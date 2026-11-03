@@ -10,7 +10,9 @@
 # human, a stack in manual mode is only reported, a paused and a pinned stack stay as they are, and a change with
 # window set takes effect in the running service. The terminal interface follows: sudo qdeploy opens it in a
 # tmux pane, an update shows its changelog before it is confirmed and then runs, and two ticked stacks are updated
-# one after another with one confirmation. Docker integration tests of the deployer run inside the host
+# one after another with one confirmation. Notification channels (webhook, Slack, Telegram, e-mail) are
+# added with qdeploy notify: a webhook hears of a deployed and of a rolled-back run, and every channel
+# type delivers a test message. Docker integration tests of the deployer run inside the host
 # before all that. Sourced by run.sh scenario.
 
 as_admin() {
@@ -227,6 +229,38 @@ stack_images() {
 	docker exec "$host" docker ps --filter "label=com.docker.compose.project=$1" --format '{{.Image}}'
 }
 
+# qd_in runs qd with standard input from the first argument.
+qd_in() {
+	input=$1
+	shift
+	printf '%s' "$input" | docker exec -i "$host" qdeploy "$@" 2>&1
+}
+
+# hook_seen succeeds when the webhook receiver recorded a signed request to the path $1 with the event $2 and,
+# if given, the stack $3 in its body.
+hook_seen() {
+	stack_pattern='"body"'
+	[ -z "${3:-}" ] || stack_pattern="\\\"stack\\\":\\\"$3\\\""
+	docker exec "$prefix-hooks" cat /data/requests.jsonl 2>/dev/null | grep -F "\"path\":\"$1\"" |
+		grep -F "\"X-Qdeploy-Event\":\"$2\"" | grep -F '"X-Qdeploy-Signature":"' | grep -qF -- "$stack_pattern"
+}
+
+# journal prints the log of the qdeploy service.
+journal() {
+	docker exec "$host" journalctl -u qdeploy-e2e --no-pager -o cat
+}
+
+# mail_seen succeeds when the mail server recorded a message containing the fixed string $1.
+mail_seen() {
+	docker exec "$prefix-mail" cat /data/messages.jsonl 2>/dev/null | grep -F -- "$1" >/dev/null
+}
+
+hook_url=https://hooks.$domain/notify
+hook_signing_value=demo-signing-value-e2e
+slack_url_value=https://hooks.$domain/slack/T000/B000/demo-slack-path-e2e
+bot_credential=123456:demo-bot-credential-e2e
+mail_login_value=demo-mail-login-e2e
+
 scenario_deploy() {
 	secret=not-a-real-secret-e2e
 
@@ -243,6 +277,12 @@ scenario_deploy() {
 	[ -z "$dirty" ] || fail "secrets.env made the working copy dirty: $dirty"
 	[ "$(docker exec "$host" stat -c %U:%a /opt/stacks/demo-stack/secrets.env)" = qdeploy:600 ] || fail 'secrets.env has the wrong owner or mode'
 
+	step 'a webhook channel is added from standard input'
+	out=$(qd_in "$hook_url
+$hook_signing_value
+" notify add hook --type webhook --events succeeded,rolled-back) || fail "notify add failed: $out"
+	qd notify list | grep -q 'hook *webhook *succeeded,rolled-back' || fail "notify list does not show the webhook: $(qd notify list)"
+
 	step 'a manual run deploys demo-stack and records the commit'
 	out=$(qd --output json stack deploy demo-stack) || fail "deploy failed: $out"
 	run=$(printf '%s\n' "$out" | sed -n 's/.*"run": *"\([^"]*\)".*/\1/p')
@@ -256,6 +296,8 @@ scenario_deploy() {
 	docker exec "$host" docker inspect -f '{{.Config.Env}}' "$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=demo-stack)" |
 		grep -q "DEMO_SECRET=$secret" || fail 'the container did not get the value of secrets.env'
 	log "scenario: deploy succeeded, run $run, deployed commit $commit"
+	wait_for 'the webhook for the deployed run' 60 hook_seen /notify succeeded demo-stack
+	log "scenario: the webhook receiver was told of the succeeded run"
 
 	step 'the engine deploys a new commit it finds by polling'
 	good=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
@@ -293,6 +335,8 @@ scenario_deploy() {
 	[ "$(stack_images demo-cache)" = "registry.$domain/demo/app:1.1.0" ] || fail "demo-cache does not run the previous image 1.1.0: $(stack_images demo-cache)"
 	stack_healthy demo-cache || fail 'demo-cache is not healthy after the rollback'
 	log "scenario: failing healthcheck: run $failed_run rolled back, bad commit $bad reverted by $revert"
+	wait_for 'the webhook for the rolled-back run' 60 hook_seen /notify rolled-back demo-cache
+	log "scenario: the webhook receiver was told of the rolled-back run"
 
 	step 'a rolled-back commit is not run again by the next poll'
 	count=$(qd stack runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
@@ -313,6 +357,76 @@ scenario_deploy() {
 	[ "$n" -ge 3 ] || fail "too few runs to check the logs: $n"
 	if qd stack runs | grep -qF -- "$secret"; then fail 'qdeploy stack runs shows the secret value'; fi
 	log "scenario: the secret value is in none of $n run logs"
+
+	scenario_notify
+}
+
+# scenario_notify proves that every channel type delivers a test message, that a channel is managed with the
+# documented errors, and that no secret part of a channel shows in the listing, the run logs or the journal.
+scenario_notify() {
+	step 'notify test delivers through the webhook channel'
+	out=$(qd notify test hook) || fail "notify test hook failed: $out"
+	hook_seen /notify test || fail 'the webhook receiver did not record the test message'
+
+	step 'notify test delivers through a Slack channel'
+	out=$(qd_in "$slack_url_value
+" notify add chat --type slack) || fail "notify add chat failed: $out"
+	out=$(qd notify test chat) || fail "notify test chat failed: $out"
+	docker exec "$prefix-hooks" cat /data/requests.jsonl | grep -F '"path":"/slack/T000/B000/demo-slack-path-e2e"' | grep -qF 'qdeploy test message' ||
+		fail 'the receiver did not record the Slack test message'
+
+	step 'notify test delivers through a Telegram channel'
+	out=$(qd_in "$bot_credential
+" notify add bot --type telegram --chat-id 4242 --base-url "https://hooks.$domain/telegram") || fail "notify add bot failed: $out"
+	out=$(qd notify test bot) || fail "notify test bot failed: $out"
+	docker exec "$prefix-hooks" cat /data/requests.jsonl | grep -F "\"path\":\"/telegram/bot$bot_credential/sendMessage\"" | grep -qF '4242' ||
+		fail 'the receiver did not record the Telegram test message'
+
+	step 'notify test delivers through an SMTP channel with STARTTLS and a login'
+	out=$(qd_in "$mail_login_value
+" notify add mail --type smtp --host "mail.$domain" --user qdeploy-mailer --from qdeploy@example.test \
+		--to ops@example.test) || fail "notify add mail failed: $out"
+	out=$(qd notify test mail) || fail "notify test mail failed: $out"
+	mail_seen 'Subject: qdeploy test message' || fail 'the mail server did not record the test message'
+	mail_seen '"to":["TO:\u003cops@example.test\u003e"]' || fail 'the mail server did not record the recipient'
+	mail_seen '"user":"qdeploy-mailer"' || fail 'the mail server did not record the login name'
+
+	step 'the channel commands report their errors'
+	if out=$(qd_in "$slack_url_value
+" notify add hook --type slack); then fail 'a duplicate channel was added'; fi
+	printf '%s' "$out" | grep -q 'exists' || fail "the duplicate was not explained: $out"
+	out=$(qd_fails notify test missing) || fail 'a missing channel was tested'
+	printf '%s' "$out" | grep -q 'no such channel' || fail "the missing channel was not explained: $out"
+	out=$(qd_fails notify remove missing) || fail 'a missing channel was removed'
+	if out=$(qd_in "$slack_url_value
+" notify add bad --type slack --events exploded); then fail 'an unknown event was accepted'; fi
+	printf '%s' "$out" | grep -q 'event' || fail "the unknown event was not explained: $out"
+	if qd notify list | grep -q '^bad '; then fail 'a refused channel was stored'; fi
+
+	step 'no secret part of a channel shows in the listing, the run logs or the journal'
+	listing=$(qd notify list; qd --output json notify list)
+	runs=$(qd stack runs)
+	for id in $(qd stack runs | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}'); do
+		runs="$runs
+$(qd stack log "$id")"
+	done
+	journal_text=$(journal)
+	for value in "$hook_url" "$hook_signing_value" "$slack_url_value" demo-slack-path-e2e "$bot_credential" "$mail_login_value"; do
+		for place in listing runs journal_text; do
+			eval "text=\$$place"
+			if printf '%s' "$text" | grep -qF -- "$value"; then fail "a secret part of a channel shows in $place"; fi
+		done
+	done
+	[ -n "$journal_text" ] || fail 'the journal of the service is empty'
+
+	step 'removing the channels removes their stored secrets'
+	for name in hook chat bot mail; do
+		out=$(qd notify remove "$name") || fail "notify remove $name failed: $out"
+	done
+	if qd notify list | grep -q 'webhook\|slack\|telegram\|smtp'; then fail "channels remain: $(qd notify list)"; fi
+	left=$(docker exec "$host" sh -c 'ls /var/lib/qdeploy/credentials 2>/dev/null | grep -c "^notify" || true')
+	[ "$left" = 0 ] || fail "$left notification credentials remain after the channels were removed"
+	log 'scenario: all four channel types delivered a test message and no secret part showed anywhere'
 }
 
 # fixture_run runs a script as root in a throwaway container of the backup helper image on the host, with the
