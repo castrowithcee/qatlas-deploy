@@ -1,0 +1,14 @@
+qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe                                                                                 
+------------------------------------------------------------------------------------------------------------------------
+      STACK        VERSION      VERFÜGBAR      MODUS        ZUSTAND   LETZTER LAUF                         BEFUNDE      
+> [ ] demo-stack   1.4.2        1.5.0          automatisch  deployt   erfolgreich 10-30 14:02              1 Warnung    
+  [ ] mail-relay   3.1          aktuell        manuell      offen     erfolgreich 10-28 03:10              keine        
+  [ ] old-tool     -            ungeprüft      -            entfernt  erfolgreich                          keine        
+  [ ] photo-album  2.0.1        Fehler         automatisch  gestoppt  Rollback fehlgeschlagen 10-29 03:10  1 Fehler     
+  [ ] web-shop     5.2.0, 16.4  6.0.0 (Major)  automatisch  läuft     zurückgerollt 10-30 12:00            keine        
+  [ ] wiki         1.41.0       ungeprüft      keiner       gepinnt   erfolgreich 10-27 03:10              2 Warnungen  
+                                                                                                                        
+                                                                                                                        
+enter Details  / Suchen  space markieren  u update  d deploy  r Neu laden  1-3 Bereich  q Beenden                       
+                                                                                                  up/down Auswählen  1/6

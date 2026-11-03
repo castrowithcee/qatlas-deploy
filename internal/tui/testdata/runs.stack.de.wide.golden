@@ -1,0 +1,14 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details  [3 Läufe]                                                                                
+------------------------------------------------------------------------------------------------------------------------
+  Nur Läufe von demo-stack. f zeigt alle Stacks.                                                                        
+  STACK       START        ERGEBNIS        AUSLÖSER  DAUER  LAUF                                                        
+> demo-stack  10-30 14:02  erfolgreich     update    48s    20261030T140200Z-0000000c                                   
+  demo-stack  10-29 02:00  fehlgeschlagen  poll      850ms  20261029T020000Z-00000010                                   
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+enter Log  / Suchen  f alle Stacks  r Neu laden  1-3 Bereich  q Beenden                           up/down Auswählen  1/2

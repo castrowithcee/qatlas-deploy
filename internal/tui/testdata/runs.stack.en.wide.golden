@@ -1,0 +1,14 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail  [3 Runs]                                                                                  
+------------------------------------------------------------------------------------------------------------------------
+  Runs of demo-stack only. f shows all stacks.                                                                          
+  STACK       STARTED      RESULT     TRIGGER  DURATION  RUN                                                            
+> demo-stack  10-30 14:02  succeeded  update   48s       20261030T140200Z-0000000c                                      
+  demo-stack  10-29 02:00  failed     poll     850ms     20261029T020000Z-00000010                                      
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+enter log  / search  f all stacks  r reload  1-3 area  q quit                                        up/down choose  1/2

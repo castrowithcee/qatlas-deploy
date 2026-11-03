@@ -1,0 +1,20 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks]  2 Stack detail   3 Runs                   
+--------------------------------------------------------
+      STACK        CURRENT  AVAILABLE  STATE  FINDINGS  
+> [ ] demo-stack   1.4.2    1.5.0      depl~  1 warning 
+  [ ] mail-relay   3.1      up to da~  pend~  none      
+  #= pin ============================================#  
+  | ! Pin demo-stack?                                |  
+  |                                                  |  
+  | The maintenance window and update leave the      |gs
+  | image versions of the stack as they are until    |  
+  | you unpin it.                                    |  
+  |                                                  |  
+  | [ yes, do it ]  > cancel <                       |  
+  | y yes, do it  n/esc/enter cancel                 |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        
+                                                     1/6

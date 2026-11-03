@@ -1,0 +1,40 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe                                                                                 
+------------------------------------------------------------------------------------------------------------------------
+  demo-stack                                                                                                            
+                                                                                                                        
+  Modus    automatisch                                                                                                  
+  Zustand  deployt                                                                                                      
+  Befunde  1 Warnung                                                                                                    
+                                                                                                                        
+  Image-Versionen                                                                                                       
+    APP_VERSION  example/app                                                                                            
+      1.4.2 -> 1.5.0  Update verfügbar                                                                                  
+                                                                                                                        
+  Changelog                                                                                                             
+    APP_VERSION  1.4.2 -> 1.5.0                                                                                         
+      Quelle example/app                                                                                                
+      1.5.0  Spring release  2026-10-29                                                                                 
+        Adds a dark theme.                                                                                              
+                                                                                                                        
+        - faster start                                                                                                  
+        - fixes the upload limit                                                                                        
+      1.4.3  2026-10-20                                                                                                 
+        Fixes a crash on empty input.                                                                                   
+      mehr unter https://example.invalid/app/releases                                                                   
+                                                                                                                        
+  Backups                                                                                                               
+    Fehler: der Dienst hat die Anfrage abgelehnt: the service is busy                                                   
+                                                                                                                        
+  Letzte Läufe                                                                                                          
+    erfolgreich  10-30 14:02  update  48s                                                                               
+      20261030T140200Z-0000000c                                                                                         
+    fehlgeschlagen  10-29 02:00  poll  850ms                                                                            
+      20261029T020000Z-00000010                                                                                         
+      compose pull failed: registry unreachable                                                                         
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+r Neu laden  1-3 Bereich  q Beenden                                                                     up/down Scrollen

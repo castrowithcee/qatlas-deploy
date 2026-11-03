@@ -1,0 +1,40 @@
+qdeploy  Wartungsfenster zu                    [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe                 
+--------------------------------------------------------
+  ! Update von demo-stack ausführen?                    
+                                                        
+  Jeder Stack wird gesichert, per Commit geändert und   
+  Schritt für Schritt ausgerollt, ein Stack nach dem    
+  anderen; ein fehlgeschlagener Schritt wird            
+  zurückgerollt. Die gezeigten Versionen stammen aus der
+  letzten Prüfung, der Dienst fragt die Registries      
+  erneut ab.                                            
+                                                        
+  demo-stack                                            
+    APP_VERSION  example/app                            
+      1.4.2 -> 1.5.0  Update verfügbar                  
+                                                        
+  Changelog                                             
+    APP_VERSION  1.4.2 -> 1.5.0                         
+      Quelle example/app                                
+      1.5.0  Spring release  2026-10-29                 
+        Adds a dark theme.                              
+                                                        
+        - faster start                                  
+        - fixes the upload limit                        
+      1.4.3  2026-10-20                                 
+        Fixes a crash on empty input.                   
+      mehr unter https://example.invalid/app/releases   
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+y ja, ausführen  n/esc/enter abbrechen  up/down Scrollen

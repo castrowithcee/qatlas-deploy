@@ -27,7 +27,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		Short: "Roll out and update the Docker stacks of a Linux host from its stacks repository",
 		Long: "qdeploy runs as a service on a Linux host and keeps the Docker stacks of that host rolled out and\n" +
 			"up to date from its stacks repository.",
-		// Without a subcommand there is nothing to do yet, so the root command prints its own help.
+		// At a terminal Run starts the interface instead, so the help shows only where no terminal is.
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
 	secrets := &redact.Redactor{}
@@ -39,7 +39,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, &state),
 		newKeyCommand(program, &state), newRepoCommand(program, &state), newStacksCommand(program, &state), newCheckCommand(program, &state),
 		newDeployCommand(program, &state), newRunsCommand(program, &state), newLogCommand(program, &state), newResumeCommand(program, &state), newPauseCommand(program, &state), newUnpauseCommand(program, &state), newPinCommand(program, &state), newUnpinCommand(program, &state), newWindowCommand(program, &state), newBackupCommand(program, &state), newUpdatesCommand(program, &state), newUpdateCommand(program, &state), newChangelogCommand(program, &state),
-		newCredentialCommand(program, &state, secrets), newManpageCommand(program))
+		newCredentialCommand(program, &state, secrets), newTUICommand(&state), newManpageCommand(program))
+	if _, _, ok := terminalStreams(stdout); ok && len(args) == 0 {
+		args = []string{"tui"}
+	}
 	code := program.Execute(args, stdout, stderr)
 	if code == cli.ExitRuntime && state.seen {
 		return ExitServiceNotRunning

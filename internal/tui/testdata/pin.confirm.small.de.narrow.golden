@@ -1,0 +1,14 @@
+qdeploy  Wartungsfenster zu                    [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe                 
+--------------------------------------------------------
+  #= pin ============================================#E 
+> | ! demo-stack pinnen?                             |u~
+  |                                                  |  
+  | Wartungsfenster und update lassen die Image-     |  
+  | Versionen des Stacks unverändert, bis du den Pin |er
+  | aufhebst.                                        |  
+  |                                                  |u~
+  | [ ja, ausführen ]  > abbrechen <                 |  
+  | y ja, ausführen  n/esc/enter abbrechen           |  
+  #==================================================#  
+                                                     1/6

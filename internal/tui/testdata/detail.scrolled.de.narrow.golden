@@ -1,0 +1,16 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe                 
+--------------------------------------------------------
+    APP_VERSION  1.4.2 -> 1.5.0                         
+      Quelle example/app                                
+      1.5.0  Spring release  2026-10-29                 
+        Adds a dark theme.                              
+                                                        
+        - faster start                                  
+        - fixes the upload limit                        
+      1.4.3  2026-10-20                                 
+        Fixes a crash on empty input.                   
+      mehr unter https://example.invalid/app/releases   
+                                                        
+r Neu laden  1-3 Bereich  q Beenden                     
+                                 up/down Scrollen  23/36

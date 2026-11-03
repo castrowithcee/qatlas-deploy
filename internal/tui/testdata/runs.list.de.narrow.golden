@@ -1,0 +1,14 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details  [3 Läufe]                
+--------------------------------------------------------
+  STACK        START        ERGEBNIS                    
+> web-shop     10-30 15:00  läuft                       
+  demo-stack   10-30 14:02  erfolgreich                 
+  web-shop     10-30 12:00  zurückgerollt               
+  photo-album  10-29 03:10  Rollback fehlgeschlagen     
+  demo-stack   10-29 02:00  fehlgeschlagen              
+  mail-relay   10-28 03:10  erfolgreich                 
+  wiki         10-27 03:10  erfolgreich                 
+                                                        
+enter Log  / Suchen  f dieser Stack  r Neu laden        
+1-3 Bereich  q Beenden            up/down Auswählen  1/7

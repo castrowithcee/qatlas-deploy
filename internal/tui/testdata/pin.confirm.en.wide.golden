@@ -1,0 +1,20 @@
+qdeploy  maintenance window closed                                                                              [?] help
+  [1 Stacks]  2 Stack detail   3 Runs                                                                                   
+------------------------------------------------------------------------------------------------------------------------
+      STACK        CURRENT      AVAILABLE      MODE       STATE                  LAST RUN                     FINDINGS  
+> [ ] demo-stack   1.4.2        1.5.0          automatic  deployed               succeeded 10-30 14:02        1 warning 
+  [ ] mail-relay   3.1          up to date     manual     pending                succeeded 10-28 03:10        none      
+  [ ] old-tool     -        #= pin ========================================================#                  none      
+  [ ] photo-album  2.0.1    | ! Pin demo-stack?                                            |iled 10-29 03:10  1 error   
+  [ ] web-shop     5.2.0, 16|                                                              | 10-30 12:00      none      
+  [ ] wiki         1.41.0   | The maintenance window and update leave the image versions   |0-27 03:10        2 warnings
+                            | of the stack as they are until you unpin it.                 |                            
+                            |                                                              |                            
+                            | [ yes, do it ]  > cancel <                                   |                            
+                            | y yes, do it  n/esc/enter cancel                             |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                     1/6
