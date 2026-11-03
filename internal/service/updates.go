@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/castrowithcee/qatlas-deploy/internal/changelog"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
@@ -62,21 +64,24 @@ func registryCredentialFrom(store *credentials.Store) func(string) (registry.Cre
 }
 
 type updatesService struct {
-	repo     *repoService
-	eng      *engine.Engine
-	detector *updates.Detector
+	repo      *repoService
+	eng       *engine.Engine
+	detector  *updates.Detector
+	changelog *changelogSource
 }
 
-func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.Engine, store *credentials.Store, opts registry.Options) error {
-	s := &updatesService{repo: repo, eng: eng, detector: &updates.Detector{Credential: registryCredentialFrom(store), Options: opts}}
-	return r.Register(control.UpdatesListCommand, s.handleList)
-}
-
-func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (any, error) {
-	var a control.UpdatesArgs
-	if err := decodeArgs(raw, &a); err != nil {
-		return nil, err
+func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.Engine, store *credentials.Store, opts registry.Options, clog changelog.Options) error {
+	cs := newChangelogSource(store, opts, clog, filepath.Join(repo.stateDir, changelogCacheDir))
+	cs.clean()
+	s := &updatesService{repo: repo, eng: eng, detector: &updates.Detector{Credential: registryCredentialFrom(store), Options: opts}, changelog: cs}
+	if err := r.Register(control.UpdatesListCommand, s.handleList); err != nil {
+		return err
 	}
+	return r.Register(control.ChangelogShowCommand, s.handleChangelog)
+}
+
+// loadStacks reads the working copy and narrows it to the named stack; an empty name keeps all of them.
+func (s *updatesService) loadStacks(name string) ([]stacks.Stack, error) {
 	s.repo.mu.Lock()
 	c, err := s.repo.bound()
 	var list []stacks.Stack
@@ -90,8 +95,8 @@ func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (a
 	if err != nil {
 		return nil, err
 	}
-	if a.Stack != "" {
-		i := slices.IndexFunc(list, func(st stacks.Stack) bool { return st.Name == a.Stack })
+	if name != "" {
+		i := slices.IndexFunc(list, func(st stacks.Stack) bool { return st.Name == name })
 		switch {
 		case i < 0:
 			return nil, runsAnswer(engine.ErrUnknownStack)
@@ -99,6 +104,44 @@ func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (a
 			return nil, runsAnswer(engine.ErrUnreadable)
 		}
 		list = list[i : i+1]
+	}
+	return list, nil
+}
+
+func (s *updatesService) handleChangelog(ctx context.Context, raw json.RawMessage) (any, error) {
+	var a control.ChangelogArgs
+	if err := decodeArgs(raw, &a); err != nil {
+		return nil, err
+	}
+	if a.Stack == "" {
+		return nil, control.NewError(control.CodeBadRequest, "a stack name is required")
+	}
+	list, err := s.loadStacks(a.Stack)
+	if err != nil {
+		return nil, err
+	}
+	snap, err := s.eng.Snapshot()
+	if err != nil {
+		return nil, errors.New("the engine state cannot be read")
+	}
+	res := control.ChangelogResult{Stack: printable(list[0].Name), Items: []control.ChangelogInfo{}}
+	if check := snap.State.Stacks[list[0].Name].Updates; check != nil {
+		res.Checked = check.Checked
+		cctx, cancel := context.WithTimeout(ctx, control.ChangelogTimeout)
+		defer cancel()
+		res.Items = s.changelog.forStack(cctx, list[0], *check, &changelogBudget{left: maxChangelogBytes})
+	}
+	return res, nil
+}
+
+func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (any, error) {
+	var a control.UpdatesArgs
+	if err := decodeArgs(raw, &a); err != nil {
+		return nil, err
+	}
+	list, err := s.loadStacks(a.Stack)
+	if err != nil {
+		return nil, err
 	}
 
 	var fresh map[string]engine.UpdateCheck
@@ -121,6 +164,14 @@ func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (a
 
 	// Everything below comes from the working copy and the state and may reach a terminal.
 	res := control.UpdatesResult{Stacks: make([]control.StackUpdates, 0, len(list))}
+	var budget *changelogBudget
+	cctx := ctx
+	if a.Changelog {
+		var cancel context.CancelFunc
+		cctx, cancel = context.WithTimeout(ctx, control.ChangelogTimeout)
+		defer cancel()
+		budget = &changelogBudget{left: maxChangelogBytes}
+	}
 	for _, st := range list {
 		info := control.StackUpdates{Name: printable(st.Name), Update: st.UpdateMode(), Items: []control.UpdateInfo{}}
 		if st.Err != nil {
@@ -132,6 +183,9 @@ func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (a
 		}
 		if ok {
 			info.Checked = check.Checked
+			if a.Changelog {
+				info.Changelogs = s.changelog.forStack(cctx, st, check, budget)
+			}
 			for _, it := range check.Items {
 				info.Items = append(info.Items, control.UpdateInfo{
 					Variable: printable(it.Variable), Image: printable(it.Image), Current: printable(it.Current),

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/castrowithcee/qatlas-deploy/internal/changelog"
 )
 
 // Update modes, ceilings and major strategies.
@@ -44,6 +46,9 @@ type Update struct {
 	Major string
 	// Tags restricts the candidate tags per image variable.
 	Tags map[string]*regexp.Regexp
+	// Changelog names the GitHub repository ("owner/name") whose releases describe the versions of an image
+	// variable. It takes precedence over the image label.
+	Changelog map[string]string
 }
 
 // Backup describes what is saved before an update. Nothing here is executed by this package.
@@ -80,6 +85,8 @@ type rawRules struct {
 		Ceiling *string           `yaml:"ceiling"`
 		Major   *string           `yaml:"major"`
 		Tags    map[string]string `yaml:"tags"`
+
+		Changelog map[string]string `yaml:"changelog"`
 	} `yaml:"update"`
 	Backup *struct {
 		Paths     []string `yaml:"paths"`
@@ -194,6 +201,24 @@ func validateRules(raw rawRules) (*Rules, error) {
 				r.Update.Tags = map[string]*regexp.Regexp{}
 			}
 			r.Update.Tags[k] = re
+		}
+		keys = keys[:0]
+		for k := range u.Changelog {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if !envKey.MatchString(k) {
+				return nil, fmt.Errorf("update.changelog.%s: not a variable name", k)
+			}
+			src := changelog.ParseSource(u.Changelog[k])
+			if !src.GitHub {
+				return nil, fmt.Errorf("update.changelog.%s: must be a GitHub repository as owner/name or a github.com address", k)
+			}
+			if r.Update.Changelog == nil {
+				r.Update.Changelog = map[string]string{}
+			}
+			r.Update.Changelog[k] = src.Repo.String()
 		}
 	}
 

@@ -32,6 +32,7 @@ Commands:
 - qdeploy log <run>: print the log of a run (run with sudo)
 - qdeploy resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
 - qdeploy updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
+- qdeploy changelog <stack>: show the release notes between the current and the available version of each variable with an update; qdeploy updates --changelog shows them for all stacks (run with sudo)
 - qdeploy backup create|list <stack>, qdeploy backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy version: print the version
@@ -51,6 +52,7 @@ Credentials:
 - qdeploy credential delete <name>: remove a credential
 - A name has 1 to 64 characters: lowercase letters, digits, '.', '_' or '-', starting with a letter.
 - Registry login for update checks: name the credential "registry." plus the registry host in lowercase with ':' written as '-' (Docker Hub: registry.docker.io), with the value <user>:<token>. Without such a credential the registry is asked anonymously.
+- GitHub token for changelogs: name the credential "github.com", with the token alone as value. It is sent only to the GitHub API and raises the rate limit; without it GitHub is asked anonymously.
 - A stored value is not shown again and is removed from the service's log output.`
 
 const repositoryTopic = `The service clones the stacks repository of the host over SSH with its own deploy key and checks the server with its own known_hosts file; the system's SSH configuration and known hosts are not used. Host key checking is always strict.
@@ -75,6 +77,7 @@ Fields (all optional except version):
 - update.ceiling: patch, minor (default) or major; the largest version step taken
 - update.major: stepwise (default, one major version at a time) or direct
 - update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
+- update.changelog.<VARIABLE>: GitHub repository (owner/name or a github.com address) whose releases are shown as changelog; it takes precedence over the image label org.opencontainers.image.source
 - backup.paths: data directories below data/ in the stack folder, for example data/db; other paths are refused when a backup runs
 - backup.volumes: volume keys of the Compose file (the top-level volumes: names), not Docker volume names
 - backup.command: a command as a list of arguments, never a shell line (see qdeploy help backups)
