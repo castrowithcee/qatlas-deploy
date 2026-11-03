@@ -14,6 +14,7 @@ func All() []helptopics.Topic {
 		{Name: "stack-standard", Short: "The stacks-repo standard that qdeploy stack check enforces", Text: stackStandardTopic},
 		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
+		{Name: "notifications", Short: "Notification channels: events, types and secrets", Text: notificationsTopic},
 	}
 }
 
@@ -40,6 +41,7 @@ Commands:
 - qdeploy stack changelog <stack>: show the release notes between the current and the available version of each variable with an update; qdeploy stack updates --changelog shows them for all stacks (run with sudo)
 - qdeploy stack backup create|list <stack>, qdeploy stack backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
+- qdeploy notify list|add|remove|test: manage the notification channels (webhook, Slack, Telegram, e-mail) and send a test message through one (run with sudo; see qdeploy help notifications)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`
 
@@ -162,3 +164,26 @@ Rules (rule ID, severity):
 - unreadable-stack (error): another file of the stack cannot be read
 
 Secret values are never read or shown; only the key names of secrets.env are compared with .env.`
+
+const notificationsTopic = `A notification channel receives the events it selected. Channels belong to the host, not to a stack. Commands (run with sudo; the service must run):
+- qdeploy notify list: the channels with type, events and settings, never their secrets
+- qdeploy notify add <name> --type webhook|slack|telegram|smtp [--events <list>] [settings]: add a channel
+- qdeploy notify remove <name>: remove a channel and its stored secrets
+- qdeploy notify test <name>: send one test message once, without retries; a failure carries the error class of the delivery (auth, permission, not-found, rate-limited, unreachable, timeout, tls, config-invalid, invalid-request or runtime) in its message and exit code
+
+Events (--events takes a comma list; without it the channel receives all):
+- succeeded: a run deployed a commit
+- failed: a run failed and no rollback was made
+- rolled-back: a run failed and the stack was rolled back to the previous state
+- rollback-failed: a run failed and the rollback failed too; the stack is stopped and paused
+- update-available: a newer image version was found for a stack in manual mode, once per version
+
+Channel types and settings:
+- webhook: posts JSON (event, stack, run, commit, error, items) to an https URL, signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
+- slack: posts text to an incoming-webhook URL.
+- telegram: sends text to a chat; needs --chat-id, and --base-url for a Bot API server of your own.
+- smtp: sends an e-mail; needs --host, --from and --to (comma list or repeated); --port (default 587 with starttls, 465 with tls), --security starttls (default) or tls, and --user for a login. The connection is always encrypted.
+
+Secrets: the webhook URL and its signing key, the Slack URL, the Telegram bot token and the SMTP password. They are never an argument or a flag value. At a terminal they are asked for without echo; piped on standard input they are lines in that order (webhook: URL, then key; smtp: the password only with --user). The service stores them as credentials, shows them nowhere and removes them from its log output.
+
+Delivery runs in the background after the event; a failing channel is retried a few times and never delays or fails a run.`

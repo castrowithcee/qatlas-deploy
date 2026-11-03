@@ -1,6 +1,6 @@
 #!/bin/sh
 # End-to-end environment: a simulated Linux host (systemd + Docker) with a local git platform (SSH, push), an
-# OCI registry with demo image tags, a GitHub releases fake and a webhook receiver.
+# OCI registry with demo image tags, a GitHub releases fake, a webhook receiver and a mail server (STARTTLS on port 587).
 #
 #   e2e/run.sh up                 build everything and start the environment
 #   e2e/run.sh down               remove every container, network, volume, image and temp directory it made
@@ -8,6 +8,7 @@
 #   e2e/run.sh exec [-u user] <command...>   run a command on the simulated host (default user e2e-admin)
 #   e2e/run.sh env                print the path of the file with the generated test values (source it)
 #   e2e/run.sh requests           print the requests the webhook receiver recorded (JSON lines)
+#   e2e/run.sh messages           print the e-mails the mail server recorded (JSON lines)
 #   e2e/run.sh scenario           run the scenario once after up (see e2e/scenario.sh)
 #
 # On the host, e2e-admin reaches the stacks repo with: git clone git.qdeploye2e.test:stacks.git
@@ -121,7 +122,7 @@ make_keys_and_certs() {
 	openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
 		-subj "/CN=$prefix helper services" -keyout "$ca/server.key" -out "$work/keys/server.csr" 2>/dev/null
 	cat >"$work/keys/server.ext" <<EXT
-subjectAltName = DNS:registry.$domain, DNS:hooks.$domain, DNS:releases.$domain, DNS:api.github.com, DNS:github.com
+subjectAltName = DNS:registry.$domain, DNS:hooks.$domain, DNS:mail.$domain, DNS:releases.$domain, DNS:api.github.com, DNS:github.com
 extendedKeyUsage = serverAuth
 EXT
 	openssl x509 -req -in "$work/keys/server.csr" -CA "$ca/ca.crt" -CAkey "$work/keys/ca.key" -CAcreateserial \
@@ -174,6 +175,8 @@ start_services() {
 		-e GIT_AUTHORIZED_KEY="$(cat "$work/keys/admin.pub")" -v "$prefix-git:/srv/git" "$prefix-git:latest" >/dev/null
 	docker run -d --name "$prefix-hooks" --label "$label" --network "$net" --network-alias "hooks.$domain" \
 		"$prefix-fakes:latest" webhook >/dev/null
+	docker run -d --name "$prefix-mail" --label "$label" --network "$net" --network-alias "mail.$domain" \
+		"$prefix-fakes:latest" mail >/dev/null
 	docker run -d --name "$prefix-releases" --label "$label" --network "$net" \
 		--network-alias "releases.$domain" --network-alias api.github.com --network-alias github.com \
 		"$prefix-fakes:latest" releases >/dev/null
@@ -325,6 +328,10 @@ main() {
 		require_up
 		docker exec "$prefix-hooks" cat /data/requests.jsonl 2>/dev/null || true
 		;;
+	messages)
+		require_up
+		docker exec "$prefix-mail" cat /data/messages.jsonl 2>/dev/null || true
+		;;
 	scenario)
 		require_up
 		. "$here/scenario.sh"
@@ -345,7 +352,7 @@ main() {
 		exec docker exec -i -u "$user" "$host" "$@"
 		;;
 	*)
-		sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
 		[ -z "$cmd" ] || exit 2
 		;;
 	esac
