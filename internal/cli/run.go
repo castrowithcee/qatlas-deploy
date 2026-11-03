@@ -20,7 +20,8 @@ func newRunCommand() *cobra.Command {
 		RunE: func(c *cobra.Command, _ []string) error {
 			ctx, stop := signal.NotifyContext(c.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
-			return service.Run(ctx, slog.New(slog.NewTextHandler(c.ErrOrStderr(), nil)).With("pid", os.Getpid()))
+			return service.Run(ctx, slog.New(slog.NewTextHandler(c.ErrOrStderr(), nil)).With("pid", os.Getpid()),
+				service.Config{Version: version, Endpoint: serviceEndpoint()})
 		},
 	}
 }

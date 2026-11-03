@@ -16,5 +16,6 @@ const overview = `qdeploy runs as a service on a Linux host and keeps the Docker
 
 Commands:
 - qdeploy run: run the service in the foreground until it receives SIGTERM or SIGINT
+- qdeploy status: show whether the service is running, its version and start time (run with sudo)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`

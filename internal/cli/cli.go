@@ -33,8 +33,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return cli.ExitRuntime
 	}
-	root.AddCommand(newVersionCommand(program), newRunCommand(), newManpageCommand(program))
-	return program.Execute(args, stdout, stderr)
+	var state notRunning
+	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, &state), newManpageCommand(program))
+	code := program.Execute(args, stdout, stderr)
+	if code == cli.ExitRuntime && state.seen {
+		return ExitServiceNotRunning
+	}
+	return code
 }
 
 func newVersionCommand(program *cobracli.Program) *cobra.Command {
