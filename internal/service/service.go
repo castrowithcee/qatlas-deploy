@@ -35,6 +35,9 @@ type Config struct {
 	// Deployer brings a stack to a commit. Nil means the engine only polls, updates the working copy and
 	// reports pending stacks; it never deploys.
 	Deployer engine.Deployer
+	// Backups saves and restores the data of a stack. Nil means the backup commands answer that backups are
+	// not available.
+	Backups Backups
 	// PollInterval is the time between repository polls; zero means engine.DefaultInterval.
 	PollInterval time.Duration
 }
@@ -76,6 +79,9 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	}
 	repo.onBound = eng.Wake
 	if err := registerRunCommands(registry, eng, cfg.Version, started); err != nil {
+		return err
+	}
+	if err := registerBackupCommands(registry, eng, cfg.Backups, secrets.Apply, log); err != nil {
 		return err
 	}
 	engineDone := make(chan struct{})

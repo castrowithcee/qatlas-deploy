@@ -63,6 +63,12 @@ const (
 	CodeNoSuchRun      = "no-such-run"
 	CodeUnreadable     = "stack-unreadable"
 	CodeNoDeployer     = "no-deployer"
+
+	CodeNoBackups     = "no-backups"
+	CodeNoBackupRules = "no-backup-rules"
+	CodeNoSuchBackup  = "no-such-backup"
+	CodeConfirmation  = "confirmation-required"
+	CodeBackupFailed  = "backup-failed"
 )
 
 // Request is what a client sends. Args is command specific and may be absent.
@@ -373,4 +379,59 @@ type CheckFinding struct {
 	Severity string `json:"severity"`
 	Cause    string `json:"cause"`
 	Fix      string `json:"fix"`
+}
+
+// The commands that save and restore the data of a stack.
+const (
+	BackupCreateCommand  = "backup.create"
+	BackupListCommand    = "backup.list"
+	BackupRestoreCommand = "backup.restore"
+)
+
+// BackupArgs are the arguments of BackupCreateCommand and BackupListCommand.
+type BackupArgs struct {
+	Stack string `json:"stack"`
+}
+
+// BackupRestoreArgs are the arguments of BackupRestoreCommand. Confirm must be true: a restore overwrites the
+// current data, so a call without it is refused.
+type BackupRestoreArgs struct {
+	Stack   string `json:"stack"`
+	ID      string `json:"id"`
+	Confirm bool   `json:"confirm"`
+}
+
+// BackupItemInfo is one part of a backup: a data directory, a volume or the command output.
+type BackupItemInfo struct {
+	Kind string `json:"kind"`
+	Name string `json:"name,omitempty"`
+	Size int64  `json:"size"`
+}
+
+// BackupInfo describes one backup. Incomplete marks a directory of the store without valid metadata.
+type BackupInfo struct {
+	ID         string           `json:"id"`
+	Stack      string           `json:"stack"`
+	Created    time.Time        `json:"created,omitzero"`
+	Commit     string           `json:"commit,omitempty"`
+	Size       int64            `json:"size"`
+	Items      []BackupItemInfo `json:"items"`
+	Incomplete bool             `json:"incomplete,omitempty"`
+}
+
+// BackupCreateResult answers BackupCreateCommand; Removed lists the ids retention deleted.
+type BackupCreateResult struct {
+	Backup  BackupInfo `json:"backup"`
+	Removed []string   `json:"removed"`
+}
+
+// BackupListResult answers BackupListCommand, newest backup first.
+type BackupListResult struct {
+	Stack   string       `json:"stack"`
+	Backups []BackupInfo `json:"backups"`
+}
+
+// BackupRestoreResult answers BackupRestoreCommand with the backup that was restored.
+type BackupRestoreResult struct {
+	Backup BackupInfo `json:"backup"`
 }

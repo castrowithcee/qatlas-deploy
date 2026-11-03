@@ -13,6 +13,7 @@ func All() []helptopics.Topic {
 		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
 		{Name: "stack-standard", Short: "The stacks-repo standard that qdeploy check enforces", Text: stackStandardTopic},
 		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
+		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
 	}
 }
 
@@ -29,6 +30,7 @@ Commands:
 - qdeploy deploy <stack>: start a manual run of a stack at the commit the working copy has (run with sudo)
 - qdeploy runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy log <run>: print the log of a run (run with sudo)
+- qdeploy backup create|list <stack>, qdeploy backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`
@@ -70,9 +72,9 @@ Fields (all optional except version):
 - update.ceiling: patch, minor (default) or major; the largest version step taken
 - update.major: stepwise (default, one major version at a time) or direct
 - update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
-- backup.paths: data directories relative to the stack folder, for example data/db
-- backup.volumes: named volumes
-- backup.command: a command as a list of arguments, never a shell line
+- backup.paths: data directories below data/ in the stack folder, for example data/db; other paths are refused when a backup runs
+- backup.volumes: volume keys of the Compose file (the top-level volumes: names), not Docker volume names
+- backup.command: a command as a list of arguments, never a shell line (see qdeploy help backups)
 - backup.retention.keep: number of newest backups to keep (default 7 when no retention is set)
 - backup.retention.max_age_days: age limit in days; a backup is kept only while it satisfies every limit that is set
 - check.containers: require all containers to be running (default true)
@@ -95,6 +97,32 @@ check:
   http: {url: 'http://localhost:8080/health', status: 200, timeout: 5s}
 
 Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. qdeploy check reports fixed and floating tags such as latest (see qdeploy help stack-standard).`
+
+const backupsTopic = `A backup saves the data of one stack while the stack is stopped, so the copy is consistent. What is saved is listed in the backup section of the stack's qdeploy.yaml (see qdeploy help stack-rules). Backups are kept in the service's state directory under backups/<stack>/<backup>, readable by the service user only.
+
+Commands (run with sudo; the service must run):
+- qdeploy backup create <stack>: stop the stack if it runs, save every listed data directory and volume, run the backup command, start the stack again, then remove backups beyond the retention limits
+- qdeploy backup list <stack>: the backups of a stack, newest first, with time, deployed commit, size and number of parts
+- qdeploy backup restore <stack> <backup> [--yes]: replace the data with the content of one backup; the stack is stopped and started again if it ran
+
+How it works:
+- A data directory or volume is packed into a tar archive with owners and permissions by a short-lived helper container without network. The helper image is set with qdeploy run --backup-image; it needs sh, find, rm and a tar that knows --numeric-owner.
+- backup.command runs on the host, not in a container, as a program in the search path or an absolute path, in the stack folder and without a shell; its standard output is saved as command.out in the backup. A relative path such as ./dump.sh is refused.
+- The backup records the stack, the time, the commit deployed at that time and the image versions.
+- A failed backup is removed and a stack that ran is started again.
+- A backup and a deployment of the same stack never run at the same time.
+
+Retention:
+- backup.retention.keep and backup.retention.max_age_days apply after each successful backup; a backup is kept only while it satisfies every limit that is set. The newest backup is never removed.
+
+Restore:
+- The backup id comes from qdeploy backup list; the newest is never chosen for you.
+- At a terminal the command asks first (default no). Without a terminal, and with --agent, it refuses unless --yes is given.
+- Every archive is read through before the first target is emptied. Each target is then emptied and unpacked inside the helper container, on the mounted path only.
+- A backup that holds a data directory or volume the rules no longer list is refused as a whole.
+- The command output is not restored; qdeploy.yaml has no restore command.
+- A restore that fails after the first target was emptied leaves the stack stopped, because it would run on incomplete data.
+- A volume must exist before it is backed up or restored; deploy the stack first.`
 
 const stackStandardTopic = `qdeploy check compares the working copy of the stacks repository with this standard. It reports each deviation as a finding with stack, rule, severity, cause and fix. Errors break or endanger a deploy or leak secrets; warnings leave the stack working. The exit code is 1 when there is at least one error.
 

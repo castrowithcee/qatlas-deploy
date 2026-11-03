@@ -26,6 +26,9 @@ var testGit service.Git
 // testDeployer is the deployer of the next service a test starts; nil means none.
 var testDeployer engine.Deployer
 
+// testBackups is the backup manager of the next service a test starts; nil means none.
+var testBackups service.Backups
+
 func useEndpoint(t *testing.T, ep localipc.ServiceEndpoint) {
 	t.Helper()
 	old := serviceEndpoint
@@ -57,7 +60,7 @@ func startServiceLogged(t *testing.T, check service.PeerCheck, logOut io.Writer)
 	done := make(chan error, 1)
 	go func() {
 		done <- service.Run(ctx, slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelDebug})),
-			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer})
+			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	path, err := ep.Path()

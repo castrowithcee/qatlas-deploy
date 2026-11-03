@@ -780,3 +780,93 @@ func TestRaceManyTriggers(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWithStackExcludesRunsAndPolls(t *testing.T) {
+	r := newRig(t, "web")
+	r.deployAll()
+	var gotCommit string
+	entered, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- r.eng.WithStack(context.Background(), "web", "backup", func(_ context.Context, st stacks.Stack, deployed string) error {
+			gotCommit = deployed
+			if st.Name != "web" {
+				t.Errorf("stack = %q", st.Name)
+			}
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	<-entered
+	if _, err := r.eng.Trigger(context.Background(), "web"); !errors.Is(err, ErrRunActive) {
+		t.Fatalf("trigger err = %v", err)
+	}
+	if err := r.eng.WithStack(context.Background(), "web", "backup", nil); !errors.Is(err, ErrRunActive) {
+		t.Fatalf("second WithStack err = %v", err)
+	}
+	if snap, _ := r.eng.Snapshot(); snap.Active["web"] != "backup" {
+		t.Fatalf("active = %v", snap.Active)
+	}
+	r.copy.set(func(f *fakeCopy) {
+		f.remote = commit(2)
+		f.folders[[2]string{commit(1), commit(2)}] = []string{"web"}
+	})
+	res, err := r.eng.Poll(context.Background())
+	if err != nil || r.copy.called("ff") != 0 || len(res.Started) != 0 {
+		t.Fatalf("poll during backup: %+v %v ff=%d", res, err, r.copy.called("ff"))
+	}
+	close(release)
+	if err := <-done; err != nil || gotCommit != commit(1) {
+		t.Fatalf("err %v, commit %q", err, gotCommit)
+	}
+	if snap, _ := r.eng.Snapshot(); len(snap.Active) != 0 {
+		t.Fatalf("slot not released: %v", snap.Active)
+	}
+}
+
+func TestWithStackRefusals(t *testing.T) {
+	r := newRig(t, "web")
+	r.deployAll()
+	noop := func(context.Context, stacks.Stack, string) error { t.Error("fn ran"); return nil }
+	if err := r.eng.WithStack(context.Background(), "nope", "backup", noop); !errors.Is(err, ErrUnknownStack) {
+		t.Fatalf("err = %v", err)
+	}
+	r.copy.set(func(f *fakeCopy) { f.changes = []gitrepo.Change{{Path: "web/compose.yaml"}} })
+	if err := r.eng.WithStack(context.Background(), "web", "backup", noop); !errors.Is(err, ErrLocalChanges) {
+		t.Fatalf("err = %v", err)
+	}
+	r.copy.set(func(f *fakeCopy) { f.changes = nil })
+	if err := os.WriteFile(filepath.Join(r.wc, "web", "qdeploy.yaml"), []byte("version: 1\nupdate:\n  mode: sometimes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.eng.WithStack(context.Background(), "web", "backup", noop); !errors.Is(err, ErrUnreadable) {
+		t.Fatalf("err = %v", err)
+	}
+	if err := os.Remove(filepath.Join(r.wc, "web", "qdeploy.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	r.eng.Close()
+	if err := r.eng.WithStack(context.Background(), "web", "backup", noop); !errors.Is(err, ErrStopped) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestWithStackEndsWithTheEngine(t *testing.T) {
+	r := newRig(t, "web")
+	r.deployAll()
+	entered := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- r.eng.WithStack(context.Background(), "web", "backup", func(ctx context.Context, _ stacks.Stack, _ string) error {
+			close(entered)
+			<-ctx.Done()
+			return ctx.Err()
+		})
+	}()
+	<-entered
+	r.eng.Close()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
+	}
+}

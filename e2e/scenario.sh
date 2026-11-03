@@ -100,7 +100,7 @@ setup_service() {
 		install -d -o qdeploy -g qdeploy -m 0755 /opt/stacks
 		systemd-run --quiet --unit=qdeploy-e2e --property=Type=exec --property=User=qdeploy --property=Group=qdeploy \
 			--property=StateDirectory=qdeploy --property=StateDirectoryMode=0700 \
-			--property=RuntimeDirectory=qdeploy --property=RuntimeDirectoryMode=0750 /usr/local/bin/qdeploy run' ||
+			--property=RuntimeDirectory=qdeploy --property=RuntimeDirectoryMode=0750 /usr/local/bin/qdeploy run --backup-image '"$backup_image"'' ||
 		fail 'cannot start the qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
 	log 'scenario: qdeploy service running'
@@ -237,6 +237,120 @@ scenario_deploy() {
 	log "scenario: the secret value is in none of $n run logs"
 }
 
+# fixture_run runs a script as root in a throwaway container of the backup helper image on the host, with the
+# data source (a host directory or a volume name) mounted at /data.
+fixture_run() {
+	docker exec -i "$host" docker run --rm --network none -v "$1:/data" "$backup_image" sh -ec "$2"
+}
+
+# fixture_write fills /data with entries of mixed numeric owners and modes.
+fixture_write() {
+	fixture_run "$1" '
+		cd /data
+		mkdir -p sub/deep
+		printf "alpha\n" >a.txt && chown 1234:1234 a.txt && chmod 640 a.txt
+		printf "root only\n" >r.txt && chown 0:0 r.txt && chmod 600 r.txt
+		printf "nested\n" >sub/deep/n.bin && chown 4321:5678 sub/deep/n.bin && chmod 755 sub/deep/n.bin
+		chown 2000:2000 sub && chmod 750 sub
+		ln -s a.txt link'
+}
+
+# fixture_change alters, removes and adds entries so the data differs from fixture_write in content, owners
+# and modes.
+fixture_change() {
+	fixture_run "$1" '
+		cd /data
+		rm -f a.txt
+		printf "changed\n" >r.txt && chown 99:99 r.txt && chmod 666 r.txt
+		chown 0:0 sub && chmod 777 sub
+		rm -rf sub/deep
+		printf "extra\n" >extra.txt'
+}
+
+# fixture_snap prints numeric owner, group, mode, type and link target of every entry, then the checksums.
+fixture_snap() {
+	docker exec -i "$host" docker run --rm --network none -v "$1:/data:ro" "$backup_image" sh -ec '
+		cd /data
+		find . -printf "%U:%G:%m:%y %p -> %l\n" | sort -k2
+		find . -type f -exec sha256sum {} + | sort -k2'
+}
+
+backup_ids() {
+	qd backup list "$1" | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}'
+}
+
+stack_running() {
+	[ "$(stack_images "$1")" = "registry.$domain/demo/app:1.0.1" ]
+}
+
+scenario_backup() {
+	bind=/opt/stacks/demo-stack/data
+	vol=demo-stack_state
+	store=/var/lib/qdeploy/backups/demo-stack
+
+	step 'demo-stack data and volume get files with mixed owners and modes'
+	wait_for 'demo-stack to be idle' 120 stack_idle demo-stack
+	stack_running demo-stack || fail "demo-stack is not running before the backup: $(stack_images demo-stack)"
+	fixture_write "$bind" || fail 'cannot write the fixture into data/'
+	fixture_write "$vol" || fail 'cannot write the fixture into the volume'
+	bind_before=$(fixture_snap "$bind") && vol_before=$(fixture_snap "$vol") || fail 'cannot read the fixture'
+	printf '%s\n' "$bind_before" | grep -q '^1234:1234:640:f ./a.txt' || fail "the fixture lacks the owner 1234: $bind_before"
+	printf '%s\n' "$bind_before" | grep -q '^0:0:600:f ./r.txt' || fail "the fixture lacks the root file: $bind_before"
+	log "scenario: fixture written: $(printf '%s\n' "$bind_before" | grep -c ' ->') entries in data/ and in the volume"
+
+	step 'backup create saves data/, the volume and the command output, and starts the stack again'
+	out=$(qd --output json backup create demo-stack) || fail "backup create failed: $out"
+	b1=$(printf '%s\n' "$out" | sed -n 's/.*"backup": *"\([^"]*\)".*/\1/p')
+	[ -n "$b1" ] || fail "backup create reported no id: $out"
+	printf '%s' "$out" | grep -q '"items": *3' || fail "the backup does not hold three items: $out"
+	stack_running demo-stack || fail "demo-stack is not running after the backup: $(stack_images demo-stack)"
+	[ "$(docker exec "$host" cat "$store/$b1/command.out")" = backup-command-output ] || fail "command.out of $b1 is wrong: $(docker exec "$host" ls -l "$store/$b1")"
+	[ "$(docker exec "$host" stat -c %a:%U "$store/$b1/path-0.tar" "$store/$b1/volume-0.tar" | sort -u)" = 600:qdeploy ] ||
+		fail "the archives are not private to the service user: $(docker exec "$host" ls -ln "$store/$b1")"
+	log "scenario: backup $b1: $(docker exec "$host" sh -c "cd $store/$b1 && ls | tr '\n' ' '")"
+
+	step 'the data changes after the backup'
+	fixture_change "$bind" && fixture_change "$vol" || fail 'cannot change the data'
+	bind_changed=$(fixture_snap "$bind") && vol_changed=$(fixture_snap "$vol") || fail 'cannot read the changed data'
+	[ "$bind_changed" != "$bind_before" ] && [ "$vol_changed" != "$vol_before" ] || fail 'the change did not alter the data'
+
+	step 'restore without confirmation and without a terminal is refused and changes nothing'
+	out=$(qd_fails backup restore demo-stack "$b1") || fail "backup restore without confirmation succeeded: $out"
+	printf '%s' "$out" | grep -q -- '--yes' || fail "the refusal does not name --yes: $out"
+	[ "$(fixture_snap "$bind")" = "$bind_changed" ] && [ "$(fixture_snap "$vol")" = "$vol_changed" ] || fail 'the refused restore changed the data'
+	stack_running demo-stack || fail 'the refused restore stopped the stack'
+	log "scenario: restore refused: $out"
+
+	step 'restore with --yes brings back data/ and the volume byte-identical, owners and modes included'
+	out=$(qd backup restore demo-stack "$b1" --yes) || fail "backup restore failed: $out"
+	[ "$(fixture_snap "$bind")" = "$bind_before" ] || fail "data/ differs after the restore: $(fixture_snap "$bind")"
+	[ "$(fixture_snap "$vol")" = "$vol_before" ] || fail "the volume differs after the restore: $(fixture_snap "$vol")"
+	stack_running demo-stack || fail "demo-stack is not running after the restore: $(stack_images demo-stack)"
+	log "scenario: restored $b1; data/ and volume identical to the backed-up state"
+
+	step 'retention keeps the newest two backups and deletes the oldest'
+	out=$(qd --output json backup create demo-stack) || fail "second backup failed: $out"
+	b2=$(printf '%s\n' "$out" | sed -n 's/.*"backup": *"\([^"]*\)".*/\1/p')
+	out=$(qd --output json backup create demo-stack) || fail "third backup failed: $out"
+	b3=$(printf '%s\n' "$out" | sed -n 's/.*"backup": *"\([^"]*\)".*/\1/p')
+	printf '%s' "$out" | grep -q "\"removed\": *\"$b1\"" || fail "the third backup did not report removing $b1: $out"
+	listed=$(backup_ids demo-stack | tr '\n' ' ')
+	[ "$listed" = "$b3 $b2 " ] || fail "backup list shows '$listed', want '$b3 $b2 '"
+	if docker exec "$host" test -e "$store/$b1"; then fail "the oldest backup $b1 is still in the store"; fi
+	[ "$(docker exec "$host" ls "$store" | wc -l)" = 2 ] || fail "the store does not hold exactly two backups: $(docker exec "$host" ls "$store")"
+	stack_running demo-stack || fail 'demo-stack is not running after the backups'
+	log "scenario: retention: list shows $listed, $b1 deleted"
+
+	step 'a backup path outside the stack directory is refused'
+	out=$(qd_fails check demo-badpath) || fail "check accepted a path outside the stack: $out"
+	printf '%s' "$out" | grep -q -- "'..' is not allowed" || fail "check does not name the path error: $out"
+	log "scenario: check refused: $out"
+	out=$(qd_fails backup create demo-badpath) || fail "backup create accepted a path outside the stack: $out"
+	printf '%s' "$out" | grep -q -- 'config-invalid' || fail "backup create does not refuse the invalid rules: $out"
+	if docker exec "$host" test -e /var/lib/qdeploy/backups/demo-badpath; then fail 'a refused backup left a store directory'; fi
+	log "scenario: backup create refused: $out"
+}
+
 scenario_stacks_repo() {
 	setup_service
 	url=git.$domain:stacks.git
@@ -289,6 +403,8 @@ scenario_stacks_repo() {
 	done
 
 	scenario_deploy
+
+	scenario_backup
 
 	step 'a changed host key of the git server aborts qdeploy'
 	original_key=$(scanned_git_key)
