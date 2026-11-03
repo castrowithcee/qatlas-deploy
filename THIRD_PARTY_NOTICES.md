@@ -7,6 +7,7 @@ Parts of this repository are copied from or derived from qatlas-sysmin
 
 - the command and error handling structure of `internal/cli`, the signal handling of its `run` command and the help topic package `internal/helptopics`
 - `.github/workflows/ci.yml`
+- the end-to-end environment in `e2e/`: `run.sh`, `host.Dockerfile`, `registry.Dockerfile`, `fakes.Dockerfile` and the helper services in `e2e/fakes` (releases fake, webhook receiver, demo application)
 
 Copyright (c) 2026 castrowithcee
 
