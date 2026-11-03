@@ -27,7 +27,9 @@ func allowAll(net.Conn) error { return nil }
 
 func runService(t *testing.T, cfg Config) localipc.ServiceEndpoint {
 	t.Helper()
-	cfg.Endpoint = channeltest.Endpoint(t)
+	if cfg.Endpoint == (localipc.ServiceEndpoint{}) {
+		cfg.Endpoint = channeltest.Endpoint(t)
+	}
 	if cfg.StateDir == "" {
 		cfg.StateDir = filepath.Join(t.TempDir(), "state")
 	}
