@@ -63,6 +63,8 @@ const (
 	CodeNoSuchRun      = "no-such-run"
 	CodeUnreadable     = "stack-unreadable"
 	CodeNoDeployer     = "no-deployer"
+	CodePaused         = "paused"
+	CodeNotPaused      = "not-paused"
 
 	CodeNoBackups     = "no-backups"
 	CodeNoBackupRules = "no-backup-rules"
@@ -172,7 +174,7 @@ type EngineStatus struct {
 }
 
 // StackStatus is the engine's view of one stack. ActiveRun is the id of the run in progress, LastRun the
-// result of the last finished one.
+// result of the last finished one. Paused is set while the stack gets no runs after a failed rollback.
 type StackStatus struct {
 	Name      string        `json:"name"`
 	Deployed  string        `json:"deployed,omitempty"`
@@ -181,6 +183,14 @@ type StackStatus struct {
 	LastRun   string        `json:"last_run,omitempty"`
 	Findings  []FindingInfo `json:"findings"`
 	Removed   bool          `json:"removed,omitempty"`
+	Paused    *PauseInfo    `json:"paused,omitempty"`
+}
+
+// PauseInfo says since when a stack is paused, after which run and why.
+type PauseInfo struct {
+	Since  time.Time `json:"since"`
+	Run    string    `json:"run"`
+	Reason string    `json:"reason,omitempty"`
 }
 
 // FindingInfo is one finding of the engine about a stack.
@@ -189,12 +199,24 @@ type FindingInfo struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// The commands that control runs.
+// The commands that control runs. ResumeCommand clears the pause of a stack and starts no run.
 const (
 	DeployCommand = "deploy"
 	RunsCommand   = "runs"
 	LogCommand    = "log"
+	ResumeCommand = "resume"
 )
+
+// ResumeArgs are the arguments of ResumeCommand.
+type ResumeArgs struct {
+	Stack string `json:"stack"`
+}
+
+// ResumeResult answers ResumeCommand with the pause that was cleared.
+type ResumeResult struct {
+	Stack string    `json:"stack"`
+	Pause PauseInfo `json:"pause"`
+}
 
 // DeployArgs are the arguments of DeployCommand.
 type DeployArgs struct {

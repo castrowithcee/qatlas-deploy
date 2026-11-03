@@ -30,6 +30,10 @@ func runsAnswer(err error) error {
 		return control.NewError(control.CodeNoRepo, "no stacks repository is bound")
 	case errors.Is(err, engine.ErrStopped):
 		return control.NewError(control.CodeBusy, "the service is stopping")
+	case errors.Is(err, engine.ErrPaused):
+		return control.NewError(control.CodePaused, "the stack is paused after a failed rollback; resume it first")
+	case errors.Is(err, engine.ErrNotPaused):
+		return control.NewError(control.CodeNotPaused, "the stack is not paused")
 	case errors.Is(err, engine.ErrNoSuchRun):
 		return control.NewError(control.CodeNoSuchRun, "no such run")
 	}
@@ -74,6 +78,20 @@ func registerRunCommands(r *control.Registry, eng *engine.Engine, version string
 				})
 			}
 			return res, nil
+		},
+		control.ResumeCommand: func(_ context.Context, raw json.RawMessage) (any, error) {
+			var a control.ResumeArgs
+			if err := decodeArgs(raw, &a); err != nil {
+				return nil, err
+			}
+			p, err := eng.Resume(a.Stack)
+			if err != nil {
+				if errors.Is(err, engine.ErrNotPaused) {
+					return nil, runsAnswer(err)
+				}
+				return nil, errors.New("the engine state cannot be written")
+			}
+			return control.ResumeResult{Stack: printable(a.Stack), Pause: pauseInfo(p)}, nil
 		},
 		control.LogCommand: func(_ context.Context, raw json.RawMessage) (any, error) {
 			var a control.LogArgs
@@ -125,10 +143,18 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 		if s.LastRun != nil {
 			item.LastRun = printable(s.LastRun.Result)
 		}
+		if s.Paused != nil {
+			p := pauseInfo(*s.Paused)
+			item.Paused = &p
+		}
 		for _, f := range s.Findings {
 			item.Findings = append(item.Findings, control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)})
 		}
 		res.Stacks = append(res.Stacks, item)
 	}
 	return res
+}
+
+func pauseInfo(p engine.Pause) control.PauseInfo {
+	return control.PauseInfo{Since: p.Time, Run: printable(p.Run), Reason: printable(p.Reason)}
 }

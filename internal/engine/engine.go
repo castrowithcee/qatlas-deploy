@@ -1,10 +1,13 @@
 // Package engine polls the stacks repository, finds the stacks that changed since their last deployed commit
-// and runs at most one deployment per stack. It decides when and what; how a stack is brought up is the
-// Deployer's job.
+// and runs at most one deployment per stack. It decides when and what; how a stack is stopped, backed up and
+// brought up is the Deployer's job. A failed run is rolled back: the data of the run's backup is restored, a
+// commit that puts the stack folder back to its deployed state is pushed, and that state is started again.
 //
 // The working copy is shared with the repository commands of the service and belongs to the operator: the
-// engine fetches, fast-forwards only a copy without local changes, and otherwise only reads. It never resets,
-// stashes, checks out or writes into it. Its content is data; stack names from it never become file names.
+// engine fetches, fast-forwards only a copy without local changes, and otherwise only reads. Its only own
+// change is a rollback's revert commit, built outside the working copy, pushed as a plain fast-forward and
+// then followed by a fast-forward. It never resets, stashes, checks out or writes into the working copy. Its
+// content is data; stack names from it never become file names.
 package engine
 
 import (
@@ -41,19 +44,25 @@ const (
 	runsDir   = "runs"
 )
 
-// Errors the callers of Trigger can tell apart.
+// Errors the callers can tell apart.
 var (
-	ErrNoRepo         = errors.New("no stacks repository is bound")
-	ErrNoDeployer     = errors.New("deployments are not available")
-	ErrRunActive      = errors.New("a run of this stack is active")
-	ErrUnknownStack   = errors.New("no such stack in the working copy")
-	ErrUnreadable     = errors.New("the stack cannot be read")
-	ErrLocalChanges   = errors.New("the stack has local changes in the working copy")
-	ErrStopped        = errors.New("the engine is stopped")
+	ErrNoRepo       = errors.New("no stacks repository is bound")
+	ErrNoDeployer   = errors.New("deployments are not available")
+	ErrRunActive    = errors.New("a run of this stack is active")
+	ErrUnknownStack = errors.New("no such stack in the working copy")
+	ErrUnreadable   = errors.New("the stack cannot be read")
+	ErrLocalChanges = errors.New("the stack has local changes in the working copy")
+	ErrStopped      = errors.New("the engine is stopped")
+	ErrPaused       = errors.New("the stack is paused after a failed rollback")
+	ErrNotPaused    = errors.New("the stack is not paused")
+	// ErrNoBackup is what Deployer.Backup returns for a stack without backup rules: the run goes on without a
+	// backup, and a rollback without a data restore.
+	ErrNoBackup       = errors.New("the stack has no backup rules")
 	errAlreadyRunning = errors.New("the poll loop is already running")
 )
 
-// WorkingCopy is the git layer the engine needs.
+// WorkingCopy is the git layer the engine needs; *gitrepo.Repo implements it. RevertStack and Push follow
+// the contract and the errors of gitrepo.
 type WorkingCopy interface {
 	Fetch(ctx context.Context) error
 	Head(ctx context.Context) (string, error)
@@ -61,6 +70,8 @@ type WorkingCopy interface {
 	Status(ctx context.Context) ([]gitrepo.Change, error)
 	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
 	FastForward(ctx context.Context) error
+	RevertStack(ctx context.Context, stack, deployed, failed, reason string) (string, error)
+	Push(ctx context.Context, commit string) error
 }
 
 // Binding is the working copy to watch and the directory it lives in.
@@ -69,10 +80,23 @@ type Binding struct {
 	Copy WorkingCopy
 }
 
-// Deployer brings one stack to a commit. The working copy is at commit and is not moved while the call runs.
-// An error is a failed run; the deployed commit then stays.
+// Deployer carries out the steps of a run on one stack. A run calls Stop, Backup, Pull, Up and Check in this
+// order and stops at the first error; its rollback calls Stop, Restore, Up and Check. While a step runs, the
+// working copy is not moved, so the stack folder is the one the step was given.
 type Deployer interface {
-	Deploy(ctx context.Context, stack stacks.Stack, commit string, log *Log) error
+	// Stop stops the containers of the stack; a stack that does not run is no error.
+	Stop(ctx context.Context, stack stacks.Stack, log *Log) error
+	// Backup saves the data of the stopped stack, which belongs to the commit deployed, and returns the id of
+	// the backup; ErrNoBackup when the stack has no backup rules. It leaves the stack stopped.
+	Backup(ctx context.Context, stack stacks.Stack, deployed string, log *Log) (string, error)
+	// Pull fetches the images of the stack; nothing is started.
+	Pull(ctx context.Context, stack stacks.Stack, log *Log) error
+	// Up starts the stack.
+	Up(ctx context.Context, stack stacks.Stack, log *Log) error
+	// Check tells whether the started stack works.
+	Check(ctx context.Context, stack stacks.Stack, log *Log) error
+	// Restore puts the data of backup id back into the stopped stack and leaves it stopped.
+	Restore(ctx context.Context, stack stacks.Stack, id string, log *Log) error
 }
 
 // Clock is the time source of the poll loop.
@@ -98,6 +122,9 @@ type Config struct {
 	// Deployer is nil in a service that cannot deploy yet: the engine then only polls, fast-forwards and
 	// reports pending stacks, and never starts a run or records a deployed commit.
 	Deployer Deployer
+	// Events, when set, is told the outcome of every finished run. It is called in the run's goroutine after
+	// the result is stored and the stack's slot is free, and must return quickly: Close waits for it.
+	Events func(Event)
 	// Redact is applied to every text stored in the state and the run logs. Nil means none.
 	Redact func(string) string
 	// Interval between polls, DefaultInterval when zero, at least MinInterval.
@@ -125,10 +152,14 @@ type Engine struct {
 	running sync.Mutex // guards the loop flag
 	looping bool
 
-	mu     sync.Mutex // guards active, stopped and wg.Add
+	mu     sync.Mutex // guards active, closed, holds, idle and wg.Add
 	active map[string]string
 	closed bool
 	wg     sync.WaitGroup
+	// holds counts the runs and claims that rely on the working copy staying where it is; idle is closed and
+	// replaced whenever holds drops to zero. See exclusive.
+	holds int
+	idle  chan struct{}
 }
 
 // New prepares the engine; it creates no files before the first state change.
@@ -164,7 +195,7 @@ func New(cfg Config) (*Engine, error) {
 	}
 	e := &Engine{
 		cfg: cfg, lock: cfg.Lock, store: store, logs: logStore{dir: filepath.Join(dir, runsDir)},
-		wake: make(chan struct{}, 1), active: map[string]string{},
+		wake: make(chan struct{}, 1), active: map[string]string{}, idle: make(chan struct{}),
 	}
 	if e.lock == nil {
 		e.lock = &sync.Mutex{}
@@ -320,6 +351,10 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		case changedAtHead:
 			v.start = true
 		}
+		if old.Paused != nil {
+			v.start = false
+			v.findings = append([]Finding{{FindingPaused, e.pauseDetail(old.Paused)}}, v.findings...)
+		}
 		verdicts[st.Name] = v
 	}
 
@@ -367,12 +402,14 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 			byName[st.Name] = st
 		}
 		for _, name := range names {
-			_, err := e.start(byName[name], head, TriggerPoll)
+			_, err := e.start(b, byName[name], head, TriggerPoll)
 			switch {
 			case err == nil:
 				res.Started = append(res.Started, name)
 			case errors.Is(err, ErrRunActive):
 				res.Dropped = append(res.Dropped, name)
+			case errors.Is(err, ErrPaused):
+				// Paused by a run that ended after the state above was read; the next poll reports it.
 			default:
 				e.cfg.Logger.Warn("run not started", "stack", name, "error", err)
 			}
@@ -420,6 +457,14 @@ func (e *Engine) localDetail(paths []string) string {
 		detail += ", ..."
 	}
 	return detail
+}
+
+func (e *Engine) pauseDetail(p *Pause) string {
+	detail := "the rollback of run " + p.Run + " failed; the stack stays stopped and gets no runs until it is resumed"
+	if p.Reason != "" {
+		detail += ": " + p.Reason
+	}
+	return e.text(detail)
 }
 
 func normalize(s State) State {
@@ -489,7 +534,8 @@ type RunInfo struct {
 
 // Trigger starts a manual run of the stack at the commit the working copy has; it does not fetch. It returns
 // as soon as the run is started. A second trigger while a run of the stack is active is dropped with
-// ErrRunActive and noted in the state. A stack with local changes is refused with ErrLocalChanges.
+// ErrRunActive and noted in the state. A stack with local changes is refused with ErrLocalChanges, a paused
+// stack with ErrPaused.
 func (e *Engine) Trigger(ctx context.Context, name string) (RunInfo, error) {
 	if e.cfg.Deployer == nil {
 		return RunInfo{}, ErrNoDeployer
@@ -522,13 +568,14 @@ func (e *Engine) Trigger(ctx context.Context, name string) (RunInfo, error) {
 		if st.Err != nil {
 			return RunInfo{}, fmt.Errorf("%w: %s", ErrUnreadable, e.text(st.Err.Error()))
 		}
-		return e.start(st, head, TriggerManual)
+		return e.start(b, st, head, TriggerManual)
 	}
 	return RunInfo{}, ErrUnknownStack
 }
 
-// start takes the stack's lock and launches the run. The caller holds the working-copy lock.
-func (e *Engine) start(st stacks.Stack, commit, trigger string) (RunInfo, error) {
+// start takes the stack's slot and a hold on the working copy and launches the run. The caller holds the
+// working-copy lock.
+func (e *Engine) start(b Binding, st stacks.Stack, commit, trigger string) (RunInfo, error) {
 	e.mu.Lock()
 	if e.closed {
 		e.mu.Unlock()
@@ -539,6 +586,16 @@ func (e *Engine) start(st stacks.Stack, commit, trigger string) (RunInfo, error)
 		e.recordDropped(st.Name, trigger)
 		return RunInfo{}, ErrRunActive
 	}
+	// Read with mu held: a run stores its pause before it frees the slot, so none can slip in between.
+	cur, _, err := e.Stack(st.Name)
+	if err != nil {
+		e.mu.Unlock()
+		return RunInfo{}, err
+	}
+	if cur.Paused != nil {
+		e.mu.Unlock()
+		return RunInfo{}, ErrPaused
+	}
 	now := e.cfg.Clock.Now().UTC()
 	id, w, err := e.newLog(now)
 	if err != nil {
@@ -546,12 +603,16 @@ func (e *Engine) start(st stacks.Stack, commit, trigger string) (RunInfo, error)
 		return RunInfo{}, fmt.Errorf("create the run log: %w", err)
 	}
 	e.active[st.Name] = id
+	e.holds++
 	e.wg.Add(1)
 	e.mu.Unlock()
 
-	log := &Log{w: w, redact: e.cfg.Redact, now: e.cfg.Clock.Now}
-	rec := RunRecord{ID: id, Stack: st.Name, Commit: commit, Trigger: trigger, Started: now}
-	go e.execute(st, rec, log)
+	r := &run{
+		e: e, b: b, st: st, deployed: cur.Deployed, held: true,
+		log: &Log{w: w, redact: e.cfg.Redact, now: e.cfg.Clock.Now},
+		rec: RunRecord{ID: id, Stack: st.Name, Commit: commit, Trigger: trigger, Started: now},
+	}
+	go r.execute()
 	return RunInfo{ID: id, Stack: st.Name, Commit: commit}, nil
 }
 
@@ -571,62 +632,6 @@ func (e *Engine) newLog(now time.Time) (string, io.WriteCloser, error) {
 		}
 	}
 	return "", nil, errors.New("no free run id")
-}
-
-func (e *Engine) execute(st stacks.Stack, rec RunRecord, log *Log) {
-	defer e.wg.Done()
-	ctx, cancel := context.WithTimeout(e.base, e.cfg.RunTimeout)
-	defer cancel()
-
-	log.Step("run " + e.text(st.Name) + " at " + rec.Commit + " (" + rec.Trigger + ")")
-	err := e.callDeployer(ctx, st, rec.Commit, log)
-	rec.Duration = e.cfg.Clock.Now().Sub(rec.Started)
-	rec.Result = ResultSucceeded
-	if err != nil {
-		rec.Result, rec.Error = ResultFailed, e.text(err.Error())
-	}
-	log.line("result", rec.Result+" "+rec.Error)
-	log.close()
-
-	var dropped []RunRecord
-	_, uerr := e.store.Update(func(s State) (State, error) {
-		s = normalize(s)
-		cur := s.Stacks[rec.Stack]
-		r := rec
-		cur.LastRun = &r
-		if rec.Result == ResultSucceeded {
-			cur.Deployed, cur.FailedCommit = rec.Commit, ""
-			if cur.Pending == rec.Commit {
-				cur.Pending = ""
-			}
-		} else {
-			cur.FailedCommit = rec.Commit
-		}
-		s.Stacks[rec.Stack] = cur
-		dropped = s.addRun(rec)
-		return s, nil
-	})
-	if uerr != nil {
-		e.cfg.Logger.Error("run result not recorded", "run", rec.ID, "error", uerr)
-	}
-	ids := make([]string, len(dropped))
-	for i, d := range dropped {
-		ids[i] = d.ID
-	}
-	e.logs.remove(ids...)
-
-	e.mu.Lock()
-	delete(e.active, rec.Stack)
-	e.mu.Unlock()
-}
-
-func (e *Engine) callDeployer(ctx context.Context, st stacks.Stack, commit string, log *Log) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("the deployer panicked: %v", r)
-		}
-	}()
-	return e.cfg.Deployer.Deploy(ctx, st, commit, log)
 }
 
 func (e *Engine) recordDropped(name, trigger string) {
@@ -699,11 +704,11 @@ func (e *Engine) Runs(stack string) ([]RunRecord, error) {
 func (e *Engine) Log(id string) (string, error) { return e.logs.read(id) }
 
 // WithStack calls fn with the stack, read from the working copy, and the commit last deployed (empty if
-// none), while holding the stack's run slot: no run of the stack starts or is active meanwhile, and a poll
-// does not move the working copy. It is for work that must not overlap a deployment, such as a backup. label
-// is shown as the active run of the stack and is no run id. A stack that is busy, unknown, unreadable or has
-// local changes is refused as Trigger refuses it. fn runs in the caller's goroutine; its context also ends
-// when the engine closes.
+// none), while holding the stack's run slot: no run of the stack starts or is active meanwhile, and neither a
+// poll nor a rollback moves the working copy. It is for work that must not overlap a deployment, such as a
+// backup. label is shown as the active run of the stack and is no run id. A stack that is busy, unknown,
+// unreadable or has local changes is refused as Trigger refuses it; a paused stack is accepted. fn runs in the
+// caller's goroutine; its context also ends when the engine closes.
 func (e *Engine) WithStack(ctx context.Context, name, label string,
 	fn func(ctx context.Context, st stacks.Stack, deployed string) error) error {
 	b, err := e.cfg.Source()
@@ -764,11 +769,13 @@ func (e *Engine) claim(name, label string) (release func(), err error) {
 		return nil, ErrRunActive
 	}
 	e.active[name] = label
+	e.holds++
 	e.wg.Add(1)
 	return func() {
 		e.mu.Lock()
 		delete(e.active, name)
 		e.mu.Unlock()
+		e.releaseHold()
 		e.wg.Done()
 	}, nil
 }

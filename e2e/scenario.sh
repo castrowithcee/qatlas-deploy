@@ -1,9 +1,10 @@
 #!/bin/sh
 # Scenario: from the simulated host, clone the demo stacks repository over SSH and push a commit; then check
 # the demo image tags and that a demo container turns unhealthy on purpose. Then run qdeploy on the host as a
-# service, bind the stacks repository with its own deploy key, list the stacks, deploy a new commit, report a
-# commit with a failing healthcheck as failed and refuse a changed host key of the git server. Docker
-# integration tests of the deployer run inside the host before that. Sourced by run.sh scenario.
+# service, bind the stacks repository with its own deploy key, list the stacks, deploy a new commit, roll back a
+# commit with a failing healthcheck (data restored from the run's backup, revert commit on the remote), leave a
+# stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
+# Docker integration tests of the deployer run inside the host before that. Sourced by run.sh scenario.
 
 as_admin() {
 	docker exec -i -u "$admin" "$host" sh -ec "$*"
@@ -158,6 +159,62 @@ restart_service() {
 	wait_for 'the qdeploy service to answer' 20 qd status
 }
 
+# status_field prints one top-level field of qdeploy status.
+status_field() {
+	qd --output json status | sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p"
+}
+
+# poll_done succeeds when the service has polled since it started.
+poll_done() {
+	started=$(status_field started_at) polled=$(status_field last_poll)
+	[ -n "$started" ] && [ -n "$polled" ] && [ "$(printf '%s\n%s\n' "$polled" "$started" | sort | head -n 1)" = "$started" ]
+}
+
+# stack_healthy succeeds when the stack runs and every container with a healthcheck is healthy.
+stack_healthy() {
+	[ -n "$(docker exec "$host" docker ps -q --filter "label=com.docker.compose.project=$1" --filter health=healthy)" ] &&
+		[ -z "$(docker exec "$host" docker ps -q --filter "label=com.docker.compose.project=$1" --filter health=unhealthy --filter health=starting)" ]
+}
+
+# log_steps prints the run's own steps of a run log in order, joined by commas; the sub-steps of the backup
+# and the restore are left out.
+log_steps() {
+	printf '%s\n' "$1" | sed -n 's/^[^ ]* step //p' |
+		grep -x -e stop -e backup -e pull -e up -e check -e rollback -e restore -e revert -e push -e fast-forward |
+		tr '\n' ',' | sed 's/,$//'
+}
+
+rolled_back_steps=stop,backup,pull,up,check,rollback,stop,restore,revert,push,fast-forward,up,check
+rollback_failed_steps=stop,backup,pull,up,check,rollback,stop,restore,revert,push,stop
+
+# newest_run prints the id of the newest recorded run of a stack (empty when there is none).
+newest_run() {
+	qd runs "$1" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' || true
+}
+
+# next_run waits for a run of the stack other than the run id $2, active or already finished, and prints its
+# id. Recorded runs are listed only once they have ended, so an active run is read from the status.
+next_run() {
+	i=0
+	while :; do
+		id=$(stack_field "$1" active_run)
+		[ -n "$id" ] || id=$(newest_run "$1")
+		if [ -n "$id" ] && [ "$id" != "$2" ]; then
+			printf '%s' "$id"
+			return 0
+		fi
+		i=$((i + 1))
+		[ "$i" -lt 400 ] || return 1
+		sleep 0.3
+	done
+}
+
+# admin_commit changes a file of the admin clone with a sed expression and pushes it as a new commit.
+admin_commit() {
+	as_admin "cd ~/stacks && git pull -q --ff-only && sed -i '$2' $1 &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am '$3' && git push -q origin main"
+}
+
 # stack_images prints the images of the running containers of a Compose project on the host.
 stack_images() {
 	docker exec "$host" docker ps --filter "label=com.docker.compose.project=$1" --format '{{.Image}}'
@@ -201,29 +258,43 @@ scenario_deploy() {
 	[ "$(stack_images demo-cache)" = "registry.$domain/demo/app:1.1.0" ] || fail "demo-cache does not run the image 1.1.0: $(stack_images demo-cache)"
 	log "scenario: poll deployed demo-cache at $good"
 
-	step 'a commit with a failing healthcheck is a failed run and is not recorded as deployed'
+	step 'a commit with a failing healthcheck is rolled back with a revert commit on the remote branch'
 	as_admin 'cd ~/stacks &&
 		sed -i "s/^DEMO_HEALTH=.*/DEMO_HEALTH=fail/" demo-cache/.env &&
 		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -am "Break the demo-cache healthcheck" &&
 		git push -q origin main'
 	bad=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
 	restart_service
-	wait_for 'the failed run of demo-cache' 240 stack_settled demo-cache failed
-	[ "$(stack_field demo-cache deployed)" = "$good" ] || fail "demo-cache deployed changed to $(stack_field demo-cache deployed), want $good"
+	wait_for 'the rolled-back run of demo-cache' 240 stack_settled demo-cache rolled-back
 	runs_out=$(qd runs demo-cache)
 	failed_run=$(printf '%s\n' "$runs_out" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}')
-	printf '%s\n' "$runs_out" | grep -m 1 "$failed_run" | grep -q 'failed' || fail "the newest run of demo-cache is not failed: $runs_out"
+	printf '%s\n' "$runs_out" | grep -m 1 "$failed_run" | grep -q 'rolled-back' || fail "the newest run of demo-cache is not rolled-back: $runs_out"
 	failed_log=$(qd log "$failed_run")
-	printf '%s' "$failed_log" | grep -q ' result failed' || fail "the run log does not end failed: $failed_log"
+	printf '%s' "$failed_log" | grep -q ' result rolled-back' || fail "the run log does not end rolled-back: $failed_log"
 	printf '%s' "$failed_log" | grep -q 'unhealthy' || fail "the run log does not name the unhealthy container: $failed_log"
-	log "scenario: failing healthcheck: run $failed_run failed, bad commit $bad not deployed, still $good"
+	[ "$(log_steps "$failed_log")" = "$rolled_back_steps" ] || fail "unexpected steps of the rolled-back run: $(log_steps "$failed_log")"
+	printf '%s' "$failed_log" | grep -q 'skipped: the stack has no backup rules' || fail "the rollback did not skip the data restore for a stack without backup rules: $failed_log"
+	revert=$(as_admin "cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD")
+	[ "$revert" != "$bad" ] || fail 'no revert commit reached the remote branch'
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$revert" ] || fail 'the revert commit is not the head of the remote branch'
+	meta=$(as_admin "cd ~/stacks && git log -1 --format='%an|%ae|%cn|%ce|%s|%P' $revert")
+	[ "$meta" = "qdeploy|qdeploy@localhost.invalid|qdeploy|qdeploy@localhost.invalid|Revert demo-cache to $(printf '%s' "$good" | cut -c 1-12)|$bad" ] ||
+		fail "the revert commit has the wrong author, subject or parent: $meta"
+	[ "$(as_admin "cd ~/stacks && git rev-parse $revert:demo-cache")" = "$(as_admin "cd ~/stacks && git rev-parse $good:demo-cache")" ] ||
+		fail 'the revert commit does not restore the demo-cache folder'
+	[ "$(stack_field demo-cache deployed)" = "$revert" ] || fail "demo-cache is recorded as deployed at $(stack_field demo-cache deployed), want the revert commit $revert"
+	[ "$(stack_images demo-cache)" = "registry.$domain/demo/app:1.1.0" ] || fail "demo-cache does not run the previous image 1.1.0: $(stack_images demo-cache)"
+	stack_healthy demo-cache || fail 'demo-cache is not healthy after the rollback'
+	log "scenario: failing healthcheck: run $failed_run rolled back, bad commit $bad reverted by $revert"
 
-	step 'a failed commit is not run again by the next poll'
+	step 'a rolled-back commit is not run again by the next poll'
 	count=$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
 	restart_service
-	wait_for 'the failed-commit finding' 60 has_failed_commit_finding
-	[ "$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'a failed commit was run again by the poll'
-	[ "$(stack_field demo-cache deployed)" = "$good" ] || fail 'the failed commit was recorded as deployed'
+	wait_for 'the poll after the restart' 60 poll_done
+	[ "$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'a rolled-back commit was run again by the poll'
+	[ "$(stack_field demo-cache deployed)" = "$revert" ] || fail 'the poll changed the deployed commit of demo-cache'
+	[ -z "$(stack_field demo-cache pending)" ] || fail "demo-cache has a pending commit after the rollback: $(stack_field demo-cache pending)"
+	[ -z "$(stack_field demo-cache findings)" ] || fail "demo-cache has findings after the rollback: $(stack_field demo-cache findings)"
 
 	step 'no run log holds a secret value'
 	ids=$(qd runs | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}')
@@ -255,16 +326,19 @@ fixture_write() {
 		ln -s a.txt link'
 }
 
-# fixture_change alters, removes and adds entries so the data differs from fixture_write in content, owners
-# and modes.
-fixture_change() {
-	fixture_run "$1" '
-		cd /data
+# fixture_change_script alters, removes and adds entries in the current directory so the data differs from
+# fixture_write in content, owners and modes.
+fixture_change_script() {
+	printf '%s' '
 		rm -f a.txt
 		printf "changed\n" >r.txt && chown 99:99 r.txt && chmod 666 r.txt
 		chown 0:0 sub && chmod 777 sub
 		rm -rf sub/deep
 		printf "extra\n" >extra.txt'
+}
+
+fixture_change() {
+	fixture_run "$1" "cd /data; $(fixture_change_script)"
 }
 
 # fixture_snap prints numeric owner, group, mode, type and link target of every entry, then the checksums.
@@ -351,6 +425,140 @@ scenario_backup() {
 	log "scenario: backup create refused: $out"
 }
 
+# scenario_rollback runs the automatic rollback against the demo stacks: a good deploy with a backup, a bad
+# deploy of a stack with data (data restored from the run's own backup, revert commit pushed, previous state
+# healthy), and a bad deploy whose rollback fails (stack stopped and paused, deploy refused, resume).
+scenario_rollback() {
+	bind=/opt/stacks/demo-stack/data
+	vol=demo-stack_state
+	image=registry.$domain/demo/app
+
+	step 'a good commit deploys demo-stack with a backup of its data'
+	prev=$(newest_run demo-stack)
+	admin_commit demo-stack/.env 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=1.1.0/' 'Update demo-stack to 1.1.0'
+	good_stack=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	restart_service
+	run=$(next_run demo-stack "$prev") || fail 'no run of demo-stack started for the good commit'
+	wait_for "the run $run" 240 run_finished demo-stack "$run"
+	run_log=$(qd log "$run")
+	printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the good run did not succeed: $run_log"
+	[ "$(log_steps "$run_log")" = stop,backup,pull,up,check ] || fail "unexpected steps of the good run: $(log_steps "$run_log")"
+	good_backup=$(printf '%s\n' "$run_log" | sed -n 's/^[^ ]* info backup \([0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}\)$/\1/p')
+	[ -n "$good_backup" ] || fail "the good run made no backup: $run_log"
+	[ "$(backup_ids demo-stack | head -n 1)" = "$good_backup" ] || fail "backup list does not show $good_backup first: $(qd backup list demo-stack)"
+	[ "$(stack_field demo-stack deployed)" = "$good_stack" ] || fail "demo-stack is not recorded as deployed at $good_stack"
+	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "demo-stack does not run 1.1.0: $(stack_images demo-stack)"
+	log "scenario: good run $run deployed $good_stack, backup $good_backup"
+
+	step 'a failing commit restores the data of the run backup, reverts the commit and runs the previous state'
+	marker=marker-$run
+	for target in "$bind" "$vol"; do
+		fixture_run "$target" "printf '%s\n' $marker >/data/marker.txt && chown 4242:4242 /data/marker.txt && chmod 604 /data/marker.txt" ||
+			fail 'cannot write the marker'
+	done
+	bind_before=$(fixture_snap "$bind") && vol_before=$(fixture_snap "$vol") || fail 'cannot read the data before the run'
+	printf '%s\n' "$bind_before" | grep -q '^4242:4242:604:f ./marker.txt' || fail "the marker is missing: $bind_before"
+	old_backups=$(backup_ids demo-stack | tr '\n' ' ')
+	prev=$run
+	as_admin 'cd ~/stacks && git pull -q --ff-only &&
+		sed -i "s/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=2.0.0/; s/^DEMO_HEALTH=.*/DEMO_HEALTH=fail/" demo-stack/.env &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -am "Update demo-stack to 2.0.0 with a broken healthcheck" &&
+		git push -q origin main'
+	bad_stack=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	restart_service
+	run=$(next_run demo-stack "$prev") || fail 'no run of demo-stack started for the failing commit'
+	# Once the run has its backup, the data changes under the new version; only a restore can undo that.
+	i=0
+	until qd log "$run" | grep -q ' info backup [0-9]\{8\}T'; do
+		i=$((i + 1))
+		[ "$i" -lt 120 ] || fail "the run $run made no backup"
+		sleep 0.2
+	done
+	docker exec -i "$host" docker run --rm --network none -v "$bind:/data" -v "$vol:/state" "$backup_image" sh -ec \
+		"for d in /data /state; do cd \$d; $(fixture_change_script); done" </dev/null || fail 'cannot change the data during the run'
+	wait_for "the run $run" 240 run_finished demo-stack "$run"
+	run_log=$(qd log "$run")
+	printf '%s' "$run_log" | grep -q ' result rolled-back' || fail "the run did not end rolled-back: $run_log"
+	[ "$(log_steps "$run_log")" = "$rolled_back_steps" ] || fail "unexpected steps of the rolled-back run: $(log_steps "$run_log")"
+	run_backups=$(printf '%s\n' "$run_log" | sed -n 's/^[^ ]* info backup \([0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}\)$/\1/p')
+	[ "$(printf '%s\n' "$run_backups" | wc -l)" = 2 ] && [ "$(printf '%s\n' "$run_backups" | sort -u | wc -l)" = 1 ] ||
+		fail "the backup and the restore do not name one backup: $run_backups"
+	run_backup=$(printf '%s\n' "$run_backups" | head -n 1)
+	case " $old_backups " in *" $run_backup "*) fail "the run restored an older backup: $run_backup" ;; esac
+	backup_ids demo-stack | grep -qx "$run_backup" || fail "backup list does not know $run_backup: $(qd backup list demo-stack)"
+	[ "$(fixture_snap "$bind")" = "$bind_before" ] || fail "data/ differs from the backed-up state after the rollback: $(fixture_snap "$bind")"
+	[ "$(fixture_snap "$vol")" = "$vol_before" ] || fail "the volume differs from the backed-up state after the rollback: $(fixture_snap "$vol")"
+	[ "$(docker exec "$host" cat "$bind/marker.txt")" = "$marker" ] || fail 'the marker of this run backup is not back'
+	revert=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
+	[ "$revert" != "$bad_stack" ] || fail 'no revert commit reached the remote branch'
+	meta=$(as_admin "cd ~/stacks && git log -1 --format='%an|%ae|%cn|%ce|%s|%P' $revert")
+	[ "$meta" = "qdeploy|qdeploy@localhost.invalid|qdeploy|qdeploy@localhost.invalid|Revert demo-stack to $(printf '%s' "$good_stack" | cut -c 1-12)|$bad_stack" ] ||
+		fail "the revert commit has the wrong author, subject or parent: $meta"
+	[ "$(as_admin "cd ~/stacks && git rev-parse $revert:demo-stack")" = "$(as_admin "cd ~/stacks && git rev-parse $good_stack:demo-stack")" ] ||
+		fail 'the revert commit does not restore the demo-stack folder'
+	[ "$(stack_field demo-stack deployed)" = "$revert" ] || fail "demo-stack is not recorded as deployed at the revert commit $revert"
+	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "demo-stack does not run the previous image 1.1.0: $(stack_images demo-stack)"
+	stack_healthy demo-stack || fail 'demo-stack is not healthy after the rollback'
+	log "scenario: run $run rolled back; restored $run_backup (not among $old_backups); revert $revert; data identical to the backed-up state"
+
+	step 'a failing rollback leaves the stack stopped and paused'
+	cache_good=$(stack_field demo-cache deployed)
+	prev=$(newest_run demo-cache)
+	admin_commit demo-cache/.env 's/^DEMO_HEALTH=.*/DEMO_HEALTH=fail/' 'Break the demo-cache healthcheck again'
+	stuck=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	# The remote refuses every push from now on, so the revert commit cannot be published.
+	docker exec "$prefix-git" sh -ec "printf '#!/bin/sh\necho rejected by the e2e hook >&2\nexit 1\n' >/srv/git/stacks.git/hooks/pre-receive &&
+		chown git:git /srv/git/stacks.git/hooks/pre-receive && chmod 755 /srv/git/stacks.git/hooks/pre-receive"
+	restart_service
+	run=$(next_run demo-cache "$prev") || {
+		docker exec "$prefix-git" rm -f /srv/git/stacks.git/hooks/pre-receive
+		fail 'no run of demo-cache started for the failing commit'
+	}
+	wait_for "the run $run" 240 run_finished demo-cache "$run" || {
+		docker exec "$prefix-git" rm -f /srv/git/stacks.git/hooks/pre-receive
+		fail "the run $run did not finish"
+	}
+	docker exec "$prefix-git" rm -f /srv/git/stacks.git/hooks/pre-receive
+	run_log=$(qd log "$run")
+	printf '%s' "$run_log" | grep -q ' result rollback-failed' || fail "the run did not end rollback-failed: $run_log"
+	[ "$(log_steps "$run_log")" = "$rollback_failed_steps" ] || fail "unexpected steps of the rollback-failed run: $(log_steps "$run_log")"
+	printf '%s' "$run_log" | grep -q 'rejected by the e2e hook' || fail "the run log does not show the remote refusing the push: $run_log"
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$stuck" ] || fail 'the remote branch moved although the push was refused'
+	[ -z "$(stack_images demo-cache)" ] || fail "demo-cache is still running after the failed rollback: $(stack_images demo-cache)"
+	[ -n "$(stack_field demo-cache paused)" ] || fail "status does not show demo-cache as paused: $(qd --output json status)"
+	[ "$(stack_field demo-cache deployed)" = "$cache_good" ] || fail 'the failed rollback changed the deployed commit'
+	log "scenario: run $run rollback-failed; demo-cache stopped and $(stack_field demo-cache paused)"
+
+	step 'deploy is refused while the stack is paused and the poll does not run it'
+	out=$(qd_fails deploy demo-cache) || fail "deploy of a paused stack succeeded: $out"
+	printf '%s' "$out" | grep -q 'paused' || fail "the refusal does not name the pause: $out"
+	count=$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	restart_service
+	wait_for 'the poll after the restart' 60 poll_done
+	[ "$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'the poll ran a paused stack'
+	[ -n "$(stack_field demo-cache paused)" ] || fail 'the restart cleared the pause'
+	stack_field demo-cache findings | grep -q failed-commit || fail "the failed commit is not marked as a finding: $(stack_field demo-cache findings)"
+	log "scenario: deploy refused: $out"
+
+	step 'resume clears the pause, and the stack deploys a fixing commit'
+	out=$(qd --output json resume demo-cache) || fail "resume failed: $out"
+	printf '%s' "$out" | grep -q '"stack": *"demo-cache"' || fail "resume does not name the stack: $out"
+	[ -z "$(stack_field demo-cache paused)" ] || fail 'status still shows the pause after resume'
+	if stack_field demo-cache findings | grep -q paused; then fail 'the paused finding stays after resume'; fi
+	out=$(qd_fails resume demo-cache) || fail "a second resume succeeded: $out"
+	prev=$(newest_run demo-cache)
+	admin_commit demo-cache/.env 's/^DEMO_HEALTH=.*/DEMO_HEALTH=ok/; s/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=2.0.0/' 'Fix the demo-cache healthcheck and update to 2.0.0'
+	fix=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	restart_service
+	run=$(next_run demo-cache "$prev") || fail 'no run of demo-cache started for the fixing commit'
+	wait_for "the run $run" 240 run_finished demo-cache "$run"
+	qd log "$run" | grep -q ' result succeeded' || fail "the run of the fixing commit did not succeed: $(qd log "$run")"
+	[ "$(stack_field demo-cache deployed)" = "$fix" ] || fail "demo-cache is not recorded as deployed at $fix"
+	[ "$(stack_images demo-cache)" = "$image:2.0.0" ] || fail "demo-cache does not run 2.0.0: $(stack_images demo-cache)"
+	stack_healthy demo-cache || fail 'demo-cache is not healthy after the fix'
+	log "scenario: resumed; fixing commit $fix deployed"
+}
+
 scenario_stacks_repo() {
 	setup_service
 	url=git.$domain:stacks.git
@@ -405,6 +613,8 @@ scenario_stacks_repo() {
 	scenario_deploy
 
 	scenario_backup
+
+	scenario_rollback
 
 	step 'a changed host key of the git server aborts qdeploy'
 	original_key=$(scanned_git_key)

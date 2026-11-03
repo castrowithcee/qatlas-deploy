@@ -27,6 +27,8 @@ type Git struct {
 	NotIgnored bool
 	// CloneErr and FetchErr make the call fail; set them before the service starts or use SetFetchErr.
 	CloneErr, FetchErr error
+	// RevertErr is what RevertStack answers; nil means gitrepo.ErrNothingToRevert. Use SetRevertErr.
+	RevertErr error
 
 	mu      sync.Mutex
 	origins map[string]string
@@ -45,6 +47,13 @@ func (g *Git) SetFetchErr(err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.FetchErr = err
+}
+
+// SetRevertErr sets the answer of RevertStack.
+func (g *Git) SetRevertErr(err error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.RevertErr = err
 }
 
 // SetRemote sets the fetched branch.
@@ -140,6 +149,21 @@ func (c *copyOf) Status(context.Context) ([]gitrepo.Change, error) { return nil,
 func (c *copyOf) ChangedFolders(context.Context, string, string) ([]string, error) { return nil, nil }
 
 func (c *copyOf) FastForward(context.Context) error { return nil }
+
+// RevertStack creates nothing: the branch already has the deployed state unless RevertErr says otherwise.
+func (c *copyOf) RevertStack(context.Context, string, string, string, string) (string, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	if c.g.RevertErr != nil {
+		return "", c.g.RevertErr
+	}
+	return "", gitrepo.ErrNothingToRevert
+}
+
+// Push refuses: the fake never creates a commit to push.
+func (c *copyOf) Push(context.Context, string) error {
+	return errors.New("the fake repository takes no pushes")
+}
 
 func (c *copyOf) TrackedFiles(_ context.Context, dir string) ([]string, error) {
 	c.g.mu.Lock()

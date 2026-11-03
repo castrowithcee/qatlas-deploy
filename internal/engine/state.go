@@ -18,7 +18,13 @@ const (
 // Results of a run.
 const (
 	ResultSucceeded = "succeeded"
-	ResultFailed    = "failed"
+	// ResultFailed is a run that changed nothing it could go back from: it failed before the stack was
+	// stopped, or the stack had never been deployed.
+	ResultFailed = "failed"
+	// ResultRolledBack is a failed run whose rollback brought the stack back to its previous state.
+	ResultRolledBack = "rolled-back"
+	// ResultRollbackFailed is a failed run whose rollback failed too; the stack is stopped and paused.
+	ResultRollbackFailed = "rollback-failed"
 )
 
 // What started a run.
@@ -34,6 +40,7 @@ const (
 	FindingFailedCommit = "failed-commit" // the last run of this commit failed; only a new commit or a manual run retries
 	FindingDiff         = "diff-failed"   // the changes since the deployed commit cannot be determined
 	FindingRemoved      = "removed"       // the folder is gone from the repository; nothing is stopped
+	FindingPaused       = "paused"        // a rollback failed; no run starts until the stack is resumed
 )
 
 var (
@@ -71,6 +78,15 @@ type StackState struct {
 	Dropped      *DroppedTrig `json:"dropped,omitempty"`
 	// Removed is set while the stack's folder is missing from the repository.
 	Removed bool `json:"removed,omitempty"`
+	// Paused is set when a rollback failed; it is cleared only by Resume.
+	Paused *Pause `json:"paused,omitempty"`
+}
+
+// Pause records why a stack gets no runs: the run whose rollback failed and its redacted reason.
+type Pause struct {
+	Time   time.Time `json:"time"`
+	Run    string    `json:"run"`
+	Reason string    `json:"reason,omitempty"`
 }
 
 // Finding is a fact about a stack that needs a human or explains why the stack is skipped.
@@ -94,8 +110,12 @@ type RunRecord struct {
 	Started  time.Time     `json:"started"`
 	Duration time.Duration `json:"duration"`
 	Result   string        `json:"result"`
-	// Error is the redacted reason of a failed run.
+	// Error is the redacted reason of a run that did not succeed.
 	Error string `json:"error,omitempty"`
+	// Backup is the id of the backup the run made, empty when it made none.
+	Backup string `json:"backup,omitempty"`
+	// RolledBackTo is the commit a successful rollback left the stack at.
+	RolledBackTo string `json:"rolled_back_to,omitempty"`
 }
 
 func validateState(s State) error {
@@ -111,10 +131,16 @@ func validateState(s State) error {
 				return errors.New("invalid commit id")
 			}
 		}
+		if st.Paused != nil && !runIDRe.MatchString(st.Paused.Run) {
+			return errors.New("invalid run id")
+		}
 	}
 	for _, r := range s.Runs {
 		if !runIDRe.MatchString(r.ID) {
 			return errors.New("invalid run id")
+		}
+		if r.RolledBackTo != "" && !commitRe.MatchString(r.RolledBackTo) {
+			return errors.New("invalid commit id")
 		}
 	}
 	return nil
@@ -143,6 +169,10 @@ func (s State) clone() State {
 		if v.Dropped != nil {
 			d := *v.Dropped
 			v.Dropped = &d
+		}
+		if v.Paused != nil {
+			p := *v.Paused
+			v.Paused = &p
 		}
 		out.Stacks[k] = v
 	}

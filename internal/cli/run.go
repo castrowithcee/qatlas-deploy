@@ -31,7 +31,7 @@ func newRunCommand() *cobra.Command {
 			backups.Image = backupImage
 			return service.Run(ctx, slog.New(slog.NewTextHandler(c.ErrOrStderr(), nil)).With("pid", os.Getpid()),
 				service.Config{Version: version, Endpoint: serviceEndpoint(), StateDir: stateDir(),
-					Deployer: compose.New(), Backups: backups})
+					Deployer: compose.New(backups.ForRuns()), Backups: backups})
 		},
 	}
 	cmd.Flags().StringVar(&backupImage, "backup-image", backup.DefaultImage,

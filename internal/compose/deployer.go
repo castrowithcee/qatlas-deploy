@@ -9,43 +9,65 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
-// Deployer implements engine.Deployer: pull, up, check. A failed step returns its error and ends the run;
-// bringing the previous version back is not part of it.
+// Backups saves and restores the data of a stack around a run; the backup package provides it.
+type Backups interface {
+	// Create backs up the stopped stack, whose data belongs to commit, and returns the backup's id.
+	Create(ctx context.Context, st stacks.Stack, commit string, log Logger) (string, error)
+	// Restore puts the data of backup id back into the stopped stack and leaves it stopped.
+	Restore(ctx context.Context, st stacks.Stack, id string, log Logger) error
+}
+
+// Deployer implements engine.Deployer with Docker Compose and, when Backups is set, the stack's backup rules.
 type Deployer struct {
 	Exec    *Executor
 	Checker *Checker
+	// Backups is nil when the service cannot back up: every stack then runs as one without backup rules.
+	Backups Backups
 }
 
 var _ engine.Deployer = (*Deployer)(nil)
 
 // New returns the production deployer: docker through os/exec with ProductionEnv, real clock.
-func New() *Deployer {
+func New(backups Backups) *Deployer {
 	x := &Executor{Runner: &ExecRunner{}, Env: ProductionEnv(os.Getenv)}
-	return &Deployer{Exec: x, Checker: &Checker{Exec: x}}
+	return &Deployer{Exec: x, Checker: &Checker{Exec: x}, Backups: backups}
 }
 
-// Deploy implements engine.Deployer.
-func (d *Deployer) Deploy(ctx context.Context, st stacks.Stack, _ string, log *engine.Log) error {
-	return d.deploy(ctx, st, log)
+// Stop implements engine.Deployer.
+func (d *Deployer) Stop(ctx context.Context, st stacks.Stack, log *engine.Log) error {
+	return d.Exec.Stop(ctx, st, log)
 }
 
-func (d *Deployer) deploy(ctx context.Context, st stacks.Stack, log Logger) error {
-	// Fail on a missing secrets.env or an unusable name before the first Compose call.
-	if _, err := d.Exec.command(st, 0, "pull"); err != nil {
-		log.Step("prepare")
-		return err
+// Backup implements engine.Deployer; a stack without backup rules is engine.ErrNoBackup.
+func (d *Deployer) Backup(ctx context.Context, st stacks.Stack, deployed string, log *engine.Log) (string, error) {
+	if d.Backups == nil || st.Rules == nil || st.Rules.Backup == nil {
+		return "", engine.ErrNoBackup
 	}
-	log.Step("pull")
-	if err := d.Exec.Pull(ctx, st, log); err != nil {
-		return err
-	}
-	log.Step("up")
-	if err := d.Exec.Up(ctx, st, log); err != nil {
-		return err
-	}
-	log.Step("check")
+	return d.Backups.Create(ctx, st, deployed, log)
+}
+
+// Pull implements engine.Deployer.
+func (d *Deployer) Pull(ctx context.Context, st stacks.Stack, log *engine.Log) error {
+	return d.Exec.Pull(ctx, st, log)
+}
+
+// Up implements engine.Deployer.
+func (d *Deployer) Up(ctx context.Context, st stacks.Stack, log *engine.Log) error {
+	return d.Exec.Up(ctx, st, log)
+}
+
+// Check implements engine.Deployer.
+func (d *Deployer) Check(ctx context.Context, st stacks.Stack, log *engine.Log) error {
 	if err := d.Checker.Check(ctx, st, log); err != nil {
 		return fmt.Errorf("check failed: %w", err)
 	}
 	return nil
+}
+
+// Restore implements engine.Deployer.
+func (d *Deployer) Restore(ctx context.Context, st stacks.Stack, id string, log *engine.Log) error {
+	if d.Backups == nil {
+		return engine.ErrNoBackup
+	}
+	return d.Backups.Restore(ctx, st, id, log)
 }

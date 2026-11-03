@@ -22,7 +22,11 @@ func newDeployCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Short: "Start a manual run of a stack",
 		Long: "deploy starts a run of the stack at the commit the working copy has now; it does not fetch. It returns as\n" +
 			"soon as the run is started and prints its id; follow it with 'qdeploy runs' and 'qdeploy log <run>'. A\n" +
-			"stack with a run in progress, with local changes or that cannot be read is refused.",
+			"stack with a run in progress, with local changes, that cannot be read or that is paused is refused.\n\n" +
+			"A run stops the stack, backs up its data, pulls, starts and checks the new version. When a step after the\n" +
+			"stop fails, the run is rolled back: the data is restored from the run's backup, a commit that puts the\n" +
+			"stack folder back to its deployed state is pushed to the branch, and that state is started and checked.\n" +
+			"A stack whose rollback fails is left stopped and paused until 'qdeploy resume' is run.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			var res control.DeployResult
@@ -31,6 +35,28 @@ func newDeployCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 			}
 			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: []output.Field{
 				{Name: "run", Value: res.ID}, {Name: "stack", Value: res.Stack}, {Name: "commit", Value: res.Commit},
+			}})
+		},
+	}
+}
+
+func newResumeCommand(program *cobracli.Program, state *notRunning) *cobra.Command {
+	return &cobra.Command{
+		Use:   "resume <stack>",
+		Short: "Clear the pause of a stack after a failed rollback",
+		Long: "resume clears the pause a failed rollback left on the stack, so polls and manual runs reach it again. It\n" +
+			"starts nothing and leaves the stack as it is: the failed commit stays marked, so the stack runs again on\n" +
+			"a new commit or with 'qdeploy deploy <stack>'. Find out first why the rollback failed with\n" +
+			"'qdeploy runs <stack>' and 'qdeploy log <run>'.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			var res control.ResumeResult
+			if err := credentialCall(c, state, control.ResumeCommand, control.ResumeArgs{Stack: args[0]}, &res); err != nil {
+				return err
+			}
+			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: []output.Field{
+				{Name: "stack", Value: res.Stack}, {Name: "paused_since", Value: res.Pause.Since.UTC().Format(time.RFC3339)},
+				{Name: "run", Value: res.Pause.Run}, {Name: "reason", Value: res.Pause.Reason},
 			}})
 		},
 	}

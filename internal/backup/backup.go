@@ -607,3 +607,19 @@ func (m *Manager) start(ctx context.Context, st stacks.Stack, log Logger) error 
 	log.Step("up")
 	return m.Exec.Up(ctx, st, log)
 }
+
+// ForRuns returns the manager as the backups of deployment runs. A run calls it for a stack it stopped
+// itself, so Create and Restore leave the stack stopped.
+func (m *Manager) ForRuns() compose.Backups { return runBackups{m} }
+
+type runBackups struct{ m *Manager }
+
+func (b runBackups) Create(ctx context.Context, st stacks.Stack, commit string, log compose.Logger) (string, error) {
+	res, err := b.m.Create(ctx, st, commit, log)
+	return res.Meta.ID, err
+}
+
+func (b runBackups) Restore(ctx context.Context, st stacks.Stack, id string, log compose.Logger) error {
+	_, err := b.m.Restore(ctx, st, id, log)
+	return err
+}
