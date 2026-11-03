@@ -17,6 +17,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	registryclient "github.com/castrowithcee/qatlas-deploy/internal/registry"
+	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
 // DefaultStateDir is the state directory of the service under systemd's StateDirectory convention.
@@ -96,8 +97,12 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err := registerNotifyCommands(registry, notifier); err != nil {
 		return err
 	}
+	deployer := cfg.Deployer
+	if deployer != nil {
+		deployer = redactingDeployer{next: deployer, r: secrets}
+	}
 	eng, err := engine.New(engine.Config{
-		StateDir: cfg.StateDir, Source: repo.engineSource, Lock: &repo.mu, Deployer: cfg.Deployer,
+		StateDir: cfg.StateDir, Source: repo.engineSource, Lock: &repo.mu, Deployer: deployer,
 		Events: notifier.runEvent,
 		Redact: secrets.Apply, Interval: cfg.PollInterval, Clock: cfg.Clock, Logger: log,
 	})
@@ -125,7 +130,11 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err := registerRunCommands(registry, eng, cfg.Version, started, win.status); err != nil {
 		return err
 	}
-	if err := registerBackupCommands(registry, eng, cfg.Backups, secrets.Apply, log); err != nil {
+	if err := registerBackupCommands(registry, eng, cfg.Backups, secrets.Apply,
+		func(st stacks.Stack) { registerStackSecrets(secrets, st) }, log); err != nil {
+		return err
+	}
+	if err := registerSecretCommands(registry, eng, repo.engineSource, secrets, log); err != nil {
 		return err
 	}
 	engineDone := make(chan struct{})

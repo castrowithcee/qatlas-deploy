@@ -40,6 +40,7 @@ Commands:
 - qdeploy stack updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
 - qdeploy stack changelog <stack>: show the release notes between the current and the available version of each variable with an update; qdeploy stack updates --changelog shows them for all stacks (run with sudo)
 - qdeploy stack backup create|list <stack>, qdeploy stack backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
+- qdeploy stack secret set <stack> <KEY>, qdeploy stack secret list <stack>, qdeploy stack secret delete <stack> <KEY>: write, list by key and remove the secrets in a stack's secrets.env; the value is read without echo at a terminal or from standard input, never from an argument, and nothing is redeployed (run with sudo)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy notify list|add|remove|test: manage the notification channels (webhook, Slack, Telegram, e-mail) and send a test message through one (run with sudo; see qdeploy help notifications)
 - qdeploy version: print the version
@@ -163,7 +164,7 @@ Rules (rule ID, severity):
 - unknown-rules-variable (error): qdeploy.yaml names an image variable the stack does not have
 - unreadable-stack (error): another file of the stack cannot be read
 
-Secret values are never read or shown; only the key names of secrets.env are compared with .env.`
+Secret values are never shown or logged; the check compares only the key names of secrets.env with .env.`
 
 const notificationsTopic = `A notification channel receives the events it selected. Channels belong to the host, not to a stack. Commands (run with sudo; the service must run):
 - qdeploy notify list: the channels with type, events and settings, never their secrets

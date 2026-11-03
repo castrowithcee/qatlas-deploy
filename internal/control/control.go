@@ -450,6 +450,46 @@ const (
 	BackupRestoreCommand = "backup.restore"
 )
 
+// The commands that manage the secrets of a stack in its secrets.env. None answers with a value.
+const (
+	SecretSetCommand    = "secret.set"
+	SecretListCommand   = "secret.list"
+	SecretDeleteCommand = "secret.delete"
+)
+
+// SecretSetArgs are the arguments of SecretSetCommand. The value travels only in this request.
+type SecretSetArgs struct {
+	Stack string `json:"stack"`
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// SecretKeyArgs are the arguments of SecretDeleteCommand.
+type SecretKeyArgs struct {
+	Stack string `json:"stack"`
+	Key   string `json:"key"`
+}
+
+// SecretListArgs are the arguments of SecretListCommand.
+type SecretListArgs struct {
+	Stack string `json:"stack"`
+}
+
+// SecretResult answers SecretSetCommand and SecretDeleteCommand. Replaced is true when set overwrote a key.
+// Neither the run nor a redeploy is started: the new value applies at the next deployment.
+type SecretResult struct {
+	Stack    string `json:"stack"`
+	Key      string `json:"key"`
+	Replaced bool   `json:"replaced,omitempty"`
+}
+
+// SecretListResult answers SecretListCommand: the sorted key names, never values. A stack without a
+// secrets.env has no keys.
+type SecretListResult struct {
+	Stack string   `json:"stack"`
+	Keys  []string `json:"keys"`
+}
+
 // BackupArgs are the arguments of BackupCreateCommand and BackupListCommand.
 type BackupArgs struct {
 	Stack string `json:"stack"`
