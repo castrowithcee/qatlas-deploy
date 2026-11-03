@@ -55,6 +55,23 @@ func (c *svcClock) Advance(d time.Duration) {
 	c.timers = keep
 }
 
+// awaitTimer waits until a timer due at exactly at is pending. Advancing before the scheduler has asked for
+// its wait would leave that wait computed from the old time, so it would never fire.
+func (c *svcClock) awaitTimer(t *testing.T, at time.Time) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(time.Millisecond) {
+		c.mu.Lock()
+		found := slices.ContainsFunc(c.timers, func(tm svcTimer) bool { return tm.at.Equal(at) })
+		c.mu.Unlock()
+		if found {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no timer due at %s", at)
+		}
+	}
+}
+
 // noon is a Monday at noon on the host's own clock, far from the default window at 03:00 in any zone, and far
 // from any DST change.
 var noon = time.Date(2026, 6, 15, 12, 0, 0, 0, time.Local)
@@ -103,6 +120,7 @@ func openWindow(t *testing.T, h *harness, clock *svcClock) control.WindowResult 
 	if err := h.call(control.WindowSetCommand, control.WindowSetArgs{Start: "12:30", Duration: "1h"}, nil); err != nil {
 		t.Fatal(err)
 	}
+	clock.awaitTimer(t, noon.Add(30*time.Minute))
 	clock.Advance(30 * time.Minute)
 	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
 		var res control.WindowResult
