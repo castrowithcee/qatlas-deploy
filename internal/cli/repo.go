@@ -160,7 +160,11 @@ func confirmHostKey(c *cobra.Command, target string, probe control.RepoProbeResu
 }
 
 func repoCall(c *cobra.Command, state *notRunning, command string, args, result any) error {
-	if err := callFor(c.Context(), remoteCallLimit, serviceEndpoint(), command, args, result); err != nil {
+	return remoteCall(c, state, remoteCallLimit, command, args, result)
+}
+
+func remoteCall(c *cobra.Command, state *notRunning, limit time.Duration, command string, args, result any) error {
+	if err := callFor(c.Context(), limit, serviceEndpoint(), command, args, result); err != nil {
 		if errors.Is(err, client.ErrNotRunning) {
 			state.seen = true
 		}

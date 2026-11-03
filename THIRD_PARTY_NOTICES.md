@@ -10,6 +10,7 @@ Parts of this repository are copied from or derived from qatlas-sysmin
 - the hardened git environment, SSH options, output limits and process-group handling of `internal/gitrepo`
 - the poll loop with spread and wake-up, the per-stack run lock with dropped parallel triggers, and the state and run-log layout of `internal/engine`, reduced to a deployment engine without approvals, vault or step plans
 - the runner with process-group handling and bounded output, the Compose command assembly and the container and HTTP checks of `internal/compose`, reduced to one fixed pull, up and check flow without step plans
+- the volume archive through a helper container without network, the backup directory naming, the retention and the restore flow of `internal/backup`, rebuilt around Compose stacks (the backup store, metadata, data-directory handling and confirmation are new)
 - `.github/workflows/ci.yml`
 - the end-to-end environment in `e2e/`: `run.sh`, `host.Dockerfile`, `registry.Dockerfile`, `fakes.Dockerfile` and the helper services in `e2e/fakes` (releases fake, webhook receiver, demo application)
 

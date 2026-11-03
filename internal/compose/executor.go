@@ -97,6 +97,16 @@ func (x *Executor) step(ctx context.Context, st stacks.Stack, log Logger, timeou
 
 // run starts c under its own time limit and logs the command line.
 func (x *Executor) run(ctx context.Context, log Logger, c Command, timeout time.Duration, label string) (Result, error) {
+	return x.runNamed(ctx, log, c, timeout, "docker compose "+label)
+}
+
+// Do runs c, a call the caller assembled itself, under the executor's runner with its own time limit. name
+// says what the call is in the error text. The command line is logged, its output is not.
+func (x *Executor) Do(ctx context.Context, log Logger, c Command, timeout time.Duration, name string) (Result, error) {
+	return x.runNamed(ctx, log, c, timeout, name)
+}
+
+func (x *Executor) runNamed(ctx context.Context, log Logger, c Command, timeout time.Duration, name string) (Result, error) {
 	if x.Runner == nil {
 		return Result{}, errors.New("executor has no runner")
 	}
@@ -106,12 +116,12 @@ func (x *Executor) run(ctx context.Context, log Logger, c Command, timeout time.
 	res, err := x.Runner.Run(cctx, c)
 	if err != nil && cctx.Err() != nil {
 		if ctx.Err() == nil {
-			return res, fmt.Errorf("docker compose %s timed out after %s", label, timeout)
+			return res, fmt.Errorf("%s timed out after %s", name, timeout)
 		}
 		return res, fmt.Errorf("canceled: %w", ctx.Err())
 	}
 	if err != nil {
-		return res, fmt.Errorf("docker compose %s failed: %w", label, err)
+		return res, fmt.Errorf("%s failed: %w", name, err)
 	}
 	return res, nil
 }

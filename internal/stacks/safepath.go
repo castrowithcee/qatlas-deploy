@@ -83,3 +83,36 @@ func readBounded(root, rel string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// ResolveDir returns the absolute path of the directory rel below root. root must be absolute and clean. rel
+// must pass the same lexical checks as every path of the working copy and no component on the way may be a
+// symlink or a non-directory. exists is false when the path or a tail of it is missing; the part that exists
+// has been checked all the same. The result is a snapshot: the caller must not assume it stays valid.
+func ResolveDir(root, rel string) (abs string, exists bool, err error) {
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
+		return "", false, errors.New("root must be an absolute, clean path")
+	}
+	if err := checkRelative(rel); err != nil {
+		return "", false, err
+	}
+	cur := root
+	missing := false
+	for _, part := range strings.Split(rel, "/") {
+		cur = filepath.Join(cur, part)
+		if missing {
+			continue
+		}
+		info, err := os.Lstat(cur)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			missing = true
+		case err != nil:
+			return "", false, err
+		case info.Mode()&os.ModeSymlink != 0:
+			return "", false, errors.New("symlinks are not allowed")
+		case !info.IsDir():
+			return "", false, errors.New("not a directory")
+		}
+	}
+	return cur, !missing, nil
+}

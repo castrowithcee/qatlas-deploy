@@ -6,6 +6,7 @@ package compose
 import (
 	"context"
 	"fmt"
+	"io"
 )
 
 // Command is one external program call. Name and Args are passed as argv.
@@ -18,6 +19,9 @@ type Command struct {
 	Env []string
 	// MaxOutput caps the captured output; zero means DefaultMaxOutput.
 	MaxOutput int
+	// Stdout, when set, receives the standard output of the program; Result.Output then holds only the
+	// standard error. A write error to Stdout fails the program.
+	Stdout io.Writer
 }
 
 // Result is what a finished program produced.

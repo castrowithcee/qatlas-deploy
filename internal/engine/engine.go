@@ -697,3 +697,78 @@ func (e *Engine) Runs(stack string) ([]RunRecord, error) {
 
 // Log returns the run log of a run id; ErrNoSuchRun when the id is malformed or has no log.
 func (e *Engine) Log(id string) (string, error) { return e.logs.read(id) }
+
+// WithStack calls fn with the stack, read from the working copy, and the commit last deployed (empty if
+// none), while holding the stack's run slot: no run of the stack starts or is active meanwhile, and a poll
+// does not move the working copy. It is for work that must not overlap a deployment, such as a backup. label
+// is shown as the active run of the stack and is no run id. A stack that is busy, unknown, unreadable or has
+// local changes is refused as Trigger refuses it. fn runs in the caller's goroutine; its context also ends
+// when the engine closes.
+func (e *Engine) WithStack(ctx context.Context, name, label string,
+	fn func(ctx context.Context, st stacks.Stack, deployed string) error) error {
+	b, err := e.cfg.Source()
+	if err != nil {
+		return err
+	}
+	var (
+		st      stacks.Stack
+		release func()
+	)
+	err = func() error {
+		e.lock.Lock()
+		defer e.lock.Unlock()
+		changes, err := b.Copy.Status(ctx)
+		if err != nil {
+			return err
+		}
+		if local, _ := classify(changes); len(local[name]) > 0 {
+			return fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[name]))
+		}
+		list, err := stacks.Load(b.Dir)
+		if err != nil {
+			return fmt.Errorf("read stacks: %w", err)
+		}
+		i := slices.IndexFunc(list, func(s stacks.Stack) bool { return s.Name == name })
+		switch {
+		case i < 0:
+			return ErrUnknownStack
+		case list[i].Err != nil:
+			return fmt.Errorf("%w: %s", ErrUnreadable, e.text(list[i].Err.Error()))
+		}
+		st = list[i]
+		release, err = e.claim(name, label)
+		return err
+	}()
+	if err != nil {
+		return err
+	}
+	defer release()
+	cur, _, err := e.Stack(name)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	defer context.AfterFunc(e.base, cancel)()
+	return fn(ctx, st, cur.Deployed)
+}
+
+// claim takes the run slot of a stack for work that is no deployment run.
+func (e *Engine) claim(name, label string) (release func(), err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.closed {
+		return nil, ErrStopped
+	}
+	if _, busy := e.active[name]; busy {
+		return nil, ErrRunActive
+	}
+	e.active[name] = label
+	e.wg.Add(1)
+	return func() {
+		e.mu.Lock()
+		delete(e.active, name)
+		e.mu.Unlock()
+		e.wg.Done()
+	}, nil
+}

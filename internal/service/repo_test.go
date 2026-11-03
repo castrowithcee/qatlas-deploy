@@ -35,7 +35,7 @@ type harness struct {
 
 func start(t *testing.T) *harness { return startWith(t, nil) }
 
-func startWith(t *testing.T, dep engine.Deployer) *harness {
+func startWith(t *testing.T, dep engine.Deployer, opts ...func(*service.Config)) *harness {
 	t.Helper()
 	h := &harness{t: t, state: filepath.Join(t.TempDir(), "state"), git: servicetest.New(), srv: hostkeytest.Start(t)}
 	h.git.Files = servicetest.Stacks()
@@ -45,9 +45,13 @@ func startWith(t *testing.T, dep engine.Deployer) *harness {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- service.Run(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), service.Config{
+		cfg := service.Config{
 			Endpoint: ep, StateDir: h.state, PeerCheck: func(net.Conn) error { return nil }, Git: h.git, Deployer: dep,
-		})
+		}
+		for _, o := range opts {
+			o(&cfg)
+		}
+		done <- service.Run(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	path, err := ep.Path()

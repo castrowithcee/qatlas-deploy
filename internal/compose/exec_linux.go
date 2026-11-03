@@ -44,6 +44,9 @@ func (r *ExecRunner) Run(ctx context.Context, c Command) (Result, error) {
 		cmd.Env = []string{} // an empty environment, not the service's
 	}
 	cmd.Stdout, cmd.Stderr = out, out
+	if c.Stdout != nil {
+		cmd.Stdout = c.Stdout
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	var mu sync.Mutex

@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -51,5 +52,15 @@ func TestExecRunnerKillsProcessGroupOnTimeout(t *testing.T) {
 	}
 	if time.Since(start) > 5*time.Second {
 		t.Errorf("took %s", time.Since(start))
+	}
+}
+
+func TestExecRunnerSendsStandardOutputToTheWriter(t *testing.T) {
+	var out bytes.Buffer
+	res, err := (&ExecRunner{}).Run(context.Background(), Command{
+		Name: "/bin/sh", Args: []string{"-c", "echo data; echo warning >&2"}, Env: []string{}, Stdout: &out,
+	})
+	if err != nil || out.String() != "data\n" || string(res.Output) != "warning\n" {
+		t.Fatalf("stdout %q, output %q, err %v", out.String(), res.Output, err)
 	}
 }

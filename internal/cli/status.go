@@ -158,6 +158,21 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodeNoDeployer:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Stacks are only reported in this version; nothing can be deployed yet.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeConfirmation:
+		return &cli.Failure{Code: output.CodeConfirmationRequired, Message: remote.Message, Usage: true,
+			NextStep: "Confirm the action explicitly.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoBackups:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Update the service to a version that can back up stacks.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoBackupRules:
+		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
+			NextStep: "Add a backup section to the stack's qdeploy.yaml (see 'qdeploy help stack-rules').", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchBackup:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the backups with 'qdeploy backup list <stack>'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeBackupFailed:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Check the service log, then check that the stack runs; a failed backup is removed and a stopped stack is started again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeBusy:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Run the command again once the service is up.", Cause: err}

@@ -375,3 +375,67 @@ func TestParseProductionEnv(t *testing.T) {
 		t.Errorf("env = %q", env)
 	}
 }
+
+func TestVolumeNamesReadsOnlyTheNames(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{".env": "A=1\n", "secrets.env": "TOKEN=invented\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st := stacks.Stack{Name: "demo", Dir: dir, ComposeFiles: []string{"compose.yaml"}}
+	for name, tc := range map[string]struct {
+		out     string
+		want    map[string]string
+		wantErr bool
+	}{
+		"scoped and external": {`{"volumes":{"db":{"name":"demo_db"},"shared":{"name":"shared-vol","external":true}}}`,
+			map[string]string{"db": "demo_db", "shared": "shared-vol"}, false},
+		"none":      {`{"name":"demo"}`, map[string]string{}, false},
+		"no name":   {`{"volumes":{"db":{}}}`, nil, true},
+		"not json":  {`oops`, nil, true},
+		"too large": {strings.Repeat(" ", maxConfigOutput+1), nil, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := &stdoutRunner{out: tc.out}
+			x := &Executor{Runner: r}
+			got, err := x.VolumeNames(context.Background(), st, &fakeLog{})
+			if (err != nil) != tc.wantErr || fmt.Sprint(got) != fmt.Sprint(tc.want) {
+				t.Fatalf("got %v, %v", got, err)
+			}
+			if !strings.HasSuffix(strings.Join(r.args, " "), "config --format json") {
+				t.Fatalf("args = %v", r.args)
+			}
+		})
+	}
+}
+
+// stdoutRunner answers on the command's Stdout, as docker does for `compose config`.
+type stdoutRunner struct {
+	out  string
+	args []string
+}
+
+func (r *stdoutRunner) Run(_ context.Context, c Command) (Result, error) {
+	r.args = c.Args
+	_, err := c.Stdout.Write([]byte(r.out))
+	return Result{Output: []byte("warning on stderr")}, err
+}
+
+func TestRunningSeesStartedContainers(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{".env": "A=1\n", "secrets.env": "TOKEN=invented\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st := stacks.Stack{Name: "demo", Dir: dir, ComposeFiles: []string{"compose.yaml"}}
+	for out, want := range map[string]bool{
+		"": false, `{"Service":"app","State":"exited"}`: false, `{"Service":"app","State":"running"}`: true,
+	} {
+		x := &Executor{Runner: &fakeRunner{ps: []string{out}}}
+		if got, err := x.Running(context.Background(), st, &fakeLog{}); err != nil || got != want {
+			t.Fatalf("ps %q: %v, %v", out, got, err)
+		}
+	}
+}

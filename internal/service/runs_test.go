@@ -9,6 +9,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
+	"github.com/castrowithcee/qatlas-deploy/internal/service"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -45,7 +46,16 @@ func (d *fakeDeployer) Deploy(ctx context.Context, st stacks.Stack, commit strin
 
 func bound(t *testing.T, dep engine.Deployer) *harness {
 	t.Helper()
-	h := startWith(t, dep)
+	return boundWith(t, dep, nil)
+}
+
+// boundWith is bound with extra files in the working copy and options for the service.
+func boundWith(t *testing.T, dep engine.Deployer, files map[string]string, opts ...func(*service.Config)) *harness {
+	t.Helper()
+	h := startWith(t, dep, opts...)
+	for k, v := range files {
+		h.git.Files[k] = v
+	}
 	h.withKey()
 	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
 		t.Fatal(err)
