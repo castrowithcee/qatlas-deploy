@@ -35,7 +35,7 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			var st control.StatusResult
-			if err := call(c.Context(), serviceEndpoint(), control.StatusCommand, &st); err != nil {
+			if err := call(c.Context(), serviceEndpoint(), control.StatusCommand, nil, &st); err != nil {
 				if errors.Is(err, client.ErrNotRunning) {
 					state.seen = true
 				}
@@ -50,7 +50,7 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 	}
 }
 
-func call(ctx context.Context, ep localipc.ServiceEndpoint, command string, result any) error {
+func call(ctx context.Context, ep localipc.ServiceEndpoint, command string, args, result any) error {
 	ctx, cancel := context.WithTimeout(ctx, client.CallTimeout)
 	defer cancel()
 	cl, err := client.Dial(ctx, ep)
@@ -58,7 +58,7 @@ func call(ctx context.Context, ep localipc.ServiceEndpoint, command string, resu
 		return err
 	}
 	defer cl.Close()
-	return cl.Call(ctx, command, nil, result)
+	return cl.Call(ctx, command, args, result)
 }
 
 // failureOf turns a channel error into a diagnostic with a next step.
@@ -71,6 +71,15 @@ func failureOf(err error) error {
 	case errors.Is(err, client.ErrNoAccess), errors.As(err, &remote) && remote.Code == control.CodeNotRoot:
 		return &cli.Failure{Code: output.CodePermission, Message: "only root may use the qdeploy service; run with sudo",
 			NextStep: "Run the same command with sudo.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeKeyExists:
+		return &cli.Failure{Code: output.CodeConfirmationRequired, Message: remote.Message, Usage: true,
+			NextStep: "Run 'qdeploy key generate --replace' to replace it; the old key stops working at once.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeInvalid:
+		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
+			NextStep: "Fix the argument and run the command again.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNotFound:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "Create it first with 'qdeploy key generate' or 'qdeploy credential set <name>'.", Cause: err}
 	case errors.As(err, &remote):
 		return &cli.Failure{Code: output.CodeRuntime, Message: "the service refused the request: " + remote.Message,
 			NextStep: "Check that the client and the service are the same version.", Cause: err}

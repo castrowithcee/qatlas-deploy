@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -25,15 +26,31 @@ func useEndpoint(t *testing.T, ep localipc.ServiceEndpoint) {
 	t.Cleanup(func() { serviceEndpoint = old })
 }
 
+func useStateDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "state")
+	old := stateDir
+	stateDir = func() string { return dir }
+	t.Cleanup(func() { stateDir = old })
+	return dir
+}
+
 func startService(t *testing.T, check service.PeerCheck) {
+	t.Helper()
+	startServiceLogged(t, check, io.Discard)
+}
+
+// startServiceLogged starts the service with its log on logOut and returns once the channel exists.
+func startServiceLogged(t *testing.T, check service.PeerCheck, logOut io.Writer) string {
 	t.Helper()
 	ep := channeltest.Endpoint(t)
 	useEndpoint(t, ep)
+	dir := useStateDir(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- service.Run(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)),
-			service.Config{Version: "9.9.9", Endpoint: ep, PeerCheck: check})
+		done <- service.Run(ctx, slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelDebug})),
+			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	path, err := ep.Path()
@@ -42,7 +59,7 @@ func startService(t *testing.T, check service.PeerCheck) {
 	}
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
 		if _, err := os.Lstat(path); err == nil {
-			return
+			return dir
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("service channel did not appear")

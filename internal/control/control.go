@@ -50,6 +50,9 @@ const (
 	CodeTooLarge       = "too-large"
 	CodeBusy           = "busy"
 	CodeInternal       = "internal"
+	CodeInvalid        = "invalid-argument"
+	CodeNotFound       = "not-found"
+	CodeKeyExists      = "key-exists"
 )
 
 // Request is what a client sends. Args is command specific and may be absent.
@@ -139,4 +142,47 @@ const StatusCommand = "status"
 type StatusResult struct {
 	Version   string    `json:"version"`
 	StartedAt time.Time `json:"started_at"`
+}
+
+// The commands that manage the deploy key and the named credentials. The private key and stored values never
+// travel back over the channel.
+const (
+	KeyGenerateCommand      = "key.generate"
+	KeyShowCommand          = "key.show"
+	CredentialSetCommand    = "credential.set"
+	CredentialListCommand   = "credential.list"
+	CredentialDeleteCommand = "credential.delete"
+)
+
+// KeyGenerateArgs are the arguments of KeyGenerateCommand. An existing key is replaced only if Replace is set.
+type KeyGenerateArgs struct {
+	Replace bool `json:"replace"`
+}
+
+// KeyResult answers KeyGenerateCommand and KeyShowCommand with the public part of the deploy key.
+type KeyResult struct {
+	PublicKey   string `json:"public_key"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// CredentialSetArgs are the arguments of CredentialSetCommand.
+type CredentialSetArgs struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// CredentialNameArgs are the arguments of CredentialDeleteCommand.
+type CredentialNameArgs struct {
+	Name string `json:"name"`
+}
+
+// CredentialInfo describes one stored credential; it never carries the value.
+type CredentialInfo struct {
+	Name     string    `json:"name"`
+	Modified time.Time `json:"modified"`
+}
+
+// CredentialListResult answers CredentialListCommand.
+type CredentialListResult struct {
+	Credentials []CredentialInfo `json:"credentials"`
 }

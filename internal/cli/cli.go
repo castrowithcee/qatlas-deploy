@@ -10,6 +10,7 @@ import (
 	"github.com/castrowithcee/qatlas-kit/cli"
 	"github.com/castrowithcee/qatlas-kit/cobracli"
 	"github.com/castrowithcee/qatlas-kit/output"
+	"github.com/castrowithcee/qatlas-kit/redact"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/helptopics"
 )
@@ -29,12 +30,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		// Without a subcommand there is nothing to do yet, so the root command prints its own help.
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
-	program, err := cobracli.New(root, cobracli.Options{Version: version, Topics: helptopics.All()})
+	secrets := &redact.Redactor{}
+	program, err := cobracli.New(root, cobracli.Options{Version: version, Topics: helptopics.All(), Redactor: secrets})
 	if err != nil {
 		return cli.ExitRuntime
 	}
 	var state notRunning
-	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, &state), newManpageCommand(program))
+	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, &state),
+		newKeyCommand(program, &state), newCredentialCommand(program, &state, secrets), newManpageCommand(program))
 	code := program.Execute(args, stdout, stderr)
 	if code == cli.ExitRuntime && state.seen {
 		return ExitServiceNotRunning
