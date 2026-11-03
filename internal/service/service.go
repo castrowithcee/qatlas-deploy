@@ -4,7 +4,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -58,12 +57,6 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	}
 	registry := control.NewRegistry()
 	started := time.Now().UTC().Truncate(time.Second)
-	err = registry.Register(control.StatusCommand, func(context.Context, json.RawMessage) (any, error) {
-		return control.StatusResult{Version: cfg.Version, StartedAt: started}, nil
-	})
-	if err != nil {
-		return err
-	}
 	if err := registerCredentialCommands(registry, store); err != nil {
 		return err
 	}
@@ -82,6 +75,9 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		return fmt.Errorf("prepare the engine: %w", err)
 	}
 	repo.onBound = eng.Wake
+	if err := registerRunCommands(registry, eng, cfg.Version, started); err != nil {
+		return err
+	}
 	engineDone := make(chan struct{})
 	go func() {
 		defer close(engineDone)

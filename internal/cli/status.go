@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -30,7 +31,8 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show whether the qdeploy service is running",
-		Long: "status asks the running service for its version and start time. Only root may use the service\n" +
+		Long: "status asks the running service for its version and start time, the state of its last repository poll\n" +
+			"and, per stack, what is deployed, pending or running, the last run result and the findings. Only root may use the service\n" +
 			"channel, so run it with sudo. Without a running service it ends with exit code 3.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
@@ -41,13 +43,52 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 				}
 				return failureOf(err)
 			}
-			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: []output.Field{
+			fields := []output.Field{
 				{Name: "running", Value: true},
 				{Name: "version", Value: st.Version},
 				{Name: "started_at", Value: st.StartedAt.UTC().Format(time.RFC3339)},
-			}})
+			}
+			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: append(fields, engineFields(st.Engine)...)})
 		},
 	}
+}
+
+// engineFields flattens the engine part into scalar fields, which every output format can carry.
+func engineFields(e control.EngineStatus) []output.Field {
+	var out []output.Field
+	if !e.LastPoll.IsZero() {
+		out = append(out, output.Field{Name: "last_poll", Value: e.LastPoll.UTC().Format(time.RFC3339)})
+	}
+	for _, f := range [][2]string{{"poll_error", e.PollError}, {"note", e.Note}, {"head", e.Head}, {"remote_head", e.RemoteHead}} {
+		if f[1] != "" {
+			out = append(out, output.Field{Name: f[0], Value: f[1]})
+		}
+	}
+	for _, s := range e.Stacks {
+		p := "stack." + s.Name + "."
+		out = append(out, output.Field{Name: p + "deployed", Value: s.Deployed}, output.Field{Name: p + "pending", Value: s.Pending})
+		if s.ActiveRun != "" {
+			out = append(out, output.Field{Name: p + "active_run", Value: s.ActiveRun})
+		}
+		if s.LastRun != "" {
+			out = append(out, output.Field{Name: p + "last_run", Value: s.LastRun})
+		}
+		if len(s.Findings) > 0 {
+			parts := make([]string, 0, len(s.Findings))
+			for _, f := range s.Findings {
+				part := f.Kind
+				if f.Detail != "" {
+					part += ": " + f.Detail
+				}
+				parts = append(parts, part)
+			}
+			out = append(out, output.Field{Name: p + "findings", Value: strings.Join(parts, "; ")})
+		}
+		if s.Removed {
+			out = append(out, output.Field{Name: p + "removed", Value: true})
+		}
+	}
+	return out
 }
 
 func call(ctx context.Context, ep localipc.ServiceEndpoint, command string, args, result any) error {
@@ -99,6 +140,27 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodeRemote:
 		return &cli.Failure{Code: output.CodeUnreachable, Message: remote.Message,
 			NextStep: "Check the URL, the network and that the deploy key is entered in the git platform ('qdeploy key show').", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeRunActive:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Wait for the active run to end ('qdeploy runs'), then run the command again.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeLocalChanges:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Resolve the local changes in the working copy of the stack; the stack is skipped until then.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchStack:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the stacks with 'qdeploy stacks'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchRun:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the runs with 'qdeploy runs'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeUnreadable:
+		return &cli.Failure{Code: output.CodeConfigInvalid, Message: remote.Message,
+			NextStep: "Find the problem with 'qdeploy check', fix it in the stacks repository and run the command again.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoDeployer:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Stacks are only reported in this version; nothing can be deployed yet.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeBusy:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Run the command again once the service is up.", Cause: err}
 	case errors.As(err, &remote):
 		return &cli.Failure{Code: output.CodeRuntime, Message: "the service refused the request: " + remote.Message,
 			NextStep: "Check that the client and the service are the same version.", Cause: err}

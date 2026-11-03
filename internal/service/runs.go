@@ -1,0 +1,134 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"slices"
+	"sort"
+	"time"
+
+	"github.com/castrowithcee/qatlas-deploy/internal/control"
+	"github.com/castrowithcee/qatlas-deploy/internal/engine"
+)
+
+// runsAnswer maps an engine error to a fixed answer. Text from the engine's error is never passed on: it may
+// carry names or paths from the working copy.
+func runsAnswer(err error) error {
+	switch {
+	case errors.Is(err, engine.ErrRunActive):
+		return control.NewError(control.CodeRunActive, "a run of this stack is already active")
+	case errors.Is(err, engine.ErrLocalChanges):
+		return control.NewError(control.CodeLocalChanges, "the stack has local changes in the working copy and is skipped")
+	case errors.Is(err, engine.ErrUnknownStack):
+		return control.NewError(control.CodeNoSuchStack, "no such stack in the working copy")
+	case errors.Is(err, engine.ErrUnreadable):
+		return control.NewError(control.CodeUnreadable, "the stack cannot be read")
+	case errors.Is(err, engine.ErrNoDeployer):
+		return control.NewError(control.CodeNoDeployer, "deployments are not available in this version")
+	case errors.Is(err, engine.ErrNoRepo):
+		return control.NewError(control.CodeNoRepo, "no stacks repository is bound")
+	case errors.Is(err, engine.ErrStopped):
+		return control.NewError(control.CodeBusy, "the service is stopping")
+	case errors.Is(err, engine.ErrNoSuchRun):
+		return control.NewError(control.CodeNoSuchRun, "no such run")
+	}
+	return err
+}
+
+func registerRunCommands(r *control.Registry, eng *engine.Engine, version string, started time.Time) error {
+	commands := map[string]control.Handler{
+		control.StatusCommand: func(context.Context, json.RawMessage) (any, error) {
+			snap, err := eng.Snapshot()
+			if err != nil {
+				return nil, errors.New("the engine state cannot be read")
+			}
+			return control.StatusResult{Version: version, StartedAt: started, Engine: engineStatus(snap)}, nil
+		},
+		control.DeployCommand: func(ctx context.Context, raw json.RawMessage) (any, error) {
+			var a control.DeployArgs
+			if err := decodeArgs(raw, &a); err != nil {
+				return nil, err
+			}
+			info, err := eng.Trigger(ctx, a.Stack)
+			if err != nil {
+				return nil, runsAnswer(err)
+			}
+			return control.DeployResult{ID: printable(info.ID), Stack: printable(info.Stack), Commit: printable(info.Commit)}, nil
+		},
+		control.RunsCommand: func(_ context.Context, raw json.RawMessage) (any, error) {
+			var a control.RunsArgs
+			if err := decodeArgs(raw, &a); err != nil {
+				return nil, err
+			}
+			runs, err := eng.Runs(a.Stack)
+			if err != nil {
+				return nil, errors.New("the engine state cannot be read")
+			}
+			res := control.RunsResult{Runs: make([]control.RunInfo, 0, len(runs))}
+			for _, rec := range runs {
+				res.Runs = append(res.Runs, control.RunInfo{
+					ID: printable(rec.ID), Stack: printable(rec.Stack), Commit: printable(rec.Commit),
+					Trigger: printable(rec.Trigger), Started: rec.Started, DurationMS: rec.Duration.Milliseconds(),
+					Result: printable(rec.Result), Error: printable(rec.Error),
+				})
+			}
+			return res, nil
+		},
+		control.LogCommand: func(_ context.Context, raw json.RawMessage) (any, error) {
+			var a control.LogArgs
+			if err := decodeArgs(raw, &a); err != nil {
+				return nil, err
+			}
+			text, err := eng.Log(a.ID)
+			if err != nil {
+				if errors.Is(err, engine.ErrNoSuchRun) {
+					return nil, runsAnswer(err)
+				}
+				return nil, errors.New("the run log cannot be read")
+			}
+			// Run logs are sanitized line by line when written; the line breaks must survive.
+			return control.LogResult{Text: text}, nil
+		},
+	}
+	for name, h := range commands {
+		if err := r.Register(name, h); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func engineStatus(snap engine.Snapshot) control.EngineStatus {
+	st := snap.State
+	res := control.EngineStatus{
+		LastPoll: st.LastPoll, PollError: printable(st.PollError), Note: printable(st.Note),
+		Head: printable(st.Head), RemoteHead: printable(st.RemoteHead), Stacks: []control.StackStatus{},
+	}
+	names := make([]string, 0, len(st.Stacks))
+	for n := range st.Stacks {
+		names = append(names, n)
+	}
+	for n := range snap.Active {
+		if _, ok := st.Stacks[n]; !ok {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	names = slices.Compact(names)
+	for _, n := range names {
+		s := st.Stacks[n]
+		item := control.StackStatus{
+			Name: printable(n), Deployed: printable(s.Deployed), Pending: printable(s.Pending),
+			ActiveRun: printable(snap.Active[n]), Findings: []control.FindingInfo{}, Removed: s.Removed,
+		}
+		if s.LastRun != nil {
+			item.LastRun = printable(s.LastRun.Result)
+		}
+		for _, f := range s.Findings {
+			item.Findings = append(item.Findings, control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)})
+		}
+		res.Stacks = append(res.Stacks, item)
+	}
+	return res
+}

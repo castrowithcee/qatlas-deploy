@@ -17,6 +17,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/channeltest"
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
+	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/hostkey/hostkeytest"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
 	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
@@ -32,7 +33,9 @@ type harness struct {
 	call  func(command string, args, result any) error
 }
 
-func start(t *testing.T) *harness {
+func start(t *testing.T) *harness { return startWith(t, nil) }
+
+func startWith(t *testing.T, dep engine.Deployer) *harness {
 	t.Helper()
 	h := &harness{t: t, state: filepath.Join(t.TempDir(), "state"), git: servicetest.New(), srv: hostkeytest.Start(t)}
 	h.git.Files = servicetest.Stacks()
@@ -43,7 +46,7 @@ func start(t *testing.T) *harness {
 	done := make(chan error, 1)
 	go func() {
 		done <- service.Run(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), service.Config{
-			Endpoint: ep, StateDir: h.state, PeerCheck: func(net.Conn) error { return nil }, Git: h.git,
+			Endpoint: ep, StateDir: h.state, PeerCheck: func(net.Conn) error { return nil }, Git: h.git, Deployer: dep,
 		})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
