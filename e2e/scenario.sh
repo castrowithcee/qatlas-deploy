@@ -8,7 +8,9 @@
 # Version updates with qdeploy update follow: one direct step, a stepwise major jump and a jump whose middle step
 # fails. The maintenance window follows on a real, short window: a stack in automatic mode is updated without a
 # human, a stack in manual mode is only reported, a paused and a pinned stack stay as they are, and a change with
-# window set takes effect in the running service. Docker integration tests of the deployer run inside the host
+# window set takes effect in the running service. The terminal interface follows: sudo qdeploy opens it in a
+# tmux pane, an update shows its changelog before it is confirmed and then runs, and two ticked stacks are updated
+# one after another with one confirmation. Docker integration tests of the deployer run inside the host
 # before all that. Sourced by run.sh scenario.
 
 as_admin() {
@@ -852,6 +854,8 @@ scenario_stacks_repo() {
 
 	scenario_window
 
+	scenario_tui
+
 	step 'a changed host key of the git server aborts qdeploy'
 	original_key=$(scanned_git_key)
 	pinned=$(known_hosts_sum)
@@ -1033,6 +1037,187 @@ scenario_window() {
 	qd unpin demo-pinned >/dev/null || fail 'unpin failed'
 	out=$(window_far_away) || fail "window set failed: $out"
 	[ "$(window_field open)" = false ] || fail "the window is still open after it was moved: $(qd --output json window show)"
+}
+
+# The terminal interface is driven in a tmux pane of the administrator, 120 columns by 40 rows. The command
+# keeps the pane after qdeploy ends, so the exit code can be read from the screen.
+tui_tmux() {
+	docker exec -u "$admin" "$host" tmux -L qdtui "$@"
+}
+
+tui_screen() {
+	tui_tmux capture-pane -p -t qdtui
+}
+
+tui_send() {
+	tui_tmux send-keys -t qdtui "$@"
+}
+
+tui_has() {
+	tui_screen | grep -qF -- "$1"
+}
+
+# tui_wait waits up to $2 seconds for the text $1 on the screen and shows the screen when it does not appear.
+tui_wait() {
+	i=0
+	until tui_has "$1"; do
+		i=$((i + 1))
+		if [ "$i" -ge $(($2 * 4)) ]; then
+			printf '%s\n' "$(tui_screen)" >&2
+			fail "timeout waiting for '$1' on the screen of the terminal interface"
+		fi
+		sleep 0.25
+	done
+}
+
+# tui_cursor_to moves the cursor of the Stacks list to the stack $1.
+tui_cursor_to() {
+	i=0
+	until tui_screen | grep -q "^> .*\[.\] $1 "; do
+		i=$((i + 1))
+		[ "$i" -lt 12 ] || fail "the cursor does not reach $1: $(tui_screen)"
+		tui_send Down
+		sleep 0.2
+	done
+}
+
+# tui_excerpt logs the lines of the screen from the first one containing $1, at most $2 lines.
+tui_excerpt() {
+	tui_screen | sed -n "/$1/,\$p" | head -n "$2" | sed 's/ *$//; s/^/e2e:   | /'
+}
+
+# scenario_tui drives the terminal interface of the running service the way an administrator does. demo-cache
+# (manual mode, 1.0.1) is updated alone with the changelog of its image; demo-paused and demo-pinned (1.0.0) are
+# ticked and updated together. All three offer 1.1.0 after the window section.
+scenario_tui() {
+	image=registry.$domain/demo/app
+
+	step 'demo-cache gets a changelog source and a fresh update check'
+	prev=$(newest_run demo-cache)
+	admin_commit demo-cache/qdeploy.yaml 's|^  mode: manual$|  mode: manual\n  changelog:\n    DEMO_APP_VERSION: qdeploye2e-org/demo-image|' 'Add the demo-cache changelog source'
+	restart_service
+	run=$(next_run demo-cache "$prev") || fail 'no run of demo-cache started for the changelog source'
+	wait_for "the run $run" 240 run_finished demo-cache "$run"
+	qd log "$run" | grep -q ' result succeeded' || fail "the run for the changelog source did not succeed: $(qd log "$run")"
+	qd updates --refresh >/dev/null || fail 'updates --refresh failed'
+	out=$(qd changelog demo-cache) || fail "changelog failed: $out"
+	printf '%s' "$out" | grep -q 'invented crash' || fail "the changelog of demo-cache has no release notes: $out"
+
+	step 'sudo qdeploy opens the interface and lists the demo stacks'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait '1 Stacks' 30
+	for name in demo-stack demo-cache demo-paused demo-pinned; do tui_wait "$name" 30; done
+	tui_wait 'q quit' 10
+	log 'scenario: interface open, stacks listed'
+
+	step 'u asks first: the question shows the versions and the changelog, nothing changes yet'
+	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
+	runs_before=$(stack_run_count demo-cache)
+	tui_cursor_to demo-cache
+	tui_send u
+	tui_wait 'Update demo-cache?' 15
+	tui_wait '1.0.1 -> 1.1.0' 15
+	tui_wait 'Fixes an invented crash on empty input.' 30
+	log 'scenario: update question of demo-cache:'
+	tui_excerpt "Update demo-cache" 14
+	[ "$(stack_images demo-cache)" = "$image:1.0.1" ] || fail "demo-cache changed before the answer: $(stack_images demo-cache)"
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$head_before" ] || fail 'the question already made a commit'
+	[ "$(stack_run_count demo-cache)" = "$runs_before" ] || fail 'the question already started a run'
+
+	step 'y runs the update; while it runs the Runs area lists the run and opens its log, which follows it'
+	tui_send y
+	tui_send 3
+	# The list is read again on r. The run lasts a few seconds, long enough for a poll every 0.3 seconds.
+	i=0
+	until tui_screen | grep -qE 'demo-cache +[0-9-]+ +[0-9:]+ +running'; do
+		i=$((i + 1))
+		[ "$i" -lt 30 ] || fail "the Runs area never listed the running update: $(tui_screen)"
+		tui_send r
+		sleep 0.3
+	done
+	tui_send Home Enter
+	tui_wait 'following' 10
+	tui_screen | grep -qE '^ +demo-cache +running +[0-9]{8}T' || fail "the opened log is not that of the running update: $(tui_screen)"
+	tui_wait 'step ' 10
+	log 'scenario: live run log of the update:'
+	tui_excerpt 'demo-cache  ' 8
+	tui_wait 'update finished: 1 ok, 0 failed' 120
+
+	step 'l opens the log of the finished run; the update made one commit and the stack runs 1.1.0'
+	tui_send l
+	tui_wait 'result succeeded' 15
+	screen_run=$(tui_screen | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' | head -n 1)
+	[ -n "$screen_run" ] && [ "$screen_run" = "$(newest_run demo-cache)" ] ||
+		fail "the log on the screen is not the newest run of demo-cache ($screen_run): $(tui_screen)"
+	run_log=$(qd log "$screen_run")
+	printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the update run did not succeed: $run_log"
+	[ "$(update_steps "$run_log")" = stop,backup,commit,push,fast-forward,pull,up,check ] || fail "unexpected steps of the update run: $(update_steps "$run_log")"
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $head_before..HEAD")" = 1 ] || fail 'the update did not create exactly one commit'
+	tui_commit_only_version "$(as_admin 'cd ~/stacks && git rev-parse HEAD')" demo-cache 1.0.1 1.1.0
+	[ "$(stack_images demo-cache)" = "$image:1.1.0" ] || fail "demo-cache does not run 1.1.0: $(stack_images demo-cache)"
+	stack_healthy demo-cache || fail 'demo-cache is not healthy after the update'
+	log "scenario: interface update of demo-cache: run $screen_run, demo-cache runs 1.1.0"
+
+	step 'two ticked stacks are updated with one question, one after another'
+	head_before=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	tui_send 1
+	tui_wait '[ ] demo-paused' 10
+	tui_cursor_to demo-paused
+	tui_send Space
+	tui_cursor_to demo-pinned
+	tui_send Space
+	tui_wait '[x] demo-paused' 10
+	tui_wait '[x] demo-pinned' 10
+	tui_send u
+	tui_wait 'Update 2 stacks?' 15
+	tui_wait '  demo-pinned' 15
+	log 'scenario: update question of two stacks:'
+	tui_excerpt 'Update 2 stacks' 14
+	[ "$(stack_images demo-paused)" = "$image:1.0.0" ] && [ "$(stack_images demo-pinned)" = "$image:1.0.0" ] ||
+		fail 'a stack changed before the answer'
+	tui_send y
+	tui_wait 'update finished: 2 ok, 0 failed' 180
+	log 'scenario: result of the two-stack update:'
+	tui_excerpt 'update finished' 8
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $head_before..HEAD")" = 2 ] || fail 'the multi-update did not create exactly two commits'
+	first_commit=$(as_admin "cd ~/stacks && git log --reverse --format=%H $head_before..HEAD" | sed -n 1p)
+	second_commit=$(as_admin "cd ~/stacks && git log --reverse --format=%H $head_before..HEAD" | sed -n 2p)
+	tui_commit_only_version "$first_commit" demo-paused 1.0.0 1.1.0
+	tui_commit_only_version "$second_commit" demo-pinned 1.0.0 1.1.0
+	for stack in demo-paused demo-pinned; do
+		[ "$(stack_images "$stack")" = "$image:1.1.0" ] || fail "$stack does not run 1.1.0: $(stack_images "$stack")"
+		stack_healthy "$stack" || fail "$stack is not healthy after the update"
+	done
+	[ "$(stack_field demo-paused deployed)" = "$first_commit" ] && [ "$(stack_field demo-pinned deployed)" = "$second_commit" ] ||
+		fail 'the stacks are not recorded as deployed at their update commits'
+	first_log=$(qd log "$(newest_run demo-paused)") second_log=$(qd log "$(newest_run demo-pinned)")
+	first_end=$(printf '%s\n' "$first_log" | tail -n 1 | cut -d ' ' -f 1) second_start=$(printf '%s\n' "$second_log" | head -n 1 | cut -d ' ' -f 1)
+	[ "$(printf '%s\n%s\n' "$first_end" "$second_start" | sort | head -n 1)" = "$first_end" ] ||
+		fail "the second run started before the first ended: $first_end, $second_start"
+	log "scenario: two stacks updated one after another: $first_commit, $second_commit"
+
+	step 'q ends the interface with exit code 0'
+	tui_send Escape
+	tui_send 1
+	sleep 0.3
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+}
+
+# tui_commit_only_version requires that a commit moves only DEMO_APP_VERSION of one stack, from $3 to $4, with
+# the subject the update gives it.
+tui_commit_only_version() {
+	[ "$(as_admin "cd ~/stacks && git show --format= --numstat $1")" = "$(printf '1\t1\t%s/.env' "$2")" ] ||
+		fail "the commit $1 does not change exactly one line of $2/.env"
+	[ "$(as_admin "cd ~/stacks && git show --format= -U0 $1 | grep '^[-+]' | grep -v '^\(---\|+++\)'")" = "$(printf -- '-DEMO_APP_VERSION=%s\n+DEMO_APP_VERSION=%s' "$3" "$4")" ] ||
+		fail "the commit $1 does not only move DEMO_APP_VERSION of $2 from $3 to $4"
+	[ "$(as_admin "cd ~/stacks && git log -1 --format=%s $1")" = "Update $2 DEMO_APP_VERSION from $3 to $4" ] ||
+		fail "the commit $1 has an unexpected subject: $(as_admin "cd ~/stacks && git log -1 --format=%s $1")"
 }
 
 health_is() {
