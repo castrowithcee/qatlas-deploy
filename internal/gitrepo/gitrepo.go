@@ -266,6 +266,11 @@ func (r *Repo) revParse(ctx context.Context, rev string) (string, error) {
 
 // run executes git with the hardened environment. inRepo selects the working copy as git's directory.
 func (r *Repo) run(ctx context.Context, inRepo bool, outLimit int, args ...string) (string, error) {
+	return r.runEnv(ctx, inRepo, outLimit, nil, args...)
+}
+
+// runEnv is run with extra environment entries appended to the minimal environment.
+func (r *Repo) runEnv(ctx context.Context, inRepo bool, outLimit int, extraEnv []string, args ...string) (string, error) {
 	gitPath := r.cfg.test.gitPath
 	if gitPath == "" {
 		p, err := lookIn(fixedPath, "git")
@@ -279,7 +284,7 @@ func (r *Repo) run(ctx context.Context, inRepo bool, outLimit int, args ...strin
 		return "", fmt.Errorf("create temporary directory: %w", err)
 	}
 	defer os.RemoveAll(tmp)
-	env := r.environment(tmp)
+	env := append(r.environment(tmp), extraEnv...)
 
 	timeout := r.cfg.Timeout
 	if timeout <= 0 {
@@ -307,7 +312,7 @@ func (r *Repo) run(ctx context.Context, inRepo bool, outLimit int, args ...strin
 	case ctx.Err() != nil:
 		return "", ctx.Err()
 	case runErr != nil:
-		failure := &runFailure{text: failureText(runErr, stderr.String()), code: -1}
+		failure := &runFailure{text: failureText(runErr, stderr.String()), code: -1, stdout: stdout.String()}
 		var exit *exec.ExitError
 		if errors.As(runErr, &exit) {
 			failure.code = exit.ExitCode()
@@ -319,8 +324,9 @@ func (r *Repo) run(ctx context.Context, inRepo bool, outLimit int, args ...strin
 
 // runFailure is a failed git call; code is git's exit status, -1 when git did not run to its end.
 type runFailure struct {
-	text string
-	code int
+	text   string
+	code   int
+	stdout string
 }
 
 func (f *runFailure) Error() string { return f.text }
