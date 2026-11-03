@@ -41,8 +41,8 @@ func TestDetailShowsLoadingThenEachSectionOnItsOwn(t *testing.T) {
 	b.errs["changelog:demo-stack"] = errServiceBusy()
 	m := newTestModel(t, i18n.English, b, wideWidth, 40)
 	_, cmd := m.Update(keyMsg("enter"))
-	if screen := m.render(); strings.Count(screen, "Loading…") != 2 {
-		t.Fatalf("both sections should load:\n%s", screen)
+	if screen := m.render(); strings.Count(screen, "Loading…") != 3 {
+		t.Fatalf("all sections should load:\n%s", screen)
 	}
 	drain(m, cmd)
 	screen := m.render()
@@ -94,7 +94,7 @@ func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
 	m := newTestModel(t, i18n.English, demoBackend(), narrowWidth, 14)
 	send(m, "enter")
 	first := m.render()
-	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, "/36") {
+	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, "/40") {
 		t.Fatalf("top:\n%s", first)
 	}
 	send(m, "down", "down")
@@ -103,7 +103,7 @@ func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
 	}
 	send(m, "end")
 	last := m.render()
-	if !strings.Contains(last, "compose pull failed") || !strings.Contains(last, "36/36") {
+	if !strings.Contains(last, "compose pull failed") || !strings.Contains(last, "40/40") {
 		t.Fatalf("end:\n%s", last)
 	}
 	send(m, "down", "pgdown")
@@ -428,7 +428,7 @@ func TestOverviewOnlyReads(t *testing.T) {
 	send(m, "enter", "r", "esc", "3", "enter", "L", "r", "esc", "esc")
 	for name := range b.calls {
 		switch name {
-		case "status", "stacks", "check", "updates", "runs", "log", "changelog", "backups":
+		case "status", "stacks", "check", "updates", "runs", "log", "changelog", "backups", "secrets":
 		default:
 			t.Errorf("unexpected call %s", name)
 		}

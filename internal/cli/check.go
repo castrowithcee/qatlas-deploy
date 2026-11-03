@@ -18,7 +18,7 @@ func newCheckCommand(program *cobracli.Program, state *notRunning) *cobra.Comman
 		Short: "Check the stacks of the working copy against the stacks-repo standard",
 		Long: "check reports everything in the working copy of the bound stacks repository that contradicts the\n" +
 			"standard, one row per finding with stack, rule, severity (error or warning), cause and fix. Without\n" +
-			"an argument every stack is checked. Secret values are never read or shown, only key names. It reads\n" +
+			"an argument every stack is checked. Secret values are never shown or logged, only key names are compared. It reads\n" +
 			"the working copy as it is: it does not fetch, change files or fix anything. The exit code is 1 when\n" +
 			"at least one error was found, 0 otherwise. See 'qdeploy help stack-standard' for the rules.",
 		Args: func(_ *cobra.Command, args []string) error {

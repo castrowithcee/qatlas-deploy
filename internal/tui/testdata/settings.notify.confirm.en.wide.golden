@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]                                                                     
+------------------------------------------------------------------------------------------------------------------------
+  Settings of the channel                                                                                               
+                                                                                                                        
+              +--------------------------------------------------------------------------------------------------------+
+  Webhook URL | (entered, hidden)                                                                                      |
+              +--------------------------------------------------------------------------------------------------------+
+              #=============#= Add a notification channel =================================#===========================#
+> Signing key | ************| ! Add the channel deploy-hook (webhook)?                     |                           |
+              #=============|                                                              |===========================#
+              hidden; signs | The service stores the secret parts and never shows them     |                            
+                            | again.                                                       |                            
+                            |                                                              |                            
+                            | [ yes, do it ]  > cancel <                                   |                            
+                            | y yes, do it  n/esc/enter cancel                             |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]                                                                     
+------------------------------------------------------------------------------------------------------------------------
+  Credentials                                                                                                           
+                                                                                                                        
+  NAME                STORED                                                                                            
+> registry.docker.io  2026-10-30 09:00                                                                                  
+  github.com          2026-10-29 09:00                                                                                  
+                            #= Credentials ================================================#                            
+                            | ! Delete the credential registry.docker.io?                  |                            
+                            |                                                              |                            
+                            | Without it qdeploy works anonymously for this service. The   |                            
+                            | value cannot be recovered.                                   |                            
+                            |                                                              |                            
+                            | [ yes, do it ]  > cancel <                                   |                            
+                            | y yes, do it  n/esc/enter cancel                             |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                     1/2

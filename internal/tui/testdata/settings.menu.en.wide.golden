@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]                                                                     
+------------------------------------------------------------------------------------------------------------------------
+  SETTING             ABOUT                                                                                             
+> Stacks repository   bind the repository, confirm its host key, fetch                                                  
+  Deploy key          show or generate the key for the git platform                                                     
+  Credentials         registry logins and the GitHub token                                                              
+  Maintenance window  when updates run                                                                                  
+  Notifications       webhook, Slack, Telegram and e-mail channels                                                      
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+enter open  r reload  1-4 area  q quit                                                               up/down choose  1/5

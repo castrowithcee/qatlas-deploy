@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 Stacks [2 Stack-Details] 3 Läufe 4 Einstellungen    
+--------------------------------------------------------
+  demo-stack                                            
+                                                        
+  Modus    automatisch                                  
+  #= Backup einspielen ==============================#  
+  | ! Das Backup 20261023T031000Z-4567cdef des       |  
+  |   Stacks demo-stack einspielen?                  |  
+  |                                                  |  
+  | Der Stack wird gestoppt und seine aktuellen      |  
+  | Daten werden mit dem Backup überschrieben.       |  
+  | Danach wird der Stack wieder gestartet. Das      |  
+  | lässt sich nicht rückgängig machen.              |  
+  | 10-23 03:10                                      |  
+  | 11.0 MiB                                         |  
+  |                                                  |  
+  | [ ja, ausführen ]  > abbrechen <                 |  
+  | y ja, ausführen  n/esc/enter abbrechen           |  
+  #==================================================#  
+        - fixes the upload limit                        
+      1.4.3  2026-10-20                                 
+        Fixes a crash on empty input.                   
+                                                   20/40

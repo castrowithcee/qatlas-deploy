@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"maps"
+
 	"github.com/castrowithcee/qatlas-kit/i18n"
 	kittui "github.com/castrowithcee/qatlas-kit/tui"
 )
@@ -171,6 +173,15 @@ const (
 )
 
 func catalog() i18n.Catalogs[kittui.TextID] {
+	c := baseCatalog()
+	maps.Copy(c[i18n.English], settingsEnglish())
+	maps.Copy(c[i18n.German], settingsGerman())
+	maps.Copy(c[i18n.English], detailEnglish())
+	maps.Copy(c[i18n.German], detailGerman())
+	return c
+}
+
+func baseCatalog() i18n.Catalogs[kittui.TextID] {
 	return i18n.Catalogs[kittui.TextID]{
 		i18n.English: {
 			textAreaStacks: "Stacks",

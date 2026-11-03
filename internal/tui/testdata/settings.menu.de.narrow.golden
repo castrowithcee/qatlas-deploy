@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 Stacks 2 Stack-Details 3 Läufe [4 Einstellungen]    
+--------------------------------------------------------
+  EINSTELLUNG         INHALT                            
+> Stacks-Repository   Repository binden, Hostschlüssel ~
+  Deploy-Schlüssel    Schlüssel für die Git-Plattform z~
+  Zugangsdaten        Registry-Logins und GitHub-Token  
+  Wartungsfenster     wann Updates laufen               
+  Benachrichtigungen  Kanäle für Webhook, Slack, Telegr~
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+enter öffnen  r Neu laden  1-4 Bereich  q Beenden       
+                                  up/down Auswählen  1/5

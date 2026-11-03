@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs                                                                                   
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings                                                                      
 ------------------------------------------------------------------------------------------------------------------------
   demo-stack                                                                                                            
                                                                                                                         
@@ -23,6 +23,10 @@ qdeploy  maintenance window closed                                              
         Fixes a crash on empty input.                                                                                   
       more at https://example.invalid/app/releases                                                                      
                                                                                                                         
+  Secrets                                                                                                               
+    API_SIGNING_KEY                                                                                                     
+    DB_PASSWORD                                                                                                         
+                                                                                                                        
   Backups                                                                                                               
     20261030T140100Z-0123abcd                                                                                           
       10-30 14:01  12.0 MiB                                                                                             
@@ -37,4 +41,4 @@ qdeploy  maintenance window closed                                              
     failed  10-29 02:00  poll  850ms                                                                                    
       20261029T020000Z-00000010                                                                                         
       compose pull failed: registry unreachable                                                                         
-r reload  1-3 area  q quit                                                                                up/down scroll
+a set secret  x delete secret  R restore backup  r reload  1-4 area  q quit                               up/down scroll

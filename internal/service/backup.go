@@ -38,7 +38,7 @@ func (l backupLog) Printf(format string, args ...any) {
 	l.log.Info("backup", "stack", l.stack, "detail", fmt.Sprintf(format, args...))
 }
 
-func registerBackupCommands(r *control.Registry, eng *engine.Engine, backups Backups, redact func(string) string, log *slog.Logger) error {
+func registerBackupCommands(r *control.Registry, eng *engine.Engine, backups Backups, redact func(string) string, register func(stacks.Stack), log *slog.Logger) error {
 	answer := func(err error) error {
 		switch {
 		case errors.Is(err, backup.ErrNoRules):
@@ -78,6 +78,7 @@ func registerBackupCommands(r *control.Registry, eng *engine.Engine, backups Bac
 			defer cancel()
 			var res backup.Result
 			err := eng.WithStack(ctx, a.Stack, "backup", func(ctx context.Context, st stacks.Stack, deployed string) error {
+				register(st)
 				var err error
 				res, err = backups.Create(ctx, st, deployed, backupLog{log, a.Stack})
 				return err
@@ -136,6 +137,7 @@ func registerBackupCommands(r *control.Registry, eng *engine.Engine, backups Bac
 			defer cancel()
 			var meta backup.Meta
 			err := eng.WithStack(ctx, a.Stack, "restore", func(ctx context.Context, st stacks.Stack, _ string) error {
+				register(st)
 				var err error
 				meta, err = backups.Restore(ctx, st, a.ID, backupLog{log, a.Stack})
 				return err

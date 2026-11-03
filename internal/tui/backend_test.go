@@ -62,6 +62,24 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 		"pin":     func() error { _, err := b.Pin(ctx, "demo-stack"); return err },
 		"unpin":   func() error { _, err := b.Unpin(ctx, "demo-stack"); return err },
 		"resume":  func() error { _, err := b.Resume(ctx, "demo-stack"); return err },
+		// The settings calls get arguments the service refuses or answers harmlessly in its temporary state.
+		"probe":         func() error { _, err := b.RepoProbe(ctx, "https://git.example.test/stacks.git"); return err },
+		"reposet":       func() error { _, err := b.RepoSet(ctx, control.RepoSetArgs{}); return err },
+		"fetch":         func() error { _, err := b.RepoFetch(ctx); return err },
+		"keyshow":       func() error { _, err := b.KeyShow(ctx); return err },
+		"keygenerate":   func() error { _, err := b.KeyGenerate(ctx); return err },
+		"credentials":   func() error { _, err := b.Credentials(ctx); return err },
+		"credentialset": func() error { return b.CredentialSet(ctx, "backend-test", "example-value") },
+		"credentialdel": func() error { return b.CredentialDelete(ctx, "backend-test") },
+		"windowset":     func() error { _, err := b.WindowSet(ctx, control.WindowSetArgs{}); return err },
+		"notifications": func() error { _, err := b.Notifications(ctx); return err },
+		"notifyadd":     func() error { _, err := b.NotifyAdd(ctx, control.NotifyAddArgs{}); return err },
+		"notifyremove":  func() error { return b.NotifyRemove(ctx, "no-channel") },
+		"notifytest":    func() error { _, err := b.NotifyTest(ctx, "no-channel"); return err },
+		"secrets":       func() error { _, err := b.Secrets(ctx, "demo-stack"); return err },
+		"secretset":     func() error { _, err := b.SecretSet(ctx, "demo-stack", "BACKEND_TEST", "example-value"); return err },
+		"secretdelete":  func() error { _, err := b.SecretDelete(ctx, "demo-stack", "BACKEND_TEST"); return err },
+		"restore":       func() error { _, err := b.BackupRestore(ctx, "demo-stack", "20261023T031000Z-4567cdef"); return err },
 	}
 	for name, call := range calls {
 		var remote *control.Error

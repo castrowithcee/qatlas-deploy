@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]     
+--------------------------------------------------------
+  Bind the stacks repository                            
+                                                        
+  #= Stacks repository ==============================#=#
+> | ! Bind git@example.test:ops/stacks.git and trust | |
+  |   this host key?                                 |=#
+  |                                                  |  
+  | Compare the fingerprint with the git platform    |  
+  | first. The key is stored only now, and the       |-+
+  | repository is cloned.                            | |
+  | host: example.test                               |-+
+  | key type: ssh-ed25519                            |  
+  | fingerprint:                                     |  
+  | SHA256:ExampleFingerprintForTestsOnly0000000000  |  
+  | directory: /opt/stacks                           |  
+  |                                                  |  
+  | [ yes, do it ]  > cancel <                       |  
+  | y yes, do it  n/esc/enter cancel                 |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        

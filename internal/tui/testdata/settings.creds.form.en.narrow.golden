@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed            [esc] back
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]     
+--------------------------------------------------------
+  Set a credential                                      
+                                                        
+                +--------------------------------------+
+  Credential    | registry login                     v |
+                +--------------------------------------+
+                +--------------------------------------+
+  Registry host | Registry.Example.test:5000           |
+                +--------------------------------------+
+                +--------------------------------------+
+  Registry user | alice                                |
+                +--------------------------------------+
+                #======================================#
+> Token         | ************************_            |
+                #======================================#
+                hidden; the registry token, or the      
+                GitHub token                            
+                                                        
+                                                        
+                                                        
+F2 save  esc discard                                    
+tab next zone or field  shift+tab previous zone or field

@@ -6,7 +6,7 @@ import (
 
 // The heights of the detail goldens: tall enough for the whole detail, and short enough to scroll.
 const (
-	detailRows   = 40
+	detailRows   = 44
 	scrolledRows = 16
 )
 
@@ -21,6 +21,7 @@ func goldenScreens(t *testing.T, prefix string, rows int, setup func() *fakeBack
 				send(m, keys...)
 				screen := m.render()
 				checkScreen(t, screen, width, rows)
+				noLeak(t, screen, hiddenA, hiddenB)
 				checkGolden(t, prefix+"."+name+"."+size+".golden", screen+"\n")
 			})
 		}

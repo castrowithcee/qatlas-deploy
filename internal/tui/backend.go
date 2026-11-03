@@ -29,6 +29,8 @@ type Backend interface {
 	// Backups lists the backups of one stack, newest first.
 	Backups(ctx context.Context, stack string) (control.BackupListResult, error)
 	Window(ctx context.Context) (control.WindowResult, error)
+	// Secrets lists the key names of the secrets of one stack; never a value.
+	Secrets(ctx context.Context, stack string) (control.SecretListResult, error)
 
 	// The calls below change something in the service; the interface makes them only after a confirmation.
 
@@ -42,11 +44,43 @@ type Backend interface {
 	Unpin(ctx context.Context, stack string) (control.HoldResult, error)
 	// Resume clears the pause a failed rollback left on a stack.
 	Resume(ctx context.Context, stack string) (control.ResumeResult, error)
+
+	// The settings calls. Reads are free; the others the interface makes only after a confirmation. None of
+	// the results carries a stored secret.
+
+	// RepoProbe reads the host key the server of url presents; it stores nothing.
+	RepoProbe(ctx context.Context, url string) (control.RepoProbeResult, error)
+	RepoSet(ctx context.Context, args control.RepoSetArgs) (control.RepoSetResult, error)
+	RepoFetch(ctx context.Context) (control.RepoFetchResult, error)
+	KeyShow(ctx context.Context) (control.KeyResult, error)
+	// KeyGenerate never replaces an existing key: the interface offers no replacement.
+	KeyGenerate(ctx context.Context) (control.KeyResult, error)
+	Credentials(ctx context.Context) (control.CredentialListResult, error)
+	CredentialSet(ctx context.Context, name, value string) error
+	CredentialDelete(ctx context.Context, name string) error
+	WindowSet(ctx context.Context, args control.WindowSetArgs) (control.WindowResult, error)
+	Notifications(ctx context.Context) (control.NotifyListResult, error)
+	NotifyAdd(ctx context.Context, args control.NotifyAddArgs) (control.NotifyChannelInfo, error)
+	NotifyRemove(ctx context.Context, name string) error
+	NotifyTest(ctx context.Context, name string) (control.NotifyTestResult, error)
+
+	// The stack-detail writes. The value of SecretSet travels only in this call.
+	SecretSet(ctx context.Context, stack, key, value string) (control.SecretResult, error)
+	SecretDelete(ctx context.Context, stack, key string) (control.SecretResult, error)
+	// BackupRestore replaces the data of a stack with a backup and starts the stack again.
+	BackupRestore(ctx context.Context, stack, id string) (control.BackupRestoreResult, error)
 }
 
 // updateCallLimit bounds one update call, which waits for every step of the stack; it is the limit of the
 // update command.
 const updateCallLimit = 24 * time.Hour
+
+// remoteCallLimit bounds the calls that wait on the git server; it is the limit of the repo command.
+const remoteCallLimit = 3 * time.Minute
+
+// restoreCallLimit bounds a restore, which waits for the stack to stop, unpack and start again; it is the limit
+// of the backup command.
+const restoreCallLimit = 6*time.Hour + time.Minute
 
 // ChannelBackend is the Backend over the service channel. Every call dials a connection of its own, so calls
 // may run concurrently.
@@ -147,5 +181,89 @@ func (b *ChannelBackend) Unpin(ctx context.Context, stack string) (control.HoldR
 
 func (b *ChannelBackend) Resume(ctx context.Context, stack string) (res control.ResumeResult, err error) {
 	err = b.call(ctx, control.ResumeCommand, control.ResumeArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) RepoProbe(ctx context.Context, url string) (res control.RepoProbeResult, err error) {
+	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.RepoProbeCommand, control.RepoProbeArgs{URL: url}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) RepoSet(ctx context.Context, args control.RepoSetArgs) (res control.RepoSetResult, err error) {
+	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.RepoSetCommand, args, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) RepoFetch(ctx context.Context) (res control.RepoFetchResult, err error) {
+	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.RepoFetchCommand, nil, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) KeyShow(ctx context.Context) (res control.KeyResult, err error) {
+	err = b.call(ctx, control.KeyShowCommand, nil, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) KeyGenerate(ctx context.Context) (res control.KeyResult, err error) {
+	err = b.call(ctx, control.KeyGenerateCommand, control.KeyGenerateArgs{}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Credentials(ctx context.Context) (res control.CredentialListResult, err error) {
+	err = b.call(ctx, control.CredentialListCommand, nil, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) CredentialSet(ctx context.Context, name, value string) error {
+	return b.call(ctx, control.CredentialSetCommand, control.CredentialSetArgs{Name: name, Value: value}, nil)
+}
+
+func (b *ChannelBackend) CredentialDelete(ctx context.Context, name string) error {
+	return b.call(ctx, control.CredentialDeleteCommand, control.CredentialNameArgs{Name: name}, nil)
+}
+
+func (b *ChannelBackend) WindowSet(ctx context.Context, args control.WindowSetArgs) (res control.WindowResult, err error) {
+	err = b.call(ctx, control.WindowSetCommand, args, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Notifications(ctx context.Context) (res control.NotifyListResult, err error) {
+	err = b.call(ctx, control.NotifyListCommand, nil, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) NotifyAdd(ctx context.Context, args control.NotifyAddArgs) (res control.NotifyChannelInfo, err error) {
+	err = b.call(ctx, control.NotifyAddCommand, args, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) NotifyRemove(ctx context.Context, name string) error {
+	return b.call(ctx, control.NotifyRemoveCommand, control.NotifyNameArgs{Name: name}, nil)
+}
+
+func (b *ChannelBackend) NotifyTest(ctx context.Context, name string) (res control.NotifyTestResult, err error) {
+	err = client.Do(ctx, b.endpoint, client.CallTimeout+control.NotifyTestTimeout, control.NotifyTestCommand,
+		control.NotifyNameArgs{Name: name}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Secrets(ctx context.Context, stack string) (res control.SecretListResult, err error) {
+	err = b.call(ctx, control.SecretListCommand, control.SecretListArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SecretSet(ctx context.Context, stack, key, value string) (res control.SecretResult, err error) {
+	err = b.call(ctx, control.SecretSetCommand, control.SecretSetArgs{Stack: stack, Key: key, Value: value}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SecretDelete(ctx context.Context, stack, key string) (res control.SecretResult, err error) {
+	err = b.call(ctx, control.SecretDeleteCommand, control.SecretKeyArgs{Stack: stack, Key: key}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) BackupRestore(ctx context.Context, stack, id string) (res control.BackupRestoreResult, err error) {
+	err = client.Do(ctx, b.endpoint, restoreCallLimit, control.BackupRestoreCommand,
+		control.BackupRestoreArgs{Stack: stack, ID: id, Confirm: true}, &res)
 	return res, err
 }

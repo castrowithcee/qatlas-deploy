@@ -13,7 +13,10 @@
 # one after another with one confirmation. Notification channels (webhook, Slack, Telegram, e-mail) are
 # added with qdeploy notify: a webhook hears of a deployed and of a rolled-back run, and every channel
 # type delivers a test message. Docker integration tests of the deployer run inside the host
-# before all that. Sourced by run.sh scenario.
+# before all that. The last section resets the service to a fresh state and does the first setup only through
+# the terminal interface: deploy key, registry credential, maintenance window, notification channel with its
+# test, repository with a confirmed host key, a stack secret and the first deploy; then it restores an older
+# backup through the interface and proves that no masked value shows anywhere. Sourced by run.sh scenario.
 
 as_admin() {
 	docker exec -i -u "$admin" "$host" sh -ec "$*"
@@ -1008,6 +1011,8 @@ scenario_stacks_repo() {
 	step 'the original host key works again'
 	qd repo fetch >/dev/null || fail 'repo fetch fails after the host keys were restored'
 
+	scenario_tui_setup
+
 	docker exec "$host" systemctl stop qdeploy-e2e
 }
 
@@ -1159,8 +1164,10 @@ tui_tmux() {
 	docker exec -u "$admin" "$host" tmux -L qdtui "$@"
 }
 
+# tui_screen prints the screen and appends it to the capture log, which the first-setup section searches for
+# masked values at its end.
 tui_screen() {
-	tui_tmux capture-pane -p -t qdtui
+	tui_tmux capture-pane -p -t qdtui | tee -a "${tui_log:-/dev/null}" 2>/dev/null
 }
 
 tui_send() {
@@ -1336,4 +1343,333 @@ tui_commit_only_version() {
 
 health_is() {
 	[ "$(docker exec "$host" docker inspect -f '{{.State.Health.Status}}' "$1")" = "$2" ]
+}
+
+# --- First setup of a fresh service through the terminal interface only ---
+
+tui_login_user=alice-e2e
+tui_registry_host=quay.other.example.test
+tui_login_value=tui-registry-login-e2e
+tui_hook_url_value=https://hooks.$domain/tui-hook-e2e-path
+tui_hook_signing_value=tui-signing-value-e2e
+tui_stack_value=tuivalue-e2e-0451
+
+# tui_type types text into the interface.
+tui_type() {
+	tui_tmux send-keys -t qdtui -l -- "$1"
+}
+
+# tui_clear empties the text field that has the focus.
+tui_clear() {
+	tui_send BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace
+	tui_send BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace
+}
+
+# tui_menu shows the menu of the Settings area, whatever page was open.
+tui_menu() {
+	tui_send 4
+	sleep 0.4
+	tui_has 'bind the repository' || {
+		tui_send Escape
+		sleep 0.4
+	}
+	tui_wait 'bind the repository' 10
+}
+
+# tui_page opens the page of the Settings menu that is $1 rows below the first.
+tui_page() {
+	tui_menu
+	tui_send Home
+	n=0
+	while [ "$n" -lt "$1" ]; do
+		tui_send Down
+		n=$((n + 1))
+	done
+	tui_send Enter
+}
+
+# tui_pick_to moves the cursor of an open choice to the row that starts with the text $1.
+tui_pick_to() {
+	i=0
+	until tui_screen | grep -q "^> *$1"; do
+		i=$((i + 1))
+		[ "$i" -lt 12 ] || fail "the cursor does not reach $1: $(tui_screen)"
+		tui_send Down
+		sleep 0.2
+	done
+}
+
+# first_setup_reset gives the service a fresh state: no key, credentials, channels, repository or runs, and
+# no containers of the earlier sections.
+first_setup_reset() {
+	docker exec "$host" systemctl stop qdeploy-e2e || fail 'cannot stop the qdeploy service'
+	docker exec "$host" sh -ec '
+		for c in $(docker ps -aq --filter label=com.docker.compose.project); do docker rm -f -v "$c" >/dev/null; done
+		for v in $(docker volume ls -q --filter label=com.docker.compose.project); do docker volume rm "$v" >/dev/null; done
+		find /opt/stacks /var/lib/qdeploy -mindepth 1 -delete' || fail 'cannot reset the state of the service'
+	docker exec "$host" systemd-run --quiet --unit=qdeploy-e2e --property=Type=exec --property=User=qdeploy --property=Group=qdeploy \
+		--property=StateDirectory=qdeploy --property=StateDirectoryMode=0700 \
+		--property=RuntimeDirectory=qdeploy --property=RuntimeDirectoryMode=0750 /usr/local/bin/qdeploy run --backup-image "$backup_image" ||
+		fail 'cannot start the fresh qdeploy service'
+	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
+	wait_for 'the fresh qdeploy service to answer' 20 qd status
+}
+
+# first_setup_stack adds the stack demo-echo to the repository: its container name carries the value of the
+# secret DEMO_ECHO_TAG, so Compose prints that value when it creates and starts the container.
+first_setup_stack() {
+	as_admin 'cd ~/stacks && git pull -q --ff-only && mkdir demo-echo'
+	cat <<EOF | as_admin 'cat >"$HOME"/stacks/demo-echo/compose.yaml'
+services:
+  app:
+    image: registry.$domain/demo/app:\${DEMO_APP_VERSION}
+    container_name: demo-echo-\${DEMO_ECHO_TAG}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: demo-echo
+      DEMO_VERSION: \${DEMO_APP_VERSION}
+      DEMO_HEALTH: \${DEMO_HEALTH}
+    volumes:
+      - ./data:/data
+EOF
+	printf 'version: 1\nbackup:\n  paths:\n    - data\n  retention:\n    keep: 5\n' | as_admin 'cat >"$HOME"/stacks/demo-echo/qdeploy.yaml'
+	printf 'DEMO_APP_VERSION=1.0.1\nDEMO_HEALTH=ok\n' | as_admin 'cat >"$HOME"/stacks/demo-echo/.env'
+	as_admin 'cd ~/stacks && cp demo-cache/.gitignore demo-echo/.gitignore && git add -A &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Add the demo-echo stack" && git push -q origin main'
+}
+
+scenario_tui_setup() {
+	tui_log=$work/tui-screens.log
+	: >"$tui_log"
+	image=registry.$domain/demo/app
+
+	step 'the service gets a fresh state; the stack demo-echo joins the repository'
+	first_setup_stack
+	first_setup_reset
+	if qd key show >/dev/null; then fail 'the fresh service has a deploy key'; fi
+	if qd credential list | grep -q registry; then fail "the fresh service has credentials: $(qd credential list)"; fi
+
+	step 'sudo qdeploy opens the interface of the fresh service'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait '1 Stacks' 30
+	tui_wait 'No stacks' 30
+
+	step 'Settings: the deploy key is generated and its public part shown'
+	tui_page 1
+	tui_wait 'No deploy key yet' 10
+	tui_send G
+	tui_wait 'Generate the deploy key?' 10
+	tui_send y
+	tui_wait 'The deploy key is generated' 30
+	tui_send Enter
+	tui_wait 'Add this public key' 10
+	pub=$(tui_screen | grep -o 'ssh-ed25519 [A-Za-z0-9+/=]*' | head -n 1)
+	[ -n "$pub" ] || fail "the public key is not on the screen: $(tui_screen)"
+	cli_pub=$(qd --output json key show | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p' | cut -d ' ' -f 1,2)
+	[ "$pub" = "$cli_pub" ] || fail "the key on the screen differs from the key of the service: $pub vs $cli_pub"
+	printf '%s\n' "$pub" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+	log 'scenario: deploy key generated through the interface and registered on the git server'
+
+	step 'Settings: a registry credential is set after a question'
+	tui_page 2
+	tui_wait 'Credentials' 10
+	tui_send a
+	tui_wait 'Set a credential' 10
+	tui_send Tab
+	tui_type "$tui_registry_host"
+	tui_send Tab
+	tui_type "$tui_login_user"
+	tui_send Tab
+	tui_type "$tui_login_value"
+	sleep 0.5
+	tui_send F2
+	tui_wait 'Store the credential' 10
+	tui_send y
+	tui_wait 'is stored' 20
+	tui_send Enter
+	tui_wait "registry.$tui_registry_host" 10
+	qd credential list | grep -q "registry.$tui_registry_host" || fail "the credential is not stored: $(qd credential list)"
+
+	step 'Settings: the maintenance window is moved away from now'
+	win_start=$(date -u -d '+12 hours' +%H:%M)
+	tui_page 3
+	tui_wait 'Maintenance window' 10
+	tui_send e
+	tui_wait 'Change the maintenance window' 10
+	tui_clear
+	tui_type daily
+	tui_send Tab
+	tui_clear
+	tui_type "$win_start"
+	tui_send Tab
+	tui_clear
+	tui_type 1m
+	tui_send Tab
+	tui_clear
+	tui_type UTC
+	tui_send F2
+	tui_wait 'Change the maintenance window?' 10
+	tui_send y
+	tui_wait 'The maintenance window is changed' 20
+	tui_send Enter
+	[ "$(window_field start)" = "$win_start" ] && [ "$(window_field open)" = false ] ||
+		fail "the window was not set through the interface: $(qd --output json window show)"
+
+	step 'Settings: a webhook channel is added and its test message is sent'
+	tui_page 4
+	tui_wait 'Notifications' 10
+	tui_send a
+	tui_wait 'Add a notification channel' 10
+	tui_type tui-hook
+	tui_send F2
+	tui_wait 'Settings of the channel' 10
+	tui_type "$tui_hook_url_value"
+	tui_send Tab
+	tui_type "$tui_hook_signing_value"
+	tui_send F2
+	tui_wait 'Add the channel tui-hook' 10
+	tui_send y
+	tui_wait 'The channel tui-hook is added' 20
+	tui_send Enter
+	tui_wait 'tui-hook' 10
+	tui_send T
+	tui_wait 'Send a test message through tui-hook?' 10
+	tui_send y
+	tui_wait 'was delivered' 60
+	tui_send Enter
+	hook_seen /tui-hook-e2e-path test || fail 'the webhook receiver did not record the test message of the interface'
+
+	step 'Settings: the repository is bound after the host key is shown and confirmed'
+	tui_page 0
+	tui_wait 'No stacks repository is bound' 10
+	tui_send b
+	tui_wait 'Bind the stacks repository' 10
+	tui_type "git.$domain:stacks.git"
+	tui_send F2
+	expected=$(git_ed25519_fingerprint)
+	tui_wait "$(printf '%s' "$expected" | cut -c 1-30)" 60
+	tui_wait 'ssh-ed25519' 10
+	before=$(known_hosts_sum)
+	tui_send y
+	tui_wait 'The stacks repository is bound' 120
+	tui_send Enter
+	[ "$(known_hosts_sum)" != "$before" ] || fail 'no host key was pinned'
+	docker exec "$host" test -f /opt/stacks/demo-echo/compose.yaml || fail 'the clone is missing in /opt/stacks'
+	log "scenario: repository bound through the interface, host key $expected confirmed"
+
+	step 'the Stacks area lists the stacks of the new repository'
+	tui_send 1
+	tui_wait 'demo-echo' 60
+	wait_for 'the first run of demo-echo' 180 stack_idle demo-echo
+
+	step 'Stack detail: a secret is set after a question and the file holds the value'
+	tui_cursor_to demo-echo
+	tui_send Enter
+	tui_wait 'Secrets' 15
+	tui_send a
+	tui_wait 'Set a secret' 10
+	tui_type DEMO_ECHO_TAG
+	tui_send Tab
+	tui_type "$tui_stack_value"
+	sleep 0.5
+	tui_send F2
+	tui_wait 'the secret DEMO_ECHO_TAG' 10
+	if docker exec "$host" test -e /opt/stacks/demo-echo/secrets.env; then fail 'the secret was stored before the answer'; fi
+	tui_send y
+	tui_wait 'set for the stack demo-echo' 20
+	tui_send Enter
+	tui_wait 'DEMO_ECHO_TAG' 10
+	[ "$(docker exec "$host" cat /opt/stacks/demo-echo/secrets.env)" = "DEMO_ECHO_TAG='$tui_stack_value'" ] ||
+		fail "secrets.env does not hold the secret: $(docker exec "$host" cat /opt/stacks/demo-echo/secrets.env)"
+	[ "$(docker exec "$host" stat -c %U:%a /opt/stacks/demo-echo/secrets.env)" = qdeploy:600 ] || fail 'secrets.env has the wrong owner or mode'
+	[ -z "$(docker exec -u qdeploy "$host" git -C /opt/stacks status --porcelain)" ] || fail 'the secret made the working copy dirty'
+
+	step 'Stacks: the first deploy of demo-echo succeeds; Compose prints the value and the run log hides it'
+	prev=$(newest_run demo-echo)
+	tui_send Escape
+	tui_wait 'CURRENT' 10
+	tui_cursor_to demo-echo
+	tui_send d
+	tui_wait 'Deploy demo-echo?' 10
+	tui_send y
+	tui_wait 'deploy finished: 1 ok, 0 failed' 60
+	tui_send l
+	tui_wait 'result succeeded' 240
+	run=$(next_run demo-echo "$prev") || fail 'no run of demo-echo'
+	wait_for "the run $run" 240 run_finished demo-echo "$run"
+	run_log=$(qd stack log "$run")
+	printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the deploy of demo-echo did not succeed: $run_log"
+	[ "$(stack_images demo-echo)" = "$image:1.0.1" ] || fail "demo-echo does not run 1.0.1: $(stack_images demo-echo)"
+	docker exec "$host" docker inspect -f '{{.Name}}' "demo-echo-$tui_stack_value" >/dev/null || fail 'the container name does not carry the value'
+	printf '%s' "$run_log" | grep -q 'demo-echo-\[redacted\]' || fail "the run log does not show what Compose printed with the value redacted: $run_log"
+	if printf '%s' "$run_log" | grep -qF -- "$tui_stack_value"; then fail 'the run log holds the value of the secret'; fi
+	log 'scenario: first deploy of demo-echo through the interface; Compose printed the value and the run log redacted it'
+	wait_for 'the webhook for the run of demo-echo' 60 hook_seen /tui-hook-e2e-path succeeded demo-echo
+
+	step 'Stack detail: an older backup is restored after a question'
+	docker exec "$host" sh -ec 'mkdir -p /opt/stacks/demo-echo/data && printf first >/opt/stacks/demo-echo/data/marker.txt'
+	out=$(qd --output json stack backup create demo-echo) || fail "backup create failed: $out"
+	older=$(printf '%s\n' "$out" | sed -n 's/.*"backup": *"\([^"]*\)".*/\1/p')
+	# Backup ids start with the second of their creation; two in one second would not be ordered by age.
+	sleep 2
+	docker exec "$host" sh -ec 'printf second >/opt/stacks/demo-echo/data/marker.txt'
+	out=$(qd --output json stack backup create demo-echo) || fail "backup create failed: $out"
+	newest=$(printf '%s\n' "$out" | sed -n 's/.*"backup": *"\([^"]*\)".*/\1/p')
+	[ -n "$older" ] && [ "$older" != "$newest" ] || fail "no two backups: $older, $newest"
+	tui_send 1
+	tui_wait 'CURRENT' 10
+	tui_cursor_to demo-echo
+	tui_send Enter
+	tui_wait 'Backups' 15
+	tui_send r
+	tui_wait "$newest" 15
+	tui_send R
+	tui_wait 'Restore a backup' 10
+	if tui_screen | grep -q "$newest"; then fail 'the newest backup is offered for a restore'; fi
+	tui_pick_to "$older"
+	tui_send Enter
+	tui_wait 'Restore the backup' 10
+	tui_wait 'overwritten' 10
+	[ "$(docker exec "$host" cat /opt/stacks/demo-echo/data/marker.txt)" = second ] || fail 'the question already changed the data'
+	tui_send y
+	tui_wait 'restored for the stack' 600
+	tui_send Enter
+	[ "$(docker exec "$host" cat /opt/stacks/demo-echo/data/marker.txt)" = first ] ||
+		fail "the restore did not bring back the data: $(docker exec "$host" cat /opt/stacks/demo-echo/data/marker.txt)"
+	wait_for 'demo-echo to run again after the restore' 120 stack_healthy demo-echo
+	log "scenario: the older backup $older of demo-echo was restored through the interface"
+
+	step 'q ends the interface with exit code 0'
+	tui_send Escape
+	tui_send 1
+	sleep 0.3
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+
+	step 'no masked value shows on a screen, in a run log, in the journal, in a listing or in a file but secrets.env'
+	[ "$(wc -l <"$tui_log")" -gt 200 ] || fail 'too few screens were captured to check'
+	grep -qF DEMO_ECHO_TAG "$tui_log" || fail 'the captured screens do not show the key of the secret'
+	runs_text=$(qd stack runs)
+	for id in $(qd stack runs | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}'); do
+		runs_text="$runs_text
+$(qd stack log "$id")"
+	done
+	listing=$(qd notify list; qd --output json notify list; qd credential list; qd --output json credential list; qd --output json status)
+	journal_text=$(journal)
+	screens_text=$(cat "$tui_log")
+	for value in "$tui_login_value" "$tui_hook_url_value" tui-hook-e2e-path "$tui_hook_signing_value" "$tui_stack_value"; do
+		for place in screens_text runs_text journal_text listing; do
+			eval "text=\$$place"
+			if printf '%s' "$text" | grep -qF -- "$value"; then fail "a masked value shows in $place"; fi
+		done
+	done
+	if docker exec "$prefix-hooks" cat /data/requests.jsonl | grep -qF -- "$tui_stack_value"; then
+		fail 'the value of the stack secret reached the webhook receiver'
+	fi
+	holders=$(docker exec "$host" grep -rlF -- "$tui_stack_value" /opt/stacks /var/lib/qdeploy 2>/dev/null || true)
+	[ "$holders" = /opt/stacks/demo-echo/secrets.env ] || fail "the value of the stack secret stands in: $holders"
+	log 'scenario: no masked value on a captured screen, in a run log, the journal or a listing; the secret value only in secrets.env'
 }

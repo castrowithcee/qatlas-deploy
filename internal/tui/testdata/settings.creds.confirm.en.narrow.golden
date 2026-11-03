@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]     
+--------------------------------------------------------
+  Set a credential                                      
+                                                        
+                +--------------------------------------+
+  Credential    | registry login                     v |
+                +--------------------------------------+
+  #= Set a credential ===============================#-+
+  | ! Store the credential                           | |
+  |   registry.registry.example.test-5000?           |-+
+  |                                                  |-+
+  | The service stores the value and never shows it  | |
+  | again. A credential of that name is replaced.    |-+
+  |                                                  |=#
+> | [ yes, do it ]  > cancel <                       | |
+  | y yes, do it  n/esc/enter cancel                 |=#
+  #==================================================#  
+                GitHub token                            
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        

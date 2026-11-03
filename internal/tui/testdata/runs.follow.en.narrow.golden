@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks   2 Stack detail  [3 Runs]                  
+   1 Stacks   2 Stack detail  [3 Runs]  4 Settings      
 --------------------------------------------------------
   web-shop            running  20261030T150000Z-0000000b
   step check                                            
@@ -11,4 +11,4 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
 * following - lines 1-6 of 6                            
 / search  L follow  w wrap lines  t timestamps  r reload
-1-3 area  q quit                          up/down scroll
+1-4 area  q quit                          up/down scroll
