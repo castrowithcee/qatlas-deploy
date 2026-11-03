@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
@@ -245,6 +246,11 @@ func TestUpdateRefusals(t *testing.T) {
 				r.t.Fatal(err)
 			}
 		}, nil, ErrPaused},
+		"pinned": {func(r *rig) {
+			if _, err := r.eng.SetPin(context.Background(), "web", true); err != nil {
+				r.t.Fatal(err)
+			}
+		}, nil, ErrPinned},
 		"never deployed": {func(r *rig) {
 			writeStack(r.t, r.wc, "fresh")
 		}, nil, ErrNotDeployed},
@@ -303,5 +309,42 @@ func TestUpdateRefusedWhileARunIsActive(t *testing.T) {
 	r.eng.Wait()
 	if !errors.Is(cerr, ErrRunActive) || !errors.Is(uerr, ErrRunActive) {
 		t.Fatalf("check %v, update %v", cerr, uerr)
+	}
+}
+
+func TestUpdateWhileBeginsNoStepOnceToldToStop(t *testing.T) {
+	r := updateRig(t)
+	end := r.clock.Now().Add(time.Hour)
+	asked := 0
+	proceed := func() bool {
+		asked++
+		return r.clock.Now().Before(end)
+	}
+	// the first step passes the end while it runs; it is not cut short
+	r.dep.hook = func(_ context.Context, step string, _ stacks.Stack) error {
+		if step == "pull" {
+			r.clock.Advance(2 * time.Hour)
+		}
+		return nil
+	}
+	res, err := r.eng.UpdateWhile(context.Background(), "web", []VersionStep{step("1.0.0", "1.2.0"), step("1.2.0", "2.3.0")}, proceed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res[0].Result != ResultSucceeded || res[0].Commit != commit(2001) || res[1].Run != "" || res[1].Result != "" || res[1].To != "2.3.0" || asked != 2 {
+		t.Fatalf("results = %+v, asked %d", res, asked)
+	}
+	wantSteps(t, r, "stop", "backup", "pull", "up", "check")
+	if len(r.copy.commits) != 1 || r.env() != envWith("1.2.0") || r.stack("web").Deployed != commit(2001) {
+		t.Fatalf("commits %d, env %q, deployed %s", len(r.copy.commits), r.env(), r.stack("web").Deployed)
+	}
+
+	// told to stop before the first step: nothing runs, and the slot is free again
+	res, err = r.eng.UpdateWhile(context.Background(), "web", []VersionStep{step("1.2.0", "2.3.0")}, func() bool { return false })
+	if err != nil || len(res) != 1 || res[0].Run != "" || len(r.copy.commits) != 1 {
+		t.Fatalf("results = %+v, %v, commits %d", res, err, len(r.copy.commits))
+	}
+	if snap, _ := r.eng.Snapshot(); len(snap.Active) != 0 {
+		t.Fatalf("active = %v", snap.Active)
 	}
 }

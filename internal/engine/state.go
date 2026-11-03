@@ -82,6 +82,10 @@ type StackState struct {
 	Removed bool `json:"removed,omitempty"`
 	// Paused is set when a rollback failed; it is cleared only by Resume.
 	Paused *Pause `json:"paused,omitempty"`
+	// OperatorPause and Pin are the operator's marks, see Hold. They are independent of Paused and survive
+	// runs, polls and restarts; only SetPause and SetPin change them.
+	OperatorPause *Hold `json:"operator_pause,omitempty"`
+	Pin           *Hold `json:"pin,omitempty"`
 	// Updates is the result of the last update detection; nil for a stack that was never checked.
 	Updates *UpdateCheck `json:"updates,omitempty"`
 }
@@ -128,6 +132,11 @@ type Pause struct {
 	Reason string    `json:"reason,omitempty"`
 }
 
+// Hold records an operator's mark on a stack and since when it is set.
+type Hold struct {
+	Since time.Time `json:"since"`
+}
+
 // Finding is a fact about a stack that needs a human or explains why the stack is skipped.
 type Finding struct {
 	Kind   string `json:"kind"`
@@ -172,6 +181,11 @@ func validateState(s State) error {
 		}
 		if st.Paused != nil && !runIDRe.MatchString(st.Paused.Run) {
 			return errors.New("invalid run id")
+		}
+		for _, h := range []*Hold{st.OperatorPause, st.Pin} {
+			if h != nil && h.Since.IsZero() {
+				return errors.New("invalid hold")
+			}
 		}
 		if st.Updates != nil {
 			if err := validateUpdates(*st.Updates); err != nil {
@@ -239,6 +253,14 @@ func (s State) clone() State {
 		if v.Paused != nil {
 			p := *v.Paused
 			v.Paused = &p
+		}
+		if v.OperatorPause != nil {
+			h := *v.OperatorPause
+			v.OperatorPause = &h
+		}
+		if v.Pin != nil {
+			h := *v.Pin
+			v.Pin = &h
 		}
 		if v.Updates != nil {
 			u := *v.Updates

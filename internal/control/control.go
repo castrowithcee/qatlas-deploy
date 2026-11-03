@@ -65,6 +65,7 @@ const (
 	CodeNoDeployer     = "no-deployer"
 	CodePaused         = "paused"
 	CodeNotPaused      = "not-paused"
+	CodePinned         = "pinned"
 
 	CodeNoBackups     = "no-backups"
 	CodeNoBackupRules = "no-backup-rules"
@@ -165,6 +166,8 @@ type StatusResult struct {
 	Version   string       `json:"version"`
 	StartedAt time.Time    `json:"started_at"`
 	Engine    EngineStatus `json:"engine"`
+	// Window is the maintenance window; nil when its setting cannot be read.
+	Window *WindowResult `json:"window,omitempty"`
 }
 
 // EngineStatus is the engine's part of StatusResult. Stacks is empty while no repository is bound.
@@ -188,6 +191,14 @@ type StackStatus struct {
 	Findings  []FindingInfo `json:"findings"`
 	Removed   bool          `json:"removed,omitempty"`
 	Paused    *PauseInfo    `json:"paused,omitempty"`
+	// OperatorPause and Pinned are the operator's marks for the maintenance window, unrelated to Paused.
+	OperatorPause *HoldInfo `json:"operator_pause,omitempty"`
+	Pinned        *HoldInfo `json:"pinned,omitempty"`
+}
+
+// HoldInfo says since when an operator mark is set.
+type HoldInfo struct {
+	Since time.Time `json:"since"`
 }
 
 // PauseInfo says since when a stack is paused, after which run and why.
@@ -210,6 +221,28 @@ const (
 	LogCommand    = "log"
 	ResumeCommand = "resume"
 )
+
+// The commands that mark a stack for the maintenance window. They are idempotent: repeating one answers with
+// Changed false. PauseCommand keeps the window from starting runs of the stack, PinCommand keeps it from
+// changing the stack's versions. Both are unrelated to the pause ResumeCommand clears.
+const (
+	PauseCommand   = "pause"
+	UnpauseCommand = "unpause"
+	PinCommand     = "pin"
+	UnpinCommand   = "unpin"
+)
+
+// HoldArgs are the arguments of the commands above.
+type HoldArgs struct {
+	Stack string `json:"stack"`
+}
+
+// HoldResult answers them. Active is the mark's state afterwards, Changed whether the command changed it.
+type HoldResult struct {
+	Stack   string `json:"stack"`
+	Active  bool   `json:"active"`
+	Changed bool   `json:"changed"`
+}
 
 // ResumeArgs are the arguments of ResumeCommand.
 type ResumeArgs struct {
@@ -591,3 +624,36 @@ type ChangelogRelease struct {
 
 // ChangelogTimeout bounds how long the service spends on the GitHub and label lookups of one request.
 const ChangelogTimeout = 2 * time.Minute
+
+// The commands of the maintenance window. WindowShowCommand answers the window and its openings;
+// WindowSetCommand replaces the parts it names and answers the same. The running service follows a change at
+// once.
+const (
+	WindowShowCommand = "window.show"
+	WindowSetCommand  = "window.set"
+)
+
+// WindowSetArgs are the arguments of WindowSetCommand. A part left empty keeps its value; at least one must be
+// set. Days are weekday names (mon or monday, in any case) or the single word daily; Start is HH:MM on the
+// 24-hour clock; Duration is whole minutes such as 2h or 1h30m; Zone is local or an IANA time zone name.
+type WindowSetArgs struct {
+	Days     []string `json:"days,omitempty"`
+	Start    string   `json:"start,omitempty"`
+	Duration string   `json:"duration,omitempty"`
+	Zone     string   `json:"zone,omitempty"`
+}
+
+// WindowResult is the maintenance window and its openings, with times in the window's zone. OpenUntil is set
+// while the window is open; NextOpening is the opening after the current one then. LastRun is when the work of
+// an opening last began, Running whether it is in progress.
+type WindowResult struct {
+	Days        []string  `json:"days"`
+	Start       string    `json:"start"`
+	Duration    string    `json:"duration"`
+	Zone        string    `json:"zone"`
+	Open        bool      `json:"open"`
+	OpenUntil   time.Time `json:"open_until,omitzero"`
+	NextOpening time.Time `json:"next_opening"`
+	LastRun     time.Time `json:"last_run,omitzero"`
+	Running     bool      `json:"running,omitempty"`
+}

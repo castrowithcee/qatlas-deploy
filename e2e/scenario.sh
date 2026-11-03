@@ -6,7 +6,10 @@
 # commit with a failing healthcheck (data restored from the run's backup, revert commit on the remote), leave a
 # stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
 # Version updates with qdeploy update follow: one direct step, a stepwise major jump and a jump whose middle step
-# fails. Docker integration tests of the deployer run inside the host before all that. Sourced by run.sh scenario.
+# fails. The maintenance window follows on a real, short window: a stack in automatic mode is updated without a
+# human, a stack in manual mode is only reported, a paused and a pinned stack stay as they are, and a change with
+# window set takes effect in the running service. Docker integration tests of the deployer run inside the host
+# before all that. Sourced by run.sh scenario.
 
 as_admin() {
 	docker exec -i -u "$admin" "$host" sh -ec "$*"
@@ -787,6 +790,9 @@ scenario_stacks_repo() {
 	setup_service
 	url=git.$domain:stacks.git
 
+	# The default window (daily 03:00) must not open in the middle of the other sections on a real clock.
+	window_far_away >/dev/null || fail 'cannot move the maintenance window out of the way'
+
 	step 'deploy key'
 	out=$(qd --output json key generate) || fail "key generate failed: $out"
 	pub=$(printf '%s\n' "$out" | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')
@@ -844,6 +850,8 @@ scenario_stacks_repo() {
 
 	scenario_update
 
+	scenario_window
+
 	step 'a changed host key of the git server aborts qdeploy'
 	original_key=$(scanned_git_key)
 	pinned=$(known_hosts_sum)
@@ -883,6 +891,148 @@ scenario_stacks_repo() {
 	qd repo fetch >/dev/null || fail 'repo fetch fails after the host keys were restored'
 
 	docker exec "$host" systemctl stop qdeploy-e2e
+}
+
+# window_field prints one field of qdeploy window show (empty when it is absent).
+window_field() {
+	qd --output json window show | sed -n "s/.*\"$1\": *\"\{0,1\}\([^\",}]*\).*/\1/p"
+}
+
+# window_far_away opens the window daily at the time twelve hours from now, for one minute, and prints the answer.
+window_far_away() {
+	qd --output json window set --days daily --zone UTC --start "$(date -u -d '+12 hours' +%H:%M)" --duration 1m
+}
+
+# window_log prints what the service logged about the window and the stacks since it started.
+window_log() {
+	docker exec "$host" journalctl -u qdeploy-e2e --no-pager -o cat
+}
+
+# stack_run_count prints the number of recorded runs of a stack.
+stack_run_count() {
+	qd runs "$1" | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-' || true
+}
+
+# window_done succeeds when the service has begun the work of an opening since last_run read $window_last_before
+# and has finished it. The default window may already have run once when the service started.
+window_done() {
+	last=$(window_field last_run)
+	[ -n "$last" ] && [ "$last" != "$window_last_before" ] && [ -z "$(window_field running)" ]
+}
+
+# scenario_window proves the maintenance window with the real service and a real, short window. demo-stack is in
+# automatic mode, demo-cache in manual mode, demo-paused is paused and demo-pinned is pinned, all four offer 1.1.0.
+scenario_window() {
+	image=registry.$domain/demo/app
+	win_stacks='demo-stack demo-cache demo-paused demo-pinned'
+
+	step 'four stacks wait for 1.1.0: automatic, manual, paused and pinned'
+	prev_stack=$(newest_run demo-stack) prev_cache=$(newest_run demo-cache)
+	as_admin 'cd ~/stacks && git pull -q --ff-only &&
+		for s in demo-paused demo-pinned; do
+			cp -r demo-cache $s && sed -i "s/demo-cache/$s/" $s/compose.yaml &&
+			sed -i "s/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=1.0.0/" $s/.env &&
+			printf "version: 1\nupdate:\n  mode: automatic\n" >$s/qdeploy.yaml
+		done &&
+		printf "update:\n  mode: automatic\n" >>demo-stack/qdeploy.yaml &&
+		printf "version: 1\nupdate:\n  mode: manual\n" >demo-cache/qdeploy.yaml &&
+		sed -i "s/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=1.0.1/" demo-stack/.env demo-cache/.env &&
+		git add -A && git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Prepare the maintenance window stacks" &&
+		git push -q origin main'
+	setup_commit=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	restart_service
+	for pair in "demo-stack $prev_stack" "demo-cache $prev_cache"; do
+		set -- $pair
+		run=$(next_run "$1" "$2") || fail "no run of $1 started for the window setup commit"
+		wait_for "the run $run" 240 run_finished "$1" "$run"
+		qd log "$run" | grep -q ' result succeeded' || fail "the run of $1 for the window setup did not succeed: $(qd log "$run")"
+	done
+	for stack in demo-paused demo-pinned; do
+		wait_for "the first run of $stack" 120 stack_idle "$stack"
+		docker exec -u qdeploy "$host" sh -ec "umask 077 && printf 'DEMO_SECRET=%s\n' not-a-real-secret-e2e >/opt/stacks/$stack/secrets.env"
+		out=$(qd --output json deploy "$stack") || fail "deploy of $stack failed: $out"
+		run=$(printf '%s\n' "$out" | sed -n 's/.*"run": *"\([^"]*\)".*/\1/p')
+		wait_for "the run $run" 240 run_finished "$stack" "$run"
+		qd log "$run" | grep -q ' result succeeded' || fail "the deploy of $stack did not succeed: $(qd log "$run")"
+	done
+	[ "$(stack_images demo-stack)" = "$image:1.0.1" ] && [ "$(stack_images demo-cache)" = "$image:1.0.1" ] &&
+		[ "$(stack_images demo-paused)" = "$image:1.0.0" ] && [ "$(stack_images demo-pinned)" = "$image:1.0.0" ] ||
+		fail "the window stacks do not run their starting versions: $(for s in $win_stacks; do stack_images $s; done | tr '\n' ' ')"
+
+	step 'pause and pin mark the stacks'
+	out=$(qd --output json pause demo-paused) || fail "pause failed: $out"
+	out=$(qd --output json pin demo-pinned) || fail "pin failed: $out"
+	[ -n "$(stack_field demo-paused operator_pause)" ] || fail "status does not show demo-paused as paused: $(qd --output json status)"
+	[ -n "$(stack_field demo-pinned pinned)" ] || fail "status does not show demo-pinned as pinned: $(qd --output json status)"
+	[ -z "$(stack_field demo-stack operator_pause)$(stack_field demo-stack pinned)$(stack_field demo-cache operator_pause)$(stack_field demo-cache pinned)" ] ||
+		fail 'a stack without a mark shows one'
+
+	step 'window set takes effect in the running service without a restart'
+	started=$(status_field started_at)
+	[ -n "$started" ] || fail 'status shows no start time of the service'
+	# --start has minute granularity: two minutes ahead opens the window between one and two minutes from now.
+	start=$(date -u -d '+2 minutes' +%H:%M)
+	out=$(qd --output json window set --days daily --zone UTC --start "$start" --duration 5m) || fail "window set failed: $out"
+	log "scenario: window set: $out"
+	[ "$(window_field start)" = "$start" ] && [ "$(window_field duration)" = 5m ] && [ "$(window_field zone)" = UTC ] ||
+		fail "window show does not report the new window: $(qd --output json window show)"
+	[ "$(window_field open)" = false ] || fail "the window is open before its start: $(qd --output json window show)"
+	case $(window_field next_opening) in *T$start:00Z) ;; *) fail "the next opening is not at $start UTC: $(qd --output json window show)" ;; esac
+	window_last_before=$(window_field last_run)
+
+	for stack in $win_stacks; do
+		eval "runs_$(printf '%s' "$stack" | tr - _)=$(stack_run_count "$stack")"
+		eval "deployed_$(printf '%s' "$stack" | tr - _)=$(stack_field "$stack" deployed)"
+	done
+	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
+	[ "$head_before" = "$setup_commit" ] || fail "the stacks repository moved after the setup commit: $head_before"
+
+	step 'the window opens and updates the automatic stack by itself'
+	wait_for 'the window to open' 150 sh -c "docker exec -i $host qdeploy --output json window show | grep -q '\"open\": *true'"
+	log "scenario: window open: $(qd --output json window show | tr -d '\n ')"
+	wait_for 'the window work to finish' 300 window_done
+	[ "$(window_field open)" = true ] || fail "the window work ran past the end of the window: $(qd --output json window show)"
+	[ "$(status_field started_at)" = "$started" ] || fail 'the service restarted'
+	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "the automatic stack does not run 1.1.0: $(stack_images demo-stack)"
+	stack_healthy demo-stack || fail 'demo-stack is not healthy after the window update'
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $head_before..HEAD")" = 1 ] || fail 'the window did not make exactly one commit'
+	update_commit=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$update_commit" ] || fail 'the update commit is not on the remote branch'
+	update_commit_only_version "$update_commit" 1.0.1 1.1.0
+	[ "$(stack_field demo-stack deployed)" = "$update_commit" ] || fail "demo-stack is not recorded as deployed at $update_commit"
+	[ "$(stack_run_count demo-stack)" = "$((runs_demo_stack + 1))" ] || fail 'the window did not make exactly one run of demo-stack'
+	log "scenario: window updated demo-stack to 1.1.0 with commit $update_commit"
+
+	step 'the manual stack is only reported'
+	[ "$(stack_images demo-cache)" = "$image:1.0.1" ] || fail "the manual stack changed: $(stack_images demo-cache)"
+	[ "$(stack_run_count demo-cache)" = "$runs_demo_cache" ] || fail 'the window ran the manual stack'
+	[ "$(stack_field demo-cache deployed)" = "$deployed_demo_cache" ] || fail 'the window changed the deployed commit of the manual stack'
+	[ -z "$(as_admin "cd ~/stacks && git log --format=%H $setup_commit..HEAD -- demo-cache")" ] || fail 'the window committed to the manual stack'
+	out=$(qd --output json updates demo-cache) || fail "updates demo-cache failed: $out"
+	updates_expect "$out" 1.0.1 1.1.0 5.0.0 update
+	notice=$(window_log | grep 'event=update-available' | grep 'stack=demo-cache' || true)
+	[ -n "$notice" ] || fail "the service log has no update-available line for demo-cache: $(window_log | tail -n 20)"
+	log "scenario: log: $(printf '%s' "$notice" | tail -n 1)"
+
+	step 'the paused and the pinned stack stay unchanged, their update stays visible'
+	for stack in demo-paused demo-pinned; do
+		v=$(printf '%s' "$stack" | tr - _)
+		[ "$(stack_images "$stack")" = "$image:1.0.0" ] || fail "$stack changed: $(stack_images "$stack")"
+		[ "$(stack_run_count "$stack")" = "$(eval "printf %s \"\$runs_$v\"")" ] || fail "the window ran $stack"
+		[ "$(stack_field "$stack" deployed)" = "$(eval "printf %s \"\$deployed_$v\"")" ] || fail "the window changed the deployed commit of $stack"
+		[ -z "$(as_admin "cd ~/stacks && git log --format=%H $setup_commit..HEAD -- $stack")" ] || fail "the window committed to $stack"
+		out=$(qd --output json updates "$stack") || fail "updates $stack failed: $out"
+		updates_expect "$out" 1.0.0 1.1.0 5.0.0 update
+		window_log | grep 'stack skipped' | grep "stack=$stack" | grep -q 'reason=' || fail "the service log does not say why $stack was skipped"
+		log "scenario: log: $(window_log | grep 'stack skipped' | grep "stack=$stack" | tail -n 1)"
+	done
+
+	step 'the marks are lifted and the window is moved away'
+	qd unpause demo-paused >/dev/null || fail 'unpause failed'
+	qd unpin demo-pinned >/dev/null || fail 'unpin failed'
+	out=$(window_far_away) || fail "window set failed: $out"
+	[ "$(window_field open)" = false ] || fail "the window is still open after it was moved: $(qd --output json window show)"
 }
 
 health_is() {

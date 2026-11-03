@@ -34,20 +34,22 @@ func runsAnswer(err error) error {
 		return control.NewError(control.CodePaused, "the stack is paused after a failed rollback; resume it first")
 	case errors.Is(err, engine.ErrNotPaused):
 		return control.NewError(control.CodeNotPaused, "the stack is not paused")
+	case errors.Is(err, engine.ErrPinned):
+		return control.NewError(control.CodePinned, "the stack is pinned; unpin it first")
 	case errors.Is(err, engine.ErrNoSuchRun):
 		return control.NewError(control.CodeNoSuchRun, "no such run")
 	}
 	return err
 }
 
-func registerRunCommands(r *control.Registry, eng *engine.Engine, version string, started time.Time) error {
+func registerRunCommands(r *control.Registry, eng *engine.Engine, version string, started time.Time, window func() *control.WindowResult) error {
 	commands := map[string]control.Handler{
 		control.StatusCommand: func(context.Context, json.RawMessage) (any, error) {
 			snap, err := eng.Snapshot()
 			if err != nil {
 				return nil, errors.New("the engine state cannot be read")
 			}
-			return control.StatusResult{Version: version, StartedAt: started, Engine: engineStatus(snap)}, nil
+			return control.StatusResult{Version: version, StartedAt: started, Engine: engineStatus(snap), Window: window()}, nil
 		},
 		control.DeployCommand: func(ctx context.Context, raw json.RawMessage) (any, error) {
 			var a control.DeployArgs
@@ -93,6 +95,10 @@ func registerRunCommands(r *control.Registry, eng *engine.Engine, version string
 			}
 			return control.ResumeResult{Stack: printable(a.Stack), Pause: pauseInfo(p)}, nil
 		},
+		control.PauseCommand:   holdHandler(eng.SetPause, true),
+		control.UnpauseCommand: holdHandler(eng.SetPause, false),
+		control.PinCommand:     holdHandler(eng.SetPin, true),
+		control.UnpinCommand:   holdHandler(eng.SetPin, false),
 		control.LogCommand: func(_ context.Context, raw json.RawMessage) (any, error) {
 			var a control.LogArgs
 			if err := decodeArgs(raw, &a); err != nil {
@@ -115,6 +121,24 @@ func registerRunCommands(r *control.Registry, eng *engine.Engine, version string
 		}
 	}
 	return nil
+}
+
+// holdHandler serves a command that sets or clears an operator mark.
+func holdHandler(set func(context.Context, string, bool) (bool, error), on bool) control.Handler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var a control.HoldArgs
+		if err := decodeArgs(raw, &a); err != nil {
+			return nil, err
+		}
+		changed, err := set(ctx, a.Stack, on)
+		switch {
+		case err == nil:
+			return control.HoldResult{Stack: printable(a.Stack), Active: on, Changed: changed}, nil
+		case errors.Is(err, engine.ErrUnknownStack), errors.Is(err, engine.ErrNoRepo):
+			return nil, runsAnswer(err)
+		}
+		return nil, errors.New("the engine state cannot be written")
+	}
 }
 
 func engineStatus(snap engine.Snapshot) control.EngineStatus {
@@ -146,6 +170,12 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 		if s.Paused != nil {
 			p := pauseInfo(*s.Paused)
 			item.Paused = &p
+		}
+		if s.OperatorPause != nil {
+			item.OperatorPause = &control.HoldInfo{Since: s.OperatorPause.Since}
+		}
+		if s.Pin != nil {
+			item.Pinned = &control.HoldInfo{Since: s.Pin.Since}
 		}
 		for _, f := range s.Findings {
 			item.Findings = append(item.Findings, control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)})

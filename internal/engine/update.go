@@ -73,11 +73,18 @@ func (e *Engine) CheckUpdate(ctx context.Context, name string) (stacks.Stack, er
 // no other run of it starts in between.
 //
 // Each step's From must be the variable's value in the stack's .env, or the To of the step before it, else
-// ErrStalePlan. The stack is refused as Trigger refuses it, and also when it was never deployed
-// (ErrNotDeployed), when its folder differs between the deployed commit and the working copy (ErrUndeployed)
-// or when the working copy has other local changes (ErrCopyChanges). The steps run in the caller's
-// goroutine, each under the run time limit and independent of ctx.
+// ErrStalePlan. The stack is refused as Trigger refuses it, and also when it is pinned (ErrPinned), when it
+// was never deployed (ErrNotDeployed), when its folder differs between the deployed commit and the working
+// copy (ErrUndeployed) or when the working copy has other local changes (ErrCopyChanges). The steps run in
+// the caller's goroutine, each under the run time limit and independent of ctx.
 func (e *Engine) Update(ctx context.Context, name string, steps []VersionStep) ([]StepResult, error) {
+	return e.UpdateWhile(ctx, name, steps, nil)
+}
+
+// UpdateWhile is Update that asks proceed before each step and attempts no further step once it answers
+// false, as if the step before had failed: the steps done stay deployed. A step that has begun always runs to
+// its end. A nil proceed always goes on.
+func (e *Engine) UpdateWhile(ctx context.Context, name string, steps []VersionStep, proceed func() bool) ([]StepResult, error) {
 	if e.cfg.Deployer == nil {
 		return nil, ErrNoDeployer
 	}
@@ -119,7 +126,7 @@ func (e *Engine) Update(ctx context.Context, name string, steps []VersionStep) (
 		results[i].VersionStep = s
 	}
 	for i := range steps {
-		if e.base.Err() != nil {
+		if e.base.Err() != nil || (proceed != nil && !proceed()) {
 			break
 		}
 		r, err := e.stepRun(b, st, deployed)
@@ -174,8 +181,8 @@ func (e *Engine) updatable(ctx context.Context, b Binding, name string) (stacks.
 	return list[i], head, nil
 }
 
-// updateBase returns the deployed commit of the stack, refusing a paused stack, one never deployed and one
-// whose folder at head differs from the deployed one. The caller holds the working-copy lock.
+// updateBase returns the deployed commit of the stack, refusing a paused or pinned stack, one never deployed
+// and one whose folder at head differs from the deployed one. The caller holds the working-copy lock.
 func (e *Engine) updateBase(ctx context.Context, b Binding, name, head string) (string, error) {
 	cur, _, err := e.Stack(name)
 	switch {
@@ -183,6 +190,8 @@ func (e *Engine) updateBase(ctx context.Context, b Binding, name, head string) (
 		return "", err
 	case cur.Paused != nil:
 		return "", ErrPaused
+	case cur.Pin != nil:
+		return "", ErrPinned
 	case cur.Deployed == "":
 		return "", ErrNotDeployed
 	case cur.Deployed == head:
