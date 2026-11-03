@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]                                                              
+------------------------------------------------------------------------------------------------------------------------
+  Stacks-Repository                                                                                                     
+                                                                                                                        
+    Commit: -                                                                                                           
+    Remote-Commit: -                                                                                                    
+    Stacks: 6                                                                                                           
+                            #= Erledigt ===================================================#                            
+    b bindet ein Repository,| ! Abgerufen; das Remote hat neuere Commits.                  |                            
+                            |                                                              |                            
+                            | Der Dienst hat die Änderung vorgenommen.                     |                            
+                            | Commit: 111111111111                                         |                            
+                            | Remote-Commit: 222222222222                                  |                            
+                            |                                                              |                            
+                            | > schließen <                                                |                            
+                            | n/esc/enter schließen                                        |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

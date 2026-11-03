@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                                                                                 [esc] Zurück
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]                                                              
+------------------------------------------------------------------------------------------------------------------------
+  Stacks-Repository binden                                                                                              
+                                                                                                                        
+              #========================================================================================================#
+> SSH-URL     | _                                                                                                      |
+              #========================================================================================================#
+              user@host:pfad oder ssh://[user@]host[:port]/pfad                                                         
+              [!] Die SSH-Adresse ist nötig und enthält keine Leerzeichen. - Korrigiere das Feld.                       
+              +--------------------------------------------------------------------------------------------------------+
+  Verzeichnis | /opt/stacks                                                                                            |
+              +--------------------------------------------------------------------------------------------------------+
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+F2 Speichern  esc verwerfen                 tab Nächste Zone oder nächstes Feld  shift+tab Vorige Zone oder voriges Feld

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -29,6 +30,19 @@ type fakeBackend struct {
 	acts       []string
 	updateRuns map[string]control.StackUpdateRun
 	holds      map[string]control.HoldResult
+
+	// The settings: what the service holds. A key name of errs such as "probe:" fails that call.
+	probe   control.RepoProbeResult
+	key     *control.KeyResult
+	creds   []control.CredentialInfo
+	window  control.WindowResult
+	notify  []control.NotifyChannelInfo
+	repoSet []control.RepoSetArgs
+	// sent are the arguments of the credential and channel writes in order, kept to check what reached the
+	// service and that nothing else did.
+	credSets []control.CredentialSetArgs
+	adds     []control.NotifyAddArgs
+	windows  []control.WindowSetArgs
 }
 
 func (f *fakeBackend) count(name string) {
@@ -208,7 +222,12 @@ func (f *fakeBackend) Resume(_ context.Context, stack string) (control.ResumeRes
 
 func (f *fakeBackend) Window(context.Context) (control.WindowResult, error) {
 	f.count("window")
-	return control.WindowResult{}, nil
+	if err := f.fail("window", ""); err != nil {
+		return control.WindowResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.window, nil
 }
 
 // at is a fixed point in time of the fixtures.
@@ -321,3 +340,147 @@ const demoActiveLog = `2026-10-30T15:00:00Z step check
 2026-10-30T15:00:13Z step deploy
 2026-10-30T15:00:14Z info pull example/shop:5.2.0
 `
+
+func (f *fakeBackend) RepoProbe(_ context.Context, url string) (control.RepoProbeResult, error) {
+	if err := f.act("probe", url); err != nil {
+		return control.RepoProbeResult{}, err
+	}
+	return f.probe, nil
+}
+
+func (f *fakeBackend) RepoSet(_ context.Context, args control.RepoSetArgs) (control.RepoSetResult, error) {
+	if err := f.act("reposet", args.URL); err != nil {
+		return control.RepoSetResult{}, err
+	}
+	f.mu.Lock()
+	f.repoSet = append(f.repoSet, args)
+	f.mu.Unlock()
+	return control.RepoSetResult{URL: args.URL, Dir: args.Dir, Fingerprint: args.Fingerprint, Head: commitA, Cloned: true}, nil
+}
+
+func (f *fakeBackend) RepoFetch(context.Context) (control.RepoFetchResult, error) {
+	if err := f.act("fetch", ""); err != nil {
+		return control.RepoFetchResult{}, err
+	}
+	return control.RepoFetchResult{Dir: "/opt/stacks", Head: commitA, RemoteHead: commitB, UpdatesAvailable: true}, nil
+}
+
+func (f *fakeBackend) KeyShow(context.Context) (control.KeyResult, error) {
+	f.count("keyshow")
+	if err := f.fail("keyshow", ""); err != nil {
+		return control.KeyResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.key == nil {
+		return control.KeyResult{}, control.NewError(control.CodeNotFound, "no deploy key exists")
+	}
+	return *f.key, nil
+}
+
+func (f *fakeBackend) KeyGenerate(context.Context) (control.KeyResult, error) {
+	if err := f.act("keygen", ""); err != nil {
+		return control.KeyResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.key != nil {
+		return control.KeyResult{}, control.NewError(control.CodeKeyExists, "a deploy key already exists")
+	}
+	f.key = &control.KeyResult{PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTestsOnly qdeploy",
+		Fingerprint: "SHA256:ExampleKeyFingerprintForTestsOnly000000000"}
+	return *f.key, nil
+}
+
+func (f *fakeBackend) Credentials(context.Context) (control.CredentialListResult, error) {
+	f.count("credentials")
+	if err := f.fail("credentials", ""); err != nil {
+		return control.CredentialListResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return control.CredentialListResult{Credentials: append([]control.CredentialInfo(nil), f.creds...)}, nil
+}
+
+func (f *fakeBackend) CredentialSet(_ context.Context, name, value string) error {
+	if err := f.act("credset", name); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.credSets = append(f.credSets, control.CredentialSetArgs{Name: name, Value: value})
+	f.creds = append(f.creds, control.CredentialInfo{Name: name, Modified: at(31, 9, 0)})
+	return nil
+}
+
+func (f *fakeBackend) CredentialDelete(_ context.Context, name string) error {
+	if err := f.act("creddel", name); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.creds = slices.DeleteFunc(f.creds, func(c control.CredentialInfo) bool { return c.Name == name })
+	return nil
+}
+
+func (f *fakeBackend) WindowSet(_ context.Context, args control.WindowSetArgs) (control.WindowResult, error) {
+	if err := f.act("windowset", ""); err != nil {
+		return control.WindowResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.windows = append(f.windows, args)
+	if args.Days != nil {
+		f.window.Days = args.Days
+	}
+	if args.Start != "" {
+		f.window.Start = args.Start
+	}
+	if args.Duration != "" {
+		f.window.Duration = args.Duration
+	}
+	if args.Zone != "" {
+		f.window.Zone = args.Zone
+	}
+	return f.window, nil
+}
+
+func (f *fakeBackend) Notifications(context.Context) (control.NotifyListResult, error) {
+	f.count("notifications")
+	if err := f.fail("notifications", ""); err != nil {
+		return control.NotifyListResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return control.NotifyListResult{Channels: append([]control.NotifyChannelInfo(nil), f.notify...)}, nil
+}
+
+func (f *fakeBackend) NotifyAdd(_ context.Context, args control.NotifyAddArgs) (control.NotifyChannelInfo, error) {
+	if err := f.act("notifyadd", args.Name); err != nil {
+		return control.NotifyChannelInfo{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.adds = append(f.adds, args)
+	info := control.NotifyChannelInfo{Name: args.Name, Type: args.Type, Events: args.Events, Host: args.Host, Port: args.Port,
+		Security: args.Security, User: args.User, From: args.From, To: args.To, ChatID: args.ChatID, BaseURL: args.BaseURL}
+	f.notify = append(f.notify, info)
+	return info, nil
+}
+
+func (f *fakeBackend) NotifyRemove(_ context.Context, name string) error {
+	if err := f.act("notifyremove", name); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.notify = slices.DeleteFunc(f.notify, func(c control.NotifyChannelInfo) bool { return c.Name == name })
+	return nil
+}
+
+func (f *fakeBackend) NotifyTest(_ context.Context, name string) (control.NotifyTestResult, error) {
+	if err := f.act("notifytest", name); err != nil {
+		return control.NotifyTestResult{}, err
+	}
+	return control.NotifyTestResult{Name: name, Type: control.NotifyWebhook}, nil
+}

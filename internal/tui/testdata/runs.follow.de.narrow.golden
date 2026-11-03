@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details  [3 Läufe]                
+  1 Stacks 2 Stack-Details [3 Läufe] 4 Einstellungen    
 --------------------------------------------------------
   web-shop              läuft  20261030T150000Z-0000000b
   step check                                            
@@ -11,4 +11,4 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
 * mitlaufend - Zeilen 1-6 von 6                         
 / Suchen  L mitlaufen  w Zeilen umbrechen  t Zeitstempel
-r Neu laden  1-3 Bereich  q Beenden     up/down Scrollen
+r Neu laden  1-4 Bereich  q Beenden     up/down Scrollen
