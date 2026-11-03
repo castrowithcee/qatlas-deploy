@@ -1,7 +1,9 @@
 package version
 
 import (
+	"errors"
 	"regexp"
+	"slices"
 	"testing"
 )
 
@@ -98,6 +100,42 @@ func TestParseTagKinds(t *testing.T) {
 	for _, tc := range tests {
 		if _, kind := parseTag(tc.tag); kind != tc.kind {
 			t.Errorf("%q: kind %d, want %d", tc.tag, kind, tc.kind)
+		}
+	}
+}
+
+func TestPath(t *testing.T) {
+	tags := []string{"1.0.1", "1.0.2", "1.4.0", "2.0.0", "2.3.1", "2.4.0-rc.1", "4.0.0", "4.1.0", "4.1.0-alpine", "v4.2.0", "5.0", "latest"}
+	for _, tc := range []struct {
+		current, target string
+		stepwise        bool
+		filter          string
+		want            []string
+		err             error
+	}{
+		{"1.0.1", "4.1.0", true, "", []string{"1.4.0", "2.3.1", "4.1.0"}, nil},
+		{"1.0.1", "4.1.0", false, "", []string{"4.1.0"}, nil},
+		{"1.4.0", "2.0.0", true, "", []string{"2.0.0"}, nil},
+		{"1.0.1", "1.0.2", true, "", []string{"1.0.2"}, nil},
+		{"1.0.1", "4.1.0", true, `^(1\.0|2|4)\.`, []string{"1.0.2", "2.3.1", "4.1.0"}, nil},
+		{"1.0.1", "4.1.0", true, `^1\.`, nil, ErrFiltered},
+		{"1.0.1", "1.0.1", true, "", nil, ErrNotHigher},
+		{"2.0.0", "1.4.0", true, "", nil, ErrNotHigher},
+		{"1.0.1", "9.9.9", true, "", nil, ErrNotOffered},
+		{"1.0.1", "4.1.0-alpine", true, "", nil, ErrOtherVariant},
+		{"1.0.1", "v4.2.0", true, "", nil, ErrOtherVariant},
+		{"1.0.1", "2.4.0-rc.1", true, "", nil, ErrOtherVariant},
+		{"1.0.1", "5.0", true, "", nil, ErrOtherVariant},
+		{"latest", "4.1.0", true, "", nil, ErrNotComparable},
+		{"1.0.0-rc.1", "4.1.0", true, "", nil, ErrNotComparable},
+	} {
+		in := Input{Current: tc.current, Candidates: tags}
+		if tc.filter != "" {
+			in.Filter = regexp.MustCompile(tc.filter)
+		}
+		got, err := Path(in, tc.target, tc.stepwise)
+		if !errors.Is(err, tc.err) || !slices.Equal(got, tc.want) {
+			t.Errorf("%s -> %s (stepwise %v, filter %q) = %v, %v; want %v, %v", tc.current, tc.target, tc.stepwise, tc.filter, got, err, tc.want, tc.err)
 		}
 	}
 }

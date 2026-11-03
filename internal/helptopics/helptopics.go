@@ -31,6 +31,7 @@ Commands:
 - qdeploy runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy log <run>: print the log of a run (run with sudo)
 - qdeploy resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
+- qdeploy update <stack>... [--version <v>]: update the image versions of stacks, each version step a commit of the stack's .env pushed to the branch and a run with backup, check and rollback (run with sudo)
 - qdeploy updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
 - qdeploy changelog <stack>: show the release notes between the current and the available version of each variable with an update; qdeploy updates --changelog shows them for all stacks (run with sudo)
 - qdeploy backup create|list <stack>, qdeploy backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
@@ -58,7 +59,7 @@ Credentials:
 const repositoryTopic = `The service clones the stacks repository of the host over SSH with its own deploy key and checks the server with its own known_hosts file; the system's SSH configuration and known hosts are not used. Host key checking is always strict.
 
 Binding:
-- qdeploy key generate, then enter the public key as a read-only deploy key in the git platform
+- qdeploy key generate, then enter the public key as a deploy key with write access in the git platform; qdeploy pushes its version and revert commits with it
 - qdeploy repo set <ssh-url> [--dir <path>]: the URL is user@host:path or ssh://[user@]host[:port]/path; the directory defaults to /opt/stacks and must be absolute
 - On first contact the host key and its SHA256 fingerprint are shown. At a terminal you confirm it by answering the question (default no). Without a terminal, pass the expected fingerprint: --fingerprint SHA256:...
 - Compare the fingerprint with the one the git platform publishes before you confirm it.

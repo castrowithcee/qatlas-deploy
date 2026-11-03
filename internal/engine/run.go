@@ -36,6 +36,9 @@ type run struct {
 	log      *Log
 	// held says the run holds the working copy where it is; it gives the hold up only to move it itself.
 	held bool
+	// change is set for a step of an update; pushed says its commit is on the branch.
+	change *VersionStep
+	pushed bool
 }
 
 // outcome is what a run ended with. cause is why the run failed, rollbackErr why its rollback failed and
@@ -51,16 +54,33 @@ type outcome struct {
 func (r *run) execute() {
 	e := r.e
 	defer e.wg.Done()
-	ctx, cancel := context.WithTimeout(e.base, e.cfg.RunTimeout)
-	defer cancel()
-
-	r.log.Step("run " + e.text(r.st.Name) + " at " + r.rec.Commit + " (" + r.rec.Trigger + ")")
-	out := r.secured(ctx)
+	out := r.perform()
 	if r.held {
 		e.releaseHold()
 		r.held = false
 	}
+	rec := r.record(out)
+	e.mu.Lock()
+	delete(e.active, rec.Stack)
+	e.mu.Unlock()
+	e.notify(Event{Kind: rec.Result, Stack: rec.Stack, Run: rec.ID, Commit: rec.Commit, Error: rec.Error})
+}
 
+// perform runs the secured run under the run's own time limit.
+func (r *run) perform() outcome {
+	ctx, cancel := context.WithTimeout(r.e.base, r.e.cfg.RunTimeout)
+	defer cancel()
+	head := "run " + r.e.text(r.st.Name) + " at " + r.rec.Commit + " (" + r.rec.Trigger
+	if c := r.change; c != nil {
+		head += " " + r.e.text(c.Variable+" "+c.From+" -> "+c.To)
+	}
+	r.log.Step(head + ")")
+	return r.secured(ctx)
+}
+
+// record closes the run log, stores the result of the run in the state and returns the record.
+func (r *run) record(out outcome) RunRecord {
+	e := r.e
 	rec := r.rec
 	rec.Duration = e.cfg.Clock.Now().Sub(rec.Started)
 	rec.Result, rec.Backup = out.result, out.backup
@@ -75,6 +95,8 @@ func (r *run) execute() {
 	}
 	r.log.line("result", rec.Result+" "+rec.Error)
 	r.log.close()
+	// An update step that failed before its commit was pushed left nothing on the branch to mark as failed.
+	marks := r.change == nil || r.pushed
 
 	now := e.cfg.Clock.Now().UTC()
 	var dropped []RunRecord
@@ -87,13 +109,20 @@ func (r *run) execute() {
 		case ResultSucceeded:
 			cur.Deployed, cur.FailedCommit = out.at, ""
 		case ResultFailed:
-			cur.FailedCommit = rec.Commit
+			if marks {
+				cur.FailedCommit = rec.Commit
+			}
 		case ResultRolledBack:
 			// The stack folder at the revert commit equals the old deployed state, so the next poll does not
 			// start the failed version again.
-			cur.Deployed, cur.FailedCommit = out.at, rec.Commit
+			cur.Deployed = out.at
+			if marks {
+				cur.FailedCommit = rec.Commit
+			}
 		case ResultRollbackFailed:
-			cur.FailedCommit = rec.Commit
+			if marks {
+				cur.FailedCommit = rec.Commit
+			}
 			cur.Paused = &Pause{Time: now, Run: rec.ID, Reason: e.text(out.rollbackErr.Error())}
 			cur.Findings = append([]Finding{{FindingPaused, e.pauseDetail(cur.Paused)}}, cur.Findings...)
 		}
@@ -112,11 +141,7 @@ func (r *run) execute() {
 		ids[i] = d.ID
 	}
 	e.logs.remove(ids...)
-
-	e.mu.Lock()
-	delete(e.active, rec.Stack)
-	e.mu.Unlock()
-	e.notify(Event{Kind: rec.Result, Stack: rec.Stack, Run: rec.ID, Commit: rec.Commit, Error: rec.Error})
+	return rec
 }
 
 func (e *Engine) notify(ev Event) {
@@ -143,6 +168,7 @@ func (r *run) step(name string, fn func() error) (err error) {
 }
 
 // secured is the run itself: stop, backup, pull, up, check, and the rollback when a step after the stop fails.
+// An update step commits and pushes its version change after the backup; see advance.
 func (r *run) secured(ctx context.Context) outcome {
 	d, st, log := r.e.cfg.Deployer, r.st, r.log
 	if err := r.step("stop", func() error { return d.Stop(ctx, st, log) }); err != nil {
@@ -178,6 +204,12 @@ func (r *run) secured(ctx context.Context) outcome {
 	})
 	if err != nil {
 		failedAt = "backup"
+	}
+	if err == nil && r.change != nil {
+		if err = r.advance(ctx); err != nil {
+			failedAt = "commit"
+		}
+		st = r.st
 	}
 	if err == nil {
 		if err = r.step("pull", func() error { return d.Pull(ctx, st, log) }); err != nil {
@@ -233,8 +265,9 @@ func (r *run) secured(ctx context.Context) outcome {
 }
 
 // rollback brings the stack back to its deployed state: stop, restore the run's backup unless skip says why
-// not, revert the stack folder on the branch and follow it, start and check. It returns the commit the stack
-// runs at.
+// not, revert the stack folder on the branch and follow it, start and check. An update step whose commit was
+// not pushed has nothing to revert: the working copy and the stack folder never left the deployed state. It
+// returns the commit the stack runs at.
 func (r *run) rollback(ctx context.Context, failedAt, backup, skip string) (string, error) {
 	d, log := r.e.cfg.Deployer, r.log
 	log.Step("rollback")
@@ -252,9 +285,14 @@ func (r *run) rollback(ctx context.Context, failedAt, backup, skip string) (stri
 	if err != nil {
 		return "", fmt.Errorf("restore backup %s: %w", backup, err)
 	}
-	at, err := r.revert(ctx, failedAt)
-	if err != nil {
-		return "", err
+	at := r.deployed
+	if r.change == nil || r.pushed {
+		if at, err = r.revert(ctx, failedAt); err != nil {
+			return "", err
+		}
+	} else {
+		log.Step("revert")
+		log.Printf("not needed: nothing was pushed and the working copy stayed at %s", at)
 	}
 	if err := r.step("up", func() error { return d.Up(ctx, r.st, log) }); err != nil {
 		return "", fmt.Errorf("up of the previous state: %w", err)
@@ -330,30 +368,40 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 			return "", fmt.Errorf("push: %w", err)
 		}
 	}
-	if err := r.step("fast-forward", func() error { return wc.FastForward(ctx) }); err != nil {
+	if err := r.follow(ctx, at, "revert"); err != nil {
 		return "", err
+	}
+	return at, nil
+}
+
+// follow fast-forwards the working copy to at, the pushed commit, and gives the run the stack as it is there.
+// The caller has the working copy to itself.
+func (r *run) follow(ctx context.Context, at, what string) error {
+	e, log, wc := r.e, r.log, r.b.Copy
+	if err := r.step("fast-forward", func() error { return wc.FastForward(ctx) }); err != nil {
+		return err
 	}
 	head, err := wc.Head(ctx)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if head != at {
-		return "", fmt.Errorf("the working copy is at %s after the fast-forward, not at %s", e.text(head), at)
+		return fmt.Errorf("the working copy is at %s after the fast-forward, not at %s", e.text(head), at)
 	}
 	list, err := stacks.Load(r.b.Dir)
 	if err != nil {
-		return "", fmt.Errorf("read stacks: %w", err)
+		return fmt.Errorf("read stacks: %w", err)
 	}
 	i := slices.IndexFunc(list, func(s stacks.Stack) bool { return s.Name == r.st.Name })
 	switch {
 	case i < 0:
-		return "", errors.New("the stack is missing at the revert commit")
+		return fmt.Errorf("the stack is missing at the %s commit", what)
 	case list[i].Err != nil:
-		return "", fmt.Errorf("the stack cannot be read at the revert commit: %s", e.text(list[i].Err.Error()))
+		return fmt.Errorf("the stack cannot be read at the %s commit: %s", what, e.text(list[i].Err.Error()))
 	}
 	r.st = list[i]
 	log.Printf("the working copy is at %s", at)
-	return at, nil
+	return nil
 }
 
 // stopAfterFailure leaves the stack stopped once it can be neither deployed nor rolled back.

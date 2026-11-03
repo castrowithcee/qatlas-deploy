@@ -184,6 +184,15 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodeBackupFailed:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Check the service log, then check that the stack runs; a failed backup is removed and a stopped stack is started again.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeBadVersion:
+		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
+			NextStep: "Choose a version of the same variant above the current one; 'qdeploy updates <stack> --refresh' shows them.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeRegistry:
+		return &cli.Failure{Code: output.CodeUnreachable, Message: remote.Message,
+			NextStep: "Check the network and the registry login (see 'qdeploy help credentials'), then run the command again.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNotUpdatable:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Resolve the cause named in the message (see 'qdeploy status' and 'qdeploy help stack-rules'), then run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeBusy:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Run the command again once the service is up.", Cause: err}

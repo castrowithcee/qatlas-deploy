@@ -5,9 +5,9 @@
 //
 // The working copy is shared with the repository commands of the service and belongs to the operator: the
 // engine fetches, fast-forwards only a copy without local changes, and otherwise only reads. Its only own
-// change is a rollback's revert commit, built outside the working copy, pushed as a plain fast-forward and
-// then followed by a fast-forward. It never resets, stashes, checks out or writes into the working copy. Its
-// content is data; stack names from it never become file names.
+// changes are a rollback's revert commit and an update's version commit, each built outside the working copy,
+// pushed as a plain fast-forward and then followed by a fast-forward. It never resets, stashes, checks out or
+// writes into the working copy. Its content is data; stack names from it never become file names.
 package engine
 
 import (
@@ -61,8 +61,8 @@ var (
 	errAlreadyRunning = errors.New("the poll loop is already running")
 )
 
-// WorkingCopy is the git layer the engine needs; *gitrepo.Repo implements it. RevertStack and Push follow
-// the contract and the errors of gitrepo.
+// WorkingCopy is the git layer the engine needs; *gitrepo.Repo implements it. RevertStack, CommitFile and
+// Push follow the contract and the errors of gitrepo.
 type WorkingCopy interface {
 	Fetch(ctx context.Context) error
 	Head(ctx context.Context) (string, error)
@@ -71,6 +71,8 @@ type WorkingCopy interface {
 	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
 	FastForward(ctx context.Context) error
 	RevertStack(ctx context.Context, stack, deployed, failed, reason string) (string, error)
+	CommitFile(ctx context.Context, path string, edit func(old []byte) ([]byte, error), message string) (string, error)
+	IsAncestor(ctx context.Context, a, b string) (bool, error)
 	Push(ctx context.Context, commit string) error
 }
 
@@ -122,8 +124,9 @@ type Config struct {
 	// Deployer is nil in a service that cannot deploy yet: the engine then only polls, fast-forwards and
 	// reports pending stacks, and never starts a run or records a deployed commit.
 	Deployer Deployer
-	// Events, when set, is told the outcome of every finished run. It is called in the run's goroutine after
-	// the result is stored and the stack's slot is free, and must return quickly: Close waits for it.
+	// Events, when set, is told the outcome of every finished run. It is called after the result is stored,
+	// for a run that is no update step also after the stack's slot is free, and must return quickly: Close
+	// waits for it.
 	Events func(Event)
 	// Redact is applied to every text stored in the state and the run logs. Nil means none.
 	Redact func(string) string
@@ -785,22 +788,35 @@ func (e *Engine) WithStack(ctx context.Context, name, label string,
 
 // claim takes the run slot of a stack for work that is no deployment run.
 func (e *Engine) claim(name, label string) (release func(), err error) {
+	if err := e.take(name, label); err != nil {
+		return nil, err
+	}
+	return func() { e.free(name, true) }, nil
+}
+
+// take takes the run slot of a stack and a hold on the working copy.
+func (e *Engine) take(name, label string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closed {
-		return nil, ErrStopped
+		return ErrStopped
 	}
 	if _, busy := e.active[name]; busy {
-		return nil, ErrRunActive
+		return ErrRunActive
 	}
 	e.active[name] = label
 	e.holds++
 	e.wg.Add(1)
-	return func() {
-		e.mu.Lock()
-		delete(e.active, name)
-		e.mu.Unlock()
+	return nil
+}
+
+// free gives up what take took; held is false when the hold was given up already.
+func (e *Engine) free(name string, held bool) {
+	e.mu.Lock()
+	delete(e.active, name)
+	e.mu.Unlock()
+	if held {
 		e.releaseHold()
-		e.wg.Done()
-	}, nil
+	}
+	e.wg.Done()
 }

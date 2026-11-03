@@ -42,6 +42,8 @@ type WorkingCopy interface {
 	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
 	FastForward(ctx context.Context) error
 	RevertStack(ctx context.Context, stack, deployed, failed, reason string) (string, error)
+	CommitFile(ctx context.Context, path string, edit func(old []byte) ([]byte, error), message string) (string, error)
+	IsAncestor(ctx context.Context, a, b string) (bool, error)
 	Push(ctx context.Context, commit string) error
 	TrackedFiles(ctx context.Context, dir string) ([]string, error)
 	IsIgnored(ctx context.Context, path string) (bool, error)

@@ -25,23 +25,33 @@ func commit(n int) string { return fmt.Sprintf("%040x", n) }
 // fakeCopy stands in for the git layer; FastForward writes into the directory so a forbidden call is visible.
 // RevertStack and Push take their answers from revertErrs and pushErrs, one per call, nil once used up.
 type fakeCopy struct {
-	mu            sync.Mutex
-	dir           string
-	head, remote  string
-	changes       []gitrepo.Change
-	folders       map[[2]string][]string
-	fetchErr      error
-	ffErr         error
-	revertErrs    []error
-	pushErrs      []error
-	reverts       []revertCall
-	pushed        []string
+	mu           sync.Mutex
+	dir          string
+	head, remote string
+	changes      []gitrepo.Change
+	folders      map[[2]string][]string
+	fetchErr     error
+	ffErr        error
+	revertErrs   []error
+	pushErrs     []error
+	reverts      []revertCall
+	pushed       []string
+	commitErrs   []error
+	diverged     bool // the working copy has commits the branch lacks
+	commits      []commitCall
+	// files holds what a fast-forward to a commit made by CommitFile or RevertStack writes, by path.
+	files         map[string]map[string][]byte
 	onFetch       func(*fakeCopy) // called with mu held
 	calls         []string
 	fastForwarded int
 }
 
 type revertCall struct{ Stack, Deployed, Failed, Reason, Base string }
+
+type commitCall struct {
+	Path, Message, Base string
+	Old, New            []byte
+}
 
 func pop(errs *[]error) error {
 	if len(*errs) == 0 {
@@ -77,7 +87,43 @@ func (f *fakeCopy) RevertStack(_ context.Context, stack, deployed, failed, reaso
 	if err := pop(&f.revertErrs); err != nil {
 		return "", err
 	}
-	return commit(1000 + len(f.reverts)), nil
+	id := commit(1000 + len(f.reverts))
+	// Reverting a commit of CommitFile puts its file back.
+	for i, c := range f.commits {
+		if commit(2001+i) == failed {
+			f.files[id] = map[string][]byte{c.Path: c.Old}
+		}
+	}
+	return id, nil
+}
+
+func (f *fakeCopy) IsAncestor(_ context.Context, a, b string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return !f.diverged || a == b, nil
+}
+
+// CommitFile edits the file as the working copy has it and answers with a new commit id per call; a
+// fast-forward to the commit writes the result.
+func (f *fakeCopy) CommitFile(_ context.Context, path string, edit func([]byte) ([]byte, error), message string) (string, error) {
+	f.rec("commit")
+	old, err := os.ReadFile(filepath.Join(f.dir, path))
+	if err != nil {
+		return "", err
+	}
+	content, err := edit(old)
+	if err != nil {
+		return "", err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := pop(&f.commitErrs); err != nil {
+		return "", err
+	}
+	f.commits = append(f.commits, commitCall{Path: path, Message: message, Base: f.remote, Old: old, New: content})
+	id := commit(2000 + len(f.commits))
+	f.files[id] = map[string][]byte{path: content}
+	return id, nil
 }
 
 func (f *fakeCopy) Push(_ context.Context, c string) error {
@@ -120,6 +166,11 @@ func (f *fakeCopy) FastForward(context.Context) error {
 	}
 	f.fastForwarded++
 	f.head = f.remote
+	for path, body := range f.files[f.head] {
+		if err := os.WriteFile(filepath.Join(f.dir, path), body, 0o644); err != nil {
+			return err
+		}
+	}
 	return os.WriteFile(filepath.Join(f.dir, "fast-forwarded"), []byte("x"), 0o644)
 }
 
@@ -161,6 +212,8 @@ type fakeDeployer struct {
 	noRules bool
 	// trace, when set, gets every step as it starts.
 	trace func(string)
+	// backedUp lists the deployed commit of every backup.
+	backedUp []string
 }
 
 func (d *fakeDeployer) do(ctx context.Context, step string, st stacks.Stack) error {
@@ -200,6 +253,9 @@ func (d *fakeDeployer) Backup(ctx context.Context, st stacks.Stack, deployed str
 	if err := d.do(ctx, "backup", st); err != nil {
 		return "", err
 	}
+	d.mu.Lock()
+	d.backedUp = append(d.backedUp, deployed)
+	d.mu.Unlock()
 	if d.noRules {
 		return "", ErrNoBackup
 	}
@@ -340,7 +396,7 @@ func newRig(t *testing.T, names ...string) *rig {
 	for _, n := range names {
 		writeStack(t, r.wc, n)
 	}
-	r.copy = &fakeCopy{dir: r.wc, head: commit(1), remote: commit(1), folders: map[[2]string][]string{}}
+	r.copy = &fakeCopy{dir: r.wc, head: commit(1), remote: commit(1), folders: map[[2]string][]string{}, files: map[string]map[string][]byte{}}
 	r.dep = &fakeDeployer{head: func() string {
 		h, _ := r.copy.Head(context.Background())
 		return h
