@@ -323,6 +323,15 @@ check:
 	}
 }
 
+func TestRulesChangelogRepositories(t *testing.T) {
+	for _, value := range []string{"example-org/example-app", "https://github.com/example-org/example-app", "https://github.com/example-org/example-app.git"} {
+		s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": "version: 1\nupdate: {changelog: {DEMO_VERSION: '" + value + "'}}\n"})
+		if s.Err != nil || s.Rules.Update.Changelog["DEMO_VERSION"] != "example-org/example-app" {
+			t.Errorf("%s: err = %v, rules = %+v", value, s.Err, s.Rules)
+		}
+	}
+}
+
 func TestRulesBackupDefaultsAndHTTPDefaults(t *testing.T) {
 	s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": "version: 1\nbackup: {paths: [data]}\ncheck: {http: {url: 'https://demo.example.test/'}}\n"})
 	if s.Err != nil || s.Rules.Backup.Keep != 7 || s.Rules.Check.HTTP.Status != 200 || s.Rules.Check.HTTP.Timeout != 10*time.Second {
@@ -346,6 +355,10 @@ func TestInvalidRules(t *testing.T) {
 		{"bad regex", "version: 1\nupdate: {tags: {DEMO_VERSION: '('}}\n", []string{"update.tags.DEMO_VERSION", "regular expression"}},
 		{"unknown var", "version: 1\nupdate: {tags: {OTHER: '.*'}}\n", []string{"update.tags.OTHER", "no service image"}},
 		{"bad var name", "version: 1\nupdate: {tags: {'a b': '.*'}}\n", []string{"update.tags.a b"}},
+		{"changelog bad var name", "version: 1\nupdate: {changelog: {'a b': example-org/example-app}}\n", []string{"update.changelog.a b", "not a variable name"}},
+		{"changelog bad repository", "version: 1\nupdate: {changelog: {DEMO_VERSION: 'not a repo'}}\n", []string{"update.changelog.DEMO_VERSION", "GitHub repository"}},
+		{"changelog other host", "version: 1\nupdate: {changelog: {DEMO_VERSION: 'https://git.example.test/team/app'}}\n", []string{"update.changelog.DEMO_VERSION"}},
+		{"changelog unknown var", "version: 1\nupdate: {changelog: {OTHER: example-org/example-app}}\n", []string{"update.changelog.OTHER", "no service image"}},
 		{"empty backup", "version: 1\nbackup: {}\n", []string{"backup:"}},
 		{"absolute path", "version: 1\nbackup: {paths: [/etc]}\n", []string{"backup.paths[0]", "absolute"}},
 		{"parent path", "version: 1\nbackup: {paths: [data, ../x]}\n", []string{"backup.paths[1]", ".."}},

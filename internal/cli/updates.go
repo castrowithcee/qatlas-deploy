@@ -21,9 +21,9 @@ const (
 )
 
 func newUpdatesCommand(program *cobracli.Program, state *notRunning) *cobra.Command {
-	var refresh bool
+	var refresh, withChangelog bool
 	cmd := &cobra.Command{
-		Use:   "updates [stack] [--refresh]",
+		Use:   "updates [stack] [--refresh] [--changelog]",
 		Short: "Show the current and the available image versions of the stacks",
 		Long: "updates lists, per stack and image version variable, the current version, the version the stack's rules\n" +
 			"allow it to move to (available) and, if a newer major version exists, major_available, which is never\n" +
@@ -33,16 +33,21 @@ func newUpdatesCommand(program *cobracli.Program, state *notRunning) *cobra.Comm
 			"Without --refresh the result of the last check is shown with its time; a stack never checked says so.\n" +
 			"With --refresh the service asks the registries now and stores the result. Nothing in any stack, in the\n" +
 			"repository or in a deployment is changed. A private registry needs a stored login (see qdeploy help\n" +
-			"credentials); without one it is asked anonymously.",
+			"credentials); without one it is asked anonymously.\n\n" +
+			"With --changelog the release notes between the current and the available version are shown instead of\n" +
+			"the version table (see qdeploy changelog).",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			a := control.UpdatesArgs{Refresh: refresh}
+			a := control.UpdatesArgs{Refresh: refresh, Changelog: withChangelog}
 			if len(args) == 1 {
 				a.Stack = args[0]
 			}
 			limit := client.CallTimeout
 			if refresh {
 				limit = control.UpdatesRefreshTimeout + client.CallTimeout
+			}
+			if withChangelog {
+				limit += control.ChangelogTimeout
 			}
 			var res control.UpdatesResult
 			if err := callFor(c.Context(), limit, serviceEndpoint(), control.UpdatesListCommand, a, &res); err != nil {
@@ -51,10 +56,14 @@ func newUpdatesCommand(program *cobracli.Program, state *notRunning) *cobra.Comm
 				}
 				return failureOf(err)
 			}
+			if withChangelog {
+				return encodeChangelogs(c.OutOrStdout(), program.Format(), changelogsOfUpdates(res))
+			}
 			return output.Encode(c.OutOrStdout(), program.Format(), output.Collection{Columns: updateColumns, Rows: updateRows(res)})
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "ask the registries now and store the result")
+	cmd.Flags().BoolVar(&withChangelog, "changelog", false, "show the release notes of the available updates instead of the version table")
 	return cmd
 }
 
