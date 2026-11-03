@@ -37,11 +37,10 @@ const (
 	maxText = 200 // runes; with MaxUpdateText bytes this fits for any UTF-8 text
 )
 
-// Detector runs detections. The zero value is not usable: Credential is required.
+// Detector runs detections. The zero value asks every registry anonymously.
 type Detector struct {
-	// Credential returns the login for a registry host, called at most once per host and run; nil means
-	// anonymous access. The zero
-	// registry.Credential is anonymous access.
+	// Credential returns the login for a registry host, called at most once per host and run. Nil, like a
+	// returned zero registry.Credential, means anonymous access.
 	Credential func(host string) (registry.Credential, error)
 	// Options configure the registry clients. Credential in it is ignored.
 	Options registry.Options

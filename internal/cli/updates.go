@@ -32,7 +32,8 @@ func newUpdatesCommand(program *cobracli.Program, state *notRunning) *cobra.Comm
 			"ordered, for example 'latest') and error (the registry could not be asked); the error column says why.\n\n" +
 			"Without --refresh the result of the last check is shown with its time; a stack never checked says so.\n" +
 			"With --refresh the service asks the registries now and stores the result. Nothing in any stack, in the\n" +
-			"repository or in a deployment is changed. Registries are asked anonymously.",
+			"repository or in a deployment is changed. A private registry needs a stored login (see qdeploy help\n" +
+			"credentials); without one it is asked anonymously.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			a := control.UpdatesArgs{Refresh: refresh}
