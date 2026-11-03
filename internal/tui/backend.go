@@ -1,9 +1,11 @@
-// Package tui is the terminal interface of qdeploy. It reads only through a Backend, which reaches the service
-// over its channel; it never touches the stacks repository, Docker or the files of the service.
+// Package tui is the terminal interface of qdeploy. It acts only through a Backend, which reaches the service
+// over its channel; it never touches the stacks repository, Docker or the files of the service. It changes
+// something only after the person confirmed it.
 package tui
 
 import (
 	"context"
+	"time"
 
 	"github.com/castrowithcee/qatlas-kit/localipc"
 
@@ -27,7 +29,24 @@ type Backend interface {
 	// Backups lists the backups of one stack, newest first.
 	Backups(ctx context.Context, stack string) (control.BackupListResult, error)
 	Window(ctx context.Context) (control.WindowResult, error)
+
+	// The calls below change something in the service; the interface makes them only after a confirmation.
+
+	// Deploy starts a manual run of one stack and returns as soon as it is started.
+	Deploy(ctx context.Context, stack string) (control.DeployResult, error)
+	// Update moves the image versions of the stacks and returns when the last step is done.
+	Update(ctx context.Context, stacks []string) (control.UpdateRunResult, error)
+	Pause(ctx context.Context, stack string) (control.HoldResult, error)
+	Unpause(ctx context.Context, stack string) (control.HoldResult, error)
+	Pin(ctx context.Context, stack string) (control.HoldResult, error)
+	Unpin(ctx context.Context, stack string) (control.HoldResult, error)
+	// Resume clears the pause a failed rollback left on a stack.
+	Resume(ctx context.Context, stack string) (control.ResumeResult, error)
 }
+
+// updateCallLimit bounds one update call, which waits for every step of the stack; it is the limit of the
+// update command.
+const updateCallLimit = 24 * time.Hour
 
 // ChannelBackend is the Backend over the service channel. Every call dials a connection of its own, so calls
 // may run concurrently.
@@ -92,5 +111,41 @@ func (b *ChannelBackend) Window(ctx context.Context) (res control.WindowResult, 
 
 func (b *ChannelBackend) Backups(ctx context.Context, stack string) (res control.BackupListResult, err error) {
 	err = b.call(ctx, control.BackupListCommand, control.BackupArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Deploy(ctx context.Context, stack string) (res control.DeployResult, err error) {
+	err = b.call(ctx, control.DeployCommand, control.DeployArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Update(ctx context.Context, stacks []string) (res control.UpdateRunResult, err error) {
+	err = client.Do(ctx, b.endpoint, updateCallLimit, control.UpdateRunCommand, control.UpdateRunArgs{Stacks: stacks}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) hold(ctx context.Context, command, stack string) (res control.HoldResult, err error) {
+	err = b.call(ctx, command, control.HoldArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Pause(ctx context.Context, stack string) (control.HoldResult, error) {
+	return b.hold(ctx, control.PauseCommand, stack)
+}
+
+func (b *ChannelBackend) Unpause(ctx context.Context, stack string) (control.HoldResult, error) {
+	return b.hold(ctx, control.UnpauseCommand, stack)
+}
+
+func (b *ChannelBackend) Pin(ctx context.Context, stack string) (control.HoldResult, error) {
+	return b.hold(ctx, control.PinCommand, stack)
+}
+
+func (b *ChannelBackend) Unpin(ctx context.Context, stack string) (control.HoldResult, error) {
+	return b.hold(ctx, control.UnpinCommand, stack)
+}
+
+func (b *ChannelBackend) Resume(ctx context.Context, stack string) (res control.ResumeResult, err error) {
+	err = b.call(ctx, control.ResumeCommand, control.ResumeArgs{Stack: stack}, &res)
 	return res, err
 }

@@ -1,0 +1,14 @@
+qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe                                                                                 
+------------------------------------------------------------------------------------------------------------------------
+      STACK        VERSION  #= pin ========================================================#               BEFUNDE      
+> [ ] demo-stack   1.4.2    | ! demo-stack pinnen?                                         |2              1 Warnung    
+  [ ] mail-relay   3.1      |                                                              |0              keine        
+  [ ] old-tool     -        | Wartungsfenster und update lassen die Image-Versionen des    |               keine        
+  [ ] photo-album  2.0.1    | Stacks unverändert, bis du den Pin aufhebst.                 |n 10-29 03:10  1 Fehler     
+  [ ] web-shop     5.2.0, 16|                                                              |:00            keine        
+  [ ] wiki         1.41.0   | [ ja, ausführen ]  > abbrechen <                             |0              2 Warnungen  
+                            | y ja, ausführen  n/esc/enter abbrechen                       |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                     1/6

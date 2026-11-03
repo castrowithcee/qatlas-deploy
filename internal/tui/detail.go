@@ -313,11 +313,16 @@ func (m *Model) partNote(p part, width int) (note []string, ready bool) {
 }
 
 func (m *Model) changelogLines(width int) []string {
-	t, d := m.text, &m.detail
+	d := &m.detail
 	if note, ready := m.partNote(d.cl, width); !ready {
 		return note
 	}
-	res := d.changelog
+	return m.changelogItemLines(d.changelog, width)
+}
+
+// changelogItemLines is the release notes of one stack's changelog result.
+func (m *Model) changelogItemLines(res control.ChangelogResult, width int) []string {
+	t := m.text
 	hint := func(text string) []string { return m.wrapped(detailIndent, kittui.StyleHint, text, width) }
 	switch {
 	case res.Checked.IsZero():

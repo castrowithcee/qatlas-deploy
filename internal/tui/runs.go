@@ -201,6 +201,11 @@ func (m *Model) openLog(id kittui.ItemID) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	return m.showLog(row)
+}
+
+// showLog shows the log of row, read at once.
+func (m *Model) showLog(row runRow) tea.Cmd {
 	view, err := m.newLogView()
 	if err != nil {
 		m.failure = m.text.Lookup(kittui.TextError, err.Error())

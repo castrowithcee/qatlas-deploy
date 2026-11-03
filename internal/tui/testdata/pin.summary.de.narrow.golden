@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                    [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe                 
+--------------------------------------------------------
+  pin beendet: 2 ok, 1 fehlgeschlagen                   
+                                                        
+  demo-stack  ok                                        
+    gepinnt                                             
+                                                        
+  mail-relay  fehlgeschlagen                            
+    der Dienst hat die Anfrage abgelehnt: the stack has 
+    local changes                                       
+                                                        
+  wiki  ok                                              
+    gepinnt                                             
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+n/esc/enter schließen                   up/down Scrollen

@@ -1,0 +1,40 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks]  2 Stack detail   3 Runs                   
+--------------------------------------------------------
+  ! Update demo-stack?                                  
+                                                        
+  Each stack is backed up, committed and deployed step  
+  by step, one stack after another; a failed step is    
+  rolled back. The versions shown are from the last     
+  check, the service asks the registries again.         
+                                                        
+  demo-stack                                            
+    APP_VERSION  example/app                            
+      1.4.2 -> 1.5.0  update available                  
+                                                        
+  Changelog                                             
+    APP_VERSION  1.4.2 -> 1.5.0                         
+      source example/app                                
+      1.5.0  Spring release  2026-10-29                 
+        Adds a dark theme.                              
+                                                        
+        - faster start                                  
+        - fixes the upload limit                        
+      1.4.3  2026-10-20                                 
+        Fixes a crash on empty input.                   
+      more at https://example.invalid/app/releases      
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+y yes, do it  n/esc/enter cancel          up/down scroll

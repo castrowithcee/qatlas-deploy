@@ -60,7 +60,8 @@ type config struct {
 // tickMsg starts a periodic refresh.
 type tickMsg struct{}
 
-// Model is the state of the interface. It reads only; no key triggers an effect in the service.
+// Model is the state of the interface. An action reaches the service only after the person confirmed it; the
+// periodic refresh and the mouse never trigger one.
 type Model struct {
 	ctx     context.Context
 	backend Backend
@@ -97,6 +98,12 @@ type Model struct {
 	// runsOnly limits the Runs area to the chosen stack.
 	runsOnly bool
 	log      runLog
+	// modal is the question or result that takes every key; run the sequence of calls under way. stale is set
+	// when a refresh must follow the one under way.
+	modal            *modal
+	run              *running
+	modalGen, runGen int
+	stale            bool
 	// after starts a timer; tests replace it.
 	after    func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
 	help     *kittui.Help
@@ -129,7 +136,7 @@ func newModel(c config) (*Model, error) {
 	if slices.ContainsFunc(areas(), func(a kittui.Area) bool { return a.ID == c.start }) {
 		m.area = c.start
 	}
-	m.list, err = kittui.NewList(kittui.ListSpec{Columns: stackColumns(text, m.tones), Keys: listKeys(),
+	m.list, err = kittui.NewList(kittui.ListSpec{Columns: stackColumns(text, m.tones), Keys: stackListKeys(), Ticks: true,
 		Search: kittui.SearchByKey, Empty: textStacksEmpty}, keys, text)
 	if err != nil {
 		return nil, err
@@ -191,6 +198,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.reload(), m.tick())
 	case refreshMsg:
 		m.apply(msg)
+		if m.stale {
+			m.stale = false
+			return m, m.reload()
+		}
+	case stepMsg:
+		return m, m.applyStep(msg)
+	case previewMsg:
+		return m, m.applyPreview(msg)
 	case changelogMsg:
 		m.applyChangelog(msg)
 	case backupsMsg:
@@ -246,6 +261,11 @@ func (m *Model) apply(msg refreshMsg) {
 
 // errorText says in the message line why the service could not answer.
 func (m *Model) errorText(err error) string {
+	return m.text.Lookup(kittui.TextError, m.serviceText(err))
+}
+
+// serviceText says why the service could not do what was asked.
+func (m *Model) serviceText(err error) string {
 	t := m.text
 	var remote *control.Error
 	var text string
@@ -259,12 +279,12 @@ func (m *Model) errorText(err error) string {
 	default:
 		text = t.Lookup(textErrChannel, err.Error())
 	}
-	return t.Lookup(kittui.TextError, text)
+	return text
 }
 
 // input is the input focus of the screen.
 func (m *Model) input() kittui.InputFocus {
-	if m.helpOpen {
+	if m.helpOpen || m.modal != nil {
 		return kittui.InputNavigation
 	}
 	switch m.area {
@@ -296,6 +316,9 @@ func (m *Model) typed(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
 
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	m.notice = ""
+	if m.modal != nil {
+		return m.modalKey(msg)
+	}
 	if m.helpOpen {
 		if act, handled := m.help.Update(msg); handled {
 			if act != "" {
@@ -332,6 +355,10 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			if m.area == areaRuns && !m.log.open {
 				m.toggleStackOnly()
 				return nil
+			}
+		case actUpdate, actDeploy, actPause, actUnpause, actPin, actUnpin, actResume, actCheck:
+			if m.area == areaStacks {
+				return m.beginAction(actionKinds[id])
 			}
 		case actBack:
 			switch m.area {
@@ -404,7 +431,7 @@ func (m *Model) open(id kittui.ItemID) tea.Cmd {
 }
 
 func (m *Model) openHelp() {
-	help, err := kittui.NewHelp(kittui.HelpSpec{Topics: helptopics.All(), Screen: m.footer(),
+	help, err := kittui.NewHelp(kittui.HelpSpec{Topics: helptopics.All(), Screen: m.helpScreen(),
 		Global: []kittui.ActionID{actHelp, actArea, actReload, actBack, actQuit}, Keys: helpKeys()}, m.keys, m.text)
 	if err != nil {
 		m.failure = m.text.Lookup(kittui.TextError, err.Error())
@@ -415,6 +442,13 @@ func (m *Model) openHelp() {
 
 // footer is the key line of the screen.
 func (m *Model) footer() []kittui.Hint {
+	if m.modal != nil {
+		if m.modal.sheet() {
+			return m.modalFooter()
+		}
+		// The keys of the screen behind a question do nothing; the question shows its own.
+		return nil
+	}
 	nav := []kittui.Hint{
 		{Action: actUp, Label: kittui.TextKeyChoose, Kind: kittui.HintNavigation},
 		{Action: actDown, Label: kittui.TextKeyChoose, Kind: kittui.HintNavigation},
@@ -443,9 +477,21 @@ func (m *Model) footer() []kittui.Hint {
 		return m.listFooter(m.runsList, len(m.runByID), textKeyLog, append(
 			[]kittui.Hint{m.stackOnlyHint()}, common...), nav)
 	case m.area == areaStacks:
+		if len(m.rows) > 0 {
+			common = append(m.actionHints(), common...)
+		}
 		return m.listFooter(m.list, len(m.rows), textKeyDetails, common, nav)
 	}
 	return common
+}
+
+// helpScreen are the keys the help lists for the screen it was opened from.
+func (m *Model) helpScreen() []kittui.Hint {
+	hints := m.footer()
+	if m.area == areaStacks && len(m.rows) > 0 {
+		hints = append(hints, m.moreActionHints()...)
+	}
+	return hints
 }
 
 func (m *Model) stackOnlyHint() kittui.Hint {
@@ -481,6 +527,9 @@ func (m *Model) listFooter(list *kittui.List, rows int, enter kittui.TextID, com
 func (m *Model) marks() []kittui.StatusMark {
 	t := m.text
 	var marks []kittui.StatusMark
+	if m.run != nil {
+		marks = append(marks, m.busyMark())
+	}
 	if m.loading {
 		marks = append(marks, kittui.StatusMark{Kind: kittui.StatusBusy, Text: t.Lookup(textHeaderRefreshing)})
 	}
@@ -548,10 +597,20 @@ func (m *Model) render() string {
 	spec := m.frameSpec()
 	room := m.frame.Workspace(spec)
 	spec.Workspace = m.workspace(room.Width, room.Height)
-	if m.area == areaDetail {
+	if m.area == areaDetail || m.modal != nil && m.modal.sheet() {
 		spec.Position = m.scrollNote
 	}
 	view, _ := m.frame.Render(m.styles, spec)
+	if m.modal != nil && !m.modal.sheet() {
+		if over, _, ok := m.modal.dialog.Overlay(m.styles, view, m.width, m.height, room); ok {
+			view = over
+		} else {
+			spec.Footer, spec.Input, spec.Position, spec.Back = m.modal.dialog.Hints(), kittui.InputNavigation, "", nil
+			room = m.frame.Workspace(spec)
+			spec.Workspace, _ = m.modal.dialog.View(m.styles, room.Width, room.Height)
+			view, _ = m.frame.Render(m.styles, spec)
+		}
+	}
 	if m.helpOpen {
 		if over, _, ok := m.help.Overlay(m.styles, view, m.width, m.height, room); ok {
 			view = over
@@ -580,6 +639,9 @@ func (m *Model) resizeView() string {
 
 // workspace draws the content of the active area in width by height cells.
 func (m *Model) workspace(width, height int) string {
+	if m.modal != nil && m.modal.sheet() {
+		return m.modalView(width, height)
+	}
 	if !m.loaded {
 		return m.note(m.text.Lookup(textStacksLoading), width)
 	}

@@ -54,6 +54,14 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 		"changelog": func() error { _, err := b.Changelog(ctx, "demo-stack"); return err },
 		"backups":   func() error { _, err := b.Backups(ctx, "demo-stack"); return err },
 		"window":    func() error { _, err := b.Window(ctx); return err },
+		// The service in this test has no stacks repository, so it refuses each of these before it changes anything.
+		"deploy":  func() error { _, err := b.Deploy(ctx, "demo-stack"); return err },
+		"update":  func() error { _, err := b.Update(ctx, []string{"demo-stack"}); return err },
+		"pause":   func() error { _, err := b.Pause(ctx, "demo-stack"); return err },
+		"unpause": func() error { _, err := b.Unpause(ctx, "demo-stack"); return err },
+		"pin":     func() error { _, err := b.Pin(ctx, "demo-stack"); return err },
+		"unpin":   func() error { _, err := b.Unpin(ctx, "demo-stack"); return err },
+		"resume":  func() error { _, err := b.Resume(ctx, "demo-stack"); return err },
 	}
 	for name, call := range calls {
 		var remote *control.Error

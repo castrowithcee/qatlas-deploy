@@ -24,6 +24,11 @@ type fakeBackend struct {
 	backups    map[string]control.BackupListResult
 	errs       map[string]error
 	calls      map[string]int
+	// acts records the changing calls in order as "<call>:<stack>"; an error set in errs for that key fails
+	// the call, and updateRuns and holds answer by stack.
+	acts       []string
+	updateRuns map[string]control.StackUpdateRun
+	holds      map[string]control.HoldResult
 }
 
 func (f *fakeBackend) count(name string) {
@@ -59,7 +64,9 @@ func (f *fakeBackend) Check(context.Context, string) (control.StacksCheckResult,
 func (f *fakeBackend) Updates(_ context.Context, args control.UpdatesArgs) (control.UpdatesResult, error) {
 	f.count("updates")
 	if args.Refresh {
-		f.count("refresh")
+		if err := f.act("refresh", "*"); err != nil {
+			return control.UpdatesResult{}, err
+		}
 	}
 	return f.updates, nil
 }
@@ -121,6 +128,82 @@ func (f *fakeBackend) Backups(_ context.Context, stack string) (control.BackupLi
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return control.BackupListResult{Stack: stack, Backups: f.backups[stack].Backups}, nil
+}
+
+// act records a changing call and returns the error set for it.
+func (f *fakeBackend) act(call, stack string) error {
+	f.count(call)
+	f.mu.Lock()
+	f.acts = append(f.acts, call+":"+stack)
+	f.mu.Unlock()
+	return f.fail(call, stack)
+}
+
+func (f *fakeBackend) actions() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.acts...)
+}
+
+func (f *fakeBackend) Deploy(_ context.Context, stack string) (control.DeployResult, error) {
+	if err := f.act("deploy", stack); err != nil {
+		return control.DeployResult{}, err
+	}
+	return control.DeployResult{ID: "20261031T100000Z-" + stack, Stack: stack, Commit: commitB}, nil
+}
+
+func (f *fakeBackend) Update(_ context.Context, stacks []string) (control.UpdateRunResult, error) {
+	var res control.UpdateRunResult
+	f.count("update.call")
+	for _, stack := range stacks {
+		if err := f.act("update", stack); err != nil {
+			return control.UpdateRunResult{}, err
+		}
+		f.mu.Lock()
+		run, ok := f.updateRuns[stack]
+		f.mu.Unlock()
+		if !ok {
+			run = control.StackUpdateRun{Name: stack, Steps: []control.UpdateStepInfo{{Variable: "APP_VERSION", From: "1.4.2",
+				To: "1.5.0", Run: "20261031T100000Z-" + stack, Result: "succeeded"}}}
+		}
+		res.Stacks = append(res.Stacks, run)
+	}
+	return res, nil
+}
+
+func (f *fakeBackend) hold(call, stack string, active bool) (control.HoldResult, error) {
+	if err := f.act(call, stack); err != nil {
+		return control.HoldResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if res, ok := f.holds[call+":"+stack]; ok {
+		return res, nil
+	}
+	return control.HoldResult{Stack: stack, Active: active, Changed: true}, nil
+}
+
+func (f *fakeBackend) Pause(_ context.Context, stack string) (control.HoldResult, error) {
+	return f.hold("pause", stack, true)
+}
+
+func (f *fakeBackend) Unpause(_ context.Context, stack string) (control.HoldResult, error) {
+	return f.hold("unpause", stack, false)
+}
+
+func (f *fakeBackend) Pin(_ context.Context, stack string) (control.HoldResult, error) {
+	return f.hold("pin", stack, true)
+}
+
+func (f *fakeBackend) Unpin(_ context.Context, stack string) (control.HoldResult, error) {
+	return f.hold("unpin", stack, false)
+}
+
+func (f *fakeBackend) Resume(_ context.Context, stack string) (control.ResumeResult, error) {
+	if err := f.act("resume", stack); err != nil {
+		return control.ResumeResult{}, err
+	}
+	return control.ResumeResult{Stack: stack, Pause: control.PauseInfo{Since: at(29, 3, 12), Run: "20261029T031000Z-0000000a"}}, nil
 }
 
 func (f *fakeBackend) Window(context.Context) (control.WindowResult, error) {

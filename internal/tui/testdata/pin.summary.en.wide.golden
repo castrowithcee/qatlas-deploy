@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                              [?] help
+  [1 Stacks]  2 Stack detail   3 Runs                                                                                   
+------------------------------------------------------------------------------------------------------------------------
+  pin finished: 2 ok, 1 failed                                                                                          
+                                                                                                                        
+  demo-stack  ok                                                                                                        
+    pinned                                                                                                              
+                                                                                                                        
+  mail-relay  failed                                                                                                    
+    the service refused the request: the stack has local changes                                                        
+                                                                                                                        
+  wiki  ok                                                                                                              
+    pinned                                                                                                              
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+n/esc/enter close                                                                                         up/down scroll

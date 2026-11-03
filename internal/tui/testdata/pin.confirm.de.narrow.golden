@@ -1,0 +1,20 @@
+qdeploy  Wartungsfenster zu                    [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe                 
+--------------------------------------------------------
+      STACK        VERSION  VERFÜGBAR  ZUSTAND  BEFUNDE 
+> [ ] demo-stack   1.4.2    1.5.0      deployt  1 Warnu~
+  [ ] mail-relay   3.1      aktuell    offen    keine   
+  #= pin ============================================#  
+  | ! demo-stack pinnen?                             |er
+  |                                                  |  
+  | Wartungsfenster und update lassen die Image-     |u~
+  | Versionen des Stacks unverändert, bis du den Pin |  
+  | aufhebst.                                        |  
+  |                                                  |  
+  | [ ja, ausführen ]  > abbrechen <                 |  
+  | y ja, ausführen  n/esc/enter abbrechen           |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        
+                                                     1/6

@@ -22,6 +22,21 @@ const (
 	actArea      kittui.ActionID = "area"
 	// actStackOnly limits the Runs area to the stack chosen in Stacks, and lifts the limit again.
 	actStackOnly kittui.ActionID = "stackonly"
+	// actToggle ticks a stack in the Stacks list.
+	actToggle kittui.ActionID = "toggle"
+	// The actions on stacks; each opens a confirmation first.
+	actUpdate  kittui.ActionID = "update"
+	actDeploy  kittui.ActionID = "deploy"
+	actPause   kittui.ActionID = "pause"
+	actUnpause kittui.ActionID = "unpause"
+	actPin     kittui.ActionID = "pin"
+	actUnpin   kittui.ActionID = "unpin"
+	actResume  kittui.ActionID = "resume"
+	actCheck   kittui.ActionID = "check"
+	// The answers of a question, and of a result that started runs.
+	actYes     kittui.ActionID = "yes"
+	actNo      kittui.ActionID = "no"
+	actShowLog kittui.ActionID = "showlog"
 )
 
 // areaKeys are the keys of actArea, one per area in the order of the tab line.
@@ -49,6 +64,18 @@ func keyTable() []kittui.Action {
 		act(actSearch, kittui.LevelMove, kittui.TextKeySearch, "/"),
 		act(actArea, kittui.LevelMove, textKeyArea, areaKeys...),
 		act(actStackOnly, kittui.LevelLetter, textKeyStackOnly, "f"),
+		act(actToggle, kittui.LevelMove, textKeyTick, "space"),
+		act(actUpdate, kittui.LevelLetter, textKeyUpdate, "u"),
+		act(actDeploy, kittui.LevelLetter, textKeyDeploy, "d"),
+		act(actPause, kittui.LevelLetter, textKeyPause, "p"),
+		act(actUnpause, kittui.LevelLetter, textKeyUnpause, "P"),
+		act(actPin, kittui.LevelLetter, textKeyPin, "i"),
+		act(actUnpin, kittui.LevelLetter, textKeyUnpin, "I"),
+		act(actResume, kittui.LevelLetter, textKeyResume, "g"),
+		act(actCheck, kittui.LevelLetter, textKeyCheck, "c"),
+		act(actYes, kittui.LevelConfirm, textAnswerYes, "y"),
+		act(actNo, kittui.LevelConfirm, textAnswerCancel, "n", "esc"),
+		act(actShowLog, kittui.LevelConfirm, textAnswerLog, "l"),
 	}
 	return append(table, kittui.LogViewActions()...)
 }
@@ -63,6 +90,13 @@ func logKeys() kittui.LogViewKeys {
 func listKeys() kittui.ListKeys {
 	return kittui.ListKeys{Up: actUp, Down: actDown, PageUp: actPageUp, PageDown: actPageDown, First: actFirst,
 		Last: actLast, Left: actLeft, Right: actRight, Enter: actEnter, Search: actSearch, Back: actBack}
+}
+
+// stackListKeys are the keys of the Stacks list, which ticks stacks.
+func stackListKeys() kittui.ListKeys {
+	k := listKeys()
+	k.Toggle = actToggle
+	return k
 }
 
 func helpKeys() kittui.HelpKeys {

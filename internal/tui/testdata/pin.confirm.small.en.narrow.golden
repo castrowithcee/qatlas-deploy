@@ -1,0 +1,14 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks]  2 Stack detail   3 Runs                   
+--------------------------------------------------------
+  #= pin ============================================#  
+> | ! Pin demo-stack?                                |g 
+  |                                                  |  
+  | The maintenance window and update leave the      |  
+  | image versions of the stack as they are until    |  
+  | you unpin it.                                    |  
+  |                                                  |gs
+  | [ yes, do it ]  > cancel <                       |  
+  | y yes, do it  n/esc/enter cancel                 |  
+  #==================================================#  
+                                                     1/6
