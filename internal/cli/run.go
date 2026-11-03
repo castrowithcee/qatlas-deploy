@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/castrowithcee/qatlas-deploy/internal/compose"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
 )
 
@@ -24,7 +25,8 @@ func newRunCommand() *cobra.Command {
 			ctx, stop := signal.NotifyContext(c.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
 			return service.Run(ctx, slog.New(slog.NewTextHandler(c.ErrOrStderr(), nil)).With("pid", os.Getpid()),
-				service.Config{Version: version, Endpoint: serviceEndpoint(), StateDir: stateDir()})
+				service.Config{Version: version, Endpoint: serviceEndpoint(), StateDir: stateDir(),
+					Deployer: compose.New()})
 		},
 	}
 }
