@@ -85,7 +85,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err := registerRunCommands(registry, eng, cfg.Version, started); err != nil {
 		return err
 	}
-	if err := registerUpdateCommands(registry, repo, eng, cfg.Registry); err != nil {
+	if err := registerUpdateCommands(registry, repo, eng, store, cfg.Registry); err != nil {
 		return err
 	}
 	if err := registerBackupCommands(registry, eng, cfg.Backups, secrets.Apply, log); err != nil {

@@ -5,17 +5,61 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
+	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/registry"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 	"github.com/castrowithcee/qatlas-deploy/internal/updates"
 )
 
-// registryCredential returns the login for a registry host. Registry logins are not configurable yet, so
-// every registry is asked anonymously. This is the one place that decides which credential a host gets.
-func registryCredential(string) (registry.Credential, error) { return registry.Credential{}, nil }
+// dockerHubAPIHost is the host registry.ParseRepo gives Docker Hub images.
+const dockerHubAPIHost = "registry-1.docker.io"
+
+// registryCredentialName derives the credential name for a registry host: "registry." plus the lowercase
+// host with the port separator written as '-'. Docker Hub uses "registry.docker.io". ok is false when the
+// result is no valid credential name.
+func registryCredentialName(host string) (string, bool) {
+	host = strings.ToLower(host)
+	if host == dockerHubAPIHost {
+		host = "docker.io"
+	}
+	name := "registry." + strings.ReplaceAll(host, ":", "-")
+	return name, credentials.ValidName(name)
+}
+
+var errRegistryLogin = errors.New("the stored registry login is malformed")
+
+// parseRegistryLogin splits "<user>:<token>" at the first ':'; both parts must be non-empty. The error
+// never contains the value.
+func parseRegistryLogin(value string) (registry.Credential, error) {
+	user, token, ok := strings.Cut(value, ":")
+	if !ok || user == "" || token == "" {
+		return registry.Credential{}, errRegistryLogin
+	}
+	return registry.Credential{User: user, Token: token}, nil
+}
+
+// registryCredentialFrom returns the lookup that decides which credential a registry host gets: none stored
+// or no valid name means anonymous; an unreadable or malformed credential is an error.
+func registryCredentialFrom(store *credentials.Store) func(string) (registry.Credential, error) {
+	return func(host string) (registry.Credential, error) {
+		name, ok := registryCredentialName(host)
+		if !ok {
+			return registry.Credential{}, nil
+		}
+		value, err := store.Value(name)
+		if errors.Is(err, credentials.ErrNotFound) {
+			return registry.Credential{}, nil
+		}
+		if err != nil {
+			return registry.Credential{}, err
+		}
+		return parseRegistryLogin(value)
+	}
+}
 
 type updatesService struct {
 	repo     *repoService
@@ -23,8 +67,8 @@ type updatesService struct {
 	detector *updates.Detector
 }
 
-func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.Engine, opts registry.Options) error {
-	s := &updatesService{repo: repo, eng: eng, detector: &updates.Detector{Credential: registryCredential, Options: opts}}
+func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.Engine, store *credentials.Store, opts registry.Options) error {
+	s := &updatesService{repo: repo, eng: eng, detector: &updates.Detector{Credential: registryCredentialFrom(store), Options: opts}}
 	return r.Register(control.UpdatesListCommand, s.handleList)
 }
 

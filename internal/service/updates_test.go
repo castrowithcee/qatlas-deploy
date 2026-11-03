@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -152,5 +153,87 @@ func TestUpdateResultSurvivesInStateFile(t *testing.T) {
 	})
 	if len(found) != 1 || !slices.ContainsFunc(found, func(p string) bool { return strings.Contains(p, "deploy") }) {
 		t.Fatalf("state files with the result: %v", found)
+	}
+}
+
+func TestRegistryCredentialName(t *testing.T) {
+	cases := []struct {
+		host, want string
+		ok         bool
+	}{
+		{"registry.example.test", "registry.registry.example.test", true},
+		{"registry.example.test:5000", "registry.registry.example.test-5000", true},
+		{"Registry.Example.TEST", "registry.registry.example.test", true},
+		{"registry-1.docker.io", "registry.docker.io", true},
+		{"bad host/x", "registry.bad host/x", false},
+	}
+	for _, c := range cases {
+		got, ok := service.RegistryCredentialName(c.host)
+		if got != c.want || ok != c.ok {
+			t.Fatalf("name(%q) = %q, %v; want %q, %v", c.host, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+func TestParseRegistryLogin(t *testing.T) {
+	cred, err := service.ParseRegistryLogin("fake-user-1:fake-token:42")
+	if err != nil || cred.User != "fake-user-1" || cred.Token != "fake-token:42" {
+		t.Fatalf("valid login: err = %v", err)
+	}
+	for _, bad := range []string{"fake-user-only", ":fake-token-42", "fake-user-1:"} {
+		if _, err := service.ParseRegistryLogin(bad); err == nil || strings.Contains(err.Error(), "fake") {
+			t.Fatalf("login %d bytes: err = %v", len(bad), err)
+		}
+	}
+}
+
+const (
+	fakeRegistryUser  = "fake-user-1"
+	fakeRegistryToken = "fake-token-42"
+	noCredentialText  = "no credential could be determined for the registry"
+	authText          = "the registry requires a login or did not accept the credential"
+)
+
+func TestUpdatesRegistryLogin(t *testing.T) {
+	const credName = "registry.registry.example.test"
+	cases := []struct {
+		name  string
+		auth  registrytest.Auth
+		value string // empty: no credential
+		want  string
+	}{
+		{"basic with credential", registrytest.AuthBasic, fakeRegistryUser + ":" + fakeRegistryToken, ""},
+		{"bearer with credential", registrytest.AuthBearer, fakeRegistryUser + ":" + fakeRegistryToken, ""},
+		{"basic without credential", registrytest.AuthBasic, "", authText},
+		{"malformed credential", registrytest.AuthBasic, "fake-no-separator", noCredentialText},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := registrytest.New(t, registrytest.Config{
+				Auth: c.auth, User: fakeRegistryUser, Password: fakeRegistryToken,
+				Repos: map[string][]string{"demo/app": {"1.2.3", "1.3.0"}},
+			})
+			h := boundWith(t, nil, nil, withRegistry(srv.URL))
+			if c.value != "" {
+				if err := h.call(control.CredentialSetCommand, control.CredentialSetArgs{Name: credName, Value: c.value}, nil); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var res control.UpdatesResult
+			if err := h.call(control.UpdatesListCommand, control.UpdatesArgs{Stack: "demo-stack", Refresh: true}, &res); err != nil {
+				t.Fatal(err)
+			}
+			raw, _ := json.Marshal(res)
+			if strings.Contains(string(raw), fakeRegistryToken) || strings.Contains(string(raw), "fake-no-separator") {
+				t.Fatal("a credential value reached the result")
+			}
+			items := stackNamed(res, "demo-stack").Items
+			if len(items) != 1 {
+				t.Fatalf("items = %+v", items)
+			}
+			if it := items[0]; c.want == "" && (it.Error != "" || it.Selected != "1.3.0") || c.want != "" && it.Error != c.want {
+				t.Fatalf("item = %+v", it)
+			}
+		})
 	}
 }

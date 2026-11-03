@@ -327,6 +327,23 @@ func (s *Store) Set(name, value string) error {
 	return s.write(filepath.Join(s.values, name), []byte(value), true)
 }
 
+// Value returns the value of a credential. The caller must keep it out of errors, logs and results.
+func (s *Store) Value(name string) (string, error) {
+	if !ValidName(name) {
+		return "", ErrInvalidName
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := s.read(filepath.Join(s.values, name))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // List returns the stored credentials by name, without their values.
 func (s *Store) List() ([]Entry, error) {
 	s.mu.Lock()

@@ -50,6 +50,7 @@ Credentials:
 - qdeploy credential list: show names and modification times, never values
 - qdeploy credential delete <name>: remove a credential
 - A name has 1 to 64 characters: lowercase letters, digits, '.', '_' or '-', starting with a letter.
+- Registry login for update checks: name the credential "registry." plus the registry host in lowercase with ':' written as '-' (Docker Hub: registry.docker.io), with the value <user>:<token>. Without such a credential the registry is asked anonymously.
 - A stored value is not shown again and is removed from the service's log output.`
 
 const repositoryTopic = `The service clones the stacks repository of the host over SSH with its own deploy key and checks the server with its own known_hosts file; the system's SSH configuration and known hosts are not used. Host key checking is always strict.
