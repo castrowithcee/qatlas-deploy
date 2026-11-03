@@ -26,6 +26,8 @@ const (
 	demoMailPassword = "mail-password-not-real"
 	demoUserinfoURL  = "https://user:pw@example.test/x"
 	demoFTPURL       = "ftp://hooks.example.test/x"
+	demoPlainURL     = "http://hooks.example.test/x"
+	demoLocalURL     = "http://127.0.0.1:8080/x"
 )
 
 type creds map[string]string
@@ -47,6 +49,7 @@ func TestValidate(t *testing.T) {
 		s notifier.Secrets
 	}{
 		{webhook("ops"), notifier.Secrets{Secret: demoURL, Key: demoKey}},
+		{webhook("local"), notifier.Secrets{Secret: demoLocalURL, Key: demoKey}},
 		{notifier.Channel{Name: "chat", Type: notifier.TypeSlack}, notifier.Secrets{Secret: demoURL}},
 		{notifier.Channel{Name: "tg", Type: notifier.TypeTelegram, ChatID: "-100123"}, notifier.Secrets{Secret: demoBotToken}},
 		{notifier.Channel{Name: "tg2", Type: notifier.TypeTelegram, ChatID: "@demo_chat", BaseURL: "https://bot.example.test"}, notifier.Secrets{Secret: demoBotToken}},
@@ -76,6 +79,7 @@ func TestValidate(t *testing.T) {
 		{"webhook without key", webhook("x"), notifier.Secrets{Secret: demoURL}},
 		{"webhook userinfo", webhook("x"), notifier.Secrets{Secret: demoUserinfoURL, Key: demoKey}},
 		{"webhook scheme", webhook("x"), notifier.Secrets{Secret: demoFTPURL, Key: demoKey}},
+		{"webhook plain http", webhook("x"), notifier.Secrets{Secret: demoPlainURL, Key: demoKey}},
 		{"slack with key", notifier.Channel{Name: "x", Type: notifier.TypeSlack}, notifier.Secrets{Secret: demoURL, Key: demoKey}},
 		{"slack with host", notifier.Channel{Name: "x", Type: notifier.TypeSlack, Host: "h.example.test"}, notifier.Secrets{Secret: demoURL}},
 		{"telegram short token", notifier.Channel{Name: "x", Type: notifier.TypeTelegram, ChatID: "1"}, notifier.Secrets{Secret: "abc"}},

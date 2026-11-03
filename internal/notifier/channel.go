@@ -5,6 +5,7 @@ package notifier
 
 import (
 	"errors"
+	"net"
 	"net/mail"
 	"net/url"
 	"regexp"
@@ -263,13 +264,26 @@ func checkURL(raw, what string, base bool) error {
 		return bad
 	}
 	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.Fragment != "" {
+	if err != nil || u.Host == "" || u.User != nil || u.Fragment != "" {
+		return bad
+	}
+	// The kit sends plain http only to the local machine; refusing it here keeps a channel from being stored
+	// that could never deliver.
+	if u.Scheme != "https" && (u.Scheme != "http" || !loopback(u.Hostname())) {
 		return bad
 	}
 	if base && (u.RawQuery != "" || len(raw) > maxFieldLen) {
 		return bad
 	}
 	return nil
+}
+
+func loopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // CredentialReader returns the value of a stored credential.
