@@ -159,6 +159,52 @@ func (r *Repo) Status(ctx context.Context) ([]Change, error) {
 	return changes, nil
 }
 
+// TrackedFiles returns the sorted paths of the files git tracks below the folder dir, relative to the working
+// copy root. The index is read; the working copy is not touched.
+func (r *Repo) TrackedFiles(ctx context.Context, dir string) ([]string, error) {
+	if err := checkRepoPath(dir); err != nil {
+		return nil, err
+	}
+	out, err := r.run(ctx, true, maxStdout, "--literal-pathspecs", "ls-files", "-z", "--full-name", "--", dir+"/")
+	if err != nil {
+		return nil, fmt.Errorf("ls-files failed: %w", err)
+	}
+	var files []string
+	for _, p := range strings.Split(out, "\x00") {
+		if p != "" {
+			files = append(files, p)
+		}
+	}
+	slices.Sort(files)
+	return files, nil
+}
+
+// IsIgnored reports whether the ignore rules of the working copy cover path, a path relative to the working
+// copy root, whether or not the file exists or is tracked.
+func (r *Repo) IsIgnored(ctx context.Context, path string) (bool, error) {
+	if err := checkRepoPath(path); err != nil {
+		return false, err
+	}
+	_, err := r.run(ctx, true, maxErrorText, "check-ignore", "--quiet", "--no-index", "--", path)
+	var failure *runFailure
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.As(err, &failure) && failure.code == 1:
+		return false, nil
+	}
+	return false, fmt.Errorf("check-ignore failed: %w", err)
+}
+
+// checkRepoPath accepts only clean relative paths inside the working copy.
+func checkRepoPath(p string) error {
+	if p == "" || filepath.IsAbs(p) || strings.ContainsRune(p, 0) || filepath.Clean(p) != p || p == ".." ||
+		strings.HasPrefix(p, "../") || strings.HasPrefix(p, "-") {
+		return errors.New("the path must be a clean path relative to the working copy")
+	}
+	return nil
+}
+
 // ChangedFolders returns the sorted top-level folders that differ between the commits from and to, each given
 // as a full commit id. Files in the repository root do not count.
 func (r *Repo) ChangedFolders(ctx context.Context, from, to string) ([]string, error) {
@@ -244,10 +290,23 @@ func (r *Repo) run(ctx context.Context, inRepo bool, outLimit int, args ...strin
 	case ctx.Err() != nil:
 		return "", ctx.Err()
 	case runErr != nil:
-		return "", errors.New(failureText(runErr, stderr.String()))
+		failure := &runFailure{text: failureText(runErr, stderr.String()), code: -1}
+		var exit *exec.ExitError
+		if errors.As(runErr, &exit) {
+			failure.code = exit.ExitCode()
+		}
+		return "", failure
 	}
 	return stdout.String(), nil
 }
+
+// runFailure is a failed git call; code is git's exit status, -1 when git did not run to its end.
+type runFailure struct {
+	text string
+	code int
+}
+
+func (f *runFailure) Error() string { return f.text }
 
 // baseOptions switches off everything repository-defined code could hang on and the transports other than
 // SSH.

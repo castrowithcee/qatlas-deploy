@@ -197,6 +197,8 @@ const (
 	RepoSetCommand    = "repo.set"
 	RepoFetchCommand  = "repo.fetch"
 	StacksListCommand = "stacks.list"
+	// StacksCheckCommand compares the stacks of the working copy with the standard.
+	StacksCheckCommand = "stacks.check"
 )
 
 // RepoProbeArgs are the arguments of RepoProbeCommand.
@@ -261,4 +263,28 @@ type ImageInfo struct {
 	Image   string `json:"image"`
 	Var     string `json:"var"`
 	Version string `json:"version"`
+}
+
+// StacksCheckArgs are the arguments of StacksCheckCommand. An empty Stack checks every stack.
+type StacksCheckArgs struct {
+	Stack string `json:"stack,omitempty"`
+}
+
+// StacksCheckResult answers StacksCheckCommand. Stacks names every stack that was checked, so a stack without
+// findings is visible; Findings is sorted by stack, severity and rule.
+type StacksCheckResult struct {
+	Dir      string         `json:"dir"`
+	Stacks   []string       `json:"stacks"`
+	Findings []CheckFinding `json:"findings"`
+	Errors   int            `json:"errors"`
+	Warnings int            `json:"warnings"`
+}
+
+// CheckFinding is one deviation from the standard. Severity is "error" or "warning"; Rule is a stable word.
+type CheckFinding struct {
+	Stack    string `json:"stack"`
+	Rule     string `json:"rule"`
+	Severity string `json:"severity"`
+	Cause    string `json:"cause"`
+	Fix      string `json:"fix"`
 }

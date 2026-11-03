@@ -37,7 +37,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	var state notRunning
 	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, &state),
-		newKeyCommand(program, &state), newRepoCommand(program, &state), newStacksCommand(program, &state),
+		newKeyCommand(program, &state), newRepoCommand(program, &state), newStacksCommand(program, &state), newCheckCommand(program, &state),
 		newCredentialCommand(program, &state, secrets), newManpageCommand(program))
 	code := program.Execute(args, stdout, stderr)
 	if code == cli.ExitRuntime && state.seen {
