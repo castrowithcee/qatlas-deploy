@@ -5,7 +5,8 @@
 # available image versions per update ceiling without changing anything, roll back a
 # commit with a failing healthcheck (data restored from the run's backup, revert commit on the remote), leave a
 # stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
-# Docker integration tests of the deployer run inside the host before that. Sourced by run.sh scenario.
+# Version updates with qdeploy update follow: one direct step, a stepwise major jump and a jump whose middle step
+# fails. Docker integration tests of the deployer run inside the host before all that. Sourced by run.sh scenario.
 
 as_admin() {
 	docker exec -i -u "$admin" "$host" sh -ec "$*"
@@ -460,7 +461,7 @@ scenario_updates() {
 
 	step 'updates --refresh asks the registry; the default ceiling is minor and a major version is only a hint'
 	out=$(qd --output json updates demo-stack --refresh) || fail "updates --refresh failed: $out"
-	updates_expect "$out" 1.0.1 1.1.0 2.0.0 update
+	updates_expect "$out" 1.0.1 1.1.0 5.0.0 update
 	[ -n "$(json_value "$out" checked)" ] || fail "the result has no time of the check: $out"
 	stored=$(qd --output json updates demo-stack) || fail "updates failed: $stored"
 	[ "$stored" = "$out" ] || fail "updates without --refresh does not show the stored result: $stored"
@@ -468,20 +469,20 @@ scenario_updates() {
 
 	step 'a stack without rules is listed too'
 	out=$(qd --output json updates demo-cache --refresh) || fail "updates demo-cache failed: $out"
-	updates_expect "$out" 1.1.0 1.1.0 2.0.0 current
+	updates_expect "$out" 1.1.0 1.1.0 5.0.0 current
 
-	step 'ceiling patch offers no minor step; ceiling major offers 2.0.0 without a hint'
+	step 'ceiling patch offers no minor step; ceiling major offers 5.0.0 without a hint'
 	updates_commit 's/^version: 1$/version: 1\nupdate:\n  ceiling: patch/' 'Set the demo-stack update ceiling to patch'
 	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
-	updates_expect "$out" 1.0.1 1.0.1 2.0.0 current
+	updates_expect "$out" 1.0.1 1.0.1 5.0.0 current
 	updates_commit 's/ceiling: patch/ceiling: major/' 'Set the demo-stack update ceiling to major'
 	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
-	updates_expect "$out" 1.0.1 2.0.0 '' update
+	updates_expect "$out" 1.0.1 5.0.0 '' update
 
 	step 'the demo-stack rules are restored'
 	updates_commit '/^update:$/d; /^  ceiling: major$/d' 'Remove the demo-stack update rules'
 	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
-	updates_expect "$out" 1.0.1 1.1.0 2.0.0 update
+	updates_expect "$out" 1.0.1 1.1.0 5.0.0 update
 	[ "$(stack_images demo-stack)" = "registry.$domain/demo/app:1.0.1" ] || fail "updates changed the running image: $(stack_images demo-stack)"
 	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git log --format=%s -n 1 -- demo-stack/.env')" = 'Update demo-stack to 1.0.1' ] ||
 		fail 'the version of demo-stack was changed'
@@ -621,6 +622,167 @@ scenario_rollback() {
 	log "scenario: resumed; fixing commit $fix deployed"
 }
 
+# json_values prints every string value of a key in JSON output, one per line.
+json_values() {
+	printf '%s' "$1" | grep -o "\"$2\": *\"[^\"]*\"" | cut -d '"' -f 4
+}
+
+# update_reset commits a version and a major strategy for demo-stack in one commit and waits for its run.
+update_reset() {
+	prev=$(newest_run demo-stack)
+	as_admin "cd ~/stacks && git pull -q --ff-only &&
+		sed -i 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=$1/' demo-stack/.env &&
+		sed -i 's/^  major: .*/  major: $2/' demo-stack/qdeploy.yaml &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am 'Reset demo-stack to $1 with $2 major updates' &&
+		git push -q origin main"
+	restart_service
+	run=$(next_run demo-stack "$prev") || fail "no run of demo-stack started for the reset to $1"
+	wait_for "the run $run" 240 run_finished demo-stack "$run"
+	qd log "$run" | grep -q ' result succeeded' || fail "the run for the reset to $1 did not succeed: $(qd log "$run")"
+	[ "$(stack_images demo-stack)" = "registry.$domain/demo/app:$1" ] || fail "demo-stack does not run $1: $(stack_images demo-stack)"
+}
+
+# update_commit_only_version requires that a commit of the stacks repo changes one line of demo-stack/.env, the
+# image variable, from one version to another.
+update_commit_only_version() {
+	files=$(as_admin "cd ~/stacks && git show --format= --numstat $1")
+	[ "$files" = "$(printf '1\t1\tdemo-stack/.env')" ] || fail "the commit $1 touches more than one line of demo-stack/.env: $files"
+	diff_lines=$(as_admin "cd ~/stacks && git show --format= -U0 $1 | grep '^[-+]' | grep -v '^\(---\|+++\)'")
+	[ "$diff_lines" = "$(printf -- '-DEMO_APP_VERSION=%s\n+DEMO_APP_VERSION=%s' "$2" "$3")" ] ||
+		fail "the commit $1 does not only move DEMO_APP_VERSION from $2 to $3: $diff_lines"
+	[ "$(as_admin "cd ~/stacks && git log -1 --format=%s $1")" = "Update demo-stack DEMO_APP_VERSION from $2 to $3" ] ||
+		fail "the commit $1 has an unexpected subject: $(as_admin "cd ~/stacks && git log -1 --format=%s $1")"
+}
+
+# update_run_backup prints the backup a run log names.
+update_run_backup() {
+	printf '%s\n' "$1" | sed -n 's/^[^ ]* info backup \([0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}\)$/\1/p' | head -n 1
+}
+
+# update_steps prints the steps of an update run in order, joined by commas.
+update_steps() {
+	printf '%s\n' "$1" | sed -n 's/^[^ ]* step //p' |
+		grep -x -e stop -e backup -e commit -e push -e pull -e up -e check -e rollback -e restore -e revert -e fast-forward |
+		tr '\n' ',' | sed 's/,$//'
+}
+
+# scenario_update takes version steps with 'qdeploy update' against the real git server and registry: a direct
+# update, a stepwise major jump with a commit and a backup per step, and a stepwise jump whose middle step has a
+# failing healthcheck. The image 4.0.0 is unhealthy by itself, so no commit but the update's own can break it.
+scenario_update() {
+	image=registry.$domain/demo/app
+
+	step 'a stack without qdeploy.yaml is not updated'
+	out=$(qd_fails update demo-cache) || fail "update accepted a stack without rules: $out"
+	printf '%s' "$out" | grep -q 'qdeploy.yaml' || fail "the refusal does not name qdeploy.yaml: $out"
+
+	step 'a direct update creates one commit that moves only the image variable, and the stack runs the new version'
+	updates_commit 's/^version: 1$/version: 1\nupdate:\n  major: direct/' 'Set the demo-stack major updates to direct'
+	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "demo-stack does not run 1.1.0 before the update: $(stack_images demo-stack)"
+	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
+	runs_before=$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	out=$(qd --output json update demo-stack --version 3.0.0) || fail "update to 3.0.0 failed: $out"
+	[ "$(json_values "$out" to | tr '\n' ' ')" = '3.0.0 ' ] || fail "a direct update is not one step to 3.0.0: $out"
+	run=$(json_values "$out" run | head -n 1)
+	commit=$(json_values "$out" commit | head -n 1)
+	[ -n "$run" ] && [ -n "$commit" ] || fail "update reported no run and commit: $out"
+	run_log=$(qd log "$run")
+	log "scenario: direct update steps: $(update_steps "$run_log")"
+	printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the update run did not succeed: $run_log"
+	[ "$(update_steps "$run_log")" = stop,backup,commit,push,fast-forward,pull,up,check ] || fail "unexpected steps of the update run: $(update_steps "$run_log")"
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $head_before..HEAD")" = 1 ] || fail 'the update did not create exactly one commit'
+	[ "$(as_admin 'cd ~/stacks && git rev-parse HEAD')" = "$commit" ] || fail "the head of the branch is not the update commit $commit"
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$commit" ] || fail 'the update commit is not the head of the remote branch'
+	update_commit_only_version "$commit" 1.1.0 3.0.0
+	[ "$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 1))" ] || fail 'the update did not make exactly one run'
+	[ "$(stack_field demo-stack deployed)" = "$commit" ] || fail "demo-stack is not recorded as deployed at $commit"
+	[ "$(stack_images demo-stack)" = "$image:3.0.0" ] || fail "demo-stack does not run 3.0.0: $(stack_images demo-stack)"
+	stack_healthy demo-stack || fail 'demo-stack is not healthy after the update'
+	[ -n "$(update_run_backup "$run_log")" ] || fail "the update run made no backup: $run_log"
+	log "scenario: direct update: run $run, commit $commit, demo-stack runs 3.0.0"
+
+	step 'a stepwise major jump takes one step per major version, each with its own commit and backup'
+	update_reset 1.1.0 stepwise
+	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
+	runs_before=$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	out=$(qd --output json update demo-stack --version 3.0.0) || fail "stepwise update to 3.0.0 failed: $out"
+	[ "$(json_values "$out" to | tr '\n' ' ')" = '2.0.0 3.0.0 ' ] || fail "the jump to 3.0.0 is not the steps 2.0.0 and 3.0.0: $out"
+	[ "$(json_values "$out" result | sort -u)" = succeeded ] || fail "not every step succeeded: $out"
+	runs=$(json_values "$out" run)
+	commits=$(json_values "$out" commit)
+	[ "$(printf '%s\n' "$runs" | sort -u | wc -l)" = 2 ] && [ "$(printf '%s\n' "$commits" | sort -u | wc -l)" = 2 ] ||
+		fail "the steps do not have their own run and commit: $out"
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $head_before..HEAD")" = 2 ] || fail 'the stepwise update did not create exactly two commits'
+	[ "$(as_admin "cd ~/stacks && git log --reverse --format=%H $head_before..HEAD")" = "$commits" ] || fail "the commits on the branch are not the steps' commits: $commits"
+	first_commit=$(printf '%s\n' "$commits" | sed -n 1p) second_commit=$(printf '%s\n' "$commits" | sed -n 2p)
+	update_commit_only_version "$first_commit" 1.1.0 2.0.0
+	update_commit_only_version "$second_commit" 2.0.0 3.0.0
+	backups=
+	for id in $runs; do
+		run_log=$(qd log "$id")
+		printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the step run $id did not succeed: $run_log"
+		[ "$(update_steps "$run_log")" = stop,backup,commit,push,fast-forward,pull,up,check ] || fail "unexpected steps of the run $id: $(update_steps "$run_log")"
+		this_backup=$(update_run_backup "$run_log")
+		[ -n "$this_backup" ] || fail "the step run $id made no backup"
+		case " $backups " in *" $this_backup "*) fail "the step runs share the backup $this_backup" ;; esac
+		backup_ids demo-stack | grep -qx "$this_backup" || fail "backup list does not know $this_backup"
+		backups="$backups $this_backup"
+	done
+	[ "$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 2))" ] || fail 'the stepwise update did not make exactly two runs'
+	[ "$(stack_images demo-stack)" = "$image:3.0.0" ] || fail "demo-stack does not run 3.0.0: $(stack_images demo-stack)"
+	[ "$(stack_field demo-stack deployed)" = "$second_commit" ] || fail "demo-stack is not recorded as deployed at $second_commit"
+	log "scenario: stepwise update: commits $(printf '%s' "$commits" | tr '\n' ' '), backups$backups"
+
+	step 'a failing middle step ends with a revert commit, the previous step stays, later steps are not attempted'
+	update_reset 2.0.0 stepwise
+	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
+	deployed_before=$(stack_field demo-stack deployed)
+	runs_before=$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	out=$(qd_fails --output json update demo-stack --version 5.0.0) || fail "update across a failing step succeeded: $out"
+	log "scenario: failing jump: $out"
+	[ "$(json_values "$out" to | tr '\n' ' ')" = '3.0.0 4.0.0 5.0.0 ' ] || fail "the jump to 5.0.0 is not the steps 3.0.0, 4.0.0 and 5.0.0: $out"
+	[ "$(json_values "$out" result | tr '\n' ' ')" = 'succeeded rolled-back skipped ' ] || fail "unexpected results of the steps: $out"
+	runs=$(json_values "$out" run)
+	[ "$(printf '%s\n' "$runs" | wc -l)" = 2 ] || fail "only the first two steps should have a run: $out"
+	[ "$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 2))" ] || fail 'the later step was attempted or a step made no run'
+	good_run=$(printf '%s\n' "$runs" | sed -n 1p) bad_run=$(printf '%s\n' "$runs" | sed -n 2p)
+	good_log=$(qd log "$good_run") bad_log=$(qd log "$bad_run")
+	printf '%s' "$good_log" | grep -q ' result succeeded' || fail "the run of the 3.0.0 step did not succeed: $good_log"
+	printf '%s' "$bad_log" | grep -q ' result rolled-back' || fail "the run of the 4.0.0 step did not end rolled-back: $bad_log"
+	printf '%s' "$bad_log" | grep -q 'unhealthy' || fail "the failed run does not name the unhealthy container: $bad_log"
+	log "scenario: failed step steps: $(update_steps "$bad_log")"
+	[ "$(update_steps "$bad_log")" = stop,backup,commit,push,fast-forward,pull,up,check,rollback,stop,restore,revert,push,fast-forward,up,check ] ||
+		fail "unexpected steps of the failed step: $(update_steps "$bad_log")"
+	[ -n "$(update_run_backup "$bad_log")" ] || fail "the failed step made no backup: $bad_log"
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $head_before..HEAD")" = 3 ] || fail 'the failing jump did not leave exactly the step, the failed step and its revert on the branch'
+	step_commit=$(as_admin "cd ~/stacks && git log --reverse --format=%H $head_before..HEAD" | sed -n 1p)
+	bad_step=$(as_admin "cd ~/stacks && git log --reverse --format=%H $head_before..HEAD" | sed -n 2p)
+	revert=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	update_commit_only_version "$step_commit" 2.0.0 3.0.0
+	update_commit_only_version "$bad_step" 3.0.0 4.0.0
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$revert" ] || fail 'the revert commit is not the head of the remote branch'
+	meta=$(as_admin "cd ~/stacks && git log -1 --format='%an|%ae|%cn|%ce|%s|%P' $revert")
+	[ "$meta" = "qdeploy|qdeploy@localhost.invalid|qdeploy|qdeploy@localhost.invalid|Revert demo-stack to $(printf '%s' "$step_commit" | cut -c 1-12)|$bad_step" ] ||
+		fail "the revert commit has the wrong author, subject or parent: $meta"
+	[ "$(as_admin "cd ~/stacks && git rev-parse $revert:demo-stack")" = "$(as_admin "cd ~/stacks && git rev-parse $step_commit:demo-stack")" ] ||
+		fail 'the revert commit does not restore the demo-stack folder of the previous step'
+	if [ -n "$(as_admin "cd ~/stacks && git log --format=%s --grep='to 5.0.0'")" ]; then fail 'a commit for 5.0.0 reached the branch'; fi
+	[ "$(as_admin "cd ~/stacks && git show $revert:demo-stack/.env | grep '^DEMO_APP_VERSION='")" = DEMO_APP_VERSION=3.0.0 ] || fail 'the branch does not hold 3.0.0'
+	[ "$(stack_field demo-stack deployed)" = "$revert" ] || fail "demo-stack is not recorded as deployed at the revert commit $revert"
+	[ "$(stack_images demo-stack)" = "$image:3.0.0" ] || fail "demo-stack does not run the previous step 3.0.0: $(stack_images demo-stack)"
+	stack_healthy demo-stack || fail 'demo-stack is not healthy after the rollback'
+	[ -z "$deployed_before" ] || [ "$deployed_before" != "$revert" ] || fail 'no revert was made'
+	log "scenario: failing jump: run $bad_run rolled back, step commit $step_commit kept, revert $revert, 5.0.0 not attempted"
+
+	step 'the demo-stack rules and version are restored'
+	update_reset 1.1.0 stepwise
+	updates_commit '/^update:$/d; /^  major: stepwise$/d' 'Remove the demo-stack update rules'
+	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "demo-stack does not run 1.1.0 again: $(stack_images demo-stack)"
+}
+
 scenario_stacks_repo() {
 	setup_service
 	url=git.$domain:stacks.git
@@ -679,6 +841,8 @@ scenario_stacks_repo() {
 	scenario_updates
 
 	scenario_rollback
+
+	scenario_update
 
 	step 'a changed host key of the git server aborts qdeploy'
 	original_key=$(scanned_git_key)

@@ -11,8 +11,8 @@
 #   e2e/run.sh scenario           run the scenario once after up (see e2e/scenario.sh)
 #
 # On the host, e2e-admin reaches the stacks repo with: git clone git.qdeploye2e.test:stacks.git
-# The registry is registry.qdeploye2e.test (image demo/app, tags 1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1); a demo
-# container turns unhealthy with DEMO_HEALTH=fail.
+# The registry is registry.qdeploye2e.test (image demo/app, tags 1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0
+# 5.0.0); a demo container turns unhealthy with DEMO_HEALTH=fail, and the image 4.0.0 is always unhealthy.
 #
 # Everything is named qdeploye2e-* and labelled qdeploy.e2e=1; down touches only what carries both. Nothing
 # is published on the machine's ports. Set E2E_KEEP_ON_FAIL=1 to keep a failed environment for inspection.
@@ -26,7 +26,8 @@ hostname_=qdeploy-e2e-host
 admin=e2e-admin
 net=$prefix-net
 host=$prefix-host
-tags='1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1'
+tags='1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0 5.0.0'
+unhealthy_tags='4.0.0'
 backup_image=$prefix-backup-helper:1
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -230,8 +231,10 @@ push_images() {
 	docker cp "$work/ctx/fakes" "$host:/tmp/demo-image/fakes"
 	docker cp "$here/demo-image.Dockerfile" "$host:/tmp/demo-image/Dockerfile"
 	for tag in $tags; do
+		target=healthy
+		case " $unhealthy_tags " in *" $tag "*) target=unhealthy ;; esac
 		docker exec -w /tmp/demo-image "$host" sh -ec "
-			docker build -q --build-arg VERSION=$tag -t registry.$domain/demo/app:$tag . >/dev/null
+			docker build -q --target $target --build-arg VERSION=$tag -t registry.$domain/demo/app:$tag . >/dev/null
 			docker push -q registry.$domain/demo/app:$tag >/dev/null
 			docker rmi registry.$domain/demo/app:$tag >/dev/null"
 	done
