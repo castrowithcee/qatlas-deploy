@@ -65,6 +65,7 @@ const (
 	CodeNoDeployer     = "no-deployer"
 	CodePaused         = "paused"
 	CodeNotPaused      = "not-paused"
+	CodePinned         = "pinned"
 
 	CodeNoBackups     = "no-backups"
 	CodeNoBackupRules = "no-backup-rules"
@@ -188,6 +189,14 @@ type StackStatus struct {
 	Findings  []FindingInfo `json:"findings"`
 	Removed   bool          `json:"removed,omitempty"`
 	Paused    *PauseInfo    `json:"paused,omitempty"`
+	// OperatorPause and Pinned are the operator's marks for the maintenance window, unrelated to Paused.
+	OperatorPause *HoldInfo `json:"operator_pause,omitempty"`
+	Pinned        *HoldInfo `json:"pinned,omitempty"`
+}
+
+// HoldInfo says since when an operator mark is set.
+type HoldInfo struct {
+	Since time.Time `json:"since"`
 }
 
 // PauseInfo says since when a stack is paused, after which run and why.
@@ -210,6 +219,28 @@ const (
 	LogCommand    = "log"
 	ResumeCommand = "resume"
 )
+
+// The commands that mark a stack for the maintenance window. They are idempotent: repeating one answers with
+// Changed false. PauseCommand keeps the window from starting runs of the stack, PinCommand keeps it from
+// changing the stack's versions. Both are unrelated to the pause ResumeCommand clears.
+const (
+	PauseCommand   = "pause"
+	UnpauseCommand = "unpause"
+	PinCommand     = "pin"
+	UnpinCommand   = "unpin"
+)
+
+// HoldArgs are the arguments of the commands above.
+type HoldArgs struct {
+	Stack string `json:"stack"`
+}
+
+// HoldResult answers them. Active is the mark's state afterwards, Changed whether the command changed it.
+type HoldResult struct {
+	Stack   string `json:"stack"`
+	Active  bool   `json:"active"`
+	Changed bool   `json:"changed"`
+}
 
 // ResumeArgs are the arguments of ResumeCommand.
 type ResumeArgs struct {

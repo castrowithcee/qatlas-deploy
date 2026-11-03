@@ -245,6 +245,11 @@ func TestUpdateRefusals(t *testing.T) {
 				r.t.Fatal(err)
 			}
 		}, nil, ErrPaused},
+		"pinned": {func(r *rig) {
+			if _, err := r.eng.SetPin(context.Background(), "web", true); err != nil {
+				r.t.Fatal(err)
+			}
+		}, nil, ErrPinned},
 		"never deployed": {func(r *rig) {
 			writeStack(r.t, r.wc, "fresh")
 		}, nil, ErrNotDeployed},

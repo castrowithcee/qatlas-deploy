@@ -32,7 +32,7 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Use:   "status",
 		Short: "Show whether the qdeploy service is running",
 		Long: "status asks the running service for its version and start time, the state of its last repository poll\n" +
-			"and, per stack, what is deployed, pending or running, the last run result, a pause and the findings. Only root may use the service\n" +
+			"and, per stack, what is deployed, pending or running, the last run result, a pause after a failed rollback, the operator's pause and pin, and the findings. Only root may use the service\n" +
 			"channel, so run it with sudo. Without a running service it ends with exit code 3.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
@@ -90,6 +90,12 @@ func engineFields(e control.EngineStatus) []output.Field {
 		if s.Paused != nil {
 			out = append(out, output.Field{Name: p + "paused",
 				Value: "since " + s.Paused.Since.UTC().Format(time.RFC3339) + ", run " + s.Paused.Run})
+		}
+		if s.OperatorPause != nil {
+			out = append(out, output.Field{Name: p + "operator_pause", Value: "since " + s.OperatorPause.Since.UTC().Format(time.RFC3339)})
+		}
+		if s.Pinned != nil {
+			out = append(out, output.Field{Name: p + "pinned", Value: "since " + s.Pinned.Since.UTC().Format(time.RFC3339)})
 		}
 	}
 	return out
@@ -151,6 +157,9 @@ func failureOf(err error) error {
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Find out why the rollback failed ('qdeploy runs <stack>', 'qdeploy log <run>'), fix the stack, then run 'qdeploy resume <stack>'.",
 			Cause:    err}
+	case errors.As(err, &remote) && remote.Code == control.CodePinned:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Unpin the stack with 'qdeploy unpin <stack>', then run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNotPaused:
 		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message,
 			NextStep: "Check the stack with 'qdeploy status'; only a paused stack can be resumed.", Cause: err}

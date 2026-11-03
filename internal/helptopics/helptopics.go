@@ -31,6 +31,8 @@ Commands:
 - qdeploy runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy log <run>: print the log of a run (run with sudo)
 - qdeploy resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
+- qdeploy pause|unpause <stack>: keep the maintenance window from running a stack, or lift that; unrelated to the pause of a failed rollback (run with sudo)
+- qdeploy pin|unpin <stack>: hold the image versions of a stack, so the maintenance window and qdeploy update leave them alone, or release them (run with sudo)
 - qdeploy update <stack>... [--version <v>]: update the image versions of stacks, each version step a commit of the stack's .env pushed to the branch and a run with backup, check and rollback (run with sudo)
 - qdeploy updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
 - qdeploy changelog <stack>: show the release notes between the current and the available version of each variable with an update; qdeploy updates --changelog shows them for all stacks (run with sudo)

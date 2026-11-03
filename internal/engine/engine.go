@@ -55,6 +55,7 @@ var (
 	ErrStopped      = errors.New("the engine is stopped")
 	ErrPaused       = errors.New("the stack is paused after a failed rollback")
 	ErrNotPaused    = errors.New("the stack is not paused")
+	ErrPinned       = errors.New("the stack is pinned")
 	// ErrNoBackup is what Deployer.Backup returns for a stack without backup rules: the run goes on without a
 	// backup, and a rollback without a data restore.
 	ErrNoBackup       = errors.New("the stack has no backup rules")

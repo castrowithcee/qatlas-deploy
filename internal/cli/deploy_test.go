@@ -184,3 +184,45 @@ func TestPausedStackAndResume(t *testing.T) {
 		t.Fatalf("second resume: %d", code)
 	}
 }
+
+func TestPauseAndPinCommands(t *testing.T) {
+	startBound(t, okDeployer{})
+	settle(t)
+	for _, tc := range []struct{ set, clear, key string }{
+		{"pause", "unpause", "stack.plain-stack.operator_pause"}, {"pin", "unpin", "stack.plain-stack.pinned"},
+	} {
+		code, out, stderr := run(t, tc.set, "plain-stack", "--output", "json")
+		var res map[string]any
+		if code != 0 || json.Unmarshal([]byte(out), &res) != nil || res["stack"] != "plain-stack" || res["active"] != true || res["changed"] != true {
+			t.Fatalf("%s: %d %q %q", tc.set, code, out, stderr)
+		}
+		if code, out, _ := run(t, tc.set, "plain-stack", "--output", "json"); code != 0 || !strings.Contains(out, `"changed": false`) && !strings.Contains(out, `"changed":false`) {
+			t.Fatalf("%s again: %d %q", tc.set, code, out)
+		}
+		if _, out, _ := run(t, "status", "--output", "json"); !strings.Contains(out, tc.key) || strings.Contains(out, "stack.plain-stack.paused") {
+			t.Fatalf("status after %s = %s", tc.set, out)
+		}
+		if code, _, stderr := run(t, tc.set, "nope"); code == 0 || !strings.Contains(stderr, "qdeploy stacks") {
+			t.Fatalf("%s unknown: %d %q", tc.set, code, stderr)
+		}
+		if code, out, _ := run(t, tc.clear, "plain-stack", "--output", "json"); code != 0 || !strings.Contains(out, `"active"`) {
+			t.Fatalf("%s: %d %q", tc.clear, code, out)
+		}
+		if _, out, _ := run(t, "status", "--output", "json"); strings.Contains(out, tc.key) {
+			t.Fatalf("status after %s = %s", tc.clear, out)
+		}
+		if code, _, _ := run(t, tc.set); code == 0 {
+			t.Fatalf("%s without a stack succeeded", tc.set)
+		}
+	}
+}
+
+func TestUpdateOfAPinnedStackSaysToUnpin(t *testing.T) {
+	startUpdate(t, okDeployer{})
+	if code, _, stderr := run(t, "pin", "demo-stack"); code != 0 {
+		t.Fatalf("pin: %d %q", code, stderr)
+	}
+	if code, _, stderr := run(t, "update", "demo-stack"); code != 1 || !strings.Contains(stderr, "pinned") || !strings.Contains(stderr, "qdeploy unpin") {
+		t.Fatalf("update of a pinned stack: %d %q", code, stderr)
+	}
+}
