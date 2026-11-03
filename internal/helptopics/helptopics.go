@@ -10,6 +10,8 @@ func All() []helptopics.Topic {
 	return []helptopics.Topic{
 		{Name: "qdeploy", Short: "What qdeploy is and what it is for", Text: overview},
 		{Name: "credentials", Short: "The deploy key and stored credentials", Text: credentialsTopic},
+		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
+		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
 	}
 }
 
@@ -19,6 +21,9 @@ Commands:
 - qdeploy run: run the service in the foreground until it receives SIGTERM or SIGINT
 - qdeploy status: show whether the service is running, its version and start time (run with sudo)
 - qdeploy key generate|show: create the SSH deploy key and show its public part (run with sudo)
+- qdeploy repo set <ssh-url> [--dir <path>]: bind the stacks repository, confirm its host key and clone it (run with sudo)
+- qdeploy repo fetch: fetch new commits without touching the working copy (run with sudo)
+- qdeploy stacks: list the stacks of the working copy with image versions and update mode (run with sudo)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`
@@ -37,3 +42,51 @@ Credentials:
 - qdeploy credential delete <name>: remove a credential
 - A name has 1 to 64 characters: lowercase letters, digits, '.', '_' or '-', starting with a letter.
 - A stored value is not shown again and is removed from the service's log output.`
+
+const repositoryTopic = `The service clones the stacks repository of the host over SSH with its own deploy key and checks the server with its own known_hosts file; the system's SSH configuration and known hosts are not used. Host key checking is always strict.
+
+Binding:
+- qdeploy key generate, then enter the public key as a read-only deploy key in the git platform
+- qdeploy repo set <ssh-url> [--dir <path>]: the URL is user@host:path or ssh://[user@]host[:port]/path; the directory defaults to /opt/stacks and must be absolute
+- On first contact the host key and its SHA256 fingerprint are shown. At a terminal you confirm it by answering the question (default no). Without a terminal, pass the expected fingerprint: --fingerprint SHA256:...
+- Compare the fingerprint with the one the git platform publishes before you confirm it.
+- The directory must not exist, be empty, or already be a clone of the same URL. A repository bound earlier is not replaced.
+
+Afterwards:
+- qdeploy repo fetch: fetch new commits into the remote-tracking branch and report whether the working copy is behind; the working copy itself is not changed
+- qdeploy stacks: list each stack with its image version variables, their values and its update mode (none without a qdeploy.yaml)
+- A host key that differs from the pinned one aborts every command. The pinned key is never replaced by a command; verify the change with the git platform's operator first.`
+
+const stackRulesTopic = `Each stack folder of the stacks repository may hold a qdeploy.yaml with the rules for updating it. Without the file the stack is deployed but never updated. The file is read as data only: unknown fields, a missing version, or a path that is absolute or leaves the stack folder are rejected.
+
+Fields (all optional except version):
+- version: 1
+- update.mode: manual (default) or automatic
+- update.ceiling: patch, minor (default) or major; the largest version step taken
+- update.major: stepwise (default, one major version at a time) or direct
+- update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
+- backup.paths: data directories relative to the stack folder, for example data/db
+- backup.volumes: named volumes
+- backup.command: a command as a list of arguments, never a shell line
+- backup.retention.keep: number of newest backups to keep (default 7 when no retention is set)
+- backup.retention.max_age_days: age limit in days; a backup is kept only while it satisfies every limit that is set
+- check.containers: require all containers to be running (default true)
+- check.http.url: http or https URL to probe
+- check.http.status: expected status code (default 200)
+- check.http.timeout: probe timeout from 1s to 10m (default 10s)
+- backup needs at least one of paths, volumes, command
+
+Example:
+version: 1
+update:
+  mode: automatic
+  ceiling: minor
+  tags:
+    DEMO_APP_VERSION: '^[0-9]+\.[0-9]+\.[0-9]+$'
+backup:
+  paths: [data/db]
+  retention: {keep: 5}
+check:
+  http: {url: 'http://localhost:8080/health', status: 200, timeout: 5s}
+
+Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. Fixed and floating tags such as latest are reported as findings.`

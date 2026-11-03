@@ -1,0 +1,44 @@
+format: 1
+allow:
+  - file: internal/gitrepo/gitrepo_test.go
+    rule: email
+    hash: 95a97d430c4a30c8
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 687f46febc36bfde
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: a2c32debdbbdf320
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 2c32fca9be64a940
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 6a5e8bc2773fccfb
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 1267d2dca61b2294
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: a9ff6b5bbe8dedad
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: e67bea63b36bb022
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 54cd3d4ff26354a2
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 1184001f22346e2a
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 0dfbed9083810dd6
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 1fd0d05311eac47c
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 47df2b1496383a22
+  - file: internal/gitrepo/url_test.go
+    rule: email
+    hash: 444422aa48efaedc

@@ -29,6 +29,9 @@ type Config struct {
 	StateDir string
 	// PeerCheck admits the peers of the channel. Nil means RequireRoot; tests inject their own.
 	PeerCheck PeerCheck
+	// Git is the git layer of the repository commands. Nil means the system git through internal/gitrepo;
+	// tests inject their own.
+	Git Git
 }
 
 // Run serves the channel until ctx ends and then returns nil: a stop request is the normal way for the service
@@ -56,6 +59,13 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		return err
 	}
 	if err := registerCredentialCommands(registry, store); err != nil {
+		return err
+	}
+	repo, err := newRepoService(cfg.StateDir, store, cfg.Git)
+	if err != nil {
+		return fmt.Errorf("prepare the repository commands: %w", err)
+	}
+	if err := registerRepoCommands(registry, repo); err != nil {
 		return err
 	}
 	check := cfg.PeerCheck

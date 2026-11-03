@@ -51,7 +51,12 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 }
 
 func call(ctx context.Context, ep localipc.ServiceEndpoint, command string, args, result any) error {
-	ctx, cancel := context.WithTimeout(ctx, client.CallTimeout)
+	return callFor(ctx, client.CallTimeout, ep, command, args, result)
+}
+
+// callFor is call with its own time limit, for commands that wait on a remote server.
+func callFor(ctx context.Context, limit time.Duration, ep localipc.ServiceEndpoint, command string, args, result any) error {
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	cl, err := client.Dial(ctx, ep)
 	if err != nil {
@@ -80,6 +85,20 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodeNotFound:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
 			NextStep: "Create it first with 'qdeploy key generate' or 'qdeploy credential set <name>'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoRepo:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "Bind the stacks repository with 'qdeploy repo set <ssh-url>'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeRepoBound:
+		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
+			NextStep: "Run 'qdeploy repo set' with the URL and directory already bound, or remove the service's stacks-repo.json while the service is stopped.",
+			Cause:    err}
+	case errors.As(err, &remote) && remote.Code == control.CodeHostKey:
+		return &cli.Failure{Code: output.CodeAuth, Message: remote.Message,
+			NextStep: "Verify the new host key with the git platform's operator before changing anything; the pinned key is never replaced by this command.",
+			Cause:    err}
+	case errors.As(err, &remote) && remote.Code == control.CodeRemote:
+		return &cli.Failure{Code: output.CodeUnreachable, Message: remote.Message,
+			NextStep: "Check the URL, the network and that the deploy key is entered in the git platform ('qdeploy key show').", Cause: err}
 	case errors.As(err, &remote):
 		return &cli.Failure{Code: output.CodeRuntime, Message: "the service refused the request: " + remote.Message,
 			NextStep: "Check that the client and the service are the same version.", Cause: err}

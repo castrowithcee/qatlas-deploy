@@ -45,5 +45,23 @@ func TestArchitecture(t *testing.T) {
 			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),
 			Hint:  "the store sits below the service and the command surface and knows neither",
 		},
+		{
+			Name:  "stacks-read-the-working-copy-only",
+			Files: archtest.Files{Under: []string{"internal/stacks"}, Tests: archtest.WithTests},
+			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),
+			Hint:  "reading stacks is pure and sits below the service and the command surface",
+		},
+		{
+			Name:  "hostkey-knows-no-service-layer",
+			Files: archtest.Files{Under: []string{"internal/hostkey"}, Tests: archtest.WithTests},
+			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),
+			Hint:  "host key handling sits below the service and the command surface and knows neither",
+		},
+		{
+			Name:  "gitrepo-runs-git-only",
+			Files: archtest.Files{Under: []string{"internal/gitrepo"}, Tests: archtest.WithTests},
+			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),
+			Hint:  "the git layer sits below the service and the command surface and knows neither",
+		},
 	}, nil)
 }

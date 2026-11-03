@@ -53,6 +53,10 @@ const (
 	CodeInvalid        = "invalid-argument"
 	CodeNotFound       = "not-found"
 	CodeKeyExists      = "key-exists"
+	CodeNoRepo         = "no-repo"
+	CodeRepoBound      = "repo-bound"
+	CodeHostKey        = "host-key"
+	CodeRemote         = "remote-failed"
 )
 
 // Request is what a client sends. Args is command specific and may be absent.
@@ -185,4 +189,76 @@ type CredentialInfo struct {
 // CredentialListResult answers CredentialListCommand.
 type CredentialListResult struct {
 	Credentials []CredentialInfo `json:"credentials"`
+}
+
+// The commands that bind and read the stacks repository.
+const (
+	RepoProbeCommand  = "repo.probe"
+	RepoSetCommand    = "repo.set"
+	RepoFetchCommand  = "repo.fetch"
+	StacksListCommand = "stacks.list"
+)
+
+// RepoProbeArgs are the arguments of RepoProbeCommand.
+type RepoProbeArgs struct {
+	URL string `json:"url"`
+}
+
+// RepoProbeResult answers RepoProbeCommand with the host key the server presents. Pinned says the service
+// already trusts exactly this key for the host.
+type RepoProbeResult struct {
+	Host        string `json:"host"`
+	Port        string `json:"port"`
+	KeyType     string `json:"key_type"`
+	PublicKey   string `json:"public_key"`
+	Fingerprint string `json:"fingerprint"`
+	Pinned      bool   `json:"pinned"`
+}
+
+// RepoSetArgs are the arguments of RepoSetCommand. Fingerprint is the host key the operator confirmed.
+type RepoSetArgs struct {
+	URL         string `json:"url"`
+	Dir         string `json:"dir"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// RepoSetResult answers RepoSetCommand.
+type RepoSetResult struct {
+	URL         string `json:"url"`
+	Dir         string `json:"dir"`
+	Fingerprint string `json:"fingerprint"`
+	Head        string `json:"head"`
+	Cloned      bool   `json:"cloned"`
+}
+
+// RepoFetchResult answers RepoFetchCommand. UpdatesAvailable says the fetched remote branch differs from the
+// working copy's HEAD; the working copy itself is not touched.
+type RepoFetchResult struct {
+	Dir              string `json:"dir"`
+	Head             string `json:"head"`
+	RemoteHead       string `json:"remote_head"`
+	UpdatesAvailable bool   `json:"updates_available"`
+}
+
+// StacksResult answers StacksListCommand.
+type StacksResult struct {
+	Dir    string      `json:"dir"`
+	Stacks []StackInfo `json:"stacks"`
+}
+
+// StackInfo describes one stack of the working copy. Error is set when the stack cannot be read.
+type StackInfo struct {
+	Name     string      `json:"name"`
+	Update   string      `json:"update"`
+	Images   []ImageInfo `json:"images"`
+	Findings int         `json:"findings"`
+	Error    string      `json:"error,omitempty"`
+}
+
+// ImageInfo is a service image whose tag is a variable; Version is empty when no value is set.
+type ImageInfo struct {
+	Service string `json:"service"`
+	Image   string `json:"image"`
+	Var     string `json:"var"`
+	Version string `json:"version"`
 }
