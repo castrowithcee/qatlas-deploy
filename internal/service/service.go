@@ -36,6 +36,13 @@ type Config struct {
 func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	secrets := &redact.Redactor{}
 	log = slog.New(redactHandler{next: log.Handler(), r: secrets})
+	// The channel's lock must keep a second instance away before opening the store sweeps the temporary
+	// files of a write the first instance may be doing.
+	l, err := cfg.Endpoint.Listen()
+	if err != nil {
+		return fmt.Errorf("open the service channel: %w", err)
+	}
+	defer func() { _ = l.Close() }()
 	store, err := credentials.Open(cfg.StateDir, secrets.Add)
 	if err != nil {
 		return fmt.Errorf("open the credential store: %w", err)
@@ -54,10 +61,6 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	check := cfg.PeerCheck
 	if check == nil {
 		check = RequireRoot
-	}
-	l, err := cfg.Endpoint.Listen()
-	if err != nil {
-		return fmt.Errorf("open the service channel: %w", err)
 	}
 	log.Info("service started")
 	serve(ctx, l, registry, check, log)
