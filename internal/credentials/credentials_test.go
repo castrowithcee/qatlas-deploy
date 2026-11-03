@@ -295,3 +295,19 @@ func TestOpenNeedsAbsoluteDirectory(t *testing.T) {
 		}
 	}
 }
+
+func TestValue(t *testing.T) {
+	s, _, _ := openStore(t)
+	if err := s.Set("found", demoToken); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := s.Value("found"); err != nil || v != demoToken {
+		t.Fatalf("Value(found) = %v", err)
+	}
+	if _, err := s.Value("missing"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Value(missing) = %v", err)
+	}
+	if _, err := s.Value("../x"); !errors.Is(err, ErrInvalidName) {
+		t.Fatalf("Value(../x) = %v", err)
+	}
+}

@@ -457,3 +457,44 @@ type BackupListResult struct {
 type BackupRestoreResult struct {
 	Backup BackupInfo `json:"backup"`
 }
+
+// UpdatesListCommand shows the update detection results of the stacks; with Refresh it asks the registries
+// first. Nothing in any stack, repository or deployment changes.
+const UpdatesListCommand = "updates.list"
+
+// UpdatesArgs are the arguments of UpdatesListCommand. An empty Stack means every stack.
+type UpdatesArgs struct {
+	Stack   string `json:"stack,omitempty"`
+	Refresh bool   `json:"refresh,omitempty"`
+}
+
+// UpdatesResult answers UpdatesListCommand.
+type UpdatesResult struct {
+	Stacks []StackUpdates `json:"stacks"`
+}
+
+// StackUpdates is the detection result of one stack. Checked is zero for a stack never checked. Error is set
+// when the stack cannot be read.
+type StackUpdates struct {
+	Name    string       `json:"name"`
+	Update  string       `json:"update"`
+	Checked time.Time    `json:"checked,omitzero"`
+	Items   []UpdateInfo `json:"items"`
+	Error   string       `json:"error,omitempty"`
+}
+
+// UpdateInfo is the outcome for one image variable. Status is current, update, not-comparable or error;
+// Selected is the version within the stack's ceiling (the current one if nothing is newer) and MajorAvailable
+// a newer major version that is not taken automatically.
+type UpdateInfo struct {
+	Variable       string `json:"variable"`
+	Image          string `json:"image"`
+	Current        string `json:"current,omitempty"`
+	Selected       string `json:"selected,omitempty"`
+	MajorAvailable string `json:"major_available,omitempty"`
+	Status         string `json:"status"`
+	Error          string `json:"error,omitempty"`
+}
+
+// UpdatesRefreshTimeout bounds how long the service spends asking registries for one refresh.
+const UpdatesRefreshTimeout = 5 * time.Minute

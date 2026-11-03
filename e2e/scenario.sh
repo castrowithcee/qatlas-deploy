@@ -1,7 +1,8 @@
 #!/bin/sh
 # Scenario: from the simulated host, clone the demo stacks repository over SSH and push a commit; then check
 # the demo image tags and that a demo container turns unhealthy on purpose. Then run qdeploy on the host as a
-# service, bind the stacks repository with its own deploy key, list the stacks, deploy a new commit, roll back a
+# service, bind the stacks repository with its own deploy key, list the stacks, deploy a new commit, show the
+# available image versions per update ceiling without changing anything, roll back a
 # commit with a failing healthcheck (data restored from the run's backup, revert commit on the remote), leave a
 # stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
 # Docker integration tests of the deployer run inside the host before that. Sourced by run.sh scenario.
@@ -425,6 +426,67 @@ scenario_backup() {
 	log "scenario: backup create refused: $out"
 }
 
+# json_value prints the first string value of a key in compact JSON (empty when the key is absent or empty).
+json_value() {
+	printf '%s' "$1" | grep -o "\"$2\":\"[^\"]*\"" | head -n 1 | cut -d '"' -f 4
+}
+
+# updates_expect checks the single row of a 'qdeploy updates' JSON output: current, available, major_available
+# (empty for none) and status.
+updates_expect() {
+	out=$1
+	[ "$(json_value "$out" current)" = "$2" ] && [ "$(json_value "$out" available)" = "$3" ] &&
+		[ "$(json_value "$out" major_available)" = "$4" ] && [ "$(json_value "$out" status)" = "$5" ] ||
+		fail "unexpected updates, want current=$2 available=$3 major_available=$4 status=$5: $out"
+	case $out in *2.1.0-rc.1*) fail "a pre-release is offered: $out" ;; esac
+}
+
+# updates_commit changes the rules of demo-stack and waits for the run the new commit starts.
+updates_commit() {
+	prev=$(newest_run demo-stack)
+	admin_commit demo-stack/qdeploy.yaml "$1" "$2"
+	restart_service
+	run=$(next_run demo-stack "$prev") || fail "no run of demo-stack started for: $2"
+	wait_for "the run $run" 240 run_finished demo-stack "$run"
+	qd log "$run" | grep -q ' result succeeded' || fail "the run for '$2' did not succeed: $(qd log "$run")"
+}
+
+# scenario_updates shows the update detection against the registry: the stored result, the ceiling of the stack,
+# the major hint and a stack without rules. Detection changes nothing; only the admin's commits do.
+scenario_updates() {
+	step 'updates says a stack was never checked'
+	out=$(qd --output json updates demo-stack) || fail "updates failed: $out"
+	[ "$(json_value "$out" status)" = never-checked ] || fail "demo-stack is not reported as never checked: $out"
+
+	step 'updates --refresh asks the registry; the default ceiling is minor and a major version is only a hint'
+	out=$(qd --output json updates demo-stack --refresh) || fail "updates --refresh failed: $out"
+	updates_expect "$out" 1.0.1 1.1.0 2.0.0 update
+	[ -n "$(json_value "$out" checked)" ] || fail "the result has no time of the check: $out"
+	stored=$(qd --output json updates demo-stack) || fail "updates failed: $stored"
+	[ "$stored" = "$out" ] || fail "updates without --refresh does not show the stored result: $stored"
+	log "scenario: updates $out"
+
+	step 'a stack without rules is listed too'
+	out=$(qd --output json updates demo-cache --refresh) || fail "updates demo-cache failed: $out"
+	updates_expect "$out" 1.1.0 1.1.0 2.0.0 current
+
+	step 'ceiling patch offers no minor step; ceiling major offers 2.0.0 without a hint'
+	updates_commit 's/^version: 1$/version: 1\nupdate:\n  ceiling: patch/' 'Set the demo-stack update ceiling to patch'
+	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
+	updates_expect "$out" 1.0.1 1.0.1 2.0.0 current
+	updates_commit 's/ceiling: patch/ceiling: major/' 'Set the demo-stack update ceiling to major'
+	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
+	updates_expect "$out" 1.0.1 2.0.0 '' update
+
+	step 'the demo-stack rules are restored'
+	updates_commit '/^update:$/d; /^  ceiling: major$/d' 'Remove the demo-stack update rules'
+	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
+	updates_expect "$out" 1.0.1 1.1.0 2.0.0 update
+	[ "$(stack_images demo-stack)" = "registry.$domain/demo/app:1.0.1" ] || fail "updates changed the running image: $(stack_images demo-stack)"
+	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git log --format=%s -n 1 -- demo-stack/.env')" = 'Update demo-stack to 1.0.1' ] ||
+		fail 'the version of demo-stack was changed'
+}
+
 # scenario_rollback runs the automatic rollback against the demo stacks: a good deploy with a backup, a bad
 # deploy of a stack with data (data restored from the run's own backup, revert commit pushed, previous state
 # healthy), and a bad deploy whose rollback fails (stack stopped and paused, deploy refused, resume).
@@ -613,6 +675,8 @@ scenario_stacks_repo() {
 	scenario_deploy
 
 	scenario_backup
+
+	scenario_updates
 
 	scenario_rollback
 

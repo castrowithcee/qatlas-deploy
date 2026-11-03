@@ -649,6 +649,31 @@ func (e *Engine) recordDropped(name, trigger string) {
 	}
 }
 
+// RecordUpdates stores the result of an update detection for a stack, replacing the earlier one. It touches
+// nothing else of the stack's state, so it never overwrites a run's result and a run never drops it. The
+// result is clipped to the stored limits.
+func (e *Engine) RecordUpdates(stack string, check UpdateCheck) error {
+	check.Checked = check.Checked.UTC()
+	if len(check.Items) > MaxUpdateItems {
+		check.Items = check.Items[:MaxUpdateItems]
+	}
+	check.Items = append([]UpdateItem(nil), check.Items...)
+	for i := range check.Items {
+		check.Items[i].Error = e.text(check.Items[i].Error)
+	}
+	if err := validateUpdates(check); err != nil {
+		return err
+	}
+	_, err := e.store.Update(func(s State) (State, error) {
+		s = normalize(s)
+		cur := s.Stacks[stack]
+		cur.Updates = &check
+		s.Stacks[stack] = cur
+		return s, nil
+	})
+	return err
+}
+
 // Snapshot is the state plus the runs active right now (stack to run id).
 type Snapshot struct {
 	State  State

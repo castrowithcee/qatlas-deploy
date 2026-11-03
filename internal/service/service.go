@@ -14,6 +14,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
+	registryclient "github.com/castrowithcee/qatlas-deploy/internal/registry"
 )
 
 // DefaultStateDir is the state directory of the service under systemd's StateDirectory convention.
@@ -38,6 +39,9 @@ type Config struct {
 	// Backups saves and restores the data of a stack. Nil means the backup commands answer that backups are
 	// not available.
 	Backups Backups
+	// Registry configures the registry clients of the update detection; tests point it at a local server. Its
+	// Credential is ignored: logins come from registryCredential.
+	Registry registryclient.Options
 	// PollInterval is the time between repository polls; zero means engine.DefaultInterval.
 	PollInterval time.Duration
 }
@@ -79,6 +83,9 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	}
 	repo.onBound = eng.Wake
 	if err := registerRunCommands(registry, eng, cfg.Version, started); err != nil {
+		return err
+	}
+	if err := registerUpdateCommands(registry, repo, eng, store, cfg.Registry); err != nil {
 		return err
 	}
 	if err := registerBackupCommands(registry, eng, cfg.Backups, secrets.Apply, log); err != nil {

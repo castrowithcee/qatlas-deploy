@@ -80,6 +80,43 @@ type StackState struct {
 	Removed bool `json:"removed,omitempty"`
 	// Paused is set when a rollback failed; it is cleared only by Resume.
 	Paused *Pause `json:"paused,omitempty"`
+	// Updates is the result of the last update detection; nil for a stack that was never checked.
+	Updates *UpdateCheck `json:"updates,omitempty"`
+}
+
+// Limits of a stored update check. The detector clips to them, so a valid result is never refused.
+const (
+	MaxUpdateItems = 256
+	// MaxUpdateText bounds every text of an item in bytes.
+	MaxUpdateText = 1024
+)
+
+// Statuses of an update item.
+const (
+	UpdateCurrent       = "current"
+	UpdateAvailable     = "update"
+	UpdateNotComparable = "not-comparable"
+	UpdateError         = "error"
+)
+
+// UpdateCheck is the result of one update detection of a stack: when the registries were asked and what they
+// said for each image variable. It holds versions and fixed texts, never registry answers or credentials.
+type UpdateCheck struct {
+	Checked time.Time    `json:"checked"`
+	Items   []UpdateItem `json:"items,omitempty"`
+}
+
+// UpdateItem is the outcome for one image variable. Selected is the version within the stack's ceiling and
+// equals Current when there is nothing newer; MajorAvailable is a newer major version that is never taken
+// automatically. Error is a short fixed text for a status of UpdateNotComparable or UpdateError.
+type UpdateItem struct {
+	Variable       string `json:"variable"`
+	Image          string `json:"image"`
+	Current        string `json:"current,omitempty"`
+	Selected       string `json:"selected,omitempty"`
+	MajorAvailable string `json:"major_available,omitempty"`
+	Status         string `json:"status"`
+	Error          string `json:"error,omitempty"`
 }
 
 // Pause records why a stack gets no runs: the run whose rollback failed and its redacted reason.
@@ -134,6 +171,11 @@ func validateState(s State) error {
 		if st.Paused != nil && !runIDRe.MatchString(st.Paused.Run) {
 			return errors.New("invalid run id")
 		}
+		if st.Updates != nil {
+			if err := validateUpdates(*st.Updates); err != nil {
+				return err
+			}
+		}
 	}
 	for _, r := range s.Runs {
 		if !runIDRe.MatchString(r.ID) {
@@ -141,6 +183,28 @@ func validateState(s State) error {
 		}
 		if r.RolledBackTo != "" && !commitRe.MatchString(r.RolledBackTo) {
 			return errors.New("invalid commit id")
+		}
+	}
+	return nil
+}
+
+func validateUpdates(u UpdateCheck) error {
+	if u.Checked.IsZero() || len(u.Items) > MaxUpdateItems {
+		return errors.New("invalid update check")
+	}
+	for _, it := range u.Items {
+		switch it.Status {
+		case UpdateCurrent, UpdateAvailable, UpdateNotComparable, UpdateError:
+		default:
+			return errors.New("invalid update status")
+		}
+		if it.Variable == "" || it.Image == "" {
+			return errors.New("invalid update item")
+		}
+		for _, t := range []string{it.Variable, it.Image, it.Current, it.Selected, it.MajorAvailable, it.Error} {
+			if len(t) > MaxUpdateText {
+				return errors.New("update text too long")
+			}
 		}
 	}
 	return nil
@@ -173,6 +237,11 @@ func (s State) clone() State {
 		if v.Paused != nil {
 			p := *v.Paused
 			v.Paused = &p
+		}
+		if v.Updates != nil {
+			u := *v.Updates
+			u.Items = append([]UpdateItem(nil), u.Items...)
+			v.Updates = &u
 		}
 		out.Stacks[k] = v
 	}
