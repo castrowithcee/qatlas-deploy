@@ -10,6 +10,7 @@ func All() []helptopics.Topic {
 	return []helptopics.Topic{
 		{Name: "qdeploy", Short: "What qdeploy is and what it is for", Text: overview},
 		{Name: "credentials", Short: "The deploy key and stored credentials", Text: credentialsTopic},
+		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
 	}
 }
 
@@ -37,3 +38,37 @@ Credentials:
 - qdeploy credential delete <name>: remove a credential
 - A name has 1 to 64 characters: lowercase letters, digits, '.', '_' or '-', starting with a letter.
 - A stored value is not shown again and is removed from the service's log output.`
+
+const stackRulesTopic = `Each stack folder of the stacks repository may hold a qdeploy.yaml with the rules for updating it. Without the file the stack is deployed but never updated. The file is read as data only: unknown fields, a missing version, or a path that is absolute or leaves the stack folder are rejected.
+
+Fields (all optional except version):
+- version: 1
+- update.mode: manual (default) or automatic
+- update.ceiling: patch, minor (default) or major; the largest version step taken
+- update.major: stepwise (default, one major version at a time) or direct
+- update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
+- backup.paths: data directories relative to the stack folder, for example data/db
+- backup.volumes: named volumes
+- backup.command: a command as a list of arguments, never a shell line
+- backup.retention.keep: number of newest backups to keep (default 7 when no retention is set)
+- backup.retention.max_age_days: age limit in days; a backup is kept only while it satisfies every limit that is set
+- check.containers: require all containers to be running (default true)
+- check.http.url: http or https URL to probe
+- check.http.status: expected status code (default 200)
+- check.http.timeout: probe timeout from 1s to 10m (default 10s)
+- backup needs at least one of paths, volumes, command
+
+Example:
+version: 1
+update:
+  mode: automatic
+  ceiling: minor
+  tags:
+    DEMO_APP_VERSION: '^[0-9]+\.[0-9]+\.[0-9]+$'
+backup:
+  paths: [data/db]
+  retention: {keep: 5}
+check:
+  http: {url: 'http://localhost:8080/health', status: 200, timeout: 5s}
+
+Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. Fixed and floating tags such as latest are reported as findings.`
