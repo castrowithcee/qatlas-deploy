@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
@@ -20,6 +21,10 @@ type Git struct {
 	// Head is reported as HEAD; Remote as the fetched branch, Head when empty.
 	Head   string
 	Remote string
+	// Tracked lists the paths git reports as tracked, from the repository root.
+	Tracked []string
+	// NotIgnored makes every ignore question answer "not ignored"; by default everything is ignored.
+	NotIgnored bool
 	// CloneErr and FetchErr make the call fail; set them before the service starts or use SetFetchErr.
 	CloneErr, FetchErr error
 
@@ -135,6 +140,24 @@ func (c *copyOf) Status(context.Context) ([]gitrepo.Change, error) { return nil,
 func (c *copyOf) ChangedFolders(context.Context, string, string) ([]string, error) { return nil, nil }
 
 func (c *copyOf) FastForward(context.Context) error { return nil }
+
+func (c *copyOf) TrackedFiles(_ context.Context, dir string) ([]string, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	var out []string
+	for _, p := range c.g.Tracked {
+		if strings.HasPrefix(p, dir+"/") {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func (c *copyOf) IsIgnored(context.Context, string) (bool, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	return !c.g.NotIgnored, nil
+}
 
 func (c *copyOf) RemoteURL(context.Context) (string, error) {
 	c.g.mu.Lock()

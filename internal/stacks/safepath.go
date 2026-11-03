@@ -30,6 +30,8 @@ func checkRelative(p string) error {
 	return nil
 }
 
+var errNotFound = errors.New("not found")
+
 // checkRegular requires rel to be a regular file inside root with no symlink on the way. Symlinks are rejected
 // instead of resolved: resolving would need a containment check that races with the working copy.
 func checkRegular(root, rel string) error {
@@ -42,7 +44,7 @@ func checkRegular(root, rel string) error {
 		cur = filepath.Join(cur, part)
 		info, err := os.Lstat(cur)
 		if err != nil {
-			return fmt.Errorf("not found")
+			return errNotFound
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
 			return errors.New("symlinks are not allowed")

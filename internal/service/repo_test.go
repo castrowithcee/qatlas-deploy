@@ -340,3 +340,101 @@ func TestEngineStartsPollingAfterRepoSet(t *testing.T) {
 		}
 	}
 }
+
+const checkSecret = "not-a-real-secret-4711"
+
+func conformantFiles() map[string]string {
+	return map[string]string{
+		"good-stack/compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app:${DEMO_APP_VERSION}\n",
+		"good-stack/.env":         "DEMO_APP_VERSION=1.2.3\n",
+		"good-stack/secrets.env":  "DEMO_PASSWORD=" + checkSecret + "\n",
+	}
+}
+
+func TestCheckReportsFindingsPerStack(t *testing.T) {
+	h := start(t)
+	h.withKey()
+	h.git.Files = conformantFiles()
+	h.git.Files["bad-stack/compose.yaml"] = "services:\n  app:\n    image: registry.example.test/demo/app:latest\n"
+	h.git.Files["bad-stack/.env"] = "DEMO_PASSWORD=x\n"
+	h.git.Files["bad-stack/secrets.env"] = "DEMO_PASSWORD=" + checkSecret + "\n"
+	h.git.Tracked = []string{"bad-stack/secrets.env"}
+	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
+		t.Fatal(err)
+	}
+
+	var res control.StacksCheckResult
+	if err := h.call(control.StacksCheckCommand, control.StacksCheckArgs{}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Stacks) != 2 || res.Dir != h.dir {
+		t.Fatalf("result = %+v", res)
+	}
+	rules := map[string]string{}
+	for _, f := range res.Findings {
+		if f.Stack == "good-stack" {
+			t.Errorf("finding for the conformant stack: %+v", f)
+		}
+		if f.Cause == "" || f.Fix == "" || (f.Severity != "error" && f.Severity != "warning") {
+			t.Errorf("incomplete finding %+v", f)
+		}
+		if strings.Contains(f.Cause+f.Fix, checkSecret) {
+			t.Errorf("secret value in %+v", f)
+		}
+		rules[f.Rule] = f.Severity
+	}
+	for _, want := range []string{"floating-image-tag", "duplicate-key", "tracked-secrets-env"} {
+		if rules[want] != "error" {
+			t.Errorf("missing error %s in %v", want, rules)
+		}
+	}
+	if res.Errors != 3 || res.Warnings != 0 {
+		t.Fatalf("counts = %d errors, %d warnings", res.Errors, res.Warnings)
+	}
+
+	var one control.StacksCheckResult
+	if err := h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "good-stack"}, &one); err != nil {
+		t.Fatal(err)
+	}
+	if len(one.Stacks) != 1 || one.Stacks[0] != "good-stack" || len(one.Findings) != 0 || one.Findings == nil {
+		t.Fatalf("single stack result = %+v", one)
+	}
+}
+
+func TestCheckRefusesUnknownStackAndMissingBinding(t *testing.T) {
+	h := start(t)
+	wantCode(t, h.call(control.StacksCheckCommand, control.StacksCheckArgs{}, nil), control.CodeNoRepo)
+	h.withKey()
+	h.git.Files = conformantFiles()
+	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "nope"}, nil), control.CodeNotFound)
+	wantCode(t, h.call(control.StacksCheckCommand, map[string]string{"bogus": "x"}, nil), control.CodeBadRequest)
+}
+
+func TestCheckReducesRepoTextToPrintable(t *testing.T) {
+	h := start(t)
+	h.withKey()
+	h.git.Files = map[string]string{
+		"odd-stack/compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app:1.0.0\n",
+		"odd-stack/.env":         "COMPOSE_FILE=compose.yaml:a\x1b[31mb.yaml\n",
+	}
+	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	var res control.StacksCheckResult
+	if err := h.call(control.StacksCheckCommand, control.StacksCheckArgs{}, &res); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range res.Findings {
+		found = found || f.Rule == "missing-compose-file"
+		if strings.ContainsRune(f.Cause+f.Fix+f.Stack, '\x1b') {
+			t.Errorf("control character in %+v", f)
+		}
+	}
+	if !found {
+		t.Fatalf("findings = %+v", res.Findings)
+	}
+}

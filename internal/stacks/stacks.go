@@ -7,6 +7,7 @@
 package stacks
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,13 +40,41 @@ type Stack struct {
 	Env map[string]string
 	// Images lists every service image whose tag is a variable.
 	Images []ImageVar
-	// Findings lists images the standard does not allow, as data for a later check.
+	// Findings lists images the standard does not allow, for qdeploy check.
 	Findings []Finding
 	// Rules is nil when the stack has no qdeploy.yaml: it is deployed but never updated.
 	Rules *Rules
 	// Err is set when the stack cannot be read; the other fields are then incomplete. One broken stack does not
 	// hide the others.
 	Err error
+}
+
+// RulesError is the Err of a stack whose qdeploy.yaml cannot be used. Variable is set when the file names an
+// image variable the stack does not have.
+type RulesError struct {
+	Err      error
+	Variable string
+}
+
+func (e *RulesError) Error() string { return e.Err.Error() }
+func (e *RulesError) Unwrap() error { return e.Err }
+
+// ComposeFileProblem is one entry of COMPOSE_FILE that cannot be used. Missing says the file does not exist;
+// otherwise the entry is unsafe or not a regular file.
+type ComposeFileProblem struct {
+	Entry   string
+	Missing bool
+	Reason  string
+}
+
+// ComposeFileError is the Err of a stack whose COMPOSE_FILE names unusable files; it lists every one.
+type ComposeFileError struct {
+	Problems []ComposeFileProblem
+}
+
+func (e *ComposeFileError) Error() string {
+	p := e.Problems[0]
+	return fmt.Sprintf("%s: COMPOSE_FILE entry %q: %s", envFile, p.Entry, p.Reason)
 }
 
 // UpdateMode reports how the stack is updated: ModeNone without rules.
@@ -118,16 +147,22 @@ func loadStack(dir, name string) (Stack, bool) {
 
 	rules, err := readRules(dir)
 	if err != nil {
-		return fail(err)
+		return fail(&RulesError{Err: err})
 	}
 	if rules != nil {
 		known := map[string]bool{}
 		for _, img := range s.Images {
 			known[img.Var] = true
 		}
+		vars := make([]string, 0, len(rules.Update.Tags))
 		for v := range rules.Update.Tags {
+			vars = append(vars, v)
+		}
+		sort.Strings(vars)
+		for _, v := range vars {
 			if !known[v] {
-				return fail(fmt.Errorf("%s: update.tags.%s: no service image uses this variable as its tag", RulesFile, v))
+				return fail(&RulesError{Variable: v,
+					Err: fmt.Errorf("%s: update.tags.%s: no service image uses this variable as its tag", RulesFile, v)})
 			}
 		}
 	}
@@ -161,10 +196,14 @@ func composeFiles(dir string, env map[string]string) ([]string, error) {
 		if len(parts) > MaxComposeFiles {
 			return nil, fmt.Errorf("%s: COMPOSE_FILE names more than %d files", envFile, MaxComposeFiles)
 		}
+		var problems []ComposeFileProblem
 		for _, p := range parts {
 			if err := checkRegular(dir, p); err != nil {
-				return nil, fmt.Errorf("%s: COMPOSE_FILE entry %q: %w", envFile, p, err)
+				problems = append(problems, ComposeFileProblem{Entry: p, Missing: errors.Is(err, errNotFound), Reason: err.Error()})
 			}
+		}
+		if len(problems) > 0 {
+			return nil, &ComposeFileError{Problems: problems}
 		}
 		return parts, nil
 	}

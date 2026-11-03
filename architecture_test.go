@@ -52,6 +52,12 @@ func TestArchitecture(t *testing.T) {
 			Hint:  "reading stacks is pure and sits below the service and the command surface",
 		},
 		{
+			Name:  "stackcheck-sees-stacks-and-an-interface-only",
+			Files: archtest.Files{Under: []string{"internal/stackcheck"}, Tests: archtest.WithTests},
+			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control", "internal/gitrepo"),
+			Hint:  "the check sits below the service and the command surface and reaches git only through its own interface",
+		},
+		{
 			Name:  "hostkey-knows-no-service-layer",
 			Files: archtest.Files{Under: []string{"internal/hostkey"}, Tests: archtest.WithTests},
 			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),

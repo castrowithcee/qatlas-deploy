@@ -193,3 +193,100 @@ func TestRepoFetchWithoutRunningService(t *testing.T) {
 		t.Fatalf("code %d, want %d", code, ExitServiceNotRunning)
 	}
 }
+
+func bindWithFiles(t *testing.T, files map[string]string, tracked ...string) *repoEnv {
+	t.Helper()
+	e := startRepoService(t)
+	e.git.Files = files
+	e.git.Tracked = tracked
+	if code, _, stderr := run(t, "repo", "set", e.srv.URL(), "--dir", e.dir, "--fingerprint", e.srv.Key().Fingerprint); code != 0 {
+		t.Fatalf("repo set: %d %s", code, stderr)
+	}
+	return e
+}
+
+const cliSecret = "not-a-real-secret-4711"
+
+func TestCheckCleanStackExitsZero(t *testing.T) {
+	bindWithFiles(t, map[string]string{
+		"demo-stack/compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app:${DEMO_APP_VERSION}\n",
+		"demo-stack/.env":         "DEMO_APP_VERSION=1.2.3\n",
+		"demo-stack/secrets.env":  "DEMO_PASSWORD=" + cliSecret + "\n",
+	})
+	for _, args := range [][]string{{"check"}, {"check", "demo-stack"}, {"check", "--output", "json"}} {
+		code, stdout, stderr := run(t, args...)
+		if code != 0 || stderr != "" || strings.Contains(stdout, cliSecret) || strings.Contains(stdout, "error") {
+			t.Fatalf("%v: code %d, stdout %q, stderr %q", args, code, stdout, stderr)
+		}
+	}
+}
+
+func TestCheckErrorsExitNonZeroInTextAndJSON(t *testing.T) {
+	bindWithFiles(t, map[string]string{
+		"demo-stack/compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app:latest\n",
+		"demo-stack/.env":         "DEMO_PASSWORD=x\n",
+		"demo-stack/secrets.env":  "DEMO_PASSWORD=" + cliSecret + "\n",
+	}, "demo-stack/secrets.env")
+
+	code, stdout, stderr := run(t, "check")
+	if code != 1 || !strings.Contains(stderr, "error(s)") {
+		t.Fatalf("text: code %d, stderr %q", code, stderr)
+	}
+	for _, want := range []string{"demo-stack", "floating-image-tag", "duplicate-key", "tracked-secrets-env", "error"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("text output lacks %q:\n%s", want, stdout)
+		}
+	}
+
+	code, stdout, _ = run(t, "check", "demo-stack", "--output", "json")
+	if code != 1 {
+		t.Fatalf("json: code %d", code)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &rows); err != nil {
+		var wrapped struct{ Rows []map[string]any }
+		if err2 := json.Unmarshal([]byte(stdout), &wrapped); err2 != nil {
+			t.Fatalf("invalid JSON %q: %v", stdout, err)
+		}
+		rows = wrapped.Rows
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows = %v", rows)
+	}
+	for _, r := range rows {
+		for _, k := range []string{"stack", "rule", "severity", "cause", "fix"} {
+			if s, _ := r[k].(string); s == "" {
+				t.Errorf("row lacks %s: %v", k, r)
+			}
+		}
+	}
+	for _, args := range [][]string{{"check"}, {"check", "--output", "json"}} {
+		_, out, errOut := run(t, args...)
+		if strings.Contains(out+errOut, cliSecret) {
+			t.Fatalf("%v: secret value in output", args)
+		}
+	}
+}
+
+func TestCheckWarningsExitZero(t *testing.T) {
+	e := bindWithFiles(t, map[string]string{
+		"demo-stack/compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app:${DEMO_APP_VERSION}\n",
+		"demo-stack/.env":         "DEMO_APP_VERSION=1.2.3\n",
+		"demo-stack/secrets.env":  "DEMO_PASSWORD=" + cliSecret + "\n",
+	})
+	e.git.NotIgnored = true
+	code, stdout, _ := run(t, "check")
+	if code != 0 || !strings.Contains(stdout, "secrets-env-not-ignored") || !strings.Contains(stdout, "warning") {
+		t.Fatalf("code %d, stdout %q", code, stdout)
+	}
+}
+
+func TestCheckUsageAndUnknownStack(t *testing.T) {
+	bindWithFiles(t, map[string]string{"demo-stack/compose.yaml": "services: {}\n"})
+	if code, _, _ := run(t, "check", "a", "b"); code != 2 {
+		t.Fatalf("two arguments: code %d, want 2", code)
+	}
+	if code, _, stderr := run(t, "check", "nope"); code == 0 || !strings.Contains(stderr, "no such stack") {
+		t.Fatalf("unknown stack: code %d, stderr %q", code, stderr)
+	}
+}

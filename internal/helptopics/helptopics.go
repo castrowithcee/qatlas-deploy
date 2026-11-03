@@ -11,6 +11,7 @@ func All() []helptopics.Topic {
 		{Name: "qdeploy", Short: "What qdeploy is and what it is for", Text: overview},
 		{Name: "credentials", Short: "The deploy key and stored credentials", Text: credentialsTopic},
 		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
+		{Name: "stack-standard", Short: "The stacks-repo standard that qdeploy check enforces", Text: stackStandardTopic},
 		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
 	}
 }
@@ -24,6 +25,7 @@ Commands:
 - qdeploy repo set <ssh-url> [--dir <path>]: bind the stacks repository, confirm its host key and clone it (run with sudo)
 - qdeploy repo fetch: fetch new commits without touching the working copy (run with sudo)
 - qdeploy stacks: list the stacks of the working copy with image versions and update mode (run with sudo)
+- qdeploy check [stack]: check the stacks of the working copy against the stacks-repo standard; exit code 1 on errors (run with sudo)
 - qdeploy deploy <stack>: start a manual run of a stack at the commit the working copy has (run with sudo)
 - qdeploy runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy log <run>: print the log of a run (run with sudo)
@@ -92,4 +94,31 @@ backup:
 check:
   http: {url: 'http://localhost:8080/health', status: 200, timeout: 5s}
 
-Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. Fixed and floating tags such as latest are reported as findings.`
+Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. qdeploy check reports fixed and floating tags such as latest (see qdeploy help stack-standard).`
+
+const stackStandardTopic = `qdeploy check compares the working copy of the stacks repository with this standard. It reports each deviation as a finding with stack, rule, severity, cause and fix. Errors break or endanger a deploy or leak secrets; warnings leave the stack working. The exit code is 1 when there is at least one error.
+
+Layout of a stack folder:
+- compose.yaml, optionally more compose files such as compose.prod.yaml
+- .env: non-secret values such as image versions, domains, ports and COMPOSE_FILE
+- secrets.env: the secrets; never versioned, listed in .gitignore, present on the host only
+- data (volumes, databases, uploads) never lives in the repository
+
+Rules (rule ID, severity):
+- fixed-image-tag (error): an image version is written into a compose file; use a variable from .env
+- image-version-default (warning): the version only comes from a default in the compose file; set it in .env
+- floating-image-tag (error): a tag such as latest, no tag, or a tag without a SemVer core (x.y.z)
+- unset-image-variable (error): the version variable has no value
+- duplicate-key (error): a key stands in both .env and secrets.env; keep it in one file
+- missing-secrets-env (error): secrets.env does not exist; Compose runs with --env-file .env --env-file secrets.env
+- unreadable-secrets-env (error): secrets.env is a link or too large
+- tracked-secrets-env (error): git tracks secrets.env
+- secrets-env-not-ignored (warning): .gitignore does not cover secrets.env
+- tracked-data (error): git tracks files below data/
+- missing-compose-file (error): a file named in COMPOSE_FILE does not exist
+- invalid-compose-file (error): a COMPOSE_FILE entry is unsafe or not a regular file
+- invalid-rules-file (error): qdeploy.yaml is invalid
+- unknown-rules-variable (error): qdeploy.yaml names an image variable the stack does not have
+- unreadable-stack (error): another file of the stack cannot be read
+
+Secret values are never read or shown; only the key names of secrets.env are compared with .env.`

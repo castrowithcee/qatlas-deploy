@@ -21,6 +21,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
 	"github.com/castrowithcee/qatlas-deploy/internal/hostkey"
+	"github.com/castrowithcee/qatlas-deploy/internal/stackcheck"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -40,6 +41,8 @@ type WorkingCopy interface {
 	Status(ctx context.Context) ([]gitrepo.Change, error)
 	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
 	FastForward(ctx context.Context) error
+	TrackedFiles(ctx context.Context, dir string) ([]string, error)
+	IsIgnored(ctx context.Context, path string) (bool, error)
 }
 
 // Git is the git layer behind the repository commands. Config.Git nil means internal/gitrepo.
@@ -388,6 +391,61 @@ func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any,
 	return res, nil
 }
 
+func (s *repoService) handleCheck(ctx context.Context, raw json.RawMessage) (any, error) {
+	var a control.StacksCheckArgs
+	if err := decodeArgs(raw, &a); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	c, err := s.bound()
+	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	list, err := stacks.Load(c.Dir)
+	if err != nil {
+		return nil, control.NewError(control.CodeNoRepo, "the working copy cannot be read; run 'qdeploy repo set' again")
+	}
+	if a.Stack != "" {
+		var one []stacks.Stack
+		for _, st := range list {
+			if st.Name == a.Stack {
+				one = append(one, st)
+			}
+		}
+		if len(one) == 0 {
+			return nil, control.NewError(control.CodeNotFound, "no such stack in the working copy")
+		}
+		list = one
+	}
+	wc, err := s.git.Open(s.gitConfig(), c.Dir)
+	if err != nil {
+		return nil, gitFailure(err)
+	}
+	found, err := stackcheck.Check(ctx, list, wc)
+	if err != nil {
+		return nil, gitFailure(err)
+	}
+	res := control.StacksCheckResult{
+		Dir: c.Dir, Stacks: make([]string, 0, len(list)), Findings: make([]control.CheckFinding, 0, len(found)),
+	}
+	// Everything below comes from the working copy and may reach a terminal: it is reduced to printable text.
+	for _, st := range list {
+		res.Stacks = append(res.Stacks, printable(st.Name))
+	}
+	for _, f := range found {
+		if f.Severity == stackcheck.SeverityError {
+			res.Errors++
+		} else {
+			res.Warnings++
+		}
+		res.Findings = append(res.Findings, control.CheckFinding{
+			Stack: printable(f.Stack), Rule: f.Rule, Severity: f.Severity, Cause: printable(f.Cause), Fix: printable(f.Fix),
+		})
+	}
+	return res, nil
+}
+
 // gitFailure turns an error of the git layer into a fixed-class answer. Text that came from git or the remote
 // is reduced to printable characters and a short length.
 func gitFailure(err error) error {
@@ -423,10 +481,11 @@ func printable(s string) string {
 
 func registerRepoCommands(r *control.Registry, s *repoService) error {
 	commands := map[string]control.Handler{
-		control.RepoProbeCommand:  s.handleProbe,
-		control.RepoSetCommand:    s.handleSet,
-		control.RepoFetchCommand:  s.handleFetch,
-		control.StacksListCommand: s.handleStacks,
+		control.RepoProbeCommand:   s.handleProbe,
+		control.RepoSetCommand:     s.handleSet,
+		control.RepoFetchCommand:   s.handleFetch,
+		control.StacksListCommand:  s.handleStacks,
+		control.StacksCheckCommand: s.handleCheck,
 	}
 	for name, h := range commands {
 		if err := r.Register(name, h); err != nil {
