@@ -5,6 +5,7 @@ package servicetest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,14 @@ type Git struct {
 	origins map[string]string
 	clones  int
 	last    gitrepo.Config
+	commits map[string]fakeCommit
+	pushed  []string
+}
+
+// fakeCommit is a commit CommitFile made: the file it changes and its message.
+type fakeCommit struct {
+	path, message string
+	content       []byte
 }
 
 // New returns a fake with a fixed commit id.
@@ -143,12 +152,28 @@ func (c *copyOf) RemoteHead(context.Context) (string, error) {
 	return c.g.Head, nil
 }
 
-// Status, ChangedFolders and FastForward report an unchanged, clean working copy.
+// Status and ChangedFolders report an unchanged, clean working copy.
 func (c *copyOf) Status(context.Context) ([]gitrepo.Change, error) { return nil, nil }
 
 func (c *copyOf) ChangedFolders(context.Context, string, string) ([]string, error) { return nil, nil }
 
-func (c *copyOf) FastForward(context.Context) error { return nil }
+// IsAncestor answers yes: the fake's working copy never runs ahead of the branch.
+func (c *copyOf) IsAncestor(context.Context, string, string) (bool, error) { return true, nil }
+
+// FastForward follows a pushed commit of CommitFile and does nothing otherwise.
+func (c *copyOf) FastForward(context.Context) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	fc, ok := c.g.commits[c.g.Remote]
+	if !ok || c.g.Head == c.g.Remote {
+		return nil
+	}
+	if err := os.WriteFile(filepath.Join(c.dir, filepath.FromSlash(fc.path)), fc.content, 0o644); err != nil {
+		return err
+	}
+	c.g.Head = c.g.Remote
+	return nil
+}
 
 // RevertStack creates nothing: the branch already has the deployed state unless RevertErr says otherwise.
 func (c *copyOf) RevertStack(context.Context, string, string, string, string) (string, error) {
@@ -160,9 +185,48 @@ func (c *copyOf) RevertStack(context.Context, string, string, string, string) (s
 	return "", gitrepo.ErrNothingToRevert
 }
 
-// Push refuses: the fake never creates a commit to push.
-func (c *copyOf) Push(context.Context, string) error {
-	return errors.New("the fake repository takes no pushes")
+// CommitFile makes a commit on the remote head that changes path, read from the working copy, which the fake
+// keeps at the remote head after every push.
+func (c *copyOf) CommitFile(_ context.Context, path string, edit func([]byte) ([]byte, error), message string) (string, error) {
+	old, err := os.ReadFile(filepath.Join(c.dir, filepath.FromSlash(path)))
+	if err != nil {
+		return "", err
+	}
+	content, err := edit(old)
+	if err != nil {
+		return "", err
+	}
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	if c.g.commits == nil {
+		c.g.commits = map[string]fakeCommit{}
+	}
+	id := fmt.Sprintf("%040x", 0xc0de00+len(c.g.commits))
+	c.g.commits[id] = fakeCommit{path: path, message: message, content: content}
+	return id, nil
+}
+
+// Push accepts the commits CommitFile made and refuses every other one.
+func (c *copyOf) Push(_ context.Context, id string) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	if _, ok := c.g.commits[id]; !ok {
+		return errors.New("the fake repository takes no pushes of other commits")
+	}
+	c.g.Remote = id
+	c.g.pushed = append(c.g.pushed, id)
+	return nil
+}
+
+// Pushed returns the messages of the pushed commits, oldest first.
+func (g *Git) Pushed() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	out := make([]string, 0, len(g.pushed))
+	for _, id := range g.pushed {
+		out = append(out, g.commits[id].message)
+	}
+	return out
 }
 
 func (c *copyOf) TrackedFiles(_ context.Context, dir string) ([]string, error) {

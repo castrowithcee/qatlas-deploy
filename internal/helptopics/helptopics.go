@@ -31,6 +31,7 @@ Commands:
 - qdeploy runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy log <run>: print the log of a run (run with sudo)
 - qdeploy resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
+- qdeploy update <stack>... [--version <v>]: update the image versions of stacks, each version step a commit of the stack's .env pushed to the branch and a run with backup, check and rollback (run with sudo)
 - qdeploy updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
 - qdeploy backup create|list <stack>, qdeploy backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)

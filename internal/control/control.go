@@ -71,6 +71,10 @@ const (
 	CodeNoSuchBackup  = "no-such-backup"
 	CodeConfirmation  = "confirmation-required"
 	CodeBackupFailed  = "backup-failed"
+
+	CodeBadVersion   = "bad-version"
+	CodeRegistry     = "registry-failed"
+	CodeNotUpdatable = "not-updatable"
 )
 
 // Request is what a client sends. Args is command specific and may be absent.
@@ -498,3 +502,44 @@ type UpdateInfo struct {
 
 // UpdatesRefreshTimeout bounds how long the service spends asking registries for one refresh.
 const UpdatesRefreshTimeout = 5 * time.Minute
+
+// UpdateRunCommand updates the image versions of stacks, one stack after another: each version step is a
+// commit of the stack's .env pushed to the branch and a run with backup, check and rollback. Every stack is
+// checked and planned before anything changes; the answer comes when the last stack is done.
+const UpdateRunCommand = "update.run"
+
+// MaxUpdateStacks bounds the stacks of one UpdateRunCommand.
+const MaxUpdateStacks = 256
+
+// UpdateRunArgs are the arguments of UpdateRunCommand. Without Version each stack moves to what its rules
+// allow; with it, the stack's only image version variable moves to Version, also above the ceiling.
+type UpdateRunArgs struct {
+	Stacks  []string `json:"stacks"`
+	Version string   `json:"version,omitempty"`
+}
+
+// UpdateRunResult answers UpdateRunCommand with one entry per stack, in the order requested.
+type UpdateRunResult struct {
+	Stacks []StackUpdateRun `json:"stacks"`
+}
+
+// StackUpdateRun is what happened to one stack. Steps is empty when nothing was newer; Error says why the
+// stack was refused before its first step.
+type StackUpdateRun struct {
+	Name  string           `json:"name"`
+	Steps []UpdateStepInfo `json:"steps"`
+	Error string           `json:"error,omitempty"`
+}
+
+// UpdateStepInfo is one version step. Result is a run result, empty for a step that was not attempted
+// because an earlier one failed. Commit is the step's pushed commit, or the deployed one when the step
+// failed before its push.
+type UpdateStepInfo struct {
+	Variable string `json:"variable"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Run      string `json:"run,omitempty"`
+	Commit   string `json:"commit,omitempty"`
+	Result   string `json:"result,omitempty"`
+	Error    string `json:"error,omitempty"`
+}

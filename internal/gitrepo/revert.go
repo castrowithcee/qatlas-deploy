@@ -28,8 +28,8 @@ const (
 	maxReasonRunes = 200
 	maxListedIDs   = 20
 
-	revertName  = "qdeploy"
-	revertEmail = "qdeploy@localhost.invalid"
+	commitName  = "qdeploy"
+	commitEmail = "qdeploy@localhost.invalid"
 )
 
 // RevertStack creates, without touching the working copy or its index, a commit on top of the remote-tracking
@@ -89,8 +89,8 @@ func (r *Repo) RevertStack(ctx context.Context, stack, deployed, failed, reason 
 	defer os.RemoveAll(dir)
 	env := []string{
 		"GIT_INDEX_FILE=" + filepath.Join(dir, "index"),
-		"GIT_AUTHOR_NAME=" + revertName, "GIT_AUTHOR_EMAIL=" + revertEmail,
-		"GIT_COMMITTER_NAME=" + revertName, "GIT_COMMITTER_EMAIL=" + revertEmail,
+		"GIT_AUTHOR_NAME=" + commitName, "GIT_AUTHOR_EMAIL=" + commitEmail,
+		"GIT_COMMITTER_NAME=" + commitName, "GIT_COMMITTER_EMAIL=" + commitEmail,
 	}
 	git := func(args ...string) (string, error) {
 		out, err := r.runEnv(ctx, true, maxStdout, env, append([]string{"--literal-pathspecs"}, args...)...)

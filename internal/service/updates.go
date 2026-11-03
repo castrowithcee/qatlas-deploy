@@ -69,7 +69,10 @@ type updatesService struct {
 
 func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.Engine, store *credentials.Store, opts registry.Options) error {
 	s := &updatesService{repo: repo, eng: eng, detector: &updates.Detector{Credential: registryCredentialFrom(store), Options: opts}}
-	return r.Register(control.UpdatesListCommand, s.handleList)
+	if err := r.Register(control.UpdatesListCommand, s.handleList); err != nil {
+		return err
+	}
+	return r.Register(control.UpdateRunCommand, s.handleRun)
 }
 
 func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -77,16 +80,7 @@ func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (a
 	if err := decodeArgs(raw, &a); err != nil {
 		return nil, err
 	}
-	s.repo.mu.Lock()
-	c, err := s.repo.bound()
-	var list []stacks.Stack
-	if err == nil {
-		list, err = stacks.Load(c.Dir)
-		if err != nil {
-			err = control.NewError(control.CodeNoRepo, "the working copy cannot be read; run 'qdeploy repo set' again")
-		}
-	}
-	s.repo.mu.Unlock()
+	list, err := s.stacks()
 	if err != nil {
 		return nil, err
 	}
@@ -143,4 +137,130 @@ func (s *updatesService) handleList(ctx context.Context, raw json.RawMessage) (a
 		res.Stacks = append(res.Stacks, info)
 	}
 	return res, nil
+}
+
+// stacks reads the stacks of the bound working copy.
+func (s *updatesService) stacks() ([]stacks.Stack, error) {
+	s.repo.mu.Lock()
+	defer s.repo.mu.Unlock()
+	c, err := s.repo.bound()
+	if err != nil {
+		return nil, err
+	}
+	list, err := stacks.Load(c.Dir)
+	if err != nil {
+		return nil, control.NewError(control.CodeNoRepo, "the working copy cannot be read; run 'qdeploy repo set' again")
+	}
+	return list, nil
+}
+
+func (s *updatesService) handleRun(ctx context.Context, raw json.RawMessage) (any, error) {
+	var a control.UpdateRunArgs
+	if err := decodeArgs(raw, &a); err != nil {
+		return nil, err
+	}
+	if len(a.Stacks) == 0 || len(a.Stacks) > control.MaxUpdateStacks {
+		return nil, control.NewError(control.CodeInvalid, "name at least one stack")
+	}
+	for i, name := range a.Stacks {
+		if slices.Contains(a.Stacks[:i], name) {
+			return nil, control.NewError(control.CodeInvalid, "a stack is named more than once")
+		}
+	}
+
+	// Every stack is checked and planned before the first one changes.
+	plans := make([][]engine.VersionStep, len(a.Stacks))
+	pctx, cancel := context.WithTimeout(ctx, control.UpdatesRefreshTimeout)
+	defer cancel()
+	for i, name := range a.Stacks {
+		st, err := s.eng.CheckUpdate(pctx, name)
+		if err == nil {
+			plans[i], err = s.detector.Plan(pctx, st, a.Version)
+		}
+		if err != nil {
+			return nil, forStack(name, updateAnswer(pctx, err))
+		}
+	}
+
+	res := control.UpdateRunResult{Stacks: make([]control.StackUpdateRun, 0, len(a.Stacks))}
+	var done []string
+	for i, name := range a.Stacks {
+		item := control.StackUpdateRun{Name: printable(name), Steps: []control.UpdateStepInfo{}}
+		if len(plans[i]) > 0 {
+			steps, err := s.eng.Update(ctx, name, plans[i])
+			if err != nil {
+				var ce *control.Error
+				if !errors.As(updateAnswer(ctx, err), &ce) {
+					ce = control.NewError(control.CodeInternal, "the update could not be started")
+				}
+				item.Error = ce.Message
+			} else {
+				done = append(done, name)
+			}
+			for _, st := range steps {
+				item.Steps = append(item.Steps, control.UpdateStepInfo{
+					Variable: printable(st.Variable), From: printable(st.From), To: printable(st.To), Run: printable(st.Run),
+					Commit: printable(st.Commit), Result: printable(st.Result), Error: printable(st.Error),
+				})
+			}
+		}
+		res.Stacks = append(res.Stacks, item)
+	}
+	s.recheck(ctx, done)
+	return res, nil
+}
+
+// recheck replaces the stored detection of the updated stacks, so it shows their new versions. A failure
+// leaves the old detection; the next check replaces it.
+func (s *updatesService) recheck(ctx context.Context, names []string) {
+	if len(names) == 0 {
+		return
+	}
+	list, err := s.stacks()
+	if err != nil {
+		return
+	}
+	list = slices.DeleteFunc(list, func(st stacks.Stack) bool { return !slices.Contains(names, st.Name) })
+	ctx, cancel := context.WithTimeout(ctx, control.UpdatesRefreshTimeout)
+	defer cancel()
+	fresh, err := s.detector.Check(ctx, list)
+	if err != nil {
+		return
+	}
+	for name, check := range fresh {
+		_ = s.eng.RecordUpdates(name, check)
+	}
+}
+
+// updateAnswer maps the refusals of an update to fixed answers; the texts of the engine's and the planner's
+// errors are fixed apart from variable names, which pass printable.
+func updateAnswer(ctx context.Context, err error) error {
+	var pe *updates.PlanError
+	switch {
+	case errors.As(err, &pe):
+		code := control.CodeNotUpdatable
+		switch pe.Kind {
+		case updates.PlanVersion:
+			code = control.CodeBadVersion
+		case updates.PlanRegistry:
+			code = control.CodeRegistry
+		}
+		return control.NewError(code, printable(pe.Error()))
+	case errors.Is(err, engine.ErrNotDeployed), errors.Is(err, engine.ErrUndeployed), errors.Is(err, engine.ErrStalePlan):
+		return control.NewError(control.CodeNotUpdatable, err.Error())
+	case errors.Is(err, engine.ErrCopyChanges):
+		return control.NewError(control.CodeLocalChanges, err.Error())
+	case ctx.Err() != nil:
+		return control.NewError(control.CodeBusy, "the update check did not finish in time")
+	}
+	return runsAnswer(err)
+}
+
+// forStack names the stack in an answer; other errors stay as they are.
+func forStack(name string, err error) error {
+	var ce *control.Error
+	if !errors.As(err, &ce) {
+		return err
+	}
+	return control.NewError(ce.Code, printable(name)+": "+ce.Message)
 }

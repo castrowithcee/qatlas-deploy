@@ -31,6 +31,8 @@ const (
 const (
 	TriggerPoll   = "poll"
 	TriggerManual = "manual"
+	// TriggerUpdate is a step of an update, see Engine.Update.
+	TriggerUpdate = "update"
 )
 
 // Kinds of findings. The poll replaces the findings of a stack as a whole in every cycle.

@@ -12,8 +12,11 @@
 package version
 
 import (
+	"errors"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -180,4 +183,58 @@ func allowed(cur, p parsedTag, ceiling string) bool {
 		return p.major == cur.major
 	}
 	return true
+}
+
+// Errors of Path. Their texts are fixed and may be shown as they are.
+var (
+	ErrNotComparable = errors.New("the current version is not a complete stable semantic version")
+	ErrNotOffered    = errors.New("the version is not in the tag list of the registry")
+	ErrOtherVariant  = errors.New("the version is not a stable version of the same variant as the current one")
+	ErrNotHigher     = errors.New("the version is not higher than the current one")
+	ErrFiltered      = errors.New("the version does not match the tag filter of the variable")
+)
+
+// Path returns the versions an update from in.Current to target passes through, target last. target must be
+// one of in.Candidates, of the same prefix and variant as Current, higher than it and pass in.Filter; the
+// ceiling is not applied, the caller has chosen target. With stepwise, the highest allowed candidate of each
+// major version from Current's up to the one below target's comes first, so no major version is skipped.
+func Path(in Input, target string, stepwise bool) ([]string, error) {
+	cur, kind := parseTag(in.Current)
+	if kind != kindOK {
+		return nil, ErrNotComparable
+	}
+	if !slices.Contains(in.Candidates, target) {
+		return nil, ErrNotOffered
+	}
+	to, kind := parseTag(target)
+	switch {
+	case kind != kindOK || to.variant != cur.variant || to.prefix != cur.prefix:
+		return nil, ErrOtherVariant
+	case !cur.less(to):
+		return nil, ErrNotHigher
+	case in.Filter != nil && !in.Filter.MatchString(target):
+		return nil, ErrFiltered
+	}
+	if !stepwise {
+		return []string{target}, nil
+	}
+	best := map[uint64]parsedTag{}
+	for _, tag := range in.Candidates {
+		p, kind := parseTag(tag)
+		if kind != kindOK || p.variant != cur.variant || p.prefix != cur.prefix || !cur.less(p) || p.major >= to.major {
+			continue
+		}
+		if in.Filter != nil && !in.Filter.MatchString(tag) {
+			continue
+		}
+		if b, ok := best[p.major]; !ok || b.less(p) {
+			best[p.major] = p
+		}
+	}
+	majors := slices.Sorted(maps.Keys(best))
+	path := make([]string, 0, len(majors)+1)
+	for _, m := range majors {
+		path = append(path, best[m].tag)
+	}
+	return append(path, target), nil
 }
