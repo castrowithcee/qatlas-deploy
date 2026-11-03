@@ -11,6 +11,9 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
 )
 
+// stateDir names the credential store of the service; tests replace it.
+var stateDir = func() string { return service.DefaultStateDir }
+
 func newRunCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "run",
@@ -21,7 +24,7 @@ func newRunCommand() *cobra.Command {
 			ctx, stop := signal.NotifyContext(c.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
 			return service.Run(ctx, slog.New(slog.NewTextHandler(c.ErrOrStderr(), nil)).With("pid", os.Getpid()),
-				service.Config{Version: version, Endpoint: serviceEndpoint()})
+				service.Config{Version: version, Endpoint: serviceEndpoint(), StateDir: stateDir()})
 		},
 	}
 }

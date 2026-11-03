@@ -39,5 +39,11 @@ func TestArchitecture(t *testing.T) {
 			Check: archtest.AllowImports(),
 			Hint:  "help topics are plain text shared by every surface",
 		},
+		{
+			Name:  "credentials-import-nothing-of-the-module",
+			Files: archtest.Files{Under: []string{"internal/credentials"}, Tests: archtest.WithTests},
+			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),
+			Hint:  "the store sits below the service and the command surface and knows neither",
+		},
 	}, nil)
 }

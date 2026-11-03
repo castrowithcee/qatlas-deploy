@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,9 @@ func allowAll(net.Conn) error { return nil }
 func runService(t *testing.T, cfg Config) localipc.ServiceEndpoint {
 	t.Helper()
 	cfg.Endpoint = channeltest.Endpoint(t)
+	if cfg.StateDir == "" {
+		cfg.StateDir = filepath.Join(t.TempDir(), "state")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, quiet, cfg) }()

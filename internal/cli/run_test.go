@@ -35,6 +35,7 @@ func TestRunEndsCleanlyOnSignal(t *testing.T) {
 	for _, sig := range []syscall.Signal{syscall.SIGTERM, syscall.SIGINT} {
 		t.Run(sig.String(), func(t *testing.T) {
 			useEndpoint(t, channeltest.Endpoint(t))
+			useStateDir(t)
 			var stderr syncBuffer
 			done := make(chan int, 1)
 			go func() { done <- Run([]string{"run"}, io.Discard, &stderr) }()
