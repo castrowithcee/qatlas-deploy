@@ -84,7 +84,7 @@ func newBackupCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Short: "Replace the data of a stack with a backup",
 		Long: "restore stops the stack if it runs, empties each data directory and volume the backup holds and\n" +
 			"unpacks the backup into it with owners and permissions, then starts the stack again. It needs the\n" +
-			"id of one backup from 'qdeploy backup list'; the newest is never chosen for you. The current data\n" +
+			"id of one backup from 'qdeploy stack backup list'; the newest is never chosen for you. The current data\n" +
 			"is overwritten. At a terminal the command asks first (default no); without a terminal it refuses\n" +
 			"unless --yes is given (with --agent, --yes is always needed). A backup that holds a part the stack's rules no longer list is refused. The\n" +
 			"output of the backup command is not restored. If the restore fails after the first target was\n" +
@@ -92,7 +92,7 @@ func newBackupCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) != 2 {
 				return usageFailure("backup restore takes exactly two arguments, the stack and the backup id",
-					"Run 'qdeploy backup list <stack>', then 'qdeploy backup restore <stack> <backup>'.")
+					"Run 'qdeploy stack backup list <stack>', then 'qdeploy stack backup restore <stack> <backup>'.")
 			}
 			return nil
 		},
@@ -108,7 +108,7 @@ func newBackupCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 func runBackupRestore(c *cobra.Command, program *cobracli.Program, gate *cobracli.Gate, state *notRunning, stack, id string) error {
 	if !runIDShape.MatchString(id) {
 		return &cli.Failure{Code: output.CodeNotFound, Message: "no such backup",
-			NextStep: "List the backups with 'qdeploy backup list " + stack + "'.", Cause: fmt.Errorf("malformed backup id")}
+			NextStep: "List the backups with 'qdeploy stack backup list " + stack + "'.", Cause: fmt.Errorf("malformed backup id")}
 	}
 	question := fmt.Sprintf("Restore backup %s of stack %s? The stack is stopped and its current data is overwritten.", id, stack)
 	return gate.Run(cobracli.Request{Question: question}, func() error {

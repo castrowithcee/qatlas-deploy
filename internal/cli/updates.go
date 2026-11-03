@@ -35,7 +35,7 @@ func newUpdatesCommand(program *cobracli.Program, state *notRunning) *cobra.Comm
 			"repository or in a deployment is changed. A private registry needs a stored login (see qdeploy help\n" +
 			"credentials); without one it is asked anonymously.\n\n" +
 			"With --changelog the release notes between the current and the available version are shown instead of\n" +
-			"the version table (see qdeploy changelog).",
+			"the version table (see qdeploy stack changelog).",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			a := control.UpdatesArgs{Refresh: refresh, Changelog: withChangelog}

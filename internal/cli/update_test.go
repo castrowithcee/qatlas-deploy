@@ -21,17 +21,17 @@ func startUpdate(t *testing.T, dep engine.Deployer) {
 
 func TestUpdateCommand(t *testing.T) {
 	startUpdate(t, okDeployer{})
-	if code, _, stderr := run(t, "update"); code == 0 || !strings.Contains(stderr, "at least one stack") {
+	if code, _, stderr := run(t, "stack", "update"); code == 0 || !strings.Contains(stderr, "at least one stack") {
 		t.Fatalf("no stack: %d %q", code, stderr)
 	}
-	if code, _, stderr := run(t, "update", "demo-stack", "--version", "1.2.3"); code == 0 || !strings.Contains(stderr, "not higher") {
+	if code, _, stderr := run(t, "stack", "update", "demo-stack", "--version", "1.2.3"); code == 0 || !strings.Contains(stderr, "not higher") {
 		t.Fatalf("equal version: %d %q", code, stderr)
 	}
-	if code, _, stderr := run(t, "update", "plain-stack"); code == 0 || !strings.Contains(stderr, "never updated") {
+	if code, _, stderr := run(t, "stack", "update", "plain-stack"); code == 0 || !strings.Contains(stderr, "never updated") {
 		t.Fatalf("no rules: %d %q", code, stderr)
 	}
 
-	code, out, stderr := run(t, "update", "demo-stack", "--output", "json")
+	code, out, stderr := run(t, "stack", "update", "demo-stack", "--output", "json")
 	if code != 0 {
 		t.Fatalf("update: %d %s", code, stderr)
 	}
@@ -40,7 +40,7 @@ func TestUpdateCommand(t *testing.T) {
 		rows[0]["to"] != "1.3.0" || rows[0]["result"] != "succeeded" || rows[0]["run"] == "" || rows[0]["commit"] == "" {
 		t.Fatalf("rows = %s", out)
 	}
-	code, out, _ = run(t, "update", "demo-stack")
+	code, out, _ = run(t, "stack", "update", "demo-stack")
 	if code != 0 || !strings.Contains(out, "current") {
 		t.Fatalf("again: %d %q", code, out)
 	}
@@ -50,7 +50,7 @@ func TestUpdateFailedStepExitsWithOne(t *testing.T) {
 	dep := &checkDeployer{}
 	startUpdate(t, dep)
 	dep.fail.Store(true)
-	code, out, stderr := run(t, "update", "demo-stack", "--version", "2.0.0")
+	code, out, stderr := run(t, "stack", "update", "demo-stack", "--version", "2.0.0")
 	if code != 1 || !strings.Contains(stderr, "1 of 1 stack(s) were not updated") || !strings.Contains(out, "skipped") {
 		t.Fatalf("failed step: %d %q %q", code, out, stderr)
 	}

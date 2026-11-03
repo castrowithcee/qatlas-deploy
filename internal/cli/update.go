@@ -47,7 +47,7 @@ func newUpdateCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 			"step is done and exits with 1 when a stack was not updated.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return usageFailure("update needs at least one stack", "Run 'qdeploy update <stack>... [--version <v>]'.")
+				return usageFailure("update needs at least one stack", "Run 'qdeploy stack update <stack>... [--version <v>]'.")
 			}
 			return nil
 		},
@@ -64,7 +64,7 @@ func newUpdateCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 			if failed > 0 {
 				return &cli.Failure{Code: output.CodeRuntime,
 					Message:  fmt.Sprintf("%d of %d stack(s) were not updated completely", failed, len(res.Stacks)),
-					NextStep: "Find out why with 'qdeploy runs <stack>' and 'qdeploy log <run>'."}
+					NextStep: "Find out why with 'qdeploy stack runs <stack>' and 'qdeploy stack log <run>'."}
 			}
 			return nil
 		},

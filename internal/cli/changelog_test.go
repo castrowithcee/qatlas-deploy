@@ -42,15 +42,15 @@ func TestChangelogCommandJSONAndTable(t *testing.T) {
 	startChangelog(t)
 
 	// Never checked: the stored detection is empty and nothing is asked.
-	code, out, stderr := run(t, "changelog", "demo-stack", "--output", "json")
+	code, out, stderr := run(t, "stack", "changelog", "demo-stack", "--output", "json")
 	if rows := rowsOf(t, out); code != 0 || len(rows) != 1 || rows[0]["status"] != "never-checked" {
 		t.Fatalf("never checked: %d %s %s", code, out, stderr)
 	}
 
-	if code, _, stderr := run(t, "updates", "demo-stack", "--refresh"); code != 0 {
+	if code, _, stderr := run(t, "stack", "updates", "demo-stack", "--refresh"); code != 0 {
 		t.Fatalf("refresh: %d %s", code, stderr)
 	}
-	code, out, stderr = run(t, "changelog", "demo-stack", "--output", "json")
+	code, out, stderr = run(t, "stack", "changelog", "demo-stack", "--output", "json")
 	if code != 0 {
 		t.Fatalf("changelog: %d %s", code, stderr)
 	}
@@ -65,7 +65,7 @@ func TestChangelogCommandJSONAndTable(t *testing.T) {
 		t.Fatalf("json carries the full body, not notes: %s", out)
 	}
 
-	code, table, _ := run(t, "changelog", "demo-stack")
+	code, table, _ := run(t, "stack", "changelog", "demo-stack")
 	if code != 0 || !strings.Contains(table, "NOTES") || !strings.Contains(table, "Fixes in v1.3.0") || strings.Contains(table, "- more") ||
 		!strings.Contains(table, "Release v1.2.4") || strings.Contains(table, "BODY") {
 		t.Fatalf("table: %d %q", code, table)
@@ -74,7 +74,7 @@ func TestChangelogCommandJSONAndTable(t *testing.T) {
 
 func TestUpdatesChangelogFlag(t *testing.T) {
 	startChangelog(t)
-	code, out, stderr := run(t, "updates", "--refresh", "--changelog", "--output", "json")
+	code, out, stderr := run(t, "stack", "updates", "--refresh", "--changelog", "--output", "json")
 	if code != 0 {
 		t.Fatalf("updates --changelog: %d %s", code, stderr)
 	}
@@ -88,20 +88,20 @@ func TestUpdatesChangelogFlag(t *testing.T) {
 	if releases != 2 || rowFor(rows, "plain-stack")["status"] != "no-updates" || rowFor(rows, "broken-stack")["status"] != "unreadable" {
 		t.Fatalf("rows = %s", out)
 	}
-	if code, table, _ := run(t, "updates", "--changelog"); code != 0 || !strings.Contains(table, "NOTES") || !strings.Contains(table, "no-updates") {
+	if code, table, _ := run(t, "stack", "updates", "--changelog"); code != 0 || !strings.Contains(table, "NOTES") || !strings.Contains(table, "no-updates") {
 		t.Fatalf("table: %d %q", code, table)
 	}
 }
 
 func TestChangelogUnknownStack(t *testing.T) {
 	startChangelog(t)
-	if code, _, stderr := run(t, "changelog", "nope"); code == 0 || !strings.Contains(stderr, "no such stack") {
+	if code, _, stderr := run(t, "stack", "changelog", "nope"); code == 0 || !strings.Contains(stderr, "no such stack") {
 		t.Fatalf("unknown: %d %q", code, stderr)
 	}
-	if code, _, stderr := run(t, "changelog", "broken-stack"); code == 0 || !strings.Contains(stderr, "cannot be read") {
+	if code, _, stderr := run(t, "stack", "changelog", "broken-stack"); code == 0 || !strings.Contains(stderr, "cannot be read") {
 		t.Fatalf("unreadable: %d %q", code, stderr)
 	}
-	if code, _, _ := run(t, "changelog"); code == 0 {
+	if code, _, _ := run(t, "stack", "changelog"); code == 0 {
 		t.Fatal("a missing stack argument must fail")
 	}
 }

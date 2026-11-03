@@ -38,7 +38,7 @@ func rowFor(rows []map[string]any, stack string) map[string]any {
 
 func TestUpdatesNeverCheckedRefreshAndStored(t *testing.T) {
 	startUpdates(t)
-	code, out, stderr := run(t, "updates", "--output", "json")
+	code, out, stderr := run(t, "stack", "updates", "--output", "json")
 	if code != 0 {
 		t.Fatalf("updates: %d %s", code, stderr)
 	}
@@ -52,7 +52,7 @@ func TestUpdatesNeverCheckedRefreshAndStored(t *testing.T) {
 		t.Fatalf("broken-stack = %v", r)
 	}
 
-	code, out, stderr = run(t, "updates", "demo-stack", "--refresh", "--output", "json")
+	code, out, stderr = run(t, "stack", "updates", "demo-stack", "--refresh", "--output", "json")
 	if code != 0 {
 		t.Fatalf("refresh: %d %s", code, stderr)
 	}
@@ -62,11 +62,11 @@ func TestUpdatesNeverCheckedRefreshAndStored(t *testing.T) {
 		t.Fatalf("refresh = %s", out)
 	}
 
-	code, stored, _ := run(t, "updates", "demo-stack", "--output", "json")
+	code, stored, _ := run(t, "stack", "updates", "demo-stack", "--output", "json")
 	if code != 0 || stored != out {
 		t.Fatalf("stored = %q, want %q", stored, out)
 	}
-	code, table, _ := run(t, "updates")
+	code, table, _ := run(t, "stack", "updates")
 	if code != 0 || !strings.Contains(table, "MAJOR_AVAILABLE") || !strings.Contains(table, "1.3.0") || !strings.Contains(table, "never-checked") {
 		t.Fatalf("table: %d %q", code, table)
 	}
@@ -74,10 +74,10 @@ func TestUpdatesNeverCheckedRefreshAndStored(t *testing.T) {
 
 func TestUpdatesUnknownAndUnreadableStack(t *testing.T) {
 	startUpdates(t)
-	if code, _, stderr := run(t, "updates", "nope", "--refresh"); code == 0 || !strings.Contains(stderr, "no such stack") || !strings.Contains(stderr, "not-found") {
+	if code, _, stderr := run(t, "stack", "updates", "nope", "--refresh"); code == 0 || !strings.Contains(stderr, "no such stack") || !strings.Contains(stderr, "not-found") {
 		t.Fatalf("unknown: %d %q", code, stderr)
 	}
-	if code, _, stderr := run(t, "updates", "broken-stack"); code == 0 || !strings.Contains(stderr, "cannot be read") {
+	if code, _, stderr := run(t, "stack", "updates", "broken-stack"); code == 0 || !strings.Contains(stderr, "cannot be read") {
 		t.Fatalf("unreadable: %d %q", code, stderr)
 	}
 }

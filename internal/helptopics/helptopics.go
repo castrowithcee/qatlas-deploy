@@ -11,7 +11,7 @@ func All() []helptopics.Topic {
 		{Name: "qdeploy", Short: "What qdeploy is and what it is for", Text: overview},
 		{Name: "credentials", Short: "The deploy key and stored credentials", Text: credentialsTopic},
 		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
-		{Name: "stack-standard", Short: "The stacks-repo standard that qdeploy check enforces", Text: stackStandardTopic},
+		{Name: "stack-standard", Short: "The stacks-repo standard that qdeploy stack check enforces", Text: stackStandardTopic},
 		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
 	}
@@ -26,19 +26,19 @@ Commands:
 - qdeploy key generate|show: create the SSH deploy key and show its public part (run with sudo)
 - qdeploy repo set <ssh-url> [--dir <path>]: bind the stacks repository, confirm its host key and clone it (run with sudo)
 - qdeploy repo fetch: fetch new commits without touching the working copy (run with sudo)
-- qdeploy stacks: list the stacks of the working copy with image versions and update mode (run with sudo)
-- qdeploy check [stack]: check the stacks of the working copy against the stacks-repo standard; exit code 1 on errors (run with sudo)
-- qdeploy deploy <stack>: start a manual run of a stack at the commit the working copy has (run with sudo)
-- qdeploy runs [stack]: list the recorded runs, newest first (run with sudo)
-- qdeploy log <run>: print the log of a run (run with sudo)
-- qdeploy resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
-- qdeploy pause|unpause <stack>: keep the maintenance window from running a stack, or lift that; unrelated to the pause of a failed rollback (run with sudo)
-- qdeploy pin|unpin <stack>: hold the image versions of a stack, so the maintenance window and qdeploy update leave them alone, or release them (run with sudo)
+- qdeploy stack list: list the stacks of the working copy with image versions and update mode (run with sudo)
+- qdeploy stack check [stack]: check the stacks of the working copy against the stacks-repo standard; exit code 1 on errors (run with sudo)
+- qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has (run with sudo)
+- qdeploy stack runs [stack]: list the recorded runs, newest first (run with sudo)
+- qdeploy stack log <run>: print the log of a run (run with sudo)
+- qdeploy stack resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
+- qdeploy stack pause|unpause <stack>: keep the maintenance window from running a stack, or lift that; unrelated to the pause of a failed rollback (run with sudo)
+- qdeploy stack pin|unpin <stack>: hold the image versions of a stack, so the maintenance window and qdeploy stack update leave them alone, or release them (run with sudo)
 - qdeploy window show|set: show the maintenance window, in which the service checks the registries and updates the stacks in automatic mode, or change its weekdays, start, duration and time zone; the running service follows at once (run with sudo)
-- qdeploy update <stack>... [--version <v>]: update the image versions of stacks, each version step a commit of the stack's .env pushed to the branch and a run with backup, check and rollback (run with sudo)
-- qdeploy updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
-- qdeploy changelog <stack>: show the release notes between the current and the available version of each variable with an update; qdeploy updates --changelog shows them for all stacks (run with sudo)
-- qdeploy backup create|list <stack>, qdeploy backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
+- qdeploy stack update <stack>... [--version <v>]: update the image versions of stacks, each version step a commit of the stack's .env pushed to the branch and a run with backup, check and rollback (run with sudo)
+- qdeploy stack updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
+- qdeploy stack changelog <stack>: show the release notes between the current and the available version of each variable with an update; qdeploy stack updates --changelog shows them for all stacks (run with sudo)
+- qdeploy stack backup create|list <stack>, qdeploy stack backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`
@@ -71,7 +71,7 @@ Binding:
 
 Afterwards:
 - qdeploy repo fetch: fetch new commits into the remote-tracking branch and report whether the working copy is behind; the working copy itself is not changed
-- qdeploy stacks: list each stack with its image version variables, their values and its update mode (none without a qdeploy.yaml)
+- qdeploy stack list: list each stack with its image version variables, their values and its update mode (none without a qdeploy.yaml)
 - A host key that differs from the pinned one aborts every command. The pinned key is never replaced by a command; verify the change with the git platform's operator first.`
 
 const stackRulesTopic = `Each stack folder of the stacks repository may hold a qdeploy.yaml with the rules for updating it. Without the file the stack is deployed but never updated. The file is read as data only: unknown fields, a missing version, or a path that is absolute or leaves the stack folder are rejected.
@@ -107,14 +107,14 @@ backup:
 check:
   http: {url: 'http://localhost:8080/health', status: 200, timeout: 5s}
 
-Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. qdeploy check reports fixed and floating tags such as latest (see qdeploy help stack-standard).`
+Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. qdeploy stack check reports fixed and floating tags such as latest (see qdeploy help stack-standard).`
 
 const backupsTopic = `A backup saves the data of one stack while the stack is stopped, so the copy is consistent. What is saved is listed in the backup section of the stack's qdeploy.yaml (see qdeploy help stack-rules). Backups are kept in the service's state directory under backups/<stack>/<backup>, readable by the service user only.
 
 Commands (run with sudo; the service must run):
-- qdeploy backup create <stack>: stop the stack if it runs, save every listed data directory and volume, run the backup command, start the stack again, then remove backups beyond the retention limits
-- qdeploy backup list <stack>: the backups of a stack, newest first, with time, deployed commit, size and number of parts
-- qdeploy backup restore <stack> <backup> [--yes]: replace the data with the content of one backup; the stack is stopped and started again if it ran
+- qdeploy stack backup create <stack>: stop the stack if it runs, save every listed data directory and volume, run the backup command, start the stack again, then remove backups beyond the retention limits
+- qdeploy stack backup list <stack>: the backups of a stack, newest first, with time, deployed commit, size and number of parts
+- qdeploy stack backup restore <stack> <backup> [--yes]: replace the data with the content of one backup; the stack is stopped and started again if it ran
 
 How it works:
 - A data directory or volume is packed into a tar archive with owners and permissions by a short-lived helper container without network. The helper image is set with qdeploy run --backup-image; it needs sh, find, rm and a tar that knows --numeric-owner.
@@ -128,7 +128,7 @@ Retention:
 - backup.retention.keep and backup.retention.max_age_days apply after each successful backup; a backup is kept only while it satisfies every limit that is set. The newest backup is never removed.
 
 Restore:
-- The backup id comes from qdeploy backup list; the newest is never chosen for you.
+- The backup id comes from qdeploy stack backup list; the newest is never chosen for you.
 - At a terminal the command asks first (default no). Without a terminal, and with --agent, it refuses unless --yes is given.
 - Every archive is read through before the first target is emptied. Each target is then emptied and unpacked inside the helper container, on the mounted path only.
 - A backup that holds a data directory or volume the rules no longer list is refused as a whole.
@@ -136,7 +136,7 @@ Restore:
 - A restore that fails after the first target was emptied leaves the stack stopped, because it would run on incomplete data.
 - A volume must exist before it is backed up or restored; deploy the stack first.`
 
-const stackStandardTopic = `qdeploy check compares the working copy of the stacks repository with this standard. It reports each deviation as a finding with stack, rule, severity, cause and fix. Errors break or endanger a deploy or leak secrets; warnings leave the stack working. The exit code is 1 when there is at least one error.
+const stackStandardTopic = `qdeploy stack check compares the working copy of the stacks repository with this standard. It reports each deviation as a finding with stack, rule, severity, cause and fix. Errors break or endanger a deploy or leak secrets; warnings leave the stack working. The exit code is 1 when there is at least one error.
 
 Layout of a stack folder:
 - compose.yaml, optionally more compose files such as compose.prod.yaml

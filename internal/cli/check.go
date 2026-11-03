@@ -23,7 +23,7 @@ func newCheckCommand(program *cobracli.Program, state *notRunning) *cobra.Comman
 			"at least one error was found, 0 otherwise. See 'qdeploy help stack-standard' for the rules.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 1 {
-				return usageFailure("check takes at most one argument, the name of a stack", "Run 'qdeploy check [stack]'.")
+				return usageFailure("check takes at most one argument, the name of a stack", "Run 'qdeploy stack check [stack]'.")
 			}
 			return nil
 		},

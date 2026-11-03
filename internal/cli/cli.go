@@ -22,6 +22,23 @@ var version = "dev"
 // Run executes the command line against the given streams and returns the process exit code. It never
 // terminates the process, so callers and tests share the same path.
 func Run(args []string, stdout, stderr io.Writer) int {
+	_, program, state, err := newRoot()
+	if err != nil {
+		return cli.ExitRuntime
+	}
+	if _, _, ok := terminalStreams(stdout); ok && len(args) == 0 {
+		args = []string{"tui"}
+	}
+	code := program.Execute(args, stdout, stderr)
+	if code == cli.ExitRuntime && state.seen {
+		return ExitServiceNotRunning
+	}
+	return code
+}
+
+// newRoot builds the full command tree. Only host commands sit at the top level; every command that
+// concerns a stack lives under "stack".
+func newRoot() (*cobra.Command, *cobracli.Program, *notRunning, error) {
 	root := &cobra.Command{
 		Use:   "qdeploy",
 		Short: "Roll out and update the Docker stacks of a Linux host from its stacks repository",
@@ -33,21 +50,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	secrets := &redact.Redactor{}
 	program, err := cobracli.New(root, cobracli.Options{Version: version, Topics: helptopics.All(), Redactor: secrets})
 	if err != nil {
-		return cli.ExitRuntime
+		return nil, nil, nil, err
 	}
-	var state notRunning
-	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, &state),
-		newKeyCommand(program, &state), newRepoCommand(program, &state), newStacksCommand(program, &state), newCheckCommand(program, &state),
-		newDeployCommand(program, &state), newRunsCommand(program, &state), newLogCommand(program, &state), newResumeCommand(program, &state), newPauseCommand(program, &state), newUnpauseCommand(program, &state), newPinCommand(program, &state), newUnpinCommand(program, &state), newWindowCommand(program, &state), newBackupCommand(program, &state), newUpdatesCommand(program, &state), newUpdateCommand(program, &state), newChangelogCommand(program, &state),
-		newCredentialCommand(program, &state, secrets), newTUICommand(&state), newManpageCommand(program))
-	if _, _, ok := terminalStreams(stdout); ok && len(args) == 0 {
-		args = []string{"tui"}
-	}
-	code := program.Execute(args, stdout, stderr)
-	if code == cli.ExitRuntime && state.seen {
-		return ExitServiceNotRunning
-	}
-	return code
+	state := &notRunning{}
+	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, state),
+		newKeyCommand(program, state), newRepoCommand(program, state), newStackCommand(program, state),
+		newWindowCommand(program, state), newCredentialCommand(program, state, secrets), newTUICommand(state),
+		newManpageCommand(program))
+	return root, program, state, nil
 }
 
 func newVersionCommand(program *cobracli.Program) *cobra.Command {

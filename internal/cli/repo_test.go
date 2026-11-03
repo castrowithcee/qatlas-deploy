@@ -85,7 +85,7 @@ func TestRepoSetWithFingerprintBindsAndStacksLists(t *testing.T) {
 		t.Fatalf("known_hosts = %q", e.knownHosts())
 	}
 
-	code, stdout, stderr = run(t, "stacks", "--output", "json")
+	code, stdout, stderr = run(t, "stack", "list", "--output", "json")
 	if code != 0 {
 		t.Fatalf("stacks: code %d, stderr %q", code, stderr)
 	}
@@ -94,7 +94,7 @@ func TestRepoSetWithFingerprintBindsAndStacksLists(t *testing.T) {
 			t.Errorf("stacks output lacks %q:\n%s", want, stdout)
 		}
 	}
-	if code, stdout, _ := run(t, "stacks"); code != 0 || !strings.Contains(stdout, "demo-stack") {
+	if code, stdout, _ := run(t, "stack", "list"); code != 0 || !strings.Contains(stdout, "demo-stack") {
 		t.Fatalf("stacks table: code %d, %q", code, stdout)
 	}
 
@@ -173,10 +173,10 @@ func TestRepoSetRejectsBadInput(t *testing.T) {
 	}
 }
 
-func TestStacksAndFetchWithoutBindingNameTheNextStep(t *testing.T) {
+func TestStackListAndFetchWithoutBindingNameTheNextStep(t *testing.T) {
 	startRepoService(t)
-	for _, cmd := range []string{"stacks", "fetch"} {
-		args := []string{cmd}
+	for _, cmd := range []string{"list", "fetch"} {
+		args := []string{"stack", cmd}
 		if cmd == "fetch" {
 			args = []string{"repo", "fetch"}
 		}
@@ -213,7 +213,7 @@ func TestCheckCleanStackExitsZero(t *testing.T) {
 		"demo-stack/.env":         "DEMO_APP_VERSION=1.2.3\n",
 		"demo-stack/secrets.env":  "DEMO_PASSWORD=" + cliSecret + "\n",
 	})
-	for _, args := range [][]string{{"check"}, {"check", "demo-stack"}, {"check", "--output", "json"}} {
+	for _, args := range [][]string{{"stack", "check"}, {"stack", "check", "demo-stack"}, {"stack", "check", "--output", "json"}} {
 		code, stdout, stderr := run(t, args...)
 		if code != 0 || stderr != "" || strings.Contains(stdout, cliSecret) || strings.Contains(stdout, "error") {
 			t.Fatalf("%v: code %d, stdout %q, stderr %q", args, code, stdout, stderr)
@@ -228,7 +228,7 @@ func TestCheckErrorsExitNonZeroInTextAndJSON(t *testing.T) {
 		"demo-stack/secrets.env":  "DEMO_PASSWORD=" + cliSecret + "\n",
 	}, "demo-stack/secrets.env")
 
-	code, stdout, stderr := run(t, "check")
+	code, stdout, stderr := run(t, "stack", "check")
 	if code != 1 || !strings.Contains(stderr, "error(s)") {
 		t.Fatalf("text: code %d, stderr %q", code, stderr)
 	}
@@ -238,7 +238,7 @@ func TestCheckErrorsExitNonZeroInTextAndJSON(t *testing.T) {
 		}
 	}
 
-	code, stdout, _ = run(t, "check", "demo-stack", "--output", "json")
+	code, stdout, _ = run(t, "stack", "check", "demo-stack", "--output", "json")
 	if code != 1 {
 		t.Fatalf("json: code %d", code)
 	}
@@ -260,7 +260,7 @@ func TestCheckErrorsExitNonZeroInTextAndJSON(t *testing.T) {
 			}
 		}
 	}
-	for _, args := range [][]string{{"check"}, {"check", "--output", "json"}} {
+	for _, args := range [][]string{{"stack", "check"}, {"stack", "check", "--output", "json"}} {
 		_, out, errOut := run(t, args...)
 		if strings.Contains(out+errOut, cliSecret) {
 			t.Fatalf("%v: secret value in output", args)
@@ -275,7 +275,7 @@ func TestCheckWarningsExitZero(t *testing.T) {
 		"demo-stack/secrets.env":  "DEMO_PASSWORD=" + cliSecret + "\n",
 	})
 	e.git.NotIgnored = true
-	code, stdout, _ := run(t, "check")
+	code, stdout, _ := run(t, "stack", "check")
 	if code != 0 || !strings.Contains(stdout, "secrets-env-not-ignored") || !strings.Contains(stdout, "warning") {
 		t.Fatalf("code %d, stdout %q", code, stdout)
 	}
@@ -283,10 +283,10 @@ func TestCheckWarningsExitZero(t *testing.T) {
 
 func TestCheckUsageAndUnknownStack(t *testing.T) {
 	bindWithFiles(t, map[string]string{"demo-stack/compose.yaml": "services: {}\n"})
-	if code, _, _ := run(t, "check", "a", "b"); code != 2 {
+	if code, _, _ := run(t, "stack", "check", "a", "b"); code != 2 {
 		t.Fatalf("two arguments: code %d, want 2", code)
 	}
-	if code, _, stderr := run(t, "check", "nope"); code == 0 || !strings.Contains(stderr, "no such stack") {
+	if code, _, stderr := run(t, "stack", "check", "nope"); code == 0 || !strings.Contains(stderr, "no such stack") {
 		t.Fatalf("unknown stack: code %d, stderr %q", code, stderr)
 	}
 }

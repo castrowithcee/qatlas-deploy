@@ -40,7 +40,7 @@ type Stack struct {
 	Env map[string]string
 	// Images lists every service image whose tag is a variable.
 	Images []ImageVar
-	// Findings lists images the standard does not allow, for qdeploy check.
+	// Findings lists images the standard does not allow, for qdeploy stack check.
 	Findings []Finding
 	// Rules is nil when the stack has no qdeploy.yaml: it is deployed but never updated.
 	Rules *Rules
