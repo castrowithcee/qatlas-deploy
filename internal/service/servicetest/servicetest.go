@@ -20,7 +20,7 @@ type Git struct {
 	// Head is reported as HEAD; Remote as the fetched branch, Head when empty.
 	Head   string
 	Remote string
-	// CloneErr and FetchErr make the call fail.
+	// CloneErr and FetchErr make the call fail; set them before the service starts or use SetFetchErr.
 	CloneErr, FetchErr error
 
 	mu      sync.Mutex
@@ -32,6 +32,21 @@ type Git struct {
 // New returns a fake with a fixed commit id.
 func New() *Git {
 	return &Git{Head: "0123456789abcdef0123456789abcdef01234567", origins: map[string]string{}}
+}
+
+// SetFetchErr and SetRemote change the fake while a service is running; the service polls in the background,
+// so a plain field write would race.
+func (g *Git) SetFetchErr(err error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.FetchErr = err
+}
+
+// SetRemote sets the fetched branch.
+func (g *Git) SetRemote(id string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.Remote = id
 }
 
 // Clones is the number of clones made.
@@ -93,16 +108,33 @@ type copyOf struct {
 	dir string
 }
 
-func (c *copyOf) Fetch(context.Context) error { return c.g.FetchErr }
+func (c *copyOf) Fetch(context.Context) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	return c.g.FetchErr
+}
 
-func (c *copyOf) Head(context.Context) (string, error) { return c.g.Head, nil }
+func (c *copyOf) Head(context.Context) (string, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	return c.g.Head, nil
+}
 
 func (c *copyOf) RemoteHead(context.Context) (string, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
 	if c.g.Remote != "" {
 		return c.g.Remote, nil
 	}
 	return c.g.Head, nil
 }
+
+// Status, ChangedFolders and FastForward report an unchanged, clean working copy.
+func (c *copyOf) Status(context.Context) ([]gitrepo.Change, error) { return nil, nil }
+
+func (c *copyOf) ChangedFolders(context.Context, string, string) ([]string, error) { return nil, nil }
+
+func (c *copyOf) FastForward(context.Context) error { return nil }
 
 func (c *copyOf) RemoteURL(context.Context) (string, error) {
 	c.g.mu.Lock()

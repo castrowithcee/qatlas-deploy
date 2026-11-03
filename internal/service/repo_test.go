@@ -248,7 +248,7 @@ func TestFetchReportsUpdates(t *testing.T) {
 	if err := h.call(control.RepoFetchCommand, nil, &res); err != nil || res.UpdatesAvailable || res.Head != h.git.Head {
 		t.Fatalf("fetch: %+v, %v", res, err)
 	}
-	h.git.Remote = "89abcdef0123456789abcdef0123456789abcdef"
+	h.git.SetRemote("89abcdef0123456789abcdef0123456789abcdef")
 	if err := h.call(control.RepoFetchCommand, nil, &res); err != nil || !res.UpdatesAvailable || res.RemoteHead != h.git.Remote {
 		t.Fatalf("fetch with news: %+v, %v", res, err)
 	}
@@ -260,9 +260,9 @@ func TestFetchAbortsOnAHostKeyFailure(t *testing.T) {
 	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	h.git.FetchErr = errors.New("fetch failed: Host key verification failed. fatal: Could not read from remote repository.")
+	h.git.SetFetchErr(errors.New("fetch failed: Host key verification failed. fatal: Could not read from remote repository."))
 	wantCode(t, h.call(control.RepoFetchCommand, nil, nil), control.CodeHostKey)
-	h.git.FetchErr = errors.New("fetch failed: connection timed out")
+	h.git.SetFetchErr(errors.New("fetch failed: connection timed out"))
 	wantCode(t, h.call(control.RepoFetchCommand, nil, nil), control.CodeRemote)
 }
 
@@ -311,3 +311,29 @@ func TestRepoCommandsRejectUnknownArguments(t *testing.T) {
 }
 
 func errOf(_ control.RepoSetResult, err error) error { return err }
+
+// The engine runs from the start of the service and picks up a binding made later without a restart.
+func TestEngineStartsPollingAfterRepoSet(t *testing.T) {
+	h := start(t)
+	h.withKey()
+	statePath := filepath.Join(h.state, "deploy", "state.json")
+	time.Sleep(5 * time.Millisecond)
+	if _, err := os.Stat(statePath); err == nil {
+		t.Fatal("engine state written without a binding")
+	}
+	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(2 * time.Millisecond) {
+		data, err := os.ReadFile(statePath)
+		if err == nil && strings.Contains(string(data), `"demo-stack"`) {
+			if strings.Contains(string(data), `"deployed"`) {
+				t.Fatalf("a service without a deployer recorded a deployment: %s", data)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("engine did not poll after repo set: %v %s", err, data)
+		}
+	}
+}

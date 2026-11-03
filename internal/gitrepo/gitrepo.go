@@ -142,6 +142,23 @@ func (r *Repo) RemoteHead(ctx context.Context) (string, error) {
 	return r.revParse(ctx, "refs/remotes/origin/"+branch+"^{commit}")
 }
 
+// FastForward moves the checked-out branch to the remote-tracking ref of the last Fetch, and only if that is a
+// fast-forward. It never resets, stashes or checks out: git itself refuses when the update would overwrite a
+// local change, and a diverged branch stays untouched. Callers still check Status first, because git would
+// merge around local changes that do not collide with the update.
+func (r *Repo) FastForward(ctx context.Context) error {
+	branch, err := r.branch(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.run(ctx, true, maxStdout, "merge", "--quiet", "--ff-only", "--no-autostash", "--no-verify",
+		"refs/remotes/origin/"+branch)
+	if err != nil {
+		return fmt.Errorf("fast-forward failed: %w", err)
+	}
+	return nil
+}
+
 // Status lists the local modifications and untracked files of the working copy; ignored files are left out.
 func (r *Repo) Status(ctx context.Context) ([]Change, error) {
 	out, err := r.run(ctx, true, maxStdout, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames",
