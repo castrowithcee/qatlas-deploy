@@ -27,6 +27,7 @@ admin=e2e-admin
 net=$prefix-net
 host=$prefix-host
 tags='1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1'
+backup_image=$prefix-backup-helper:1
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
@@ -138,6 +139,7 @@ E2E_GIT_URL=git.$domain:stacks.git
 E2E_REGISTRY=registry.$domain
 E2E_IMAGE=registry.$domain/demo/app
 E2E_TAGS='$tags'
+E2E_BACKUP_IMAGE=$backup_image
 E2E_RELEASES_URL=https://releases.$domain
 E2E_GITHUB_API=https://api.github.com
 E2E_WEBHOOK_URL=https://hooks.$domain/hook
@@ -236,6 +238,15 @@ push_images() {
 	docker exec "$host" rm -rf /tmp/demo-image
 }
 
+# load_backup_helper gives the host the image of the backup helper containers. The host has no internet, so the
+# Debian base of the host image (GNU tar, find, rm, sh) is copied in from the machine's Docker.
+load_backup_helper() {
+	log "loading the backup helper image $backup_image"
+	docker image inspect debian:12 >/dev/null 2>&1 || fail 'the base image debian:12 is not available'
+	docker save debian:12 | docker exec -i "$host" docker load -q >/dev/null
+	docker exec "$host" sh -ec "docker tag debian:12 $backup_image && docker rmi debian:12 >/dev/null"
+}
+
 # http_code prints the status code the host gets for a URL.
 http_code() {
 	docker exec "$host" curl -sS -o /dev/null -w '%{http_code}' "$@"
@@ -281,6 +292,7 @@ up() {
 	start_services
 	prepare_host
 	push_images
+	load_backup_helper
 	check_services
 	done_=1
 	log "up; test values: $work/testenv"

@@ -7,3 +7,9 @@ services:
       DEMO_VERSION: ${DEMO_APP_VERSION}
       DEMO_HEALTH: ${DEMO_HEALTH}
       DEMO_SECRET: ${DEMO_SECRET}
+    volumes:
+      - ./data:/data
+      - state:/state
+
+volumes:
+  state: {}

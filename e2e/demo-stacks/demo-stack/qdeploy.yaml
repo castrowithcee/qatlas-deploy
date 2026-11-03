@@ -1,0 +1,9 @@
+version: 1
+backup:
+  paths:
+    - data
+  volumes:
+    - state
+  command: [/bin/echo, backup-command-output]
+  retention:
+    keep: 2
