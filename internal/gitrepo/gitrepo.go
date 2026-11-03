@@ -118,6 +118,16 @@ func (r *Repo) Fetch(ctx context.Context) error {
 	return nil
 }
 
+// RemoteURL returns the URL of the remote "origin".
+func (r *Repo) RemoteURL(ctx context.Context) (string, error) {
+	out, err := r.run(ctx, true, maxErrorText, "config", "--local", "--get", "remote.origin.url")
+	url := strings.TrimSpace(out)
+	if err != nil || url == "" {
+		return "", errors.New("the working copy has no origin remote")
+	}
+	return url, nil
+}
+
 // Head returns the full commit id of HEAD.
 func (r *Repo) Head(ctx context.Context) (string, error) {
 	return r.revParse(ctx, "HEAD^{commit}")

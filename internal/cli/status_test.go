@@ -19,6 +19,9 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
 )
 
+// testGit is the git layer of the next service a test starts; nil means the system git.
+var testGit service.Git
+
 func useEndpoint(t *testing.T, ep localipc.ServiceEndpoint) {
 	t.Helper()
 	old := serviceEndpoint
@@ -50,7 +53,7 @@ func startServiceLogged(t *testing.T, check service.PeerCheck, logOut io.Writer)
 	done := make(chan error, 1)
 	go func() {
 		done <- service.Run(ctx, slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelDebug})),
-			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check})
+			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	path, err := ep.Path()

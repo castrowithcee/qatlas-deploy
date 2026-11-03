@@ -76,3 +76,27 @@ func validateLocalURL(raw string) error {
 	}
 	return ValidateURL(raw)
 }
+
+// SSHTarget returns the lower-case host and the port (default 22) an SSH remote connects to. The URL must
+// pass ValidateURL.
+func SSHTarget(raw string) (host, port string, err error) {
+	if err := ValidateURL(raw); err != nil {
+		return "", "", err
+	}
+	if strings.HasPrefix(raw, "ssh://") {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return "", "", ErrInvalidURL
+		}
+		port = u.Port()
+		if port == "" {
+			port = "22"
+		}
+		return strings.ToLower(u.Hostname()), port, nil
+	}
+	m := scpRe.FindStringSubmatch(raw)
+	if m == nil {
+		return "", "", ErrInvalidURL
+	}
+	return strings.ToLower(m[2]), "22", nil
+}

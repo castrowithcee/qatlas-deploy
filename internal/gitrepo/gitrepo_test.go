@@ -374,3 +374,19 @@ func TestFailureTextRedactsUserinfo(t *testing.T) {
 		t.Fatalf("len = %d", len(got))
 	}
 }
+
+func TestRemoteURL(t *testing.T) {
+	f := newRemote(t)
+	r, _ := cloneFixture(t, f)
+	got, err := r.RemoteURL(context.Background())
+	if err != nil || got != f.bare {
+		t.Fatalf("RemoteURL = %q, %v; want %q", got, err, f.bare)
+	}
+	plain, err := Open(testConfig(t), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plain.RemoteURL(context.Background()); err == nil {
+		t.Fatal("a directory that is no repository has a remote")
+	}
+}

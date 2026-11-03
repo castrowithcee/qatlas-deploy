@@ -275,6 +275,9 @@ func (s *Store) GenerateKey(replace bool) (PublicKey, error) {
 	return publicOf(sshPub), nil
 }
 
+// KeyPath is where the private deploy key lives, for handing the path to the SSH child of git.
+func (s *Store) KeyPath() string { return filepath.Join(s.dir, keyFile) }
+
 // ShowKey returns the public part of the deploy key.
 func (s *Store) ShowKey() (PublicKey, error) {
 	s.mu.Lock()

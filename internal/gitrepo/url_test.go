@@ -49,3 +49,24 @@ func TestValidateLocalURLStillRejectsInjection(t *testing.T) {
 		}
 	}
 }
+
+func TestSSHTarget(t *testing.T) {
+	cases := []struct{ url, host, port string }{
+		{"git.example.test:stacks.git", "git.example.test", "22"},
+		{"Git.Example.Test:team/stacks.git", "git.example.test", "22"},
+		{"ssh://git.example.test/team/stacks.git", "git.example.test", "22"},
+		{"ssh://git.example.test:2222/team/stacks.git", "git.example.test", "2222"},
+		{"ssh://[2001:db8::1]:2222/stacks.git", "2001:db8::1", "2222"},
+	}
+	for _, c := range cases {
+		host, port, err := SSHTarget(c.url)
+		if err != nil || host != c.host || port != c.port {
+			t.Errorf("SSHTarget(%q) = %q, %q, %v; want %q, %q", c.url, host, port, err, c.host, c.port)
+		}
+	}
+	for _, u := range []string{"", "https://git.example.test/x.git", "-oProxyCommand=id", "/srv/x.git"} {
+		if _, _, err := SSHTarget(u); err == nil {
+			t.Errorf("SSHTarget(%q) accepted", u)
+		}
+	}
+}
