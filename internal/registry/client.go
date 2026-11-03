@@ -1,13 +1,15 @@
 // Package registry reads tags, digests and image labels from an OCI registry through the distribution API.
 // It authenticates anonymously, with Basic or with a Bearer token obtained from the realm the registry names.
 //
-// Everything a registry answers is untrusted data. Answers are size-bounded, redirects are never followed, and
-// no answer text and no secret reaches an error or a log record.
+// Everything a registry answers is untrusted data. Answers are size-bounded, and no answer text, redirect
+// target and no secret reaches an error or a log record. Redirects are refused everywhere except for the image
+// configuration blob, which registries hand to a CDN; see Labels.
 package registry
 
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -39,6 +41,7 @@ const (
 	maxTagPageBytes  = 4 << 20
 	maxManifestBytes = 1 << 20
 	maxConfigBytes   = 1 << 20
+	maxBlobRedirects = 3
 	maxTokenBytes    = 64 << 10
 	maxRetryHold     = 5 * time.Minute
 	pageSize         = 1000
@@ -198,8 +201,10 @@ type manifestDoc struct {
 
 // Labels returns the labels of the image configuration for the tag; the map is empty if the image has none.
 // For a multi-platform image the manifest of the configured platform is used. The configuration blob is
-// requested like everything else, so a registry that hands blobs to another host through a redirect fails
-// here with a redirect error.
+// fetched through at most three redirects, which registries use to hand blobs to a CDN. Every target must be
+// HTTPS (HTTP only if the registry base URL is HTTP, as in tests) and free of credentials, and the
+// Authorization header never leaves the registry origin. Manifests, tags, digests and tokens still refuse
+// redirects.
 func (c *Client) Labels(ctx context.Context, repo Repo, tag string) (map[string]string, error) {
 	op := "read labels of " + repo.String()
 	if err := checkReference(tag); err != nil {
@@ -235,28 +240,114 @@ func (c *Client) Labels(ctx context.Context, repo Repo, tag string) (map[string]
 	if doc.Config == nil || !digestRe.MatchString(doc.Config.Digest) {
 		return nil, invalid(op, "the manifest has no usable image configuration")
 	}
-	resp, err := c.do(ctx, op, repo, http.MethodGet, base.String()+"/v2/"+repo.Name+"/blobs/"+doc.Config.Digest, "application/json", maxConfigBytes)
+	body, err := c.blob(ctx, op, repo, base, base.String()+"/v2/"+repo.Name+"/blobs/"+doc.Config.Digest)
 	if err != nil {
 		return nil, err
 	}
-	if algo, hexSum, _ := strings.Cut(doc.Config.Digest, ":"); algo == "sha256" {
-		sum := sha256.Sum256(resp.body)
-		if hex.EncodeToString(sum[:]) != strings.ToLower(hexSum) {
-			return nil, invalid(op, "the image configuration does not match its digest")
-		}
+	if !digestMatches(doc.Config.Digest, body) {
+		return nil, invalid(op, "the image configuration does not match its digest")
 	}
 	var cfg struct {
 		Config struct {
 			Labels map[string]string `json:"Labels"`
 		} `json:"config"`
 	}
-	if err := json.Unmarshal(resp.body, &cfg); err != nil {
+	if err := json.Unmarshal(body, &cfg); err != nil {
 		return nil, invalid(op, "the registry returned an invalid image configuration")
 	}
 	if cfg.Config.Labels == nil {
 		return map[string]string{}, nil
 	}
 	return cfg.Config.Labels, nil
+}
+
+// digestMatches reports whether body has the digest. An algorithm other than sha256 and sha512 never matches.
+func digestMatches(digest string, body []byte) bool {
+	algo, hexSum, _ := strings.Cut(digest, ":")
+	var sum []byte
+	switch algo {
+	case "sha256":
+		s := sha256.Sum256(body)
+		sum = s[:]
+	case "sha512":
+		s := sha512.Sum512(body)
+		sum = s[:]
+	default:
+		return false
+	}
+	return hex.EncodeToString(sum) == strings.ToLower(hexSum)
+}
+
+// blob fetches the image configuration blob. Only the first request goes to the registry and runs the
+// 401 flow; each redirect is checked before it is followed.
+func (c *Client) blob(ctx context.Context, op string, repo Repo, base *url.URL, first string) ([]byte, error) {
+	resp, err := c.doFollow(ctx, op, repo, http.MethodGet, first, "application/json", maxConfigBytes, true)
+	if err != nil {
+		return nil, err
+	}
+	cur, _ := url.Parse(first)
+	for hop := 0; resp.status >= 300 && resp.status < 400; hop++ {
+		if !followable(resp.status) {
+			return nil, httpx.ClassifyStatus(op, resp.status, c.statusTexts(repo))
+		}
+		if hop >= maxBlobRedirects {
+			return nil, invalid(op, fmt.Sprintf("the blob request exceeds %d redirects", maxBlobRedirects))
+		}
+		target, err := redirectTarget(op, cur, resp.header.Get("Location"), base)
+		if err != nil {
+			return nil, err
+		}
+		auth := ""
+		if sameOrigin(target, base) {
+			auth = c.cachedAuth(repo.Host, repo.scopeKey())
+		}
+		var status int
+		if resp, status, err = c.exchange(ctx, op, repo, http.MethodGet, target.String(), "application/json", auth, maxConfigBytes); err != nil {
+			return nil, err
+		}
+		resp.status = status
+		cur = target
+		if status >= 300 && status < 400 {
+			continue
+		}
+		if status < 200 || status >= 300 {
+			if status == http.StatusUnauthorized || status == http.StatusForbidden {
+				return nil, invalid(op, "the blob host denied the request")
+			}
+			return nil, httpx.ClassifyStatus(op, status, c.statusTexts(repo))
+		}
+	}
+	return resp.body, nil
+}
+
+func followable(status int) bool {
+	switch status {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return true
+	}
+	return false
+}
+
+func sameOrigin(u, base *url.URL) bool { return u.Scheme == base.Scheme && u.Host == base.Host }
+
+// redirectTarget resolves a Location against the current URL and rejects targets that are not HTTPS (unless the
+// registry base itself is HTTP), carry credentials or have no host.
+func redirectTarget(op string, cur *url.URL, location string, base *url.URL) (*url.URL, error) {
+	ref, err := url.Parse(strings.TrimSpace(location))
+	if location == "" || err != nil {
+		return nil, invalid(op, "the blob redirect has no usable target")
+	}
+	t := cur.ResolveReference(ref)
+	switch {
+	case t.Host == "" || t.Opaque != "":
+		return nil, invalid(op, "the blob redirect has no usable target")
+	case t.User != nil:
+		return nil, invalid(op, "the blob redirect target carries credentials")
+	case t.Scheme != "https" && !(t.Scheme == "http" && base.Scheme == "http"):
+		return nil, invalid(op, "the blob redirect target is not HTTPS")
+	}
+	t.Fragment = ""
+	return t, nil
 }
 
 func (c *Client) manifest(ctx context.Context, op string, repo Repo, u string) (manifestDoc, error) {
@@ -355,6 +446,7 @@ func hasRelNext(params string) bool {
 }
 
 type response struct {
+	status int
 	header http.Header
 	body   []byte
 }
@@ -378,6 +470,11 @@ func (c *Client) statusTexts(repo Repo) httpx.StatusTexts {
 // do performs one request with authentication. A 401 triggers one retry with the credentials the challenge
 // asks for.
 func (c *Client) do(ctx context.Context, op string, repo Repo, method, rawURL, accept string, limit int64) (response, error) {
+	return c.doFollow(ctx, op, repo, method, rawURL, accept, limit, false)
+}
+
+// doFollow is do; with passRedirect a 3xx answer is returned for the caller to judge instead of failing.
+func (c *Client) doFollow(ctx context.Context, op string, repo Repo, method, rawURL, accept string, limit int64, passRedirect bool) (response, error) {
 	base, err := c.baseURL(op, repo)
 	if err != nil {
 		return response{}, err
@@ -385,9 +482,16 @@ func (c *Client) do(ctx context.Context, op string, repo Repo, method, rawURL, a
 	scope := repo.scopeKey()
 	auth := c.cachedAuth(repo.Host, scope)
 	for attempt := 0; ; attempt++ {
-		resp, status, err := c.roundTrip(ctx, op, repo, method, rawURL, accept, auth, limit)
+		resp, status, err := c.exchange(ctx, op, repo, method, rawURL, accept, auth, limit)
 		if err != nil {
 			return response{}, err
+		}
+		resp.status = status
+		if status >= 300 && status < 400 && passRedirect {
+			return resp, nil
+		}
+		if status >= 300 && status < 400 {
+			return response{}, httpx.ClassifyStatus(op, status, c.statusTexts(repo))
 		}
 		if status == http.StatusUnauthorized && attempt == 0 {
 			if auth, err = c.authorize(ctx, op, repo, base, resp.header.Values("Www-Authenticate"), scope); err != nil {
@@ -414,9 +518,18 @@ func (c *Client) cachedAuth(host, scope string) string {
 	return ""
 }
 
-// roundTrip sends one request and reads the limited body. A 3xx answer is an error: the request would carry
-// its credential to whatever the answer names.
+// roundTrip is exchange for requests that must not be redirected: a 3xx answer is an error, because following
+// it would carry the credential to whatever the answer names.
 func (c *Client) roundTrip(ctx context.Context, op string, repo Repo, method, rawURL, accept, auth string, limit int64) (response, int, error) {
+	resp, status, err := c.exchange(ctx, op, repo, method, rawURL, accept, auth, limit)
+	if err == nil && status >= 300 && status < 400 {
+		return response{}, 0, httpx.ClassifyStatus(op, status, c.statusTexts(repo))
+	}
+	return resp, status, err
+}
+
+// exchange sends one request and reads the limited body of a 2xx answer. A 3xx answer is returned as is.
+func (c *Client) exchange(ctx context.Context, op string, repo Repo, method, rawURL, accept, auth string, limit int64) (response, int, error) {
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, nil)
 	if err != nil {
 		return response{}, 0, invalid(op, "invalid request URL")
@@ -436,8 +549,6 @@ func (c *Client) roundTrip(ctx context.Context, op string, repo Repo, method, ra
 	defer res.Body.Close()
 	c.logRequest(method, req.URL, res.StatusCode)
 	switch {
-	case res.StatusCode >= 300 && res.StatusCode < 400:
-		return response{}, 0, httpx.ClassifyStatus(op, res.StatusCode, c.statusTexts(repo))
 	case res.StatusCode == http.StatusTooManyRequests:
 		if c.limits != nil {
 			c.limits.For(req.URL.Host).HoldFor(min(httpx.RetryAfter(res.Header), maxRetryHold))

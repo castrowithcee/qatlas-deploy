@@ -3,12 +3,15 @@ package registry
 import (
 	"bytes"
 	"context"
+	"crypto/sha512"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -444,5 +447,237 @@ func TestRegistryTextNeverReachesErrors(t *testing.T) {
 	_, err := c.Tags(context.Background(), testRepo)
 	if err == nil || strings.Contains(err.Error(), "IGNORE") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// blobSetup starts a registry that redirects its blobs to a blob host. tls serves both over HTTPS.
+func blobSetup(t *testing.T, tls bool, redirects int, cfg registrytest.Config) (*registrytest.Server, *registrytest.CDN, *Client) {
+	t.Helper()
+	labels := map[string]string{LabelSource: "https://example.test/team/app"}
+	cdn := registrytest.NewCDN(t, registrytest.CDNConfig{Body: registrytest.ConfigBlob(labels), Redirects: redirects, TLS: tls})
+	cfg.Labels, cfg.TLS, cfg.BlobRedirect = labels, tls, cdn.BlobURL()
+	s := newServer(t, cfg)
+	return s, cdn, clientFor(s, Credential{User: fakeUser, Token: fakeToken}, func(o *Options) {
+		if tls {
+			o.Transport = s.Client().Transport // httptest hosts share one certificate
+		}
+	})
+}
+
+func TestLabelsFollowBlobRedirect(t *testing.T) {
+	for _, tls := range []bool{false, true} {
+		for _, auth := range []registrytest.Auth{registrytest.AuthNone, registrytest.AuthBearer} {
+			t.Run(fmt.Sprintf("tls=%v/auth=%d", tls, auth), func(t *testing.T) {
+				_, cdn, c := blobSetup(t, tls, 2, registrytest.Config{Auth: auth, User: fakeUser, Password: fakeToken})
+				labels, err := c.Labels(context.Background(), testRepo, "1.2.0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if labels[LabelSource] != "https://example.test/team/app" {
+					t.Errorf("labels = %v", labels)
+				}
+				hdrs := cdn.Headers()
+				if len(hdrs) != 3 {
+					t.Fatalf("blob host requests = %d, want 3", len(hdrs))
+				}
+				for _, h := range hdrs {
+					if v := h.Get("Authorization"); v != "" {
+						t.Errorf("Authorization reached the blob host: %q", v)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestBlobRedirectLimit(t *testing.T) {
+	// The registry's own redirect counts as the first.
+	_, _, c := blobSetup(t, false, 2, registrytest.Config{})
+	if _, err := c.Labels(context.Background(), testRepo, "1.2.0"); err != nil {
+		t.Errorf("3 redirects: %v", err)
+	}
+	_, cdn, c := blobSetup(t, false, 3, registrytest.Config{})
+	_, err := c.Labels(context.Background(), testRepo, "1.2.0")
+	if err == nil || !strings.Contains(err.Error(), "redirects") {
+		t.Fatalf("4 redirects: %v", err)
+	}
+	if n := len(cdn.Headers()); n != 3 {
+		t.Errorf("blob host requests = %d, want 3", n)
+	}
+}
+
+func TestBlobRedirectTargetsAreChecked(t *testing.T) {
+	withCredentials := func(scheme string) string {
+		u := url.URL{Scheme: scheme, User: url.UserPassword("user", "pw"), Host: "cdn.example.test", Path: "/blob/0", RawQuery: "sig=fake-signature"}
+		return u.String()
+	}
+	cases := []struct {
+		name, location string
+		tls            bool
+	}{
+		{"http target of https registry", "http://cdn.example.test/blob/0", true},
+		{"credentials", withCredentials("https"), true},
+		{"credentials on http base", withCredentials("http"), false},
+		{"foreign scheme", "ftp://cdn.example.test/blob/0", false},
+		{"no host", "https:///blob/0?sig=fake-signature", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newServer(t, registrytest.Config{TLS: tc.tls, BlobRedirect: tc.location})
+			c := clientFor(s, Credential{}, func(o *Options) {
+				if tc.tls {
+					o.Transport = s.Client().Transport
+				}
+			})
+			_, err := c.Labels(context.Background(), testRepo, "1.2.0")
+			if err == nil || classOf(t, err) != httpx.ClassInvalidResponse {
+				t.Fatalf("err = %v", err)
+			}
+			for _, leak := range []string{"cdn.example.test", "fake-signature", "pw", "user"} {
+				if strings.Contains(err.Error(), leak) {
+					t.Errorf("error leaks %q: %v", leak, err)
+				}
+			}
+		})
+	}
+}
+
+func TestBlobDigestIsVerified(t *testing.T) {
+	labels := map[string]string{LabelSource: "https://example.test/team/app"}
+	good := registrytest.ConfigBlob(labels)
+	sha512Sum := fmt.Sprintf("sha512:%x", sha512.Sum512(good))
+	cases := []struct {
+		name, digest string
+		body         []byte
+		ok           bool
+	}{
+		{"sha256 mismatch", "", registrytest.ConfigBlob(map[string]string{"x": "y"}), false},
+		{"sha512", sha512Sum, good, true},
+		{"sha512 mismatch", sha512Sum, registrytest.ConfigBlob(map[string]string{"x": "y"}), false},
+		{"unsupported algorithm", "md5:d41d8cd98f00b204e9800998ecf8427e", good, false},
+		{"unsupported algorithm sha384", "sha384:abcd", good, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cdn := registrytest.NewCDN(t, registrytest.CDNConfig{Body: tc.body})
+			s := newServer(t, registrytest.Config{Labels: labels, BlobRedirect: cdn.BlobURL(), ConfigDigest: tc.digest})
+			_, err := clientFor(s, Credential{}).Labels(context.Background(), testRepo, "1.2.0")
+			if tc.ok {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || classOf(t, err) != httpx.ClassInvalidResponse {
+				t.Fatalf("err = %v", err)
+			}
+		})
+	}
+}
+
+func TestBlobWithoutRedirectNeedsKnownDigest(t *testing.T) {
+	s := newServer(t, registrytest.Config{ConfigDigest: "md5:d41d8cd98f00b204e9800998ecf8427e"})
+	if _, err := clientFor(s, Credential{}).Labels(context.Background(), testRepo, "1.2.0"); err == nil {
+		t.Error("an unsupported digest algorithm must be rejected")
+	}
+}
+
+func TestBlobHostAnswersAreErrorsWithoutLeaks(t *testing.T) {
+	var gotAuth string
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+`/token"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer cdn.Close()
+	s := newServer(t, registrytest.Config{BlobRedirect: cdn.URL + "/blob?sig=fake-signature"})
+	c := clientFor(s, Credential{User: fakeUser, Token: fakeToken})
+	_, err := c.Labels(context.Background(), testRepo, "1.2.0")
+	if err == nil || gotAuth != "" {
+		t.Fatalf("err = %v, Authorization = %q", err, gotAuth)
+	}
+	for _, leak := range []string{cdn.URL, "fake-signature", fakeToken} {
+		if strings.Contains(err.Error(), leak) {
+			t.Errorf("error leaks %q: %v", leak, err)
+		}
+	}
+	for _, r := range s.TokenRequests() {
+		t.Errorf("token flow ran against the blob host: %v", r)
+	}
+}
+
+func TestBlobRedirectLogsNoQuery(t *testing.T) {
+	var buf bytes.Buffer
+	_, _, c := blobSetup(t, false, 1, registrytest.Config{})
+	c.opts.Logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	if _, err := c.Labels(context.Background(), testRepo, "1.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "fake-signature") || !strings.Contains(buf.String(), "/blob/0") {
+		t.Errorf("log = %s", buf.String())
+	}
+}
+
+func TestManifestRedirectStillRejected(t *testing.T) {
+	cdn := registrytest.NewCDN(t, registrytest.CDNConfig{Body: []byte("{}")})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, cdn.BlobURL(), http.StatusFound)
+	}))
+	defer srv.Close()
+	c := New(Options{BaseURL: func(string) string { return srv.URL }, MinInterval: -1})
+	if _, err := c.Labels(context.Background(), testRepo, "1.2.0"); err == nil || !strings.Contains(err.Error(), "redirect") {
+		t.Errorf("err = %v", err)
+	}
+	if n := len(cdn.Headers()); n != 0 {
+		t.Errorf("blob host was requested %d times", n)
+	}
+}
+
+func TestBlobRedirectWithBadLocationIsAnError(t *testing.T) {
+	for _, loc := range []string{"", "https://cdn.example.test:bad/blob?sig=fake-signature"} {
+		s := newServer(t, registrytest.Config{})
+		upstream, _ := url.Parse(s.URL)
+		proxy := httputil.NewSingleHostReverseProxy(upstream)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.Contains(r.URL.Path, "/blobs/") {
+				proxy.ServeHTTP(w, r)
+				return
+			}
+			if loc != "" {
+				w.Header().Set("Location", loc)
+			}
+			w.WriteHeader(http.StatusFound)
+		}))
+		defer srv.Close()
+		c := New(Options{BaseURL: func(string) string { return srv.URL }, MinInterval: -1})
+		_, err := c.Labels(context.Background(), testRepo, "1.2.0")
+		if err == nil {
+			t.Errorf("location %q: no error", loc)
+		} else if strings.Contains(err.Error(), "cdn.example.test") || strings.Contains(err.Error(), "fake-signature") {
+			t.Errorf("location %q: error leaks it: %v", loc, err)
+		}
+	}
+}
+
+func TestBlobOnlyFollowsRedirectStatuses(t *testing.T) {
+	cdn := registrytest.NewCDN(t, registrytest.CDNConfig{Body: registrytest.ConfigBlob(nil)})
+	s := newServer(t, registrytest.Config{})
+	upstream, _ := url.Parse(s.URL)
+	proxy := httputil.NewSingleHostReverseProxy(upstream)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/blobs/") {
+			proxy.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Location", cdn.BlobURL())
+		w.WriteHeader(http.StatusMultipleChoices)
+	}))
+	defer srv.Close()
+	c := New(Options{BaseURL: func(string) string { return srv.URL }, MinInterval: -1})
+	if _, err := c.Labels(context.Background(), testRepo, "1.2.0"); err == nil {
+		t.Error("a 300 answer must not be followed")
+	}
+	if n := len(cdn.Headers()); n != 0 {
+		t.Errorf("blob host was requested %d times", n)
 	}
 }
