@@ -18,7 +18,12 @@ type fakeBackend struct {
 	runs      control.RunsResult
 	statusErr error
 	stacksErr error
-	calls     map[string]int
+	// logs, changelogs and backups answer by run ID or stack name; an error set for the key fails that call.
+	logs       map[string]string
+	changelogs map[string]control.ChangelogResult
+	backups    map[string]control.BackupListResult
+	errs       map[string]error
+	calls      map[string]int
 }
 
 func (f *fakeBackend) count(name string) {
@@ -64,14 +69,58 @@ func (f *fakeBackend) Runs(context.Context, string) (control.RunsResult, error) 
 	return f.runs, nil
 }
 
-func (f *fakeBackend) Log(context.Context, string) (control.LogResult, error) {
-	f.count("log")
-	return control.LogResult{}, nil
+// fail returns the error set for a call and key, "log:<run>", "changelog:<stack>" or "backups:<stack>".
+func (f *fakeBackend) fail(call, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.errs[call+":"+key]
 }
 
-func (f *fakeBackend) Changelog(context.Context, string) (control.ChangelogResult, error) {
+// setLog replaces the log of a run, as the service does while the run writes.
+func (f *fakeBackend) setLog(run, text string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.logs == nil {
+		f.logs = map[string]string{}
+	}
+	f.logs[run] = text
+}
+
+func (f *fakeBackend) Log(_ context.Context, run string) (control.LogResult, error) {
+	f.count("log")
+	if err := f.fail("log", run); err != nil {
+		return control.LogResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	text, ok := f.logs[run]
+	if !ok {
+		return control.LogResult{}, control.NewError(control.CodeNoSuchRun, "no such run")
+	}
+	return control.LogResult{Text: text}, nil
+}
+
+func (f *fakeBackend) Changelog(_ context.Context, stack string) (control.ChangelogResult, error) {
 	f.count("changelog")
-	return control.ChangelogResult{}, nil
+	if err := f.fail("changelog", stack); err != nil {
+		return control.ChangelogResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if res, ok := f.changelogs[stack]; ok {
+		return res, nil
+	}
+	return control.ChangelogResult{Stack: stack}, nil
+}
+
+func (f *fakeBackend) Backups(_ context.Context, stack string) (control.BackupListResult, error) {
+	f.count("backups")
+	if err := f.fail("backups", stack); err != nil {
+		return control.BackupListResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return control.BackupListResult{Stack: stack, Backups: f.backups[stack].Backups}, nil
 }
 
 func (f *fakeBackend) Window(context.Context) (control.WindowResult, error) {
@@ -123,23 +172,69 @@ func demoBackend() *fakeBackend {
 		}, Errors: 1, Warnings: 3},
 		updates: control.UpdatesResult{Stacks: []control.StackUpdates{
 			{Name: "demo-stack", Update: "automatic", Checked: at(30, 3, 5), Items: []control.UpdateInfo{
-				{Variable: "APP_VERSION", Current: "1.4.2", Selected: "1.5.0", Status: "update"}}},
+				{Variable: "APP_VERSION", Image: "example/app", Current: "1.4.2", Selected: "1.5.0", Status: "update"}}},
 			{Name: "mail-relay", Update: "manual", Checked: at(30, 3, 5), Items: []control.UpdateInfo{
-				{Variable: "RELAY_VERSION", Current: "3.1", Selected: "3.1", Status: "current"}}},
+				{Variable: "RELAY_VERSION", Image: "example/relay", Current: "3.1", Selected: "3.1", Status: "current"}}},
 			{Name: "photo-album", Update: "automatic", Checked: at(30, 3, 5), Items: []control.UpdateInfo{
-				{Variable: "ALBUM_VERSION", Current: "2.0.1", Status: "error", Error: "registry unreachable"}}},
+				{Variable: "ALBUM_VERSION", Image: "example/album", Current: "2.0.1", Status: "error", Error: "registry unreachable"}}},
 			{Name: "web-shop", Update: "automatic", Checked: at(30, 3, 5), Items: []control.UpdateInfo{
-				{Variable: "SHOP_VERSION", Current: "5.2.0", Selected: "5.2.0", MajorAvailable: "6.0.0", Status: "current"},
-				{Variable: "DB_VERSION", Current: "16.4", Selected: "16.4", Status: "current"}}},
+				{Variable: "SHOP_VERSION", Image: "example/shop", Current: "5.2.0", Selected: "5.2.0", MajorAvailable: "6.0.0", Status: "current"},
+				{Variable: "DB_VERSION", Image: "example/db", Current: "16.4", Selected: "16.4", Status: "current"}}},
 			{Name: "wiki", Update: "none"},
 		}},
 		runs: control.RunsResult{Runs: []control.RunInfo{
 			{ID: "20261030T150000Z-0000000b", Stack: "web-shop", Started: at(30, 15, 0), Trigger: "manual"},
-			{ID: "20261030T140200Z-0000000c", Stack: "demo-stack", Started: at(30, 14, 2), Result: "succeeded"},
-			{ID: "20261030T120000Z-0000000d", Stack: "web-shop", Started: at(30, 12, 0), Result: "rolled-back"},
-			{ID: "20261029T031000Z-0000000a", Stack: "photo-album", Started: at(29, 3, 10), Result: "rollback-failed"},
-			{ID: "20261028T031000Z-0000000e", Stack: "mail-relay", Started: at(28, 3, 10), Result: "succeeded"},
-			{ID: "20261027T031000Z-0000000f", Stack: "wiki", Started: at(27, 3, 10), Result: "succeeded"},
+			{ID: "20261030T140200Z-0000000c", Stack: "demo-stack", Started: at(30, 14, 2), Trigger: "update", DurationMS: 48000, Result: "succeeded"},
+			{ID: "20261030T120000Z-0000000d", Stack: "web-shop", Started: at(30, 12, 0), Trigger: "poll", DurationMS: 215000, Result: "rolled-back",
+				Error: "health check of shop failed"},
+			{ID: "20261029T031000Z-0000000a", Stack: "photo-album", Started: at(29, 3, 10), Trigger: "poll", DurationMS: 9000, Result: "rollback-failed"},
+			{ID: "20261029T020000Z-00000010", Stack: "demo-stack", Started: at(29, 2, 0), Trigger: "poll", DurationMS: 850, Result: "failed",
+				Error: "compose pull failed: registry unreachable"},
+			{ID: "20261028T031000Z-0000000e", Stack: "mail-relay", Started: at(28, 3, 10), Trigger: "poll", DurationMS: 31000, Result: "succeeded"},
+			{ID: "20261027T031000Z-0000000f", Stack: "wiki", Started: at(27, 3, 10), Trigger: "manual", DurationMS: 12000, Result: "succeeded"},
 		}},
+		logs: map[string]string{
+			"20261030T140200Z-0000000c": demoLog,
+			"20261030T150000Z-0000000b": demoActiveLog,
+		},
+		changelogs: map[string]control.ChangelogResult{
+			"demo-stack": {Stack: "demo-stack", Checked: at(30, 3, 5), Items: []control.ChangelogInfo{{
+				Variable: "APP_VERSION", Current: "1.4.2", Target: "1.5.0", Source: "example/app",
+				Link: "https://example.invalid/app/releases",
+				Releases: []control.ChangelogRelease{
+					{Version: "1.5.0", Name: "Spring release", Published: at(29, 9, 0),
+						Body: "Adds a dark theme.\n\n- faster start\n- fixes the upload limit"},
+					{Version: "1.4.3", Published: at(20, 9, 0), Body: "Fixes a crash on empty input."},
+				}}}},
+		},
+		backups: map[string]control.BackupListResult{
+			"demo-stack": {Stack: "demo-stack", Backups: []control.BackupInfo{
+				{ID: "20261030T140100Z-0123abcd", Stack: "demo-stack", Created: at(30, 14, 1), Size: 12582912},
+				{ID: "20261023T031000Z-4567cdef", Stack: "demo-stack", Created: at(23, 3, 10), Size: 11534336},
+				{ID: "20261016T031000Z-89abcdef", Stack: "demo-stack", Incomplete: true},
+			}},
+		},
+		errs: map[string]error{},
 	}
 }
+
+// demoLog is the log of a finished run in the format of the service.
+const demoLog = `2026-10-30T14:02:00Z step check
+2026-10-30T14:02:01Z info compose file is valid
+2026-10-30T14:02:02Z step backup
+2026-10-30T14:02:09Z info backup 20261030T140100Z-0123abcd, 12.0 MiB
+2026-10-30T14:02:10Z step deploy
+2026-10-30T14:02:11Z info pull example/app:1.4.2
+2026-10-30T14:02:40Z info up -d finished
+2026-10-30T14:02:45Z step verify
+2026-10-30T14:02:50Z info all services healthy
+`
+
+// demoActiveLog is the log of the run that is still active.
+const demoActiveLog = `2026-10-30T15:00:00Z step check
+2026-10-30T15:00:01Z info compose file is valid
+2026-10-30T15:00:02Z step backup
+2026-10-30T15:00:12Z info backup 20261030T150001Z-0123abcd, 48.0 MiB
+2026-10-30T15:00:13Z step deploy
+2026-10-30T15:00:14Z info pull example/shop:5.2.0
+`

@@ -107,7 +107,7 @@ func TestKeysMoveBetweenAreasAndQuit(t *testing.T) {
 		t.Fatalf("esc: area %s", m.area)
 	}
 	press(m, "3")
-	if m.area != areaRuns || !strings.Contains(m.render(), "Runs recorded: 6") {
+	if m.area != areaRuns || !strings.Contains(m.render(), "20261030T140200Z-0000000c") {
 		t.Fatalf("3: area %s\n%s", m.area, m.render())
 	}
 	press(m, "1")
@@ -156,7 +156,7 @@ func TestReloadReadsAgainWithoutRefreshingRegistries(t *testing.T) {
 	if b.called("status") != 2 || b.called("updates") != 2 || b.called("refresh") != 0 {
 		t.Fatalf("calls %v", b.calls)
 	}
-	for _, name := range []string{"log", "changelog", "window"} {
+	for _, name := range []string{"log", "changelog", "backups", "window"} {
 		if b.called(name) != 0 {
 			t.Errorf("the overview called %s", name)
 		}
@@ -262,3 +262,5 @@ func TestStateWordsAreTranslated(t *testing.T) {
 		}
 	}
 }
+
+func errServiceBusy() error { return control.NewError(control.CodeBusy, "the service is busy") }

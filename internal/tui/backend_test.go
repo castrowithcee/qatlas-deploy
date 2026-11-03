@@ -52,6 +52,7 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 		"runs":      func() error { _, err := b.Runs(ctx, ""); return err },
 		"log":       func() error { _, err := b.Log(ctx, "20261030T140200Z-0000000c"); return err },
 		"changelog": func() error { _, err := b.Changelog(ctx, "demo-stack"); return err },
+		"backups":   func() error { _, err := b.Backups(ctx, "demo-stack"); return err },
 		"window":    func() error { _, err := b.Window(ctx); return err },
 	}
 	for name, call := range calls {

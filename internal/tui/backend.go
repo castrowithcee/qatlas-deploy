@@ -24,6 +24,8 @@ type Backend interface {
 	Runs(ctx context.Context, stack string) (control.RunsResult, error)
 	Log(ctx context.Context, run string) (control.LogResult, error)
 	Changelog(ctx context.Context, stack string) (control.ChangelogResult, error)
+	// Backups lists the backups of one stack, newest first.
+	Backups(ctx context.Context, stack string) (control.BackupListResult, error)
 	Window(ctx context.Context) (control.WindowResult, error)
 }
 
@@ -85,5 +87,10 @@ func (b *ChannelBackend) Changelog(ctx context.Context, stack string) (res contr
 
 func (b *ChannelBackend) Window(ctx context.Context) (res control.WindowResult, err error) {
 	err = b.call(ctx, control.WindowShowCommand, nil, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Backups(ctx context.Context, stack string) (res control.BackupListResult, err error) {
+	err = b.call(ctx, control.BackupListCommand, control.BackupArgs{Stack: stack}, &res)
 	return res, err
 }

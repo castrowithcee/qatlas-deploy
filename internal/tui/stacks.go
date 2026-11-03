@@ -388,10 +388,19 @@ func plural(t kittui.Translator, n int, one, many kittui.TextID) string {
 // itemIDs gives every row a list ID that holds no control character. Names that escape to the same text get a
 // counter, so no row is lost.
 func itemIDs(rows []stackRow) []kittui.ItemID {
-	ids := make([]kittui.ItemID, len(rows))
-	used := map[kittui.ItemID]bool{}
+	names := make([]string, len(rows))
 	for i, r := range rows {
-		base := kittui.Escape(r.name)
+		names[i] = r.name
+	}
+	return uniqueIDs(names)
+}
+
+// uniqueIDs is itemIDs for any names.
+func uniqueIDs(names []string) []kittui.ItemID {
+	ids := make([]kittui.ItemID, len(names))
+	used := map[kittui.ItemID]bool{}
+	for i, name := range names {
+		base := kittui.Escape(name)
 		id := kittui.ItemID(base)
 		for n := 2; used[id] || id == ""; n++ {
 			id = kittui.ItemID(base + "#" + strconv.Itoa(n))

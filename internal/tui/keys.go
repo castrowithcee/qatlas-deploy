@@ -20,6 +20,8 @@ const (
 	actEnter     kittui.ActionID = "enter"
 	actSearch    kittui.ActionID = "search"
 	actArea      kittui.ActionID = "area"
+	// actStackOnly limits the Runs area to the stack chosen in Stacks, and lifts the limit again.
+	actStackOnly kittui.ActionID = "stackonly"
 )
 
 // areaKeys are the keys of actArea, one per area in the order of the tab line.
@@ -29,7 +31,7 @@ func keyTable() []kittui.Action {
 	act := func(id kittui.ActionID, level kittui.KeyLevel, help kittui.TextID, keys ...string) kittui.Action {
 		return kittui.Action{ID: id, Level: level, DefaultKeys: keys, Help: help}
 	}
-	return []kittui.Action{
+	table := []kittui.Action{
 		act(actHelp, kittui.LevelGlobal, kittui.TextKeyHelp, "?"),
 		act(actBack, kittui.LevelGlobal, kittui.TextKeyBack, "esc"),
 		act(actForceQuit, kittui.LevelGlobal, kittui.TextKeyQuit, "ctrl+c"),
@@ -46,7 +48,16 @@ func keyTable() []kittui.Action {
 		act(actEnter, kittui.LevelMove, kittui.TextKeyEnter, "enter"),
 		act(actSearch, kittui.LevelMove, kittui.TextKeySearch, "/"),
 		act(actArea, kittui.LevelMove, textKeyArea, areaKeys...),
+		act(actStackOnly, kittui.LevelLetter, textKeyStackOnly, "f"),
 	}
+	return append(table, kittui.LogViewActions()...)
+}
+
+func logKeys() kittui.LogViewKeys {
+	return kittui.LogViewKeys{Up: actUp, Down: actDown, PageUp: actPageUp, PageDown: actPageDown, First: actFirst,
+		Last: actLast, Search: actSearch, Enter: actEnter, Back: actBack, Follow: kittui.ActionLogFollow,
+		NextMatch: kittui.ActionLogNextMatch, PrevMatch: kittui.ActionLogPrevMatch, Wrap: kittui.ActionLogWrap,
+		Timestamps: kittui.ActionLogTimestamps}
 }
 
 func listKeys() kittui.ListKeys {

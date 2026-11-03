@@ -1,0 +1,14 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details  [3 Läufe]                                                                                
+------------------------------------------------------------------------------------------------------------------------
+  demo-stack                                                                      erfolgreich  20261030T140200Z-0000000c
+  info compose file is valid                                                                                            
+  step backup                                                                                                           
+  info backup 20261030T140100Z-0123abcd, 12.0 MiB                                                                       
+  step deploy                                                                                                           
+  info pull example/app:1.4.2                                                                                           
+  info up -d finished                                                                                                   
+  step verify                                                                                                           
+  info all services healthy                                                                                             
+* mitlaufend - Zeilen 2-9 von 9                                                                                         
+/ Suchen  L mitlaufen  w Zeilen umbrechen  t Zeitstempel  r Neu laden  1-3 Bereich  q Beenden           up/down Scrollen

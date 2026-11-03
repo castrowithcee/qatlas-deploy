@@ -8,7 +8,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-kit/i18n"
 	kittui "github.com/castrowithcee/qatlas-kit/tui"
@@ -87,7 +86,19 @@ type Model struct {
 	// failure is the error of the last refresh; notice a warning that stays until the next key.
 	failure, notice string
 	// chosen is the stack the detail area shows.
-	chosen   kittui.ItemID
+	chosen kittui.ItemID
+	detail detailState
+	// scrollNote is the position in the detail, empty while it fits.
+	scrollNote string
+	runsList   *kittui.List
+	runTones   map[string]kittui.TextStyle
+	runByID    map[kittui.ItemID]runRow
+	runData    []runRow
+	// runsOnly limits the Runs area to the chosen stack.
+	runsOnly bool
+	log      runLog
+	// after starts a timer; tests replace it.
+	after    func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
 	help     *kittui.Help
 	helpOpen bool
 }
@@ -107,7 +118,8 @@ func newModel(c config) (*Model, error) {
 	}
 	m := &Model{ctx: c.ctx, backend: c.backend, keys: keys, text: text, frame: kittui.NewFrame(keys, text),
 		loc: c.loc, themes: themes, theme: c.theme, profile: c.profile, charset: c.charset, area: areaStacks,
-		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{}}
+		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
+		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick}
 	if m.ctx == nil {
 		m.ctx = context.Background()
 	}
@@ -123,6 +135,12 @@ func newModel(c config) (*Model, error) {
 		return nil, err
 	}
 	m.list.SetFocused(true)
+	m.runsList, err = kittui.NewList(kittui.ListSpec{Columns: runColumns(text, m.runTones), Keys: listKeys(),
+		Search: kittui.SearchByKey, Empty: textRunsEmpty}, keys, text)
+	if err != nil {
+		return nil, err
+	}
+	m.runsList.SetFocused(true)
 	if !m.restyle() {
 		m.notice = text.Lookup(kittui.TextWarning, text.Lookup(kittui.TextThemeUnknown, c.theme, kittui.ThemeTerminal))
 	}
@@ -173,6 +191,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.reload(), m.tick())
 	case refreshMsg:
 		m.apply(msg)
+	case changelogMsg:
+		m.applyChangelog(msg)
+	case backupsMsg:
+		m.applyBackups(msg)
+	case logMsg:
+		return m, m.applyLog(msg)
+	case logTickMsg:
+		return m, m.logTick(msg)
 	case tea.ForegroundColorMsg:
 		m.terminal.Foreground, m.haveFG = kittui.ColorOf(msg.Color), true
 		m.restyle()
@@ -215,6 +241,7 @@ func (m *Model) apply(msg refreshMsg) {
 	if err := m.list.SetItems(items); err != nil {
 		m.failure = m.text.Lookup(kittui.TextError, m.text.Lookup(textErrUnshownStacks, err.Error()))
 	}
+	m.rebuildRuns()
 }
 
 // errorText says in the message line why the service could not answer.
@@ -237,10 +264,34 @@ func (m *Model) errorText(err error) string {
 
 // input is the input focus of the screen.
 func (m *Model) input() kittui.InputFocus {
-	if m.area == areaStacks && !m.helpOpen {
+	if m.helpOpen {
+		return kittui.InputNavigation
+	}
+	switch m.area {
+	case areaStacks:
 		return m.list.Input()
+	case areaRuns:
+		if m.log.open {
+			return m.log.view.Input()
+		}
+		return m.runsList.Input()
 	}
 	return kittui.InputNavigation
+}
+
+// typed gives a key to the part that has the text focus; handled is false when it let the key pass.
+func (m *Model) typed(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
+	switch {
+	case m.area == areaStacks:
+		open, handled := m.list.Update(msg)
+		return m.open(open), handled
+	case m.area == areaRuns && m.log.open:
+		return nil, m.log.view.Update(msg)
+	case m.area == areaRuns:
+		open, handled := m.runsList.Update(msg)
+		return m.openLog(open), handled
+	}
+	return nil, false
 }
 
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
@@ -258,10 +309,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	focus := m.input()
-	if m.area == areaStacks && focus == kittui.InputText {
-		if open, handled := m.list.Update(msg); handled {
-			m.open(open)
-			return nil
+	if focus == kittui.InputText {
+		if cmd, handled := m.typed(msg); handled {
+			return cmd
 		}
 	}
 	if id, ok := m.keys.Match(msg, focus); ok {
@@ -272,32 +322,85 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			m.openHelp()
 			return nil
 		case actReload:
-			return m.reload()
+			return m.reloadAll()
 		case actArea:
 			if i := slices.Index(areaKeys, kittui.KeyName(msg)); i >= 0 {
-				m.area = areas()[i].ID
+				return m.enter(areas()[i].ID)
 			}
 			return nil
+		case actStackOnly:
+			if m.area == areaRuns && !m.log.open {
+				m.toggleStackOnly()
+				return nil
+			}
 		case actBack:
-			if m.area != areaStacks {
-				m.area = areaStacks
+			switch m.area {
+			case areaDetail:
+				return m.enter(areaStacks)
+			case areaRuns:
+				switch {
+				case m.log.open:
+					if !m.log.view.Update(msg) {
+						m.log.open = false
+					}
+				default:
+					if _, handled := m.runsList.Update(msg); !handled {
+						return m.enter(areaStacks)
+					}
+				}
 				return nil
 			}
 		}
+		if m.area == areaDetail {
+			m.scrollDetail(id)
+			return nil
+		}
 	}
-	if m.area == areaStacks {
+	switch {
+	case m.area == areaStacks:
 		open, _ := m.list.Update(msg)
-		m.open(open)
+		return m.open(open)
+	case m.area == areaRuns && m.log.open:
+		m.log.view.Update(msg)
+	case m.area == areaRuns:
+		open, _ := m.runsList.Update(msg)
+		return m.openLog(open)
+	}
+	return nil
+}
+
+// reloadAll reads the service again; the detail and an open log are read again with it.
+func (m *Model) reloadAll() tea.Cmd {
+	cmds := []tea.Cmd{m.reload()}
+	switch {
+	case m.area == areaDetail:
+		cmds = append(cmds, m.loadDetail(true))
+	case m.area == areaRuns && m.log.open && !m.log.busy:
+		m.log.busy = true
+		cmds = append(cmds, m.readLog())
+	}
+	return tea.Batch(cmds...)
+}
+
+// enter shows an area and starts what that area reads on its own.
+func (m *Model) enter(area kittui.AreaID) tea.Cmd {
+	m.area = area
+	switch area {
+	case areaDetail:
+		return m.loadDetail(false)
+	case areaRuns:
+		return m.followLog()
 	}
 	return nil
 }
 
 // open shows the stack id in the detail area.
-func (m *Model) open(id kittui.ItemID) {
+func (m *Model) open(id kittui.ItemID) tea.Cmd {
 	if id == "" {
-		return
+		return nil
 	}
-	m.chosen, m.area = id, areaDetail
+	m.chosen = id
+	return m.enter(areaDetail)
 }
 
 func (m *Model) openHelp() {
@@ -321,20 +424,54 @@ func (m *Model) footer() []kittui.Hint {
 		{Action: actArea, Label: textKeyArea, Priority: 3},
 		{Action: actQuit, Label: kittui.TextKeyQuit, Priority: 1},
 	}
-	if m.area != areaStacks || len(m.rows) == 0 {
+	switch {
+	case m.area == areaDetail:
+		scroll := []kittui.Hint{
+			{Action: actUp, Label: kittui.TextHelpScroll, Kind: kittui.HintNavigation},
+			{Action: actDown, Label: kittui.TextHelpScroll, Kind: kittui.HintNavigation},
+		}
+		if _, ok := m.rows[m.chosen]; !ok {
+			return common
+		}
+		return append(common, scroll...)
+	case m.area == areaRuns && m.log.open:
+		if m.log.view.Searching() {
+			return m.log.view.Hints()
+		}
+		return append(m.log.view.Hints(), common...)
+	case m.area == areaRuns:
+		return m.listFooter(m.runsList, len(m.runByID), textKeyLog, append(
+			[]kittui.Hint{m.stackOnlyHint()}, common...), nav)
+	case m.area == areaStacks:
+		return m.listFooter(m.list, len(m.rows), textKeyDetails, common, nav)
+	}
+	return common
+}
+
+func (m *Model) stackOnlyHint() kittui.Hint {
+	label := textKeyStackOnly
+	if m.runsOnly {
+		label = textKeyAllStacks
+	}
+	return kittui.Hint{Action: actStackOnly, Label: label, Priority: 1}
+}
+
+// listFooter is the key line of a screen that is a list: enter opens the marked row.
+func (m *Model) listFooter(list *kittui.List, rows int, enter kittui.TextID, common, nav []kittui.Hint) []kittui.Hint {
+	if rows == 0 {
 		return common
 	}
-	if m.list.Searching() {
+	if list.Searching() {
 		return []kittui.Hint{
 			{Action: actEnter, Label: textFilterKeep},
 			{Action: actBack, Label: textFilterClear},
 		}
 	}
 	hints := []kittui.Hint{
-		{Action: actEnter, Label: textKeyDetails},
+		{Action: actEnter, Label: enter},
 		{Action: actSearch, Label: kittui.TextKeySearch, Priority: 1},
 	}
-	if m.list.Query() != "" {
+	if list.Query() != "" {
 		hints = append(hints, kittui.Hint{Action: actBack, Label: textFilterClear})
 	}
 	return append(append(hints, common...), nav...)
@@ -382,9 +519,13 @@ func (m *Model) frameSpec() kittui.FrameSpec {
 		Areas:      areas(), ActiveArea: m.area, Focus: kittui.ZoneRows, Input: m.input(),
 		Message: m.message(), Footer: m.footer(),
 	}
-	if m.area == areaStacks {
+	switch {
+	case m.area == areaStacks:
 		spec.Position = m.list.Position()
-	} else {
+	case m.area == areaRuns && !m.log.open:
+		spec.Position = m.runsList.Position()
+		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
+	default:
 		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
 	}
 	return spec
@@ -407,6 +548,9 @@ func (m *Model) render() string {
 	spec := m.frameSpec()
 	room := m.frame.Workspace(spec)
 	spec.Workspace = m.workspace(room.Width, room.Height)
+	if m.area == areaDetail {
+		spec.Position = m.scrollNote
+	}
 	view, _ := m.frame.Render(m.styles, spec)
 	if m.helpOpen {
 		if over, _, ok := m.help.Overlay(m.styles, view, m.width, m.height, room); ok {
@@ -441,9 +585,9 @@ func (m *Model) workspace(width, height int) string {
 	}
 	switch m.area {
 	case areaDetail:
-		return m.detailView(width)
+		return m.detailView(width, height)
 	case areaRuns:
-		return m.note(m.text.Lookup(textRunsRecorded, len(m.snap.runs.Runs)), width)
+		return m.runsView(width, height)
 	}
 	view, _ := m.list.View(m.styles, width, height)
 	return view
@@ -454,28 +598,6 @@ func (m *Model) note(text string, width int) string {
 	lines := kittui.Wrap(kittui.Escape(text), max(width-2, 1))
 	for i, l := range lines {
 		lines[i] = "  " + m.styles.Render(kittui.StyleHint, l)
-	}
-	return strings.Join(lines, "\n")
-}
-
-// detailView is the stack chosen in the Stacks area with the values of its row.
-func (m *Model) detailView(width int) string {
-	r, ok := m.rows[m.chosen]
-	if !ok {
-		return m.note(m.text.Lookup(textDetailNone), width)
-	}
-	values := cells(r, m.text, m.loc, map[string]kittui.TextStyle{})
-	columns := stackColumns(m.text, nil)
-	labels := make([]string, len(columns))
-	labelWidth := 0
-	for i, c := range columns {
-		labels[i] = kittui.Escape(m.text.Lookup(c.Title))
-		labelWidth = max(labelWidth, lipgloss.Width(labels[i]))
-	}
-	lines := []string{"  " + m.styles.TitleLine(r.name, "", max(width-2, 1)), ""}
-	for i := 1; i < len(columns); i++ {
-		lines = append(lines, "  "+m.styles.Render(kittui.StyleHint, kittui.Pad(labels[i], labelWidth))+"  "+
-			m.styles.Render(kittui.StyleText, kittui.Escape(values[i])))
 	}
 	return strings.Join(lines, "\n")
 }

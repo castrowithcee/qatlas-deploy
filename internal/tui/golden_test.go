@@ -34,8 +34,51 @@ func newTestModel(t *testing.T, lang i18n.Lang, b Backend, width, height int) *M
 		t.Fatal(err)
 	}
 	m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	timersOf[m] = &timers{}
+	m.after = timersOf[m].start
 	load(t, m)
 	return m
+}
+
+// timers records the timers a model asks for instead of starting them, so a test fires them itself.
+type timers struct {
+	waits []time.Duration
+	fns   []func(time.Time) tea.Msg
+}
+
+func (r *timers) start(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd {
+	r.waits, r.fns = append(r.waits, d), append(r.fns, fn)
+	return nil
+}
+
+// fire takes the oldest timer and delivers its message.
+func (r *timers) fire(t *testing.T, m *Model) {
+	t.Helper()
+	if len(r.fns) == 0 {
+		t.Fatal("no timer is running")
+	}
+	fn := r.fns[0]
+	r.waits, r.fns = r.waits[1:], r.fns[1:]
+	drain(m, func() tea.Msg { return fn(time.Time{}) })
+}
+
+var timersOf = map[*Model]*timers{}
+
+// drain runs a command and every command its messages lead to, to the end.
+func drain(m *Model, cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	switch msg := cmd().(type) {
+	case nil:
+	case tea.BatchMsg:
+		for _, c := range msg {
+			drain(m, c)
+		}
+	default:
+		_, next := m.Update(msg)
+		drain(m, next)
+	}
 }
 
 // load runs one refresh synchronously.
@@ -56,6 +99,15 @@ func press(m *Model, keys ...string) tea.Cmd {
 	return last
 }
 
+// send presses keys and runs every command they lead to.
+func send(m *Model, keys ...string) {
+	for _, k := range keys {
+		_, cmd := m.Update(keyMsg(k))
+		drain(m, cmd)
+		m.render() // a key such as page down reads the size of the last drawing
+	}
+}
+
 func keyMsg(k string) tea.KeyPressMsg {
 	switch k {
 	case "enter":
@@ -64,6 +116,16 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "down":
 		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "pgup":
+		return tea.KeyPressMsg{Code: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyPressMsg{Code: tea.KeyPgDown}
+	case "home":
+		return tea.KeyPressMsg{Code: tea.KeyHome}
+	case "end":
+		return tea.KeyPressMsg{Code: tea.KeyEnd}
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	}
@@ -124,9 +186,7 @@ func TestGoldenAreas(t *testing.T) {
 			area string
 			keys []string
 		}{
-			{"detail", []string{"enter"}},
 			{"detail.none", []string{"2"}},
-			{"runs", []string{"3"}},
 		} {
 			t.Run(name+"."+tt.area, func(t *testing.T) {
 				m := newTestModel(t, lang, demoBackend(), narrowWidth, goldenRows)

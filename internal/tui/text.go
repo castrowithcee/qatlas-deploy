@@ -72,13 +72,42 @@ const (
 	textStacksLoading     kittui.TextID = "stacks.loading"
 	textStacksEmpty       kittui.TextID = "stacks.empty"
 	textDetailNone        kittui.TextID = "detail.none"
-	textRunsRecorded      kittui.TextID = "runs.recorded"
 	textErrNotRunning     kittui.TextID = "error.notrunning"
 	textErrNoAccess       kittui.TextID = "error.noaccess"
 	textErrService        kittui.TextID = "error.service"
 	textErrChannel        kittui.TextID = "error.channel"
 	textErrUnshownStacks  kittui.TextID = "error.unshownstacks"
 	textNoValue           kittui.TextID = "value.none"
+
+	textKeyStackOnly     kittui.TextID = "key.stackonly"
+	textKeyAllStacks     kittui.TextID = "key.allstacks"
+	textKeyLog           kittui.TextID = "key.log"
+	textColRun           kittui.TextID = "col.run"
+	textColStarted       kittui.TextID = "col.started"
+	textColResult        kittui.TextID = "col.result"
+	textColTrigger       kittui.TextID = "col.trigger"
+	textColDuration      kittui.TextID = "col.duration"
+	textRunsEmpty        kittui.TextID = "runs.empty"
+	textRunsOnly         kittui.TextID = "runs.only"
+	textRunsNoStack      kittui.TextID = "runs.nostack"
+	textLogLoading       kittui.TextID = "log.loading"
+	textDetailVersions   kittui.TextID = "detail.versions"
+	textDetailChangelog  kittui.TextID = "detail.changelog"
+	textDetailBackups    kittui.TextID = "detail.backups"
+	textDetailRuns       kittui.TextID = "detail.runs"
+	textDetailLoading    kittui.TextID = "detail.loading"
+	textDetailNoImages   kittui.TextID = "detail.noimages"
+	textItemUpdate       kittui.TextID = "item.update"
+	textItemMajor        kittui.TextID = "item.major"
+	textChangelogNever   kittui.TextID = "changelog.never"
+	textChangelogNone    kittui.TextID = "changelog.none"
+	textChangelogNoNotes kittui.TextID = "changelog.nonotes"
+	textChangelogSource  kittui.TextID = "changelog.source"
+	textChangelogLink    kittui.TextID = "changelog.link"
+	textChangelogOmitted kittui.TextID = "changelog.omitted"
+	textChangelogMore    kittui.TextID = "changelog.more"
+	textBackupsNone      kittui.TextID = "backups.none"
+	textBackupIncomplete kittui.TextID = "backups.incomplete"
 )
 
 func catalog() i18n.Catalogs[kittui.TextID] {
@@ -147,13 +176,42 @@ func catalog() i18n.Catalogs[kittui.TextID] {
 			textStacksLoading:     "Loading the stacks…",
 			textStacksEmpty:       "No stacks. Bind the stacks repository with 'sudo qdeploy repo set <ssh-url>', or add a stack to it.",
 			textDetailNone:        "No stack chosen. Choose one in Stacks and press {enter}.",
-			textRunsRecorded:      "Runs recorded: %d. 'sudo qdeploy runs' lists them.",
 			textErrNotRunning:     "the qdeploy service is not running; start it, then press {reload}",
 			textErrNoAccess:       "only root may use the qdeploy service; quit and run qdeploy with sudo",
 			textErrService:        "the service refused the request: %s",
 			textErrChannel:        "cannot talk to the service: %s",
 			textErrUnshownStacks:  "the stack list could not be shown: %s",
 			textNoValue:           "-",
+
+			textKeyStackOnly:     "this stack",
+			textKeyAllStacks:     "all stacks",
+			textKeyLog:           "log",
+			textColRun:           "run",
+			textColStarted:       "started",
+			textColResult:        "result",
+			textColTrigger:       "trigger",
+			textColDuration:      "duration",
+			textRunsEmpty:        "No runs recorded.",
+			textRunsOnly:         "Runs of %s only. {stackonly} shows all stacks.",
+			textRunsNoStack:      "Choose a stack in Stacks first.",
+			textLogLoading:       "Loading the log…",
+			textDetailVersions:   "Image versions",
+			textDetailChangelog:  "Changelog",
+			textDetailBackups:    "Backups",
+			textDetailRuns:       "Last runs",
+			textDetailLoading:    "Loading…",
+			textDetailNoImages:   "No image version variables.",
+			textItemUpdate:       "update available",
+			textItemMajor:        "newer major %s",
+			textChangelogNever:   "Never checked for updates, so there are no release notes.",
+			textChangelogNone:    "No update is available, so there are no release notes.",
+			textChangelogNoNotes: "No release notes.",
+			textChangelogSource:  "source %s",
+			textChangelogLink:    "more at %s",
+			textChangelogOmitted: "%d more releases left out",
+			textChangelogMore:    "… %d more lines",
+			textBackupsNone:      "No backups.",
+			textBackupIncomplete: "incomplete",
 		},
 		i18n.German: {
 			textAreaStacks: "Stacks",
@@ -219,13 +277,42 @@ func catalog() i18n.Catalogs[kittui.TextID] {
 			textStacksLoading:     "Stacks werden geladen…",
 			textStacksEmpty:       "Keine Stacks. Binde das Stacks-Repository mit 'sudo qdeploy repo set <ssh-url>' an oder lege dort einen Stack an.",
 			textDetailNone:        "Kein Stack gewählt. Wähle einen unter Stacks und drücke {enter}.",
-			textRunsRecorded:      "Aufgezeichnete Läufe: %d. 'sudo qdeploy runs' listet sie.",
 			textErrNotRunning:     "der qdeploy-Dienst läuft nicht; starte ihn und drücke dann {reload}",
 			textErrNoAccess:       "nur root darf den qdeploy-Dienst nutzen; beende und starte qdeploy mit sudo",
 			textErrService:        "der Dienst hat die Anfrage abgelehnt: %s",
 			textErrChannel:        "keine Verbindung zum Dienst: %s",
 			textErrUnshownStacks:  "die Stack-Liste ließ sich nicht anzeigen: %s",
 			textNoValue:           "-",
+
+			textKeyStackOnly:     "dieser Stack",
+			textKeyAllStacks:     "alle Stacks",
+			textKeyLog:           "Log",
+			textColRun:           "Lauf",
+			textColStarted:       "Start",
+			textColResult:        "Ergebnis",
+			textColTrigger:       "Auslöser",
+			textColDuration:      "Dauer",
+			textRunsEmpty:        "Keine Läufe aufgezeichnet.",
+			textRunsOnly:         "Nur Läufe von %s. {stackonly} zeigt alle Stacks.",
+			textRunsNoStack:      "Wähle zuerst einen Stack unter Stacks.",
+			textLogLoading:       "Log wird geladen…",
+			textDetailVersions:   "Image-Versionen",
+			textDetailChangelog:  "Changelog",
+			textDetailBackups:    "Backups",
+			textDetailRuns:       "Letzte Läufe",
+			textDetailLoading:    "Wird geladen…",
+			textDetailNoImages:   "Keine Image-Versionsvariablen.",
+			textItemUpdate:       "Update verfügbar",
+			textItemMajor:        "neuere Major-Version %s",
+			textChangelogNever:   "Nie auf Updates geprüft, daher gibt es keine Release-Notes.",
+			textChangelogNone:    "Kein Update verfügbar, daher gibt es keine Release-Notes.",
+			textChangelogNoNotes: "Keine Release-Notes.",
+			textChangelogSource:  "Quelle %s",
+			textChangelogLink:    "mehr unter %s",
+			textChangelogOmitted: "%d weitere Releases ausgelassen",
+			textChangelogMore:    "… %d weitere Zeilen",
+			textBackupsNone:      "Keine Backups.",
+			textBackupIncomplete: "unvollständig",
 		},
 	}
 }
