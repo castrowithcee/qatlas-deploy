@@ -238,3 +238,36 @@ func Path(in Input, target string, stepwise bool) ([]string, error) {
 	}
 	return append(path, target), nil
 }
+
+// Core is the ordered part of a tag: the numbers of MAJOR.MINOR.PATCH.
+type Core struct {
+	Major, Minor, Patch uint64
+	// Prerelease reports a SemVer pre-release suffix, such as "rc1". A variant suffix such as "alpine" does not
+	// set it.
+	Prerelease bool
+}
+
+// ParseCore reads the numbers of a complete SemVer tag with an optional leading "v" and any suffix. ok is
+// false for everything else.
+func ParseCore(tag string) (Core, bool) {
+	p, kind := parseTag(tag)
+	if kind == kindInvalid {
+		return Core{}, false
+	}
+	return Core{p.major, p.minor, p.patch, kind == kindPrerelease}, true
+}
+
+// Compare orders by the three numbers only and returns -1, 0 or 1.
+func (c Core) Compare(o Core) int {
+	a, b := parsedTag{major: c.Major, minor: c.Minor, patch: c.Patch}, parsedTag{major: o.Major, minor: o.Minor, patch: o.Patch}
+	switch {
+	case a.less(b):
+		return -1
+	case b.less(a):
+		return 1
+	}
+	return 0
+}
+
+// String is "MAJOR.MINOR.PATCH".
+func (c Core) String() string { return fmt.Sprintf("%d.%d.%d", c.Major, c.Minor, c.Patch) }

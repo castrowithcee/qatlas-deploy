@@ -11,6 +11,7 @@ import (
 	"github.com/castrowithcee/qatlas-kit/localipc"
 	"github.com/castrowithcee/qatlas-kit/redact"
 
+	"github.com/castrowithcee/qatlas-deploy/internal/changelog"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
@@ -42,6 +43,9 @@ type Config struct {
 	// Registry configures the registry clients of the update detection; tests point it at a local server. Its
 	// Credential is ignored: logins come from registryCredential.
 	Registry registryclient.Options
+	// Changelog configures the GitHub client of the changelogs; tests point it at a local server. Its Token and
+	// CacheDir are ignored: the token comes from the credential "github.com" and the cache lives in StateDir.
+	Changelog changelog.Options
 	// PollInterval is the time between repository polls; zero means engine.DefaultInterval.
 	PollInterval time.Duration
 }
@@ -85,7 +89,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err := registerRunCommands(registry, eng, cfg.Version, started); err != nil {
 		return err
 	}
-	if err := registerUpdateCommands(registry, repo, eng, store, cfg.Registry); err != nil {
+	if err := registerUpdateCommands(registry, repo, eng, store, cfg.Registry, cfg.Changelog); err != nil {
 		return err
 	}
 	if err := registerBackupCommands(registry, eng, cfg.Backups, secrets.Apply, log); err != nil {

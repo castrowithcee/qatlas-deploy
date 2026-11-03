@@ -470,6 +470,8 @@ const UpdatesListCommand = "updates.list"
 type UpdatesArgs struct {
 	Stack   string `json:"stack,omitempty"`
 	Refresh bool   `json:"refresh,omitempty"`
+	// Changelog adds the release notes of every available update to the result.
+	Changelog bool `json:"changelog,omitempty"`
 }
 
 // UpdatesResult answers UpdatesListCommand.
@@ -485,6 +487,8 @@ type StackUpdates struct {
 	Checked time.Time    `json:"checked,omitzero"`
 	Items   []UpdateInfo `json:"items"`
 	Error   string       `json:"error,omitempty"`
+	// Changelogs holds one entry per item with an available update; it is set only when asked for.
+	Changelogs []ChangelogInfo `json:"changelogs,omitempty"`
 }
 
 // UpdateInfo is the outcome for one image variable. Status is current, update, not-comparable or error;
@@ -543,3 +547,47 @@ type UpdateStepInfo struct {
 	Result   string `json:"result,omitempty"`
 	Error    string `json:"error,omitempty"`
 }
+
+// ChangelogShowCommand shows the release notes between the current and the available version of every
+// variable of one stack that has an update. It only reads the stored detection and asks GitHub; it never asks
+// a registry for tags and changes nothing.
+const ChangelogShowCommand = "changelog.show"
+
+// ChangelogArgs are the arguments of ChangelogShowCommand.
+type ChangelogArgs struct {
+	Stack string `json:"stack"`
+}
+
+// ChangelogResult answers ChangelogShowCommand. Checked is zero for a stack never checked.
+type ChangelogResult struct {
+	Stack   string          `json:"stack"`
+	Checked time.Time       `json:"checked,omitzero"`
+	Items   []ChangelogInfo `json:"items"`
+}
+
+// ChangelogInfo is the release notes of one image variable with an available update. Source is the GitHub
+// repository as owner/name, empty when none is known. Link is the page to read instead of or besides the
+// releases. Reason is a fixed short text that says why Releases is empty.
+type ChangelogInfo struct {
+	Variable string             `json:"variable"`
+	Current  string             `json:"current"`
+	Target   string             `json:"target"`
+	Source   string             `json:"source,omitempty"`
+	Link     string             `json:"link,omitempty"`
+	Reason   string             `json:"reason,omitempty"`
+	Releases []ChangelogRelease `json:"releases"`
+	// Omitted counts releases left out to keep the answer small.
+	Omitted int `json:"omitted,omitempty"`
+}
+
+// ChangelogRelease is one release; the texts are untrusted plain text from GitHub.
+type ChangelogRelease struct {
+	Version   string    `json:"version"`
+	Name      string    `json:"name,omitempty"`
+	Published time.Time `json:"published,omitzero"`
+	URL       string    `json:"url,omitempty"`
+	Body      string    `json:"body,omitempty"`
+}
+
+// ChangelogTimeout bounds how long the service spends on the GitHub and label lookups of one request.
+const ChangelogTimeout = 2 * time.Minute

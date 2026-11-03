@@ -139,3 +139,28 @@ func TestPath(t *testing.T) {
 		}
 	}
 }
+
+func TestParseCore(t *testing.T) {
+	for tag, want := range map[string]Core{
+		"1.2.3":         {1, 2, 3, false},
+		"v1.2.3":        {1, 2, 3, false},
+		"v1.2.3-alpine": {1, 2, 3, false},
+		"1.2.3-rc1":     {1, 2, 3, true},
+		"1.2.3-1":       {1, 2, 3, true},
+	} {
+		got, ok := ParseCore(tag)
+		if !ok || got != want {
+			t.Errorf("%s: %+v %v", tag, got, ok)
+		}
+	}
+	for _, tag := range []string{"", "latest", "1.2", "16", "01.2.3"} {
+		if _, ok := ParseCore(tag); ok {
+			t.Errorf("%q parsed", tag)
+		}
+	}
+	a, _ := ParseCore("1.9.0")
+	b, _ := ParseCore("v1.10.0")
+	if a.Compare(b) != -1 || b.Compare(a) != 1 || a.Compare(a) != 0 || b.String() != "1.10.0" {
+		t.Error("Compare or String")
+	}
+}

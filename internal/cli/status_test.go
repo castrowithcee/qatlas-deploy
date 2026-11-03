@@ -14,6 +14,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-kit/localipc"
 
+	"github.com/castrowithcee/qatlas-deploy/internal/changelog"
 	"github.com/castrowithcee/qatlas-deploy/internal/channeltest"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
@@ -26,6 +27,9 @@ var testGit service.Git
 
 // testRegistry configures the registry clients of the next service a test starts.
 var testRegistry registry.Options
+
+// testChangelog configures the GitHub client of the next service a test starts.
+var testChangelog changelog.Options
 
 // testDeployer is the deployer of the next service a test starts; nil means none.
 var testDeployer engine.Deployer
@@ -64,7 +68,7 @@ func startServiceLogged(t *testing.T, check service.PeerCheck, logOut io.Writer)
 	done := make(chan error, 1)
 	go func() {
 		done <- service.Run(ctx, slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelDebug})),
-			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups, Registry: testRegistry})
+			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups, Registry: testRegistry, Changelog: testChangelog})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	path, err := ep.Path()

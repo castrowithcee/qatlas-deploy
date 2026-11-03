@@ -154,20 +154,32 @@ func loadStack(dir, name string) (Stack, bool) {
 		for _, img := range s.Images {
 			known[img.Var] = true
 		}
-		vars := make([]string, 0, len(rules.Update.Tags))
-		for v := range rules.Update.Tags {
-			vars = append(vars, v)
-		}
-		sort.Strings(vars)
-		for _, v := range vars {
-			if !known[v] {
-				return fail(&RulesError{Variable: v,
-					Err: fmt.Errorf("%s: update.tags.%s: no service image uses this variable as its tag", RulesFile, v)})
+		for _, field := range []struct {
+			name string
+			vars []string
+		}{
+			{"update.tags", keysOf(rules.Update.Tags)},
+			{"update.changelog", keysOf(rules.Update.Changelog)},
+		} {
+			sort.Strings(field.vars)
+			for _, v := range field.vars {
+				if !known[v] {
+					return fail(&RulesError{Variable: v,
+						Err: fmt.Errorf("%s: %s.%s: no service image uses this variable as its tag", RulesFile, field.name, v)})
+				}
 			}
 		}
 	}
 	s.Rules = rules
 	return s, true
+}
+
+func keysOf[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func hasAnyCompose(dir string) bool {
