@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/castrowithcee/qatlas-kit/localipc"
+	"github.com/castrowithcee/qatlas-kit/notify"
 	"github.com/castrowithcee/qatlas-kit/redact"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/changelog"
@@ -50,6 +51,9 @@ type Config struct {
 	PollInterval time.Duration
 	// Clock drives the poll loop and the maintenance window; nil means the system clock. Tests inject their own.
 	Clock engine.Clock
+	// Notify configures the notification sender; tests give it the roots of a local server and short waits. Its
+	// Redactor is ignored: the service's own redactor is used.
+	Notify notify.Options
 	// OnUpdateAvailable, when set, is told every stack in manual mode the maintenance window found an update
 	// for. It runs in the window's goroutine and must return quickly.
 	OnUpdateAvailable func(UpdateNotice)
@@ -83,8 +87,18 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err := registerRepoCommands(registry, repo); err != nil {
 		return err
 	}
+	notifier, err := newNotifyService(cfg.StateDir, store, cfg.Notify, secrets, cfg.Version, log)
+	if err != nil {
+		return fmt.Errorf("prepare the notifications: %w", err)
+	}
+	// Deferred first, so it runs after the engine has stopped and queued its last events.
+	defer notifier.close()
+	if err := registerNotifyCommands(registry, notifier); err != nil {
+		return err
+	}
 	eng, err := engine.New(engine.Config{
 		StateDir: cfg.StateDir, Source: repo.engineSource, Lock: &repo.mu, Deployer: cfg.Deployer,
+		Events: notifier.runEvent,
 		Redact: secrets.Apply, Interval: cfg.PollInterval, Clock: cfg.Clock, Logger: log,
 	})
 	if err != nil {
@@ -95,7 +109,12 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	win, err := newWindowService(cfg.StateDir, upd, cfg.Clock, log, cfg.OnUpdateAvailable)
+	win, err := newWindowService(cfg.StateDir, upd, cfg.Clock, log, func(n UpdateNotice) {
+		if cfg.OnUpdateAvailable != nil {
+			cfg.OnUpdateAvailable(n)
+		}
+		notifier.updateAvailable(n)
+	})
 	if err != nil {
 		return fmt.Errorf("prepare the maintenance window: %w", err)
 	}

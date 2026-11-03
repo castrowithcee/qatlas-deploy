@@ -3,7 +3,6 @@ package service_test
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -30,6 +29,7 @@ type harness struct {
 	srv   *hostkeytest.Server
 	url   string
 	dir   string
+	logs  *lockedBuffer
 	call  func(command string, args, result any) error
 }
 
@@ -37,7 +37,7 @@ func start(t *testing.T) *harness { return startWith(t, nil) }
 
 func startWith(t *testing.T, dep engine.Deployer, opts ...func(*service.Config)) *harness {
 	t.Helper()
-	h := &harness{t: t, state: filepath.Join(t.TempDir(), "state"), git: servicetest.New(), srv: hostkeytest.Start(t)}
+	h := &harness{t: t, state: filepath.Join(t.TempDir(), "state"), git: servicetest.New(), srv: hostkeytest.Start(t), logs: &lockedBuffer{}}
 	h.git.Files = servicetest.Stacks()
 	h.url = h.srv.URL()
 	h.dir = filepath.Join(t.TempDir(), "stacks")
@@ -51,7 +51,7 @@ func startWith(t *testing.T, dep engine.Deployer, opts ...func(*service.Config))
 		for _, o := range opts {
 			o(&cfg)
 		}
-		done <- service.Run(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
+		done <- service.Run(ctx, slog.New(slog.NewTextHandler(h.logs, nil)), cfg)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	path, err := ep.Path()

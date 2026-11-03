@@ -76,6 +76,9 @@ const (
 	CodeBadVersion   = "bad-version"
 	CodeRegistry     = "registry-failed"
 	CodeNotUpdatable = "not-updatable"
+
+	CodeChannelExists = "channel-exists"
+	CodeNoSuchChannel = "no-such-channel"
 )
 
 // Request is what a client sends. Args is command specific and may be absent.
@@ -656,4 +659,89 @@ type WindowResult struct {
 	NextOpening time.Time `json:"next_opening"`
 	LastRun     time.Time `json:"last_run,omitzero"`
 	Running     bool      `json:"running,omitempty"`
+}
+
+// The commands of the notification channels. A channel receives the events it selected; its secret parts live
+// in the credential store and never travel back over the channel. NotifyTestCommand sends one test message
+// and answers with the error code of the notification kit when the delivery fails.
+const (
+	NotifyListCommand   = "notify.list"
+	NotifyAddCommand    = "notify.add"
+	NotifyRemoveCommand = "notify.remove"
+	NotifyTestCommand   = "notify.test"
+)
+
+// The types of a notification channel.
+const (
+	NotifyWebhook  = "webhook"
+	NotifySlack    = "slack"
+	NotifyTelegram = "telegram"
+	NotifySMTP     = "smtp"
+)
+
+// The events a channel can select.
+const (
+	NotifyEventSucceeded       = "succeeded"
+	NotifyEventFailed          = "failed"
+	NotifyEventRolledBack      = "rolled-back"
+	NotifyEventRollbackFailed  = "rollback-failed"
+	NotifyEventUpdateAvailable = "update-available"
+)
+
+// NotifyTestTimeout bounds how long the service spends on one test message.
+const NotifyTestTimeout = 30 * time.Second
+
+// NotifyAddArgs are the arguments of NotifyAddCommand. Name is 1 to 32 characters: lowercase letters, digits
+// and '-', starting with a letter. Events lists the events the channel receives; none means all. Secret is the
+// part that grants the right to send: the URL of a webhook or of a Slack incoming webhook, the token of a
+// Telegram bot, or the password of an SMTP account (required with User, otherwise absent). Key is the signing
+// key of a webhook and required there. The other fields belong to one type each: Host, Port (0 for the default
+// of the security), Security ("starttls", the default, or "tls"), User, From and To to smtp; ChatID and
+// BaseURL (optional) to telegram. A field of another type is refused.
+type NotifyAddArgs struct {
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Events   []string `json:"events,omitempty"`
+	Secret   string   `json:"secret,omitempty"`
+	Key      string   `json:"key,omitempty"`
+	Host     string   `json:"host,omitempty"`
+	Port     int      `json:"port,omitempty"`
+	Security string   `json:"security,omitempty"`
+	User     string   `json:"user,omitempty"`
+	From     string   `json:"from,omitempty"`
+	To       []string `json:"to,omitempty"`
+	ChatID   string   `json:"chat_id,omitempty"`
+	BaseURL  string   `json:"base_url,omitempty"`
+}
+
+// NotifyNameArgs are the arguments of NotifyRemoveCommand and NotifyTestCommand.
+type NotifyNameArgs struct {
+	Name string `json:"name"`
+}
+
+// NotifyChannelInfo describes one channel without any secret part.
+type NotifyChannelInfo struct {
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Events   []string `json:"events"`
+	Host     string   `json:"host,omitempty"`
+	Port     int      `json:"port,omitempty"`
+	Security string   `json:"security,omitempty"`
+	User     string   `json:"user,omitempty"`
+	From     string   `json:"from,omitempty"`
+	To       []string `json:"to,omitempty"`
+	ChatID   string   `json:"chat_id,omitempty"`
+	BaseURL  string   `json:"base_url,omitempty"`
+}
+
+// NotifyListResult answers NotifyListCommand, the channels in name order. NotifyAddCommand answers with the
+// channel it stored.
+type NotifyListResult struct {
+	Channels []NotifyChannelInfo `json:"channels"`
+}
+
+// NotifyTestResult answers a delivered test message.
+type NotifyTestResult struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
