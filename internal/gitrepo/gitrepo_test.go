@@ -391,6 +391,77 @@ func TestRemoteURL(t *testing.T) {
 	}
 }
 
+func TestFastForward(t *testing.T) {
+	ctx := context.Background()
+	f := newRemote(t)
+	r, _ := cloneFixture(t, f)
+	head, _ := r.Head(ctx)
+
+	// nothing fetched: a no-op
+	if err := r.FastForward(ctx); err != nil {
+		t.Fatalf("no-op fast-forward: %v", err)
+	}
+	next := f.commit(map[string]string{"web/compose.yaml": "b\n"})
+	if err := r.Fetch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := r.Head(ctx); h != head {
+		t.Fatal("fetch moved HEAD")
+	}
+	if err := r.FastForward(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := r.Head(ctx); h != next {
+		t.Fatalf("HEAD = %s; want %s", h, next)
+	}
+	body, _ := os.ReadFile(filepath.Join(r.dir, "web", "compose.yaml"))
+	if string(body) != "b\n" {
+		t.Fatalf("working file = %q", body)
+	}
+}
+
+func TestFastForwardRefusesCollisionAndKeepsLocalFiles(t *testing.T) {
+	ctx := context.Background()
+	f := newRemote(t)
+	r, _ := cloneFixture(t, f)
+	head, _ := r.Head(ctx)
+
+	f.commit(map[string]string{"web/compose.yaml": "remote\n", "db/new.txt": "n\n"})
+	if err := r.Fetch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	writeTree(t, r.dir, map[string]string{"web/compose.yaml": "local\n", "db/new.txt": "mine\n"})
+	if err := r.FastForward(ctx); err == nil {
+		t.Fatal("fast-forward over colliding local changes succeeded")
+	}
+	if h, _ := r.Head(ctx); h != head {
+		t.Fatal("HEAD moved")
+	}
+	for name, want := range map[string]string{"web/compose.yaml": "local\n", "db/new.txt": "mine\n"} {
+		if body, _ := os.ReadFile(filepath.Join(r.dir, name)); string(body) != want {
+			t.Fatalf("%s = %q; want %q", name, body, want)
+		}
+	}
+}
+
+func TestFastForwardRefusesDivergence(t *testing.T) {
+	ctx := context.Background()
+	f := newRemote(t)
+	r, _ := cloneFixture(t, f)
+	fixtureGit(t, r.dir, "commit", "-q", "--allow-empty", "-m", "local")
+	local, _ := r.Head(ctx)
+	f.commit(map[string]string{"web/compose.yaml": "remote\n"})
+	if err := r.Fetch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.FastForward(ctx); err == nil {
+		t.Fatal("fast-forward of a diverged branch succeeded")
+	}
+	if h, _ := r.Head(ctx); h != local {
+		t.Fatal("HEAD moved")
+	}
+}
+
 func TestTrackedFilesAndIsIgnored(t *testing.T) {
 	ctx := context.Background()
 	f := newRemote(t)

@@ -57,6 +57,12 @@ const (
 	CodeRepoBound      = "repo-bound"
 	CodeHostKey        = "host-key"
 	CodeRemote         = "remote-failed"
+	CodeRunActive      = "run-active"
+	CodeLocalChanges   = "local-changes"
+	CodeNoSuchStack    = "no-such-stack"
+	CodeNoSuchRun      = "no-such-run"
+	CodeUnreadable     = "stack-unreadable"
+	CodeNoDeployer     = "no-deployer"
 )
 
 // Request is what a client sends. Args is command specific and may be absent.
@@ -144,8 +150,88 @@ const StatusCommand = "status"
 
 // StatusResult answers StatusCommand.
 type StatusResult struct {
-	Version   string    `json:"version"`
-	StartedAt time.Time `json:"started_at"`
+	Version   string       `json:"version"`
+	StartedAt time.Time    `json:"started_at"`
+	Engine    EngineStatus `json:"engine"`
+}
+
+// EngineStatus is the engine's part of StatusResult. Stacks is empty while no repository is bound.
+type EngineStatus struct {
+	LastPoll   time.Time     `json:"last_poll,omitzero"`
+	PollError  string        `json:"poll_error,omitempty"`
+	Note       string        `json:"note,omitempty"`
+	Head       string        `json:"head,omitempty"`
+	RemoteHead string        `json:"remote_head,omitempty"`
+	Stacks     []StackStatus `json:"stacks"`
+}
+
+// StackStatus is the engine's view of one stack. ActiveRun is the id of the run in progress, LastRun the
+// result of the last finished one.
+type StackStatus struct {
+	Name      string        `json:"name"`
+	Deployed  string        `json:"deployed,omitempty"`
+	Pending   string        `json:"pending,omitempty"`
+	ActiveRun string        `json:"active_run,omitempty"`
+	LastRun   string        `json:"last_run,omitempty"`
+	Findings  []FindingInfo `json:"findings"`
+	Removed   bool          `json:"removed,omitempty"`
+}
+
+// FindingInfo is one finding of the engine about a stack.
+type FindingInfo struct {
+	Kind   string `json:"kind"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// The commands that control runs.
+const (
+	DeployCommand = "deploy"
+	RunsCommand   = "runs"
+	LogCommand    = "log"
+)
+
+// DeployArgs are the arguments of DeployCommand.
+type DeployArgs struct {
+	Stack string `json:"stack"`
+}
+
+// DeployResult answers DeployCommand with the run that was started.
+type DeployResult struct {
+	ID     string `json:"id"`
+	Stack  string `json:"stack"`
+	Commit string `json:"commit"`
+}
+
+// RunsArgs are the arguments of RunsCommand; an empty Stack means all stacks.
+type RunsArgs struct {
+	Stack string `json:"stack,omitempty"`
+}
+
+// RunInfo describes one recorded run. DurationMS is in milliseconds.
+type RunInfo struct {
+	ID         string    `json:"id"`
+	Stack      string    `json:"stack"`
+	Commit     string    `json:"commit"`
+	Trigger    string    `json:"trigger"`
+	Started    time.Time `json:"started"`
+	DurationMS int64     `json:"duration_ms"`
+	Result     string    `json:"result"`
+	Error      string    `json:"error,omitempty"`
+}
+
+// RunsResult answers RunsCommand, newest run first.
+type RunsResult struct {
+	Runs []RunInfo `json:"runs"`
+}
+
+// LogArgs are the arguments of LogCommand.
+type LogArgs struct {
+	ID string `json:"id"`
+}
+
+// LogResult answers LogCommand.
+type LogResult struct {
+	Text string `json:"text"`
 }
 
 // The commands that manage the deploy key and the named credentials. The private key and stored values never

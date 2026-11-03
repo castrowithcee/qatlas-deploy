@@ -69,5 +69,11 @@ func TestArchitecture(t *testing.T) {
 			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),
 			Hint:  "the git layer sits below the service and the command surface and knows neither",
 		},
+		{
+			Name:  "engine-knows-no-service-layer",
+			Files: archtest.Files{Under: []string{"internal/engine"}, Tests: archtest.WithTests},
+			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),
+			Hint:  "the engine sits below the service and the command surface and knows neither",
+		},
 	}, nil)
 }

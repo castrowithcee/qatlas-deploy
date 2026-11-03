@@ -18,6 +18,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
+	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
 	"github.com/castrowithcee/qatlas-deploy/internal/hostkey"
 	"github.com/castrowithcee/qatlas-deploy/internal/stackcheck"
@@ -37,6 +38,9 @@ type WorkingCopy interface {
 	Head(ctx context.Context) (string, error)
 	RemoteHead(ctx context.Context) (string, error)
 	RemoteURL(ctx context.Context) (string, error)
+	Status(ctx context.Context) ([]gitrepo.Change, error)
+	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
+	FastForward(ctx context.Context) error
 	TrackedFiles(ctx context.Context, dir string) ([]string, error)
 	IsIgnored(ctx context.Context, path string) (bool, error)
 }
@@ -101,6 +105,8 @@ type repoService struct {
 	keys     *credentials.Store
 	cfg      *configfile.Store[repoConfig]
 	git      Git
+	// onBound is called after a binding was stored, with mu held; it must not block.
+	onBound func()
 	// probe reads the host key of a server; tests replace it.
 	probe func(ctx context.Context, host, port string) (hostkey.Key, error)
 }
@@ -132,6 +138,26 @@ func (s *repoService) bound() (repoConfig, error) {
 		return repoConfig{}, errors.New("the stacks repository configuration cannot be read")
 	}
 	return c, nil
+}
+
+// engineSource is the engine's view of the binding: read again in every poll, so a binding made later by
+// "repo set" is picked up. The engine takes mu itself around its use of the working copy.
+func (s *repoService) engineSource() (engine.Binding, error) {
+	s.mu.Lock()
+	c, err := s.bound()
+	s.mu.Unlock()
+	var ce *control.Error
+	if errors.As(err, &ce) && ce.Code == control.CodeNoRepo {
+		return engine.Binding{}, engine.ErrNoRepo
+	}
+	if err != nil {
+		return engine.Binding{}, err
+	}
+	wc, err := s.git.Open(s.gitConfig(), c.Dir)
+	if err != nil {
+		return engine.Binding{}, err
+	}
+	return engine.Binding{Dir: c.Dir, Copy: wc}, nil
 }
 
 func targetOf(rawURL string) (host, port string, err error) {
@@ -257,6 +283,9 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 	}
 	if _, err := s.cfg.SaveIfUnchanged(repoConfig{Version: repoConfigVer, URL: a.URL, Dir: a.Dir}, rev); err != nil {
 		return nil, errors.New("the stacks repository configuration cannot be written")
+	}
+	if s.onBound != nil {
+		s.onBound()
 	}
 	return control.RepoSetResult{URL: a.URL, Dir: a.Dir, Fingerprint: key.Fingerprint, Head: head, Cloned: cloned}, nil
 }
