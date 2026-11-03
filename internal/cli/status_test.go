@@ -17,11 +17,15 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/channeltest"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
+	"github.com/castrowithcee/qatlas-deploy/internal/registry"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
 )
 
 // testGit is the git layer of the next service a test starts; nil means the system git.
 var testGit service.Git
+
+// testRegistry configures the registry clients of the next service a test starts.
+var testRegistry registry.Options
 
 // testDeployer is the deployer of the next service a test starts; nil means none.
 var testDeployer engine.Deployer
@@ -60,7 +64,7 @@ func startServiceLogged(t *testing.T, check service.PeerCheck, logOut io.Writer)
 	done := make(chan error, 1)
 	go func() {
 		done <- service.Run(ctx, slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelDebug})),
-			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups})
+			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups, Registry: testRegistry})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	path, err := ep.Path()
