@@ -1,0 +1,183 @@
+// Package version selects the update target of one image variable from the tags of its repository. It is
+// pure: it does no I/O.
+//
+// Rules:
+//   - A tag is comparable if it is complete SemVer, MAJOR.MINOR.PATCH with an optional leading "v". Incomplete
+//     versions such as "1.2" or "16" and everything else are ignored as candidates.
+//   - Text after the first "-" is the variant ("alpine", "apache"). Only tags with exactly the prefix and the
+//     variant of the current tag are candidates. A suffix whose first dot- or dash-separated part is a number or
+//     one of alpha, beta, rc, pre, preview, dev, snapshot, nightly, canary, next, test or milestone (optionally
+//     followed by digits) is a SemVer pre-release, not a variant, and is never offered.
+//   - The filter is applied unanchored to the whole candidate tag.
+package version
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// Ceilings: how far an automatic update may move.
+const (
+	CeilingPatch = "patch"
+	CeilingMinor = "minor"
+	CeilingMajor = "major"
+)
+
+// Status is the outcome of a selection.
+type Status string
+
+const (
+	// StatusCurrent means no candidate is allowed that is higher than the current tag.
+	StatusCurrent Status = "current"
+	// StatusUpdate means Selected is higher than the current tag and within the ceiling.
+	StatusUpdate Status = "update"
+	// StatusNotComparable means the current tag cannot be ordered against other tags; see Reason.
+	StatusNotComparable Status = "not-comparable"
+)
+
+// Reasons for StatusNotComparable.
+const (
+	// ReasonNotSemver: the current tag is not complete SemVer, for example "latest", "16" or "1.2".
+	ReasonNotSemver = "not-semver"
+	// ReasonPrerelease: the current tag is a pre-release, whose variant cannot be told from its suffix.
+	ReasonPrerelease = "prerelease"
+)
+
+// Input is one selection request.
+type Input struct {
+	// Current is the tag the variable is on.
+	Current string
+	// Candidates are the tags of the repository, in any order.
+	Candidates []string
+	// Ceiling is CeilingPatch, CeilingMinor or CeilingMajor; empty means CeilingMinor.
+	Ceiling string
+	// Filter, if set, restricts the candidates; it is not applied to Current.
+	Filter *regexp.Regexp
+}
+
+// Result is the outcome for one variable.
+type Result struct {
+	Status Status
+	// Reason is set for StatusNotComparable.
+	Reason string
+	// Current is the tag as given.
+	Current string
+	// Selected is the tag to move to. Without an allowed higher candidate it equals Current. It is empty for
+	// StatusNotComparable.
+	Selected string
+	// MajorAvailable is the highest stable, filter-passing tag of the same variant with a higher major version
+	// than Current. It is set only if the ceiling is below major, and such an update is never automatic.
+	MajorAvailable string
+}
+
+type parsedTag struct {
+	tag                 string
+	prefix              string
+	major, minor, patch uint64
+	variant             string
+}
+
+type parseKind int
+
+const (
+	kindInvalid parseKind = iota
+	kindPrerelease
+	kindOK
+)
+
+var (
+	tagRe = regexp.MustCompile(`^(v?)(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z][0-9A-Za-z.-]*))?$`)
+	preRe = regexp.MustCompile(`(?i)^(alpha|beta|rc|pre|preview|dev|snapshot|nightly|canary|next|test|milestone)[0-9]*$`)
+	numRe = regexp.MustCompile(`^[0-9]+$`)
+)
+
+func parseTag(tag string) (parsedTag, parseKind) {
+	m := tagRe.FindStringSubmatch(tag)
+	if m == nil {
+		return parsedTag{}, kindInvalid
+	}
+	p := parsedTag{tag: tag, prefix: m[1], variant: m[5]}
+	var err error
+	for i, dst := range []*uint64{&p.major, &p.minor, &p.patch} {
+		if *dst, err = strconv.ParseUint(m[2+i], 10, 63); err != nil {
+			return parsedTag{}, kindInvalid
+		}
+	}
+	if p.variant != "" {
+		first, _, _ := strings.Cut(p.variant, ".")
+		first, _, _ = strings.Cut(first, "-")
+		if numRe.MatchString(first) || preRe.MatchString(first) {
+			return p, kindPrerelease
+		}
+	}
+	return p, kindOK
+}
+
+func (a parsedTag) less(b parsedTag) bool {
+	if a.major != b.major {
+		return a.major < b.major
+	}
+	if a.minor != b.minor {
+		return a.minor < b.minor
+	}
+	return a.patch < b.patch
+}
+
+// Select picks the update target for in.Current. The only error is an unknown ceiling.
+func Select(in Input) (Result, error) {
+	ceiling := in.Ceiling
+	if ceiling == "" {
+		ceiling = CeilingMinor
+	}
+	if ceiling != CeilingPatch && ceiling != CeilingMinor && ceiling != CeilingMajor {
+		return Result{}, fmt.Errorf("unsupported ceiling %q: use patch, minor or major", in.Ceiling)
+	}
+	res := Result{Current: in.Current}
+	cur, kind := parseTag(in.Current)
+	switch kind {
+	case kindInvalid:
+		res.Status, res.Reason = StatusNotComparable, ReasonNotSemver
+		return res, nil
+	case kindPrerelease:
+		res.Status, res.Reason = StatusNotComparable, ReasonPrerelease
+		return res, nil
+	}
+
+	var best, bestMajor *parsedTag
+	for _, tag := range in.Candidates {
+		p, kind := parseTag(tag)
+		if kind != kindOK || p.variant != cur.variant || p.prefix != cur.prefix || !cur.less(p) {
+			continue
+		}
+		if in.Filter != nil && !in.Filter.MatchString(tag) {
+			continue
+		}
+		if p.major > cur.major && (bestMajor == nil || bestMajor.less(p)) {
+			bestMajor = &p
+		}
+		if allowed(cur, p, ceiling) && (best == nil || best.less(p)) {
+			best = &p
+		}
+	}
+	res.Status, res.Selected = StatusCurrent, in.Current
+	if best != nil {
+		res.Status, res.Selected = StatusUpdate, best.tag
+	}
+	if ceiling != CeilingMajor && bestMajor != nil {
+		res.MajorAvailable = bestMajor.tag
+	}
+	return res, nil
+}
+
+// allowed reports whether p, which is higher than cur, stays within the ceiling.
+func allowed(cur, p parsedTag, ceiling string) bool {
+	switch ceiling {
+	case CeilingPatch:
+		return p.major == cur.major && p.minor == cur.minor
+	case CeilingMinor:
+		return p.major == cur.major
+	}
+	return true
+}

@@ -11,6 +11,7 @@ Parts of this repository are copied from or derived from qatlas-sysmin
 - the poll loop with spread and wake-up, the per-stack run lock with dropped parallel triggers, and the state and run-log layout of `internal/engine`, reduced to a deployment engine without approvals, vault or step plans
 - the runner with process-group handling and bounded output, the Compose command assembly and the container and HTTP checks of `internal/compose`, reduced to one fixed pull, up and check flow without step plans
 - the volume archive through a helper container without network, the backup directory naming, the retention and the restore flow of `internal/backup`, rebuilt around Compose stacks (the backup store, metadata, data-directory handling and confirmation are new)
+- the OCI registry client with its reference parsing and fake registry in `internal/registry`, and the version selection of `internal/version`, rebuilt on the shared HTTP and rate-limit packages with redirects refused, and reshaped to a per-variable ceiling, filter and major hint
 - `.github/workflows/ci.yml`
 - the end-to-end environment in `e2e/`: `run.sh`, `host.Dockerfile`, `registry.Dockerfile`, `fakes.Dockerfile` and the helper services in `e2e/fakes` (releases fake, webhook receiver, demo application)
 
