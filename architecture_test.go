@@ -70,6 +70,12 @@ func TestArchitecture(t *testing.T) {
 			Hint:  "the git layer sits below the service and the command surface and knows neither",
 		},
 		{
+			Name:  "compose-sees-stacks-and-the-engine-log-only",
+			Files: archtest.Files{Under: []string{"internal/compose"}, Tests: archtest.WithTests},
+			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control", "internal/gitrepo"),
+			Hint:  "the compose layer sits below the service and the command surface and knows neither",
+		},
+		{
 			Name:  "engine-knows-no-service-layer",
 			Files: archtest.Files{Under: []string{"internal/engine"}, Tests: archtest.WithTests},
 			Check: archtest.ForbidImports("internal/service", "internal/client", "internal/cli", "internal/control"),

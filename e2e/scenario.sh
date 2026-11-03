@@ -1,8 +1,9 @@
 #!/bin/sh
 # Scenario: from the simulated host, clone the demo stacks repository over SSH and push a commit; then check
 # the demo image tags and that a demo container turns unhealthy on purpose. Then run qdeploy on the host as a
-# service, bind the stacks repository with its own deploy key, list the stacks and refuse a changed host key of
-# the git server. Sourced by run.sh scenario.
+# service, bind the stacks repository with its own deploy key, list the stacks, deploy a new commit, report a
+# commit with a failing healthcheck as failed and refuse a changed host key of the git server. Docker
+# integration tests of the deployer run inside the host before that. Sourced by run.sh scenario.
 
 as_admin() {
 	docker exec -i -u "$admin" "$host" sh -ec "$*"
@@ -55,6 +56,8 @@ run_scenario() {
 	log "scenario: $prefix-demo-ok healthy, $prefix-demo-bad unhealthy"
 	docker exec "$host" docker rm -f "$prefix-demo-ok" "$prefix-demo-bad" >/dev/null
 
+	scenario_compose_integration
+
 	scenario_stacks_repo
 
 	log 'scenario: passed'
@@ -93,7 +96,7 @@ setup_service() {
 		go build -trimpath -o "$work/qdeploy" .) || fail 'cannot build qdeploy'
 	docker cp "$work/qdeploy" "$host:/usr/local/bin/qdeploy"
 	docker exec "$host" sh -ec '
-		useradd --system --home-dir /var/lib/qdeploy --no-create-home --shell /usr/sbin/nologin qdeploy
+		useradd --system --home-dir /var/lib/qdeploy --no-create-home --shell /usr/sbin/nologin --groups docker qdeploy
 		install -d -o qdeploy -g qdeploy -m 0755 /opt/stacks
 		systemd-run --quiet --unit=qdeploy-e2e --property=Type=exec --property=User=qdeploy --property=Group=qdeploy \
 			--property=StateDirectory=qdeploy --property=StateDirectoryMode=0700 \
@@ -101,6 +104,137 @@ setup_service() {
 		fail 'cannot start the qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
 	log 'scenario: qdeploy service running'
+}
+
+# scenario_compose_integration runs the Docker integration tests of the deployer inside the host. The test
+# binary is built here and refuses to run without the marker of the simulated host.
+scenario_compose_integration() {
+	step 'Docker integration tests of the deployer run on the host'
+	(cd "$root" && GOOS=linux GOARCH="$(docker exec "$host" dpkg --print-architecture)" CGO_ENABLED=0 \
+		go test -c -tags dockerintegration -o "$work/compose.test" ./internal/compose) || fail 'cannot build the integration tests'
+	docker cp "$work/compose.test" "$host:/tmp/compose.test"
+	out=$(docker exec -e QDEPLOY_E2E_HOST=1 -e "QDEPLOY_E2E_IMAGE=registry.$domain/demo/app:1.0.0" "$host" \
+		/tmp/compose.test -test.v -test.count=1 -test.run '^TestDocker' 2>&1 </dev/null) || {
+		printf '%s\n' "$out"
+		docker exec "$host" rm -f /tmp/compose.test
+		fail 'the Docker integration tests failed'
+	}
+	docker exec "$host" rm -f /tmp/compose.test
+	for name in TestDockerHealthyStackIsDeployedAndChecked TestDockerUnhealthyStackFailsTheCheck TestDockerMissingSecretsFileStopsBeforeCompose; do
+		printf '%s' "$out" | grep -q -- "--- PASS: $name" || fail "$name did not pass: $out"
+	done
+	if printf '%s' "$out" | grep -q -- '--- SKIP'; then fail "an integration test was skipped: $out"; fi
+	log "scenario: Docker integration tests passed: $(printf '%s' "$out" | grep -E '^(--- |ok|PASS)' | tr '\n' ' ')"
+}
+
+# stack_field prints one flat field of a stack from qdeploy status (empty when it is absent).
+stack_field() {
+	qd --output json status | sed -n "s/.*\"stack\\.$1\\.$2\": *\"\\([^\"]*\\)\".*/\\1/p"
+}
+
+# stack_settled succeeds when the stack has no run in progress and its last run ended with the given result.
+stack_settled() {
+	[ -z "$(stack_field "$1" active_run)" ] && [ "$(stack_field "$1" last_run)" = "$2" ]
+}
+
+# stack_idle succeeds when the stack has no run in progress and has finished at least one.
+stack_idle() {
+	[ -z "$(stack_field "$1" active_run)" ] && [ -n "$(stack_field "$1" last_run)" ]
+}
+
+# run_finished succeeds when the log of the run has its result line and the stack has no run in progress.
+run_finished() {
+	[ -z "$(stack_field "$1" active_run)" ] && qd log "$2" | grep -q ' result '
+}
+
+has_failed_commit_finding() {
+	stack_field demo-cache findings | grep -q failed-commit
+}
+
+# restart_service restarts the qdeploy unit, which makes the engine poll at once.
+restart_service() {
+	docker exec "$host" systemctl restart qdeploy-e2e || fail 'cannot restart the qdeploy service'
+	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
+	wait_for 'the qdeploy service to answer' 20 qd status
+}
+
+# stack_images prints the images of the running containers of a Compose project on the host.
+stack_images() {
+	docker exec "$host" docker ps --filter "label=com.docker.compose.project=$1" --format '{{.Image}}'
+}
+
+scenario_deploy() {
+	secret=not-a-real-secret-e2e
+
+	step 'the runs started by repo set end; secrets.env is not there yet'
+	wait_for 'the first run of demo-stack' 120 stack_idle demo-stack
+	wait_for 'the first run of demo-cache' 120 stack_idle demo-cache
+	log "scenario: first runs: demo-stack $(stack_field demo-stack last_run), demo-cache $(stack_field demo-cache last_run)"
+
+	step 'secrets.env is created on the host, owned by the service user'
+	for stack in demo-stack demo-cache; do
+		docker exec -u qdeploy "$host" sh -ec "umask 077 && printf 'DEMO_SECRET=%s\n' '$secret' >/opt/stacks/$stack/secrets.env"
+	done
+	dirty=$(docker exec -u qdeploy "$host" git -C /opt/stacks status --porcelain 2>&1) || fail "git status failed: $dirty"
+	[ -z "$dirty" ] || fail "secrets.env made the working copy dirty: $dirty"
+	[ "$(docker exec "$host" stat -c %U:%a /opt/stacks/demo-stack/secrets.env)" = qdeploy:600 ] || fail 'secrets.env has the wrong owner or mode'
+
+	step 'a manual run deploys demo-stack and records the commit'
+	out=$(qd --output json deploy demo-stack) || fail "deploy failed: $out"
+	run=$(printf '%s\n' "$out" | sed -n 's/.*"run": *"\([^"]*\)".*/\1/p')
+	commit=$(printf '%s\n' "$out" | sed -n 's/.*"commit": *"\([^"]*\)".*/\1/p')
+	[ -n "$run" ] && [ -n "$commit" ] || fail "deploy did not report a run and a commit: $out"
+	wait_for "the run $run" 240 run_finished demo-stack "$run"
+	log_text=$(qd log "$run")
+	printf '%s' "$log_text" | grep -q ' result succeeded' || fail "the run did not succeed: $log_text"
+	[ "$(stack_field demo-stack deployed)" = "$commit" ] || fail "demo-stack is not recorded as deployed at $commit: $(qd --output json status)"
+	[ "$(stack_images demo-stack)" = "registry.$domain/demo/app:1.0.1" ] || fail "demo-stack does not run the image 1.0.1: $(stack_images demo-stack)"
+	docker exec "$host" docker inspect -f '{{.Config.Env}}' "$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=demo-stack)" |
+		grep -q "DEMO_SECRET=$secret" || fail 'the container did not get the value of secrets.env'
+	log "scenario: deploy succeeded, run $run, deployed commit $commit"
+
+	step 'the engine deploys a new commit it finds by polling'
+	good=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	restart_service
+	wait_for 'the run of demo-cache' 240 stack_settled demo-cache succeeded
+	[ "$(stack_field demo-cache deployed)" = "$good" ] || fail "demo-cache is not recorded as deployed at $good: $(qd --output json status)"
+	[ "$(stack_images demo-cache)" = "registry.$domain/demo/app:1.1.0" ] || fail "demo-cache does not run the image 1.1.0: $(stack_images demo-cache)"
+	log "scenario: poll deployed demo-cache at $good"
+
+	step 'a commit with a failing healthcheck is a failed run and is not recorded as deployed'
+	as_admin 'cd ~/stacks &&
+		sed -i "s/^DEMO_HEALTH=.*/DEMO_HEALTH=fail/" demo-cache/.env &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -am "Break the demo-cache healthcheck" &&
+		git push -q origin main'
+	bad=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	restart_service
+	wait_for 'the failed run of demo-cache' 240 stack_settled demo-cache failed
+	[ "$(stack_field demo-cache deployed)" = "$good" ] || fail "demo-cache deployed changed to $(stack_field demo-cache deployed), want $good"
+	runs_out=$(qd runs demo-cache)
+	failed_run=$(printf '%s\n' "$runs_out" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}')
+	printf '%s\n' "$runs_out" | grep -m 1 "$failed_run" | grep -q 'failed' || fail "the newest run of demo-cache is not failed: $runs_out"
+	failed_log=$(qd log "$failed_run")
+	printf '%s' "$failed_log" | grep -q ' result failed' || fail "the run log does not end failed: $failed_log"
+	printf '%s' "$failed_log" | grep -q 'unhealthy' || fail "the run log does not name the unhealthy container: $failed_log"
+	log "scenario: failing healthcheck: run $failed_run failed, bad commit $bad not deployed, still $good"
+
+	step 'a failed commit is not run again by the next poll'
+	count=$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	restart_service
+	wait_for 'the failed-commit finding' 60 has_failed_commit_finding
+	[ "$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'a failed commit was run again by the poll'
+	[ "$(stack_field demo-cache deployed)" = "$good" ] || fail 'the failed commit was recorded as deployed'
+
+	step 'no run log holds a secret value'
+	ids=$(qd runs | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}')
+	n=0
+	for id in $ids; do
+		n=$((n + 1))
+		if qd log "$id" | grep -qF -- "$secret"; then fail "the log of run $id holds the secret value"; fi
+	done
+	[ "$n" -ge 3 ] || fail "too few runs to check the logs: $n"
+	if qd runs | grep -qF -- "$secret"; then fail 'qdeploy runs shows the secret value'; fi
+	log "scenario: the secret value is in none of $n run logs"
 }
 
 scenario_stacks_repo() {
@@ -153,6 +287,8 @@ scenario_stacks_repo() {
 	for want in demo-stack demo-cache DEMO_APP_VERSION=1.0.1 DEMO_APP_VERSION=1.0.0; do
 		printf '%s' "$out" | grep -q -- "$want" || fail "stacks does not show $want: $out"
 	done
+
+	scenario_deploy
 
 	step 'a changed host key of the git server aborts qdeploy'
 	original_key=$(scanned_git_key)
