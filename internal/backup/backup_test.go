@@ -731,3 +731,14 @@ func TestCreateNeverMountsTheBackupDirectoryAndLeavesNoContainerFiles(t *testing
 		t.Fatalf("dirs = %v", dirs)
 	}
 }
+
+func TestForRunsWithoutRules(t *testing.T) {
+	m := &Manager{Exec: &compose.Executor{}, Root: t.TempDir()}
+	st := stacks.Stack{Name: "demo-stack", Dir: t.TempDir()}
+	if _, err := m.ForRuns().Create(context.Background(), st, "", nil); !errors.Is(err, ErrNoRules) {
+		t.Fatalf("create err = %v", err)
+	}
+	if err := m.ForRuns().Restore(context.Background(), st, "x", nil); !errors.Is(err, ErrNoRules) {
+		t.Fatalf("restore err = %v", err)
+	}
+}

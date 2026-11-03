@@ -41,6 +41,8 @@ type WorkingCopy interface {
 	Status(ctx context.Context) ([]gitrepo.Change, error)
 	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
 	FastForward(ctx context.Context) error
+	RevertStack(ctx context.Context, stack, deployed, failed, reason string) (string, error)
+	Push(ctx context.Context, commit string) error
 	TrackedFiles(ctx context.Context, dir string) ([]string, error)
 	IsIgnored(ctx context.Context, path string) (bool, error)
 }

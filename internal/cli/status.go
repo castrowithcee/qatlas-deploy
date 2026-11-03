@@ -32,7 +32,7 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Use:   "status",
 		Short: "Show whether the qdeploy service is running",
 		Long: "status asks the running service for its version and start time, the state of its last repository poll\n" +
-			"and, per stack, what is deployed, pending or running, the last run result and the findings. Only root may use the service\n" +
+			"and, per stack, what is deployed, pending or running, the last run result, a pause and the findings. Only root may use the service\n" +
 			"channel, so run it with sudo. Without a running service it ends with exit code 3.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
@@ -86,6 +86,10 @@ func engineFields(e control.EngineStatus) []output.Field {
 		}
 		if s.Removed {
 			out = append(out, output.Field{Name: p + "removed", Value: true})
+		}
+		if s.Paused != nil {
+			out = append(out, output.Field{Name: p + "paused",
+				Value: "since " + s.Paused.Since.UTC().Format(time.RFC3339) + ", run " + s.Paused.Run})
 		}
 	}
 	return out
@@ -143,6 +147,13 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodeRunActive:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Wait for the active run to end ('qdeploy runs'), then run the command again.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodePaused:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Find out why the rollback failed ('qdeploy runs <stack>', 'qdeploy log <run>'), fix the stack, then run 'qdeploy resume <stack>'.",
+			Cause:    err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNotPaused:
+		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message,
+			NextStep: "Check the stack with 'qdeploy status'; only a paused stack can be resumed.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeLocalChanges:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Resolve the local changes in the working copy of the stack; the stack is skipped until then.", Cause: err}

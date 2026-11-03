@@ -30,6 +30,7 @@ Commands:
 - qdeploy deploy <stack>: start a manual run of a stack at the commit the working copy has (run with sudo)
 - qdeploy runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy log <run>: print the log of a run (run with sudo)
+- qdeploy resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
 - qdeploy backup create|list <stack>, qdeploy backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy version: print the version
@@ -111,6 +112,7 @@ How it works:
 - The backup records the stack, the time, the commit deployed at that time and the image versions.
 - A failed backup is removed and a stack that ran is started again.
 - A backup and a deployment of the same stack never run at the same time.
+- Every deployment run of a stack with backup rules makes a backup after it stopped the stack; when the run is rolled back, that backup is restored. These backups count for retention like any other.
 
 Retention:
 - backup.retention.keep and backup.retention.max_age_days apply after each successful backup; a backup is kept only while it satisfies every limit that is set. The newest backup is never removed.

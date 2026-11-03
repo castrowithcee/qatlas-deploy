@@ -23,6 +23,7 @@ import (
 func commit(n int) string { return fmt.Sprintf("%040x", n) }
 
 // fakeCopy stands in for the git layer; FastForward writes into the directory so a forbidden call is visible.
+// RevertStack and Push take their answers from revertErrs and pushErrs, one per call, nil once used up.
 type fakeCopy struct {
 	mu            sync.Mutex
 	dir           string
@@ -30,8 +31,25 @@ type fakeCopy struct {
 	changes       []gitrepo.Change
 	folders       map[[2]string][]string
 	fetchErr      error
+	ffErr         error
+	revertErrs    []error
+	pushErrs      []error
+	reverts       []revertCall
+	pushed        []string
+	onFetch       func(*fakeCopy) // called with mu held
 	calls         []string
 	fastForwarded int
+}
+
+type revertCall struct{ Stack, Deployed, Failed, Reason, Base string }
+
+func pop(errs *[]error) error {
+	if len(*errs) == 0 {
+		return nil
+	}
+	err := (*errs)[0]
+	*errs = (*errs)[1:]
+	return err
 }
 
 func (f *fakeCopy) rec(s string) {
@@ -40,7 +58,39 @@ func (f *fakeCopy) rec(s string) {
 	f.mu.Unlock()
 }
 
-func (f *fakeCopy) Fetch(context.Context) error { f.rec("fetch"); return f.fetchErr }
+func (f *fakeCopy) Fetch(context.Context) error {
+	f.rec("fetch")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.onFetch != nil {
+		f.onFetch(f)
+	}
+	return f.fetchErr
+}
+
+// RevertStack answers with a new commit id per call, built on the remote head.
+func (f *fakeCopy) RevertStack(_ context.Context, stack, deployed, failed, reason string) (string, error) {
+	f.rec("revert")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reverts = append(f.reverts, revertCall{stack, deployed, failed, reason, f.remote})
+	if err := pop(&f.revertErrs); err != nil {
+		return "", err
+	}
+	return commit(1000 + len(f.reverts)), nil
+}
+
+func (f *fakeCopy) Push(_ context.Context, c string) error {
+	f.rec("push")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := pop(&f.pushErrs); err != nil {
+		return err
+	}
+	f.pushed = append(f.pushed, c)
+	f.remote = c
+	return nil
+}
 func (f *fakeCopy) Head(context.Context) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -65,6 +115,9 @@ func (f *fakeCopy) FastForward(context.Context) error {
 	f.rec("ff")
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.ffErr != nil {
+		return f.ffErr
+	}
 	f.fastForwarded++
 	f.head = f.remote
 	return os.WriteFile(filepath.Join(f.dir, "fast-forwarded"), []byte("x"), 0o644)
@@ -90,19 +143,77 @@ func (f *fakeCopy) set(fn func(*fakeCopy)) {
 
 type call struct{ Stack, Commit string }
 
+// fakeDeployer records every step as "<stack>:<step>". A run's pull is recorded in calls with the commit the
+// working copy has, which is what the run deploys. errs holds the answers of a step, one per call, nil once
+// used up; block, entered and action apply to pull.
 type fakeDeployer struct {
 	mu      sync.Mutex
+	head    func() string
 	calls   []call
-	err     error
-	block   chan struct{} // when set, Deploy waits for it
+	steps   []string
+	errs    map[string][]error
+	block   chan struct{} // when set, Pull waits for it
 	entered chan struct{}
 	action  func(*Log)
+	// hook, when set, runs at the start of every step; an error from it is the step's.
+	hook func(ctx context.Context, step string, st stacks.Stack) error
+	// noRules makes Backup answer ErrNoBackup.
+	noRules bool
+	// trace, when set, gets every step as it starts.
+	trace func(string)
 }
 
-func (d *fakeDeployer) Deploy(ctx context.Context, st stacks.Stack, commit string, log *Log) error {
+func (d *fakeDeployer) do(ctx context.Context, step string, st stacks.Stack) error {
 	d.mu.Lock()
+	d.steps = append(d.steps, st.Name+":"+step)
+	var err error
+	if list := d.errs[step]; len(list) > 0 {
+		err, d.errs[step] = list[0], list[1:]
+	}
+	hook, trace := d.hook, d.trace
+	d.mu.Unlock()
+	if trace != nil {
+		trace(st.Name + ":" + step)
+	}
+	if hook != nil {
+		if herr := hook(ctx, step, st); herr != nil {
+			return herr
+		}
+	}
+	return err
+}
+
+func (d *fakeDeployer) fail(step string, errs ...error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.errs == nil {
+		d.errs = map[string][]error{}
+	}
+	d.errs[step] = append(d.errs[step], errs...)
+}
+
+func (d *fakeDeployer) Stop(ctx context.Context, st stacks.Stack, _ *Log) error {
+	return d.do(ctx, "stop", st)
+}
+
+func (d *fakeDeployer) Backup(ctx context.Context, st stacks.Stack, deployed string, _ *Log) (string, error) {
+	if err := d.do(ctx, "backup", st); err != nil {
+		return "", err
+	}
+	if d.noRules {
+		return "", ErrNoBackup
+	}
+	return "backup-of-" + deployed[:8], nil
+}
+
+func (d *fakeDeployer) Pull(ctx context.Context, st stacks.Stack, log *Log) error {
+	d.mu.Lock()
+	commit := ""
+	if d.head != nil {
+		commit = d.head()
+	}
 	d.calls = append(d.calls, call{st.Name, commit})
-	block, entered, err, action := d.block, d.entered, d.err, d.action
+	block, entered, action := d.block, d.entered, d.action
 	d.mu.Unlock()
 	if action != nil {
 		action(log)
@@ -117,13 +228,37 @@ func (d *fakeDeployer) Deploy(ctx context.Context, st stacks.Stack, commit strin
 			return ctx.Err()
 		}
 	}
-	return err
+	return d.do(ctx, "pull", st)
+}
+
+func (d *fakeDeployer) Up(ctx context.Context, st stacks.Stack, _ *Log) error {
+	return d.do(ctx, "up", st)
+}
+
+func (d *fakeDeployer) Check(ctx context.Context, st stacks.Stack, _ *Log) error {
+	return d.do(ctx, "check", st)
+}
+
+func (d *fakeDeployer) Restore(ctx context.Context, st stacks.Stack, id string, _ *Log) error {
+	return d.do(ctx, "restore "+id, st)
 }
 
 func (d *fakeDeployer) got() []call {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return slices.Clone(d.calls)
+}
+
+func (d *fakeDeployer) stepsOf(stack string) []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []string
+	for _, s := range d.steps {
+		if name, step, _ := strings.Cut(s, ":"); name == stack {
+			out = append(out, step)
+		}
+	}
+	return out
 }
 
 type fakeClock struct {
@@ -206,7 +341,10 @@ func newRig(t *testing.T, names ...string) *rig {
 		writeStack(t, r.wc, n)
 	}
 	r.copy = &fakeCopy{dir: r.wc, head: commit(1), remote: commit(1), folders: map[[2]string][]string{}}
-	r.dep = &fakeDeployer{}
+	r.dep = &fakeDeployer{head: func() string {
+		h, _ := r.copy.Head(context.Background())
+		return h
+	}}
 	r.clock = &fakeClock{now: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
 	r.cfg = Config{
 		StateDir: r.state,
@@ -251,7 +389,7 @@ func (r *rig) stack(name string) StackState {
 func (r *rig) deployAll() {
 	r.poll()
 	r.dep.mu.Lock()
-	r.dep.calls = nil
+	r.dep.calls, r.dep.steps = nil, nil
 	r.dep.mu.Unlock()
 }
 
@@ -523,19 +661,21 @@ func TestStateSurvivesRestart(t *testing.T) {
 	}
 }
 
-func TestFailedRunKeepsDeployedAndIsNotRetriedAutomatically(t *testing.T) {
+func TestFailedFirstDeployStopsAndIsNotRetriedAutomatically(t *testing.T) {
 	r := newRig(t, "web")
-	r.deployAll()
-	r.dep.err = errors.New("compose exploded")
-	r.copy.set(func(f *fakeCopy) {
-		f.remote = commit(2)
-		f.folders[[2]string{commit(1), commit(2)}] = []string{"web"}
-	})
+	r.dep.fail("up", errors.New("compose exploded"))
 	r.poll()
 	st := r.stack("web")
-	if st.Deployed != commit(1) || st.FailedCommit != commit(2) || st.LastRun.Result != ResultFailed ||
+	if st.Deployed != "" || st.FailedCommit != commit(1) || st.LastRun.Result != ResultFailed || st.Paused != nil ||
 		!strings.Contains(st.LastRun.Error, "exploded") {
 		t.Fatalf("web = %+v / %+v", st, st.LastRun)
+	}
+	// no backup of a stack that was never deployed, no revert, and the new stack is left stopped
+	if got := r.dep.stepsOf("web"); !slices.Equal(got, []string{"stop", "pull", "up", "stop"}) {
+		t.Fatalf("steps = %v", got)
+	}
+	if r.copy.called("revert")+r.copy.called("push") != 0 {
+		t.Fatal("a first deployment was reverted")
 	}
 	r.poll()
 	if n := len(r.dep.got()); n != 1 { // the failed run only, not retried
@@ -545,12 +685,11 @@ func TestFailedRunKeepsDeployedAndIsNotRetriedAutomatically(t *testing.T) {
 		t.Fatal("no failed-commit finding")
 	}
 	// a manual run retries
-	r.dep.err = nil
 	if _, err := r.eng.Trigger(context.Background(), "web"); err != nil {
 		t.Fatal(err)
 	}
 	r.eng.Wait()
-	if st := r.stack("web"); st.Deployed != commit(2) || st.FailedCommit != "" {
+	if st := r.stack("web"); st.Deployed != commit(1) || st.FailedCommit != "" {
 		t.Fatalf("after manual retry = %+v", st)
 	}
 }

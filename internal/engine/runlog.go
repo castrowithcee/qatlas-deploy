@@ -40,7 +40,11 @@ func (l *Log) Step(name string) { l.line("step", name) }
 // Printf adds detail to the current step.
 func (l *Log) Printf(format string, args ...any) { l.line("info", fmt.Sprintf(format, args...)) }
 
+// line writes one entry; a nil Log discards it.
 func (l *Log) line(kind, text string) {
+	if l == nil {
+		return
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.w == nil || l.overflow {

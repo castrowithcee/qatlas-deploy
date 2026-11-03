@@ -3,7 +3,9 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,8 +15,28 @@ import (
 
 type okDeployer struct{}
 
-func (okDeployer) Deploy(_ context.Context, st stacks.Stack, _ string, log *engine.Log) error {
+func (okDeployer) Stop(context.Context, stacks.Stack, *engine.Log) error { return nil }
+func (okDeployer) Backup(context.Context, stacks.Stack, string, *engine.Log) (string, error) {
+	return "", engine.ErrNoBackup
+}
+func (okDeployer) Pull(_ context.Context, st stacks.Stack, log *engine.Log) error {
 	log.Step("deploy " + st.Name)
+	return nil
+}
+func (okDeployer) Up(context.Context, stacks.Stack, *engine.Log) error              { return nil }
+func (okDeployer) Check(context.Context, stacks.Stack, *engine.Log) error           { return nil }
+func (okDeployer) Restore(context.Context, stacks.Stack, string, *engine.Log) error { return nil }
+
+// checkDeployer fails every check while fail is set, also the check of a rollback.
+type checkDeployer struct {
+	okDeployer
+	fail atomic.Bool
+}
+
+func (d *checkDeployer) Check(context.Context, stacks.Stack, *engine.Log) error {
+	if d.fail.Load() {
+		return errors.New("the demo check failed")
+	}
 	return nil
 }
 
@@ -114,5 +136,51 @@ func TestDeployWithoutDeployerOrRepo(t *testing.T) {
 	code, out, _ := run(t, "status")
 	if code != 0 || strings.Contains(out, "STACK.") {
 		t.Fatalf("status without repo: %d %q", code, out)
+	}
+}
+
+func TestPausedStackAndResume(t *testing.T) {
+	d := &checkDeployer{}
+	startBound(t, d)
+	settle(t)
+	if code, _, stderr := run(t, "resume", "plain-stack"); code != 1 || !strings.Contains(stderr, "not paused") {
+		t.Fatalf("resume of a stack that is not paused: %d %q", code, stderr)
+	}
+	d.fail.Store(true)
+	code, stdout, stderr := run(t, "deploy", "plain-stack", "--output", "json")
+	if code != 0 {
+		t.Fatalf("deploy: %d %s", code, stderr)
+	}
+	var dep map[string]any
+	if err := json.Unmarshal([]byte(stdout), &dep); err != nil {
+		t.Fatal(err)
+	}
+	id := dep["run"].(string)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		_, out, _ := run(t, "status", "--output", "json")
+		if strings.Contains(out, "stack.plain-stack.paused") && strings.Contains(out, engine.ResultRollbackFailed) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("status = %s", out)
+		}
+	}
+	if code, _, stderr := run(t, "deploy", "plain-stack"); code != 1 || !strings.Contains(stderr, "paused") || !strings.Contains(stderr, "qdeploy resume") {
+		t.Fatalf("deploy of a paused stack: %d %q", code, stderr)
+	}
+	if code, out, _ := run(t, "runs", "plain-stack"); code != 0 || !strings.Contains(out, engine.ResultRollbackFailed) {
+		t.Fatalf("runs: %d %q", code, out)
+	}
+	code, out, stderr := run(t, "resume", "plain-stack", "--output", "json")
+	var res map[string]any
+	if code != 0 || json.Unmarshal([]byte(out), &res) != nil || res["stack"] != "plain-stack" || res["run"] != id ||
+		!strings.Contains(res["reason"].(string), "demo check failed") {
+		t.Fatalf("resume: %d %q %q", code, out, stderr)
+	}
+	if _, out, _ := run(t, "status", "--output", "json"); strings.Contains(out, "stack.plain-stack.paused") {
+		t.Fatalf("status after resume = %s", out)
+	}
+	if code, _, _ := run(t, "resume", "plain-stack"); code != 1 {
+		t.Fatalf("second resume: %d", code)
 	}
 }

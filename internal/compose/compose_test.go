@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -100,6 +101,20 @@ func newDeployer(r *fakeRunner) (*Deployer, *fakeClock) {
 	x := &Executor{Runner: r, Env: []string{"PATH=/bin"}}
 	return &Deployer{Exec: x, Checker: &Checker{Exec: x, Now: clk.Now, Sleep: clk.Sleep,
 		Deadline: time.Minute, Interval: 5 * time.Second}}, clk
+}
+
+// deploy runs the steps a run takes after the stop and backup, in the engine's order.
+func (d *Deployer) deploy(ctx context.Context, st stacks.Stack, log Logger) error {
+	if err := d.Exec.Pull(ctx, st, log); err != nil {
+		return err
+	}
+	if err := d.Exec.Up(ctx, st, log); err != nil {
+		return err
+	}
+	if err := d.Checker.Check(ctx, st, log); err != nil {
+		return fmt.Errorf("check failed: %w", err)
+	}
+	return nil
 }
 
 const runningJSON = `{"Name":"demo-stack-web-1","Service":"web","State":"running","Health":"healthy"}
@@ -437,5 +452,76 @@ func TestRunningSeesStartedContainers(t *testing.T) {
 		if got, err := x.Running(context.Background(), st, &fakeLog{}); err != nil || got != want {
 			t.Fatalf("ps %q: %v, %v", out, got, err)
 		}
+	}
+}
+
+type fakeBackups struct {
+	created, restored []string
+	err               error
+}
+
+func (b *fakeBackups) Create(_ context.Context, st stacks.Stack, commit string, log Logger) (string, error) {
+	log.Step("backup")
+	b.created = append(b.created, st.Name+"@"+commit)
+	return "backup-1", b.err
+}
+
+func (b *fakeBackups) Restore(_ context.Context, st stacks.Stack, id string, _ Logger) error {
+	b.restored = append(b.restored, st.Name+"/"+id)
+	return b.err
+}
+
+func TestDeployerSteps(t *testing.T) {
+	st := newStack(t, true)
+	r := &fakeRunner{ps: []string{runningJSON}}
+	d, _ := newDeployer(r)
+	ctx := context.Background()
+	// a nil run log discards the lines
+	for _, step := range []func() error{
+		func() error { return d.Stop(ctx, st, nil) },
+		func() error { return d.Pull(ctx, st, nil) },
+		func() error { return d.Up(ctx, st, nil) },
+		func() error { return d.Check(ctx, st, nil) },
+	} {
+		if err := step(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var verbs []string
+	for _, c := range r.calls {
+		verbs = append(verbs, commandVerb(c.Args))
+	}
+	if strings.Join(verbs, " ") != "stop pull up ps" {
+		t.Fatalf("verbs = %v", verbs)
+	}
+	r.ps = []string{`{"Name":"demo-stack-web-1","Service":"web","State":"exited","ExitCode":1}`}
+	if err := d.Check(ctx, st, nil); err == nil || !strings.HasPrefix(err.Error(), "check failed: ") {
+		t.Fatalf("check err = %v", err)
+	}
+}
+
+func TestDeployerBackupNeedsRulesAndBackups(t *testing.T) {
+	st := newStack(t, true)
+	d, _ := newDeployer(&fakeRunner{})
+	ctx := context.Background()
+	commit := strings.Repeat("a", 40)
+	if _, err := d.Backup(ctx, st, commit, nil); !errors.Is(err, engine.ErrNoBackup) {
+		t.Fatalf("without backups: %v", err)
+	}
+	if err := d.Restore(ctx, st, "backup-1", nil); !errors.Is(err, engine.ErrNoBackup) {
+		t.Fatalf("restore without backups: %v", err)
+	}
+	b := &fakeBackups{}
+	d.Backups = b
+	if _, err := d.Backup(ctx, st, commit, nil); !errors.Is(err, engine.ErrNoBackup) || len(b.created) != 0 {
+		t.Fatalf("without rules: %v %v", err, b.created)
+	}
+	st.Rules = &stacks.Rules{Backup: &stacks.Backup{Paths: []string{"data/db"}}}
+	id, err := d.Backup(ctx, st, commit, nil)
+	if err != nil || id != "backup-1" || len(b.created) != 1 || b.created[0] != "demo-stack@"+commit {
+		t.Fatalf("backup = %q %v %v", id, err, b.created)
+	}
+	if err := d.Restore(ctx, st, id, nil); err != nil || len(b.restored) != 1 || b.restored[0] != "demo-stack/backup-1" {
+		t.Fatalf("restore = %v %v", err, b.restored)
 	}
 }

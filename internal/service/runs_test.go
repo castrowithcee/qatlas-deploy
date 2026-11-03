@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -14,9 +15,10 @@ import (
 )
 
 type fakeDeployer struct {
-	mu      sync.Mutex
-	block   chan struct{}
-	entered chan struct{}
+	mu        sync.Mutex
+	block     chan struct{}
+	entered   chan struct{}
+	failCheck bool
 }
 
 // hold makes the next deployments wait until the returned function is called.
@@ -27,7 +29,20 @@ func (d *fakeDeployer) hold() (entered <-chan struct{}, release func()) {
 	return d.entered, func() { close(d.block) }
 }
 
-func (d *fakeDeployer) Deploy(ctx context.Context, st stacks.Stack, commit string, log *engine.Log) error {
+// setFailCheck makes every check fail, also the one of a rollback.
+func (d *fakeDeployer) setFailCheck(fail bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.failCheck = fail
+}
+
+func (d *fakeDeployer) Stop(context.Context, stacks.Stack, *engine.Log) error { return nil }
+
+func (d *fakeDeployer) Backup(context.Context, stacks.Stack, string, *engine.Log) (string, error) {
+	return "", engine.ErrNoBackup
+}
+
+func (d *fakeDeployer) Pull(ctx context.Context, st stacks.Stack, log *engine.Log) error {
 	log.Step("deploy " + st.Name)
 	d.mu.Lock()
 	block, entered := d.block, d.entered
@@ -43,6 +58,19 @@ func (d *fakeDeployer) Deploy(ctx context.Context, st stacks.Stack, commit strin
 	}
 	return nil
 }
+
+func (d *fakeDeployer) Up(context.Context, stacks.Stack, *engine.Log) error { return nil }
+
+func (d *fakeDeployer) Check(context.Context, stacks.Stack, *engine.Log) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.failCheck {
+		return errors.New("the demo check failed")
+	}
+	return nil
+}
+
+func (d *fakeDeployer) Restore(context.Context, stacks.Stack, string, *engine.Log) error { return nil }
 
 func bound(t *testing.T, dep engine.Deployer) *harness {
 	t.Helper()
@@ -194,5 +222,63 @@ func TestLogRefusesUnknownIDs(t *testing.T) {
 	h := startWith(t, nil)
 	for _, id := range []string{"", "../../etc/passwd", "20260101T000000Z-00000000"} {
 		wantCode(t, h.call(control.LogCommand, control.LogArgs{ID: id}, nil), control.CodeNoSuchRun)
+	}
+}
+
+func stackStatus(t *testing.T, h *harness, name string) control.StackStatus {
+	t.Helper()
+	var st control.StatusResult
+	if err := h.call(control.StatusCommand, nil, &st); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range st.Engine.Stacks {
+		if s.Name == name {
+			return s
+		}
+	}
+	t.Fatalf("no stack %s in %+v", name, st.Engine)
+	return control.StackStatus{}
+}
+
+func TestFailedRollbackPausesUntilResumed(t *testing.T) {
+	d := &fakeDeployer{}
+	h := bound(t, d)
+	wantCode(t, h.call(control.ResumeCommand, control.ResumeArgs{Stack: "plain-stack"}, nil), control.CodeNotPaused)
+
+	// the check of the new and of the previous state fail: the rollback fails and pauses the stack
+	d.setFailCheck(true)
+	var dep control.DeployResult
+	if err := h.call(control.DeployCommand, control.DeployArgs{Stack: "plain-stack"}, &dep); err != nil {
+		t.Fatal(err)
+	}
+	if r := waitRun(t, h, dep.ID); r.Result != engine.ResultRollbackFailed || !strings.Contains(r.Error, "demo check failed") {
+		t.Fatalf("run = %+v", r)
+	}
+	s := stackStatus(t, h, "plain-stack")
+	if s.Paused == nil || s.Paused.Run != dep.ID || !strings.Contains(s.Paused.Reason, "demo check failed") ||
+		s.LastRun != engine.ResultRollbackFailed || len(s.Findings) == 0 || s.Findings[0].Kind != engine.FindingPaused {
+		t.Fatalf("status = %+v", s)
+	}
+	wantCode(t, h.call(control.DeployCommand, control.DeployArgs{Stack: "plain-stack"}, nil), control.CodePaused)
+
+	var res control.ResumeResult
+	if err := h.call(control.ResumeCommand, control.ResumeArgs{Stack: "plain-stack"}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Stack != "plain-stack" || res.Pause.Run != dep.ID || res.Pause.Since.IsZero() {
+		t.Fatalf("resume = %+v", res)
+	}
+	if s := stackStatus(t, h, "plain-stack"); s.Paused != nil || s.ActiveRun != "" {
+		t.Fatalf("status after resume = %+v", s)
+	}
+	wantCode(t, h.call(control.ResumeCommand, control.ResumeArgs{Stack: "plain-stack"}, nil), control.CodeNotPaused)
+
+	// a manual run works again and the check passes now
+	d.setFailCheck(false)
+	if err := h.call(control.DeployCommand, control.DeployArgs{Stack: "plain-stack"}, &dep); err != nil {
+		t.Fatal(err)
+	}
+	if r := waitRun(t, h, dep.ID); r.Result != engine.ResultSucceeded {
+		t.Fatalf("run = %+v", r)
 	}
 }
