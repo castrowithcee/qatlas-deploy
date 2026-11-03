@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed            [esc] back
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]     
+--------------------------------------------------------
+  Bind the stacks repository                            
+                                                        
+            #==========================================#
+> SSH URL   | git@example.test:ops/stacks.git_         |
+            #==========================================#
+            user@host:path or                           
+            ssh://[user@]host[:port]/path               
+            +------------------------------------------+
+  Directory | /opt/stacks                              |
+            +------------------------------------------+
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+F2 save  esc discard                                    
+tab next zone or field  shift+tab previous zone or field

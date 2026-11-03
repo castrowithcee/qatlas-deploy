@@ -1,0 +1,30 @@
+qdeploy  Wartungsfenster zu                                                                                 [esc] Zurück
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]                                                              
+------------------------------------------------------------------------------------------------------------------------
+  Zugangsdaten setzen                                                                                                   
+                                                                                                                        
+                    +--------------------------------------------------------------------------------------------------+
+  Zugangsdaten      | Registry-Login                                                                                 v |
+                    +--------------------------------------------------------------------------------------------------+
+                    #==================================================================================================#
+> Registry-Host     | _                                                                                                |
+                    #==================================================================================================#
+                    nur beim Registry-Login; mit Port als host:port, Docker Hub als docker.io                           
+                    [!] Das ist kein Registry-Host. - Korrigiere das Feld.                                              
+                    +--------------------------------------------------------------------------------------------------+
+  Registry-Benutzer | leer                                                                                             |
+                    +--------------------------------------------------------------------------------------------------+
+                    [!] Der Benutzer ist nötig und enthält keinen Doppelpunkt. - Korrigiere das Feld.                   
+                    +--------------------------------------------------------------------------------------------------+
+  Token             | leer                                                                                             |
+                    +--------------------------------------------------------------------------------------------------+
+                    [!] Nötig ist ein Wert von 4 bis 8192 Zeichen ohne Steuerzeichen. - Korrigiere das Feld.            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+F2 Speichern  esc verwerfen                 tab Nächste Zone oder nächstes Feld  shift+tab Vorige Zone oder voriges Feld

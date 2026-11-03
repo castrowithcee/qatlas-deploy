@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 Stacks 2 Stack-Details 3 Läufe [4 Einstellungen]    
+--------------------------------------------------------
+  Stacks-Repository binden                              
+                                                        
+  #= Stacks-Repository ==============================#=#
+> | ! git@example.test:ops/stacks.git binden und     | |
+  |   diesem Hostschlüssel vertrauen?                |=#
+  |                                                  |  
+  | Vergleiche den Fingerabdruck zuerst mit der Git- |  
+  | Plattform. Der Schlüssel wird erst jetzt         |-+
+  | gespeichert und das Repository geklont.          | |
+  | Host: example.test                               |-+
+  | Schlüsseltyp: ssh-ed25519                        |  
+  | Fingerabdruck:                                   |  
+  | SHA256:ExampleFingerprintForTestsOnly0000000000  |  
+  | Verzeichnis: /opt/stacks                         |  
+  |                                                  |  
+  | [ ja, ausführen ]  > abbrechen <                 |  
+  | y ja, ausführen  n/esc/enter abbrechen           |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        

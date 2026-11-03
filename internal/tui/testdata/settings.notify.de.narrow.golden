@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 Stacks 2 Stack-Details 3 Läufe [4 Einstellungen]    
+--------------------------------------------------------
+  Benachrichtigungen                                    
+                                                        
+  NAME      TYP      EREIGNISSE          ZIEL           
+> ops-hook  webhook  failed,rolled-back  -              
+  ops-mail  smtp     alle                mail.example.t~
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+a hinzufügen  T Test senden  x entfernen  esc Zurück    
+r Neu laden  1-4 Bereich  q Beenden                  1/2

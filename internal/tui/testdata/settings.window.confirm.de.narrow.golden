@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 Stacks 2 Stack-Details 3 Läufe [4 Einstellungen]    
+--------------------------------------------------------
+  Wartungsfenster ändern                                
+                                                        
+           +-------------------------------------------+
+  Tage     | sun                                       |
+           +-------------------------------------------+
+  #= Wartungsfenster ändern =========================#=#
+> | ! Das Wartungsfenster ändern?                    | |
+  |                                                  |=#
+  | Der laufende Dienst folgt sofort.                |  
+  | Beginn: 04:30                                    |-+
+  |                                                  | |
+  | [ ja, ausführen ]  > abbrechen <                 |-+
+  | y ja, ausführen  n/esc/enter abbrechen           |-+
+  #==================================================# |
+           +-------------------------------------------+
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        

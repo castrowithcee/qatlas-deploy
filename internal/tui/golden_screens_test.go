@@ -21,6 +21,7 @@ func goldenScreens(t *testing.T, prefix string, rows int, setup func() *fakeBack
 				send(m, keys...)
 				screen := m.render()
 				checkScreen(t, screen, width, rows)
+				noLeak(t, screen, hiddenA, hiddenB)
 				checkGolden(t, prefix+"."+name+"."+size+".golden", screen+"\n")
 			})
 		}

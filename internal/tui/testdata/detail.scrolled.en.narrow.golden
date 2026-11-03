@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs                   
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings      
 --------------------------------------------------------
     APP_VERSION  1.4.2 -> 1.5.0                         
       source example/app                                
@@ -13,4 +13,4 @@ qdeploy  maintenance window closed  [esc] back  [?] help
       more at https://example.invalid/app/releases      
                                                         
   Backups                                               
-r reload  1-3 area  q quit         up/down scroll  23/36
+r reload  1-4 area  q quit         up/down scroll  23/36

@@ -34,13 +34,24 @@ const (
 	actResume  kittui.ActionID = "resume"
 	actCheck   kittui.ActionID = "check"
 	// The answers of a question, and of a result that started runs.
-	actYes     kittui.ActionID = "yes"
-	actNo      kittui.ActionID = "no"
-	actShowLog kittui.ActionID = "showlog"
+	actYes kittui.ActionID = "yes"
+	// The keys of the Settings area and of its forms.
+	actNext     kittui.ActionID = "next"
+	actPrev     kittui.ActionID = "prev"
+	actSave     kittui.ActionID = "save"
+	actBind     kittui.ActionID = "bind"
+	actFetch    kittui.ActionID = "fetch"
+	actGenerate kittui.ActionID = "generate"
+	actAdd      kittui.ActionID = "add"
+	actRemove   kittui.ActionID = "remove"
+	actEdit     kittui.ActionID = "edit"
+	actTest     kittui.ActionID = "test"
+	actNo       kittui.ActionID = "no"
+	actShowLog  kittui.ActionID = "showlog"
 )
 
 // areaKeys are the keys of actArea, one per area in the order of the tab line.
-var areaKeys = []string{"1", "2", "3"}
+var areaKeys = []string{"1", "2", "3", "4"}
 
 func keyTable() []kittui.Action {
 	act := func(id kittui.ActionID, level kittui.KeyLevel, help kittui.TextID, keys ...string) kittui.Action {
@@ -73,6 +84,16 @@ func keyTable() []kittui.Action {
 		act(actUnpin, kittui.LevelLetter, textKeyUnpin, "I"),
 		act(actResume, kittui.LevelLetter, textKeyResume, "g"),
 		act(actCheck, kittui.LevelLetter, textKeyCheck, "c"),
+		act(actNext, kittui.LevelMove, textKeyNext, "tab"),
+		act(actPrev, kittui.LevelMove, textKeyPrev, "shift+tab"),
+		act(actSave, kittui.LevelGlobal, textKeySave, "f2"),
+		act(actBind, kittui.LevelLetter, textKeyBind, "b"),
+		act(actFetch, kittui.LevelLetter, textKeyFetch, "F"),
+		act(actGenerate, kittui.LevelLetter, textKeyGenerate, "G"),
+		act(actAdd, kittui.LevelLetter, textKeyAdd, "a"),
+		act(actRemove, kittui.LevelLetter, textKeyRemove, "x"),
+		act(actEdit, kittui.LevelLetter, textKeyEdit, "e"),
+		act(actTest, kittui.LevelLetter, textKeyTest, "T"),
 		act(actYes, kittui.LevelConfirm, textAnswerYes, "y"),
 		act(actNo, kittui.LevelConfirm, textAnswerCancel, "n", "esc"),
 		act(actShowLog, kittui.LevelConfirm, textAnswerLog, "l"),
@@ -102,4 +123,11 @@ func stackListKeys() kittui.ListKeys {
 func helpKeys() kittui.HelpKeys {
 	return kittui.HelpKeys{Left: actLeft, Right: actRight, Up: actUp, Down: actDown, PageUp: actPageUp,
 		PageDown: actPageDown, First: actFirst, Last: actLast, Back: actBack, Help: actHelp}
+}
+
+// formKeys are the actions of the key table a form reads.
+func formKeys() kittui.FormKeys {
+	return kittui.FormKeys{Up: actUp, Down: actDown, Next: actNext, Prev: actPrev, PageUp: actPageUp,
+		PageDown: actPageDown, Left: actLeft, Right: actRight, First: actFirst, Last: actLast, Enter: actEnter,
+		Toggle: actToggle, Save: actSave, Back: actBack}
 }
