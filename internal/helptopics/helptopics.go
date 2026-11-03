@@ -21,6 +21,7 @@ const overview = `qdeploy runs as a service on a Linux host and keeps the Docker
 
 Commands:
 - qdeploy run: run the service in the foreground until it receives SIGTERM or SIGINT
+- qdeploy tui, or qdeploy without a command at a terminal: open the terminal interface with every stack, its current and available version, update mode, state, last run and findings (run with sudo)
 - qdeploy status: show whether the service is running, its version and start time, the last poll and the state of each stack (run with sudo)
 - qdeploy key generate|show: create the SSH deploy key and show its public part (run with sudo)
 - qdeploy repo set <ssh-url> [--dir <path>]: bind the stacks repository, confirm its host key and clone it (run with sudo)

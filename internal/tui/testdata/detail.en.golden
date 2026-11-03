@@ -1,0 +1,14 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+   1 Stacks  [2 Stack detail]  3 Runs                   
+--------------------------------------------------------
+  demo-stack                                            
+                                                        
+  current    1.4.2                                      
+  available  1.5.0                                      
+  mode       automatic                                  
+  state      deployed                                   
+  last run   succeeded 10-30 14:02                      
+  findings   1 warning                                  
+                                                        
+                                                        
+r reload  1-3 area  q quit                              

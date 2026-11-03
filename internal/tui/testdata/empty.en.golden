@@ -1,0 +1,14 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks]  2 Stack detail   3 Runs                   
+--------------------------------------------------------
+  No stacks. Bind the stacks repository with 'sudo      
+  qdeploy repo set <ssh-url>', or add a stack to it.    
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+r reload  1-3 area  q quit                              

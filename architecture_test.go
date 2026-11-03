@@ -34,6 +34,14 @@ func TestArchitecture(t *testing.T) {
 			Hint:  "the client reaches the service over the channel, never by import",
 		},
 		{
+			Name:  "tui-reaches-the-service-over-the-channel-only",
+			Files: archtest.Files{Under: []string{"internal/tui"}, Tests: archtest.SkipTests},
+			Check: archtest.ForbidImports("internal/service", "internal/cli", "internal/engine", "internal/stacks",
+				"internal/stackcheck", "internal/gitrepo", "internal/compose", "internal/backup", "internal/credentials",
+				"internal/registry", "internal/changelog", "internal/envfile"),
+			Hint: "the terminal interface reads the stacks, Docker and the service state through the service channel, never directly",
+		},
+		{
 			Name:  "helptopics-import-nothing-of-the-module",
 			Files: archtest.Files{Under: []string{"internal/helptopics"}, Tests: archtest.WithTests},
 			Check: archtest.AllowImports(),

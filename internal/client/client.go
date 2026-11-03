@@ -46,6 +46,18 @@ func Dial(ctx context.Context, ep localipc.ServiceEndpoint) (*Client, error) {
 	return &Client{conn: conn, br: bufio.NewReaderSize(conn, 4096)}, nil
 }
 
+// Do dials ep, sends one command within limit and closes the connection again.
+func Do(ctx context.Context, ep localipc.ServiceEndpoint, limit time.Duration, command string, args, result any) error {
+	ctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	c, err := Dial(ctx, ep)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	return c.Call(ctx, command, args, result)
+}
+
 // Close ends the connection.
 func (c *Client) Close() error { return c.conn.Close() }
 

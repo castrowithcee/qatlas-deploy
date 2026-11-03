@@ -113,14 +113,7 @@ func call(ctx context.Context, ep localipc.ServiceEndpoint, command string, args
 
 // callFor is call with its own time limit, for commands that wait on a remote server.
 func callFor(ctx context.Context, limit time.Duration, ep localipc.ServiceEndpoint, command string, args, result any) error {
-	ctx, cancel := context.WithTimeout(ctx, limit)
-	defer cancel()
-	cl, err := client.Dial(ctx, ep)
-	if err != nil {
-		return err
-	}
-	defer cl.Close()
-	return cl.Call(ctx, command, args, result)
+	return client.Do(ctx, ep, limit, command, args, result)
 }
 
 // failureOf turns a channel error into a diagnostic with a next step.
