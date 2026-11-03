@@ -36,6 +36,9 @@ type DispatchConfig struct {
 	Timeout time.Duration
 	// Grace is how long Close lets the queue drain before it cancels the deliveries; zero means DefaultGrace.
 	Grace time.Duration
+	// RunLog, if set, is called from the delivery goroutine with the run of an event and a line about a
+	// failed delivery. Events without a run do not call it; its failure is its own business.
+	RunLog func(run, text string)
 }
 
 type job struct {
@@ -160,6 +163,9 @@ func (d *Dispatcher) send(ctx context.Context, c Channel, ev Event, msg kitnotif
 	err := Send(ctx, d.cfg.Sender, d.cfg.Creds, c, msg)
 	if err != nil {
 		d.cfg.Log.Warn("notification not delivered", append(attrs, "code", ErrorCode(err), "error", err.Error())...)
+		if ev.Run != "" && d.cfg.RunLog != nil {
+			d.cfg.RunLog(ev.Run, fmt.Sprintf("notification to channel %s not delivered: %s: %s", c.Name, ErrorCode(err), err.Error()))
+		}
 		return
 	}
 	d.cfg.Log.Info("notification delivered", attrs...)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/castrowithcee/qatlas-kit/notify"
 	"github.com/castrowithcee/qatlas-kit/redact"
@@ -34,6 +35,8 @@ type notifyService struct {
 	secrets  *redact.Redactor
 	log      *slog.Logger
 	mu       sync.Mutex // serializes the commands that change channels
+	// appendLog is set once the engine exists, which is created after this service.
+	appendLog atomic.Pointer[func(run, text string) error]
 }
 
 func newNotifyService(stateDir string, creds *credentials.Store, opts notify.Options, secrets *redact.Redactor,
@@ -62,9 +65,24 @@ func newNotifyService(stateDir string, creds *credentials.Store, opts notify.Opt
 	}
 	n := &notifyService{settings: settings, seen: seen, creds: creds, test: test, secrets: secrets, log: log}
 	n.disp = notifier.NewDispatcher(notifier.DispatchConfig{
-		Sender: sender, Channels: settings.List, Creds: creds, Log: log,
+		Sender: sender, Channels: settings.List, Creds: creds, Log: log, RunLog: n.runLog,
 	})
 	return n, nil
+}
+
+// bindRunLog connects the dispatcher to the engine's run logs.
+func (n *notifyService) bindRunLog(f func(run, text string) error) { n.appendLog.Store(&f) }
+
+// runLog records a failed delivery in the log of its run, which may be gone by now; the service log keeps
+// the failure either way. The text is redacted again, on top of the kit's own redaction.
+func (n *notifyService) runLog(run, text string) {
+	f := n.appendLog.Load()
+	if f == nil {
+		return
+	}
+	if err := (*f)(run, n.secrets.Apply(text)); err != nil && !errors.Is(err, engine.ErrNoSuchRun) {
+		n.log.Warn("notification failure not recorded in the run log", "run", run, "error", err)
+	}
 }
 
 // close drains the dispatcher; the service calls it after the engine has stopped.

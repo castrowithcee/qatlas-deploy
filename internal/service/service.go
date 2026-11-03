@@ -104,6 +104,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("prepare the engine: %w", err)
 	}
+	notifier.bindRunLog(eng.AppendLog)
 	repo.onBound = eng.Wake
 	upd, err := registerUpdateCommands(registry, repo, eng, store, cfg.Registry, cfg.Changelog)
 	if err != nil {

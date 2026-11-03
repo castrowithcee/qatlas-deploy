@@ -732,6 +732,17 @@ func (e *Engine) Runs(stack string) ([]RunRecord, error) {
 // Log returns the run log of a run id; ErrNoSuchRun when the id is malformed or has no log.
 func (e *Engine) Log(id string) (string, error) { return e.logs.read(id) }
 
+// AppendLog adds one info entry to the log of an existing run, for facts that arise after the run has ended,
+// such as a notification that was not delivered. The text is redacted like every other entry. It fails with
+// ErrNoSuchRun when the id is malformed or the log is missing or not a regular file, and with ErrLogFull
+// when the log has reached its size bound.
+func (e *Engine) AppendLog(id, text string) error {
+	if e.cfg.Redact != nil {
+		text = e.cfg.Redact(text)
+	}
+	return e.logs.appendLine(id, e.cfg.Clock.Now().UTC().Format(time.RFC3339), "info", text)
+}
+
 // WithStack calls fn with the stack, read from the working copy, and the commit last deployed (empty if
 // none), while holding the stack's run slot: no run of the stack starts or is active meanwhile, and neither a
 // poll nor a rollback moves the working copy. It is for work that must not overlap a deployment, such as a

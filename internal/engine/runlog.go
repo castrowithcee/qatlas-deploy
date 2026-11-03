@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unicode"
 )
@@ -18,6 +19,9 @@ const (
 	maxLogLine  = 2 << 10
 	logExt      = ".log"
 )
+
+// ErrLogFull means a run log has reached its size bound and takes no further entry.
+var ErrLogFull = errors.New("run log is full")
 
 // ErrNoSuchRun means the run id is malformed or has no log.
 var ErrNoSuchRun = errors.New("no such run")
@@ -146,4 +150,43 @@ func (s logStore) remove(ids ...string) {
 			_ = os.Remove(p)
 		}
 	}
+}
+
+// appendLine adds one entry to the log of a finished run. It never creates a file, never follows a symlink and
+// never grows the log beyond maxLogBytes. A log that retention removed meanwhile is ErrNoSuchRun.
+func (s logStore) appendLine(id, stamp, kind, text string) error {
+	p, err := s.path(id)
+	if err != nil {
+		return err
+	}
+	fi, err := os.Lstat(p)
+	if errors.Is(err, fs.ErrNotExist) || (err == nil && !fi.Mode().IsRegular()) {
+		return ErrNoSuchRun
+	}
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_APPEND|syscall.O_NOFOLLOW, 0)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ELOOP) {
+		return ErrNoSuchRun
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if fi, err = f.Stat(); err != nil {
+		return err
+	}
+	if !fi.Mode().IsRegular() {
+		return ErrNoSuchRun
+	}
+	var b strings.Builder
+	for _, part := range strings.Split(text, "\n") {
+		b.WriteString(stamp + " " + kind + " " + printableLine(part) + "\n")
+	}
+	if fi.Size()+int64(b.Len()) > maxLogBytes {
+		return ErrLogFull
+	}
+	_, err = io.WriteString(f, b.String())
+	return err
 }

@@ -437,3 +437,77 @@ func TestUpdateAvailableIsSentOnlyForManualStacksAndOncePerVersion(t *testing.T)
 		t.Fatalf("body = %s, %v", got[0].Body, err)
 	}
 }
+
+func TestFailedDeliveryIsRecordedInTheRunLog(t *testing.T) {
+	rcv := newReceiver(t)
+	h := boundWith(t, &fakeDeployer{}, nil, withNotify(rcv))
+	addWebhook(t, h, "fine", rcv.url("/ok"), "succeeded")
+	addWebhook(t, h, "down", rcv.url("/down"), "succeeded")
+	addWebhook(t, h, "denied", rcv.url("/denied"), "failed")
+
+	var d control.DeployResult
+	if err := h.call(control.DeployCommand, control.DeployArgs{Stack: "plain-stack"}, &d); err != nil {
+		t.Fatal(err)
+	}
+	if r := waitRun(t, h, d.ID); r.Result != engine.ResultSucceeded {
+		t.Fatalf("run = %+v", r)
+	}
+	rcv.await(t, "/ok", 1)
+	rcv.await(t, "/down", 1)
+
+	var text string
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		var log control.LogResult
+		if err := h.call(control.LogCommand, control.LogArgs{ID: d.ID}, &log); err != nil {
+			t.Fatal(err)
+		}
+		text = log.Text
+		if strings.Contains(text, "not delivered") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no failed delivery in the run log:\n%s", text)
+		}
+	}
+	if strings.Count(text, "not delivered") != 1 || !strings.Contains(text, "channel down not delivered") {
+		t.Fatalf("run log:\n%s", text)
+	}
+	if strings.Contains(text, "channel fine") || strings.Contains(text, "channel denied") {
+		t.Fatalf("run log names a channel that delivered or was not selected:\n%s", text)
+	}
+	if strings.Contains(text, hookToken) || strings.Contains(text, hookKey) {
+		t.Fatalf("the run log carries a secret:\n%s", text)
+	}
+	if !strings.Contains(h.logs.String(), "notification not delivered") {
+		t.Fatalf("the service log lost the failure: %s", h.logs.String())
+	}
+}
+
+func TestSuccessfulDeliveryAddsNothingToTheRunLog(t *testing.T) {
+	rcv := newReceiver(t)
+	h := boundWith(t, &fakeDeployer{}, nil, withNotify(rcv))
+	var after control.LogResult
+	var d control.DeployResult
+	if err := h.call(control.DeployCommand, control.DeployArgs{Stack: "plain-stack"}, &d); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, h, d.ID)
+	addWebhook(t, h, "fine", rcv.url("/ok"), "succeeded")
+	if err := h.call(control.DeployCommand, control.DeployArgs{Stack: "plain-stack"}, &d); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, h, d.ID)
+	rcv.await(t, "/ok", 1)
+	// The delivery is logged by the service after the request; give it time to land before reading.
+	for deadline := time.Now().Add(10 * time.Second); !strings.Contains(h.logs.String(), "notification delivered"); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("delivery not logged")
+		}
+	}
+	if err := h.call(control.LogCommand, control.LogArgs{ID: d.ID}, &after); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(after.Text, "notification") {
+		t.Fatalf("run log:\n%s", after.Text)
+	}
+}

@@ -1065,3 +1065,95 @@ func TestWithStackEndsWithTheEngine(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+const appendedSecret = "appended-value-not-real"
+
+func TestAppendLogAddsToAFinishedRunLog(t *testing.T) {
+	r := newRig(t, "web")
+	r.deployAll()
+	runs, _ := r.eng.Runs("web")
+	id := runs[0].ID
+	r.redac.Add(appendedSecret)
+	if err := r.eng.AppendLog(id, "late fact "+appendedSecret+"\nsecond\x1b[2J"); err != nil {
+		t.Fatal(err)
+	}
+	text, err := r.eng.Log(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, " info late fact ") || !strings.Contains(text, " info second") {
+		t.Fatalf("log:\n%s", text)
+	}
+	if strings.Contains(text, appendedSecret) || strings.Contains(text, "\x1b") {
+		t.Fatalf("log carries a secret or a control character:\n%s", text)
+	}
+	if !strings.HasSuffix(text, "\n") {
+		t.Fatalf("log does not end in a newline: %q", text)
+	}
+}
+
+func TestAppendLogRefusesWhatIsNotAnExistingRegularLog(t *testing.T) {
+	r := newRig(t, "web")
+	r.deployAll()
+	runs, _ := r.eng.Runs("web")
+	dir := filepath.Join(r.state, engineDir, runsDir)
+	for _, bad := range []string{"", "../x", runs[0].ID + "/..", "20260102T030405Z-00000000"} {
+		if err := r.eng.AppendLog(bad, "x"); !errors.Is(err, ErrNoSuchRun) {
+			t.Errorf("AppendLog(%q) err = %v", bad, err)
+		}
+	}
+	outside := filepath.Join(t.TempDir(), "outside.log")
+	if err := os.WriteFile(outside, []byte("keep\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := "20260102T030405Z-00000001"
+	if err := os.Symlink(outside, filepath.Join(dir, link+logExt)); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.eng.AppendLog(link, "x"); !errors.Is(err, ErrNoSuchRun) {
+		t.Errorf("symlink err = %v", err)
+	}
+	if got, _ := os.ReadFile(outside); string(got) != "keep\n" {
+		t.Errorf("the symlink target changed: %q", got)
+	}
+	dirID := "20260102T030405Z-00000002"
+	if err := os.Mkdir(filepath.Join(dir, dirID+logExt), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.eng.AppendLog(dirID, "x"); !errors.Is(err, ErrNoSuchRun) {
+		t.Errorf("directory err = %v", err)
+	}
+	if err := r.eng.AppendLog(runs[0].ID, "x"); err != nil {
+		t.Fatal(err)
+	}
+	r.eng.logs.remove(runs[0].ID)
+	if err := r.eng.AppendLog(runs[0].ID, "x"); !errors.Is(err, ErrNoSuchRun) {
+		t.Errorf("removed log err = %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, runs[0].ID+logExt)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("AppendLog created a log: %v", err)
+	}
+}
+
+func TestAppendLogStaysWithinTheSizeBound(t *testing.T) {
+	r := newRig(t, "web")
+	r.deployAll()
+	runs, _ := r.eng.Runs("web")
+	id := runs[0].ID
+	p := filepath.Join(r.state, engineDir, runsDir, id+logExt)
+	line := strings.Repeat("a", maxLogLine-100)
+	var err error
+	for i := 0; i < maxLogBytes/len(line)+2 && err == nil; i++ {
+		err = r.eng.AppendLog(id, line)
+	}
+	if !errors.Is(err, ErrLogFull) {
+		t.Fatalf("err = %v", err)
+	}
+	fi, statErr := os.Stat(p)
+	if statErr != nil || fi.Size() > maxLogBytes {
+		t.Fatalf("size = %v, %v", fi, statErr)
+	}
+	if err := r.eng.AppendLog(id, line); !errors.Is(err, ErrLogFull) {
+		t.Fatalf("err = %v", err)
+	}
+}
