@@ -47,6 +47,13 @@ type Config struct {
 	Index bool
 	// Redirect makes every /v2/ request answer a redirect to another host.
 	Redirect bool
+	// BlobRedirect makes every blob request answer a 307 with this Location, verbatim, once the request is
+	// authorized.
+	BlobRedirect string
+	// ConfigDigest replaces the digest the manifests name for the image configuration.
+	ConfigDigest string
+	// TLS serves HTTPS with the certificate of httptest; Client returns a client that trusts it.
+	TLS bool
 	// OversizeTags makes the tag list answer more bytes than any reasonable page limit.
 	OversizeTags int
 }
@@ -67,11 +74,18 @@ type Server struct {
 func New(t testing.TB, cfg Config) *Server {
 	t.Helper()
 	s := &Server{cfg: cfg}
-	s.srv = httptest.NewServer(http.HandlerFunc(s.serve))
+	if cfg.TLS {
+		s.srv = httptest.NewTLSServer(http.HandlerFunc(s.serve))
+	} else {
+		s.srv = httptest.NewServer(http.HandlerFunc(s.serve))
+	}
 	s.URL = s.srv.URL
 	t.Cleanup(s.srv.Close)
 	return s
 }
+
+// Client returns an HTTP client that trusts the certificate of a TLS server.
+func (s *Server) Client() *http.Client { return s.srv.Client() }
 
 // Requests returns "METHOD path" of every request so far.
 func (s *Server) Requests() []string {
@@ -125,6 +139,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			s.manifest(w, r, strings.TrimPrefix(rest, name+"/manifests/"), tags)
 			return
 		case strings.HasPrefix(rest, name+"/blobs/"):
+			if s.cfg.BlobRedirect != "" {
+				w.Header().Set("Location", s.cfg.BlobRedirect)
+				w.WriteHeader(http.StatusTemporaryRedirect)
+				return
+			}
 			_, _ = w.Write(s.configBlob())
 			return
 		}
@@ -178,13 +197,83 @@ func (s *Server) tagList(w http.ResponseWriter, r *http.Request, name string, ta
 	_ = json.NewEncoder(w).Encode(map[string]any{"name": name, "tags": tags[start:end]})
 }
 
-func (s *Server) configBlob() []byte {
-	cfg, _ := json.Marshal(map[string]any{"config": map[string]any{"Labels": s.cfg.Labels}})
+// ConfigBlob is the image configuration blob of an image with the labels.
+func ConfigBlob(labels map[string]string) []byte {
+	cfg, _ := json.Marshal(map[string]any{"config": map[string]any{"Labels": labels}})
 	return cfg
+}
+
+func (s *Server) configBlob() []byte { return ConfigBlob(s.cfg.Labels) }
+
+// CDNConfig describes a blob host, the target of a blob redirect.
+type CDNConfig struct {
+	// Body is what the host serves at the end of the chain.
+	Body []byte
+	// Redirects is the number of relative redirects the host answers before it serves Body.
+	Redirects int
+	// TLS serves HTTPS with the certificate of httptest.
+	TLS bool
+}
+
+// CDN is a second host that serves a blob and records the headers it receives.
+type CDN struct {
+	// URL is the base URL of the host.
+	URL string
+
+	cfg     CDNConfig
+	srv     *httptest.Server
+	mu      sync.Mutex
+	headers []http.Header
+}
+
+// NewCDN starts a blob host that stops with the test. Its blob is at URL+"/blob/<Redirects>?sig=fake-signature".
+func NewCDN(t testing.TB, cfg CDNConfig) *CDN {
+	t.Helper()
+	c := &CDN{cfg: cfg}
+	h := http.HandlerFunc(c.serve)
+	if cfg.TLS {
+		c.srv = httptest.NewTLSServer(h)
+	} else {
+		c.srv = httptest.NewServer(h)
+	}
+	c.URL = c.srv.URL
+	t.Cleanup(c.srv.Close)
+	return c
+}
+
+// BlobURL is the first URL of the redirect chain.
+func (c *CDN) BlobURL() string {
+	return fmt.Sprintf("%s/blob/%d?sig=fake-signature", c.URL, c.cfg.Redirects)
+}
+
+// Headers returns the headers of every request so far.
+func (c *CDN) Headers() []http.Header {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]http.Header(nil), c.headers...)
+}
+
+func (c *CDN) serve(w http.ResponseWriter, r *http.Request) {
+	c.mu.Lock()
+	c.headers = append(c.headers, r.Header.Clone())
+	c.mu.Unlock()
+	n, err := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/blob/"))
+	if err != nil || r.URL.Query().Get("sig") != "fake-signature" {
+		http.NotFound(w, r)
+		return
+	}
+	if n > 0 {
+		http.Redirect(w, r, fmt.Sprintf("/blob/%d?sig=fake-signature", n-1), http.StatusFound)
+		return
+	}
+	_, _ = w.Write(c.cfg.Body)
 }
 
 func (s *Server) manifest(w http.ResponseWriter, r *http.Request, ref string, tags []string) {
 	cfgDigest := sum(s.configBlob())
+	if s.cfg.ConfigDigest != "" {
+		cfgDigest = s.cfg.ConfigDigest
+	}
 	image, _ := json.Marshal(map[string]any{
 		"mediaType": "application/vnd.oci.image.manifest.v1+json",
 		"config":    map[string]any{"digest": cfgDigest},

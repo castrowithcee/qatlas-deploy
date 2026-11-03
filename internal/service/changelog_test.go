@@ -142,6 +142,25 @@ func TestChangelogRangeFromImageLabel(t *testing.T) {
 	}
 }
 
+// Registries hand the image configuration to a CDN through a redirect; the label is still read from there.
+func TestChangelogFromLabelBehindBlobRedirect(t *testing.T) {
+	labels := map[string]string{sourceLabel: demoSourceURL}
+	cdn := registrytest.NewCDN(t, registrytest.CDNConfig{Body: registrytest.ConfigBlob(labels), Redirects: 1})
+	srv := registrytest.New(t, registrytest.Config{Repos: map[string][]string{"demo/app": demoTags}, Labels: labels, BlobRedirect: cdn.BlobURL()})
+	gh := newFakeGitHub(t)
+	h := boundWith(t, nil, nil, withRegistry(srv.URL), withGitHub(gh))
+	s := refreshWithChangelog(t, h)
+	if len(s.Changelogs) != 1 {
+		t.Fatalf("changelogs = %+v", s.Changelogs)
+	}
+	if c := s.Changelogs[0]; c.Source != demoRepo || c.Reason != "" || releaseVersions(c) != "1.3.0,1.2.4" {
+		t.Fatalf("changelog = %+v", c)
+	}
+	if len(cdn.Headers()) != 2 {
+		t.Fatalf("blob host requests = %d, want 2", len(cdn.Headers()))
+	}
+}
+
 func TestChangelogOnlyForItemsWithUpdate(t *testing.T) {
 	h, _ := changelogHarness(t, map[string]string{sourceLabel: demoSourceURL}, nil)
 	var res control.UpdatesResult
