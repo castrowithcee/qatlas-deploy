@@ -69,7 +69,7 @@ func settle(t *testing.T) {
 func TestDeployRunsLogAndStatus(t *testing.T) {
 	startBound(t, okDeployer{})
 	settle(t)
-	code, stdout, stderr := run(t, "deploy", "plain-stack", "--output", "json")
+	code, stdout, stderr := run(t, "stack", "deploy", "plain-stack", "--output", "json")
 	if code != 0 {
 		t.Fatalf("deploy: %d %s", code, stderr)
 	}
@@ -79,7 +79,7 @@ func TestDeployRunsLogAndStatus(t *testing.T) {
 	}
 	id := dep["run"].(string)
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
-		_, out, _ := run(t, "runs", "plain-stack", "--output", "json")
+		_, out, _ := run(t, "stack", "runs", "plain-stack", "--output", "json")
 		var rows []map[string]any
 		if err := json.Unmarshal([]byte(out), &rows); err != nil {
 			t.Fatalf("runs = %q: %v", out, err)
@@ -91,10 +91,10 @@ func TestDeployRunsLogAndStatus(t *testing.T) {
 			t.Fatalf("runs = %q", out)
 		}
 	}
-	if code, out, _ := run(t, "runs"); code != 0 || !strings.Contains(out, id) {
+	if code, out, _ := run(t, "stack", "runs"); code != 0 || !strings.Contains(out, id) {
 		t.Fatalf("runs table: %d %q", code, out)
 	}
-	if code, out, _ := run(t, "log", id); code != 0 || !strings.Contains(out, "deploy plain-stack") {
+	if code, out, _ := run(t, "stack", "log", id); code != 0 || !strings.Contains(out, "deploy plain-stack") {
 		t.Fatalf("log: %d %q", code, out)
 	}
 	code, out, _ := run(t, "status")
@@ -106,7 +106,7 @@ func TestDeployRunsLogAndStatus(t *testing.T) {
 func TestLogMalformedAndUnknownID(t *testing.T) {
 	startBound(t, okDeployer{})
 	for _, id := range []string{"x", "../etc/passwd", "20260101T000000Z-00000000"} {
-		if code, _, stderr := run(t, "log", id); code == 0 || !strings.Contains(stderr, "no such run") || !strings.Contains(stderr, "not-found") {
+		if code, _, stderr := run(t, "stack", "log", id); code == 0 || !strings.Contains(stderr, "no such run") || !strings.Contains(stderr, "not-found") {
 			t.Fatalf("log %q: code %d, stderr %q", id, code, stderr)
 		}
 	}
@@ -114,23 +114,23 @@ func TestLogMalformedAndUnknownID(t *testing.T) {
 
 func TestDeployRefusals(t *testing.T) {
 	startBound(t, okDeployer{})
-	code, _, stderr := run(t, "deploy", "no-such-secret")
-	if code == 0 || !strings.Contains(stderr, "no such stack") || strings.Count(stderr, "no-such-secret") != 0 || !strings.Contains(stderr, "qdeploy stacks") {
+	code, _, stderr := run(t, "stack", "deploy", "no-such-secret")
+	if code == 0 || !strings.Contains(stderr, "no such stack") || strings.Count(stderr, "no-such-secret") != 0 || !strings.Contains(stderr, "qdeploy stack list") {
 		t.Fatalf("unknown: %d %q", code, stderr)
 	}
-	if code, _, stderr := run(t, "deploy", "broken-stack"); code == 0 || !strings.Contains(stderr, "qdeploy check") {
+	if code, _, stderr := run(t, "stack", "deploy", "broken-stack"); code == 0 || !strings.Contains(stderr, "qdeploy stack check") {
 		t.Fatalf("unreadable: %d %q", code, stderr)
 	}
 }
 
 func TestDeployWithoutDeployerOrRepo(t *testing.T) {
 	startBound(t, nil)
-	if code, _, stderr := run(t, "deploy", "plain-stack"); code == 0 || !strings.Contains(stderr, "not available") {
+	if code, _, stderr := run(t, "stack", "deploy", "plain-stack"); code == 0 || !strings.Contains(stderr, "not available") {
 		t.Fatalf("no deployer: %d %q", code, stderr)
 	}
 	testDeployer = okDeployer{}
 	startRepoService(t)
-	if code, _, stderr := run(t, "deploy", "plain-stack"); code == 0 || !strings.Contains(stderr, "qdeploy repo set") {
+	if code, _, stderr := run(t, "stack", "deploy", "plain-stack"); code == 0 || !strings.Contains(stderr, "qdeploy repo set") {
 		t.Fatalf("no repo: %d %q", code, stderr)
 	}
 	code, out, _ := run(t, "status")
@@ -143,11 +143,11 @@ func TestPausedStackAndResume(t *testing.T) {
 	d := &checkDeployer{}
 	startBound(t, d)
 	settle(t)
-	if code, _, stderr := run(t, "resume", "plain-stack"); code != 1 || !strings.Contains(stderr, "not paused") {
+	if code, _, stderr := run(t, "stack", "resume", "plain-stack"); code != 1 || !strings.Contains(stderr, "not paused") {
 		t.Fatalf("resume of a stack that is not paused: %d %q", code, stderr)
 	}
 	d.fail.Store(true)
-	code, stdout, stderr := run(t, "deploy", "plain-stack", "--output", "json")
+	code, stdout, stderr := run(t, "stack", "deploy", "plain-stack", "--output", "json")
 	if code != 0 {
 		t.Fatalf("deploy: %d %s", code, stderr)
 	}
@@ -165,13 +165,13 @@ func TestPausedStackAndResume(t *testing.T) {
 			t.Fatalf("status = %s", out)
 		}
 	}
-	if code, _, stderr := run(t, "deploy", "plain-stack"); code != 1 || !strings.Contains(stderr, "paused") || !strings.Contains(stderr, "qdeploy resume") {
+	if code, _, stderr := run(t, "stack", "deploy", "plain-stack"); code != 1 || !strings.Contains(stderr, "paused") || !strings.Contains(stderr, "qdeploy stack resume") {
 		t.Fatalf("deploy of a paused stack: %d %q", code, stderr)
 	}
-	if code, out, _ := run(t, "runs", "plain-stack"); code != 0 || !strings.Contains(out, engine.ResultRollbackFailed) {
+	if code, out, _ := run(t, "stack", "runs", "plain-stack"); code != 0 || !strings.Contains(out, engine.ResultRollbackFailed) {
 		t.Fatalf("runs: %d %q", code, out)
 	}
-	code, out, stderr := run(t, "resume", "plain-stack", "--output", "json")
+	code, out, stderr := run(t, "stack", "resume", "plain-stack", "--output", "json")
 	var res map[string]any
 	if code != 0 || json.Unmarshal([]byte(out), &res) != nil || res["stack"] != "plain-stack" || res["run"] != id ||
 		!strings.Contains(res["reason"].(string), "demo check failed") {
@@ -180,7 +180,7 @@ func TestPausedStackAndResume(t *testing.T) {
 	if _, out, _ := run(t, "status", "--output", "json"); strings.Contains(out, "stack.plain-stack.paused") {
 		t.Fatalf("status after resume = %s", out)
 	}
-	if code, _, _ := run(t, "resume", "plain-stack"); code != 1 {
+	if code, _, _ := run(t, "stack", "resume", "plain-stack"); code != 1 {
 		t.Fatalf("second resume: %d", code)
 	}
 }
@@ -191,27 +191,27 @@ func TestPauseAndPinCommands(t *testing.T) {
 	for _, tc := range []struct{ set, clear, key string }{
 		{"pause", "unpause", "stack.plain-stack.operator_pause"}, {"pin", "unpin", "stack.plain-stack.pinned"},
 	} {
-		code, out, stderr := run(t, tc.set, "plain-stack", "--output", "json")
+		code, out, stderr := run(t, "stack", tc.set, "plain-stack", "--output", "json")
 		var res map[string]any
 		if code != 0 || json.Unmarshal([]byte(out), &res) != nil || res["stack"] != "plain-stack" || res["active"] != true || res["changed"] != true {
 			t.Fatalf("%s: %d %q %q", tc.set, code, out, stderr)
 		}
-		if code, out, _ := run(t, tc.set, "plain-stack", "--output", "json"); code != 0 || !strings.Contains(out, `"changed": false`) && !strings.Contains(out, `"changed":false`) {
+		if code, out, _ := run(t, "stack", tc.set, "plain-stack", "--output", "json"); code != 0 || !strings.Contains(out, `"changed": false`) && !strings.Contains(out, `"changed":false`) {
 			t.Fatalf("%s again: %d %q", tc.set, code, out)
 		}
 		if _, out, _ := run(t, "status", "--output", "json"); !strings.Contains(out, tc.key) || strings.Contains(out, "stack.plain-stack.paused") {
 			t.Fatalf("status after %s = %s", tc.set, out)
 		}
-		if code, _, stderr := run(t, tc.set, "nope"); code == 0 || !strings.Contains(stderr, "qdeploy stacks") {
+		if code, _, stderr := run(t, "stack", tc.set, "nope"); code == 0 || !strings.Contains(stderr, "qdeploy stack list") {
 			t.Fatalf("%s unknown: %d %q", tc.set, code, stderr)
 		}
-		if code, out, _ := run(t, tc.clear, "plain-stack", "--output", "json"); code != 0 || !strings.Contains(out, `"active"`) {
+		if code, out, _ := run(t, "stack", tc.clear, "plain-stack", "--output", "json"); code != 0 || !strings.Contains(out, `"active"`) {
 			t.Fatalf("%s: %d %q", tc.clear, code, out)
 		}
 		if _, out, _ := run(t, "status", "--output", "json"); strings.Contains(out, tc.key) {
 			t.Fatalf("status after %s = %s", tc.clear, out)
 		}
-		if code, _, _ := run(t, tc.set); code == 0 {
+		if code, _, _ := run(t, "stack", tc.set); code == 0 {
 			t.Fatalf("%s without a stack succeeded", tc.set)
 		}
 	}
@@ -219,10 +219,10 @@ func TestPauseAndPinCommands(t *testing.T) {
 
 func TestUpdateOfAPinnedStackSaysToUnpin(t *testing.T) {
 	startUpdate(t, okDeployer{})
-	if code, _, stderr := run(t, "pin", "demo-stack"); code != 0 {
+	if code, _, stderr := run(t, "stack", "pin", "demo-stack"); code != 0 {
 		t.Fatalf("pin: %d %q", code, stderr)
 	}
-	if code, _, stderr := run(t, "update", "demo-stack"); code != 1 || !strings.Contains(stderr, "pinned") || !strings.Contains(stderr, "qdeploy unpin") {
+	if code, _, stderr := run(t, "stack", "update", "demo-stack"); code != 1 || !strings.Contains(stderr, "pinned") || !strings.Contains(stderr, "qdeploy stack unpin") {
 		t.Fatalf("update of a pinned stack: %d %q", code, stderr)
 	}
 }

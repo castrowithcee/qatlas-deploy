@@ -5,7 +5,7 @@
 # available image versions per update ceiling without changing anything, roll back a
 # commit with a failing healthcheck (data restored from the run's backup, revert commit on the remote), leave a
 # stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
-# Version updates with qdeploy update follow: one direct step, a stepwise major jump and a jump whose middle step
+# Version updates with qdeploy stack update follow: one direct step, a stepwise major jump and a jump whose middle step
 # fails. The maintenance window follows on a real, short window: a stack in automatic mode is updated without a
 # human, a stack in manual mode is only reported, a paused and a pinned stack stay as they are, and a change with
 # window set takes effect in the running service. The terminal interface follows: sudo qdeploy opens it in a
@@ -152,7 +152,7 @@ stack_idle() {
 
 # run_finished succeeds when the log of the run has its result line and the stack has no run in progress.
 run_finished() {
-	[ -z "$(stack_field "$1" active_run)" ] && qd log "$2" | grep -q ' result '
+	[ -z "$(stack_field "$1" active_run)" ] && qd stack log "$2" | grep -q ' result '
 }
 
 has_failed_commit_finding() {
@@ -196,7 +196,7 @@ rollback_failed_steps=stop,backup,pull,up,check,rollback,stop,restore,revert,pus
 
 # newest_run prints the id of the newest recorded run of a stack (empty when there is none).
 newest_run() {
-	qd runs "$1" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' || true
+	qd stack runs "$1" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' || true
 }
 
 # next_run waits for a run of the stack other than the run id $2, active or already finished, and prints its
@@ -244,12 +244,12 @@ scenario_deploy() {
 	[ "$(docker exec "$host" stat -c %U:%a /opt/stacks/demo-stack/secrets.env)" = qdeploy:600 ] || fail 'secrets.env has the wrong owner or mode'
 
 	step 'a manual run deploys demo-stack and records the commit'
-	out=$(qd --output json deploy demo-stack) || fail "deploy failed: $out"
+	out=$(qd --output json stack deploy demo-stack) || fail "deploy failed: $out"
 	run=$(printf '%s\n' "$out" | sed -n 's/.*"run": *"\([^"]*\)".*/\1/p')
 	commit=$(printf '%s\n' "$out" | sed -n 's/.*"commit": *"\([^"]*\)".*/\1/p')
 	[ -n "$run" ] && [ -n "$commit" ] || fail "deploy did not report a run and a commit: $out"
 	wait_for "the run $run" 240 run_finished demo-stack "$run"
-	log_text=$(qd log "$run")
+	log_text=$(qd stack log "$run")
 	printf '%s' "$log_text" | grep -q ' result succeeded' || fail "the run did not succeed: $log_text"
 	[ "$(stack_field demo-stack deployed)" = "$commit" ] || fail "demo-stack is not recorded as deployed at $commit: $(qd --output json status)"
 	[ "$(stack_images demo-stack)" = "registry.$domain/demo/app:1.0.1" ] || fail "demo-stack does not run the image 1.0.1: $(stack_images demo-stack)"
@@ -273,10 +273,10 @@ scenario_deploy() {
 	bad=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
 	restart_service
 	wait_for 'the rolled-back run of demo-cache' 240 stack_settled demo-cache rolled-back
-	runs_out=$(qd runs demo-cache)
+	runs_out=$(qd stack runs demo-cache)
 	failed_run=$(printf '%s\n' "$runs_out" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}')
 	printf '%s\n' "$runs_out" | grep -m 1 "$failed_run" | grep -q 'rolled-back' || fail "the newest run of demo-cache is not rolled-back: $runs_out"
-	failed_log=$(qd log "$failed_run")
+	failed_log=$(qd stack log "$failed_run")
 	printf '%s' "$failed_log" | grep -q ' result rolled-back' || fail "the run log does not end rolled-back: $failed_log"
 	printf '%s' "$failed_log" | grep -q 'unhealthy' || fail "the run log does not name the unhealthy container: $failed_log"
 	[ "$(log_steps "$failed_log")" = "$rolled_back_steps" ] || fail "unexpected steps of the rolled-back run: $(log_steps "$failed_log")"
@@ -295,23 +295,23 @@ scenario_deploy() {
 	log "scenario: failing healthcheck: run $failed_run rolled back, bad commit $bad reverted by $revert"
 
 	step 'a rolled-back commit is not run again by the next poll'
-	count=$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	count=$(qd stack runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
 	restart_service
 	wait_for 'the poll after the restart' 60 poll_done
-	[ "$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'a rolled-back commit was run again by the poll'
+	[ "$(qd stack runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'a rolled-back commit was run again by the poll'
 	[ "$(stack_field demo-cache deployed)" = "$revert" ] || fail 'the poll changed the deployed commit of demo-cache'
 	[ -z "$(stack_field demo-cache pending)" ] || fail "demo-cache has a pending commit after the rollback: $(stack_field demo-cache pending)"
 	[ -z "$(stack_field demo-cache findings)" ] || fail "demo-cache has findings after the rollback: $(stack_field demo-cache findings)"
 
 	step 'no run log holds a secret value'
-	ids=$(qd runs | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}')
+	ids=$(qd stack runs | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}')
 	n=0
 	for id in $ids; do
 		n=$((n + 1))
-		if qd log "$id" | grep -qF -- "$secret"; then fail "the log of run $id holds the secret value"; fi
+		if qd stack log "$id" | grep -qF -- "$secret"; then fail "the log of run $id holds the secret value"; fi
 	done
 	[ "$n" -ge 3 ] || fail "too few runs to check the logs: $n"
-	if qd runs | grep -qF -- "$secret"; then fail 'qdeploy runs shows the secret value'; fi
+	if qd stack runs | grep -qF -- "$secret"; then fail 'qdeploy stack runs shows the secret value'; fi
 	log "scenario: the secret value is in none of $n run logs"
 }
 
@@ -357,7 +357,7 @@ fixture_snap() {
 }
 
 backup_ids() {
-	qd backup list "$1" | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}'
+	qd stack backup list "$1" | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}'
 }
 
 stack_running() {
@@ -380,7 +380,7 @@ scenario_backup() {
 	log "scenario: fixture written: $(printf '%s\n' "$bind_before" | grep -c ' ->') entries in data/ and in the volume"
 
 	step 'backup create saves data/, the volume and the command output, and starts the stack again'
-	out=$(qd --output json backup create demo-stack) || fail "backup create failed: $out"
+	out=$(qd --output json stack backup create demo-stack) || fail "backup create failed: $out"
 	b1=$(printf '%s\n' "$out" | sed -n 's/.*"backup": *"\([^"]*\)".*/\1/p')
 	[ -n "$b1" ] || fail "backup create reported no id: $out"
 	printf '%s' "$out" | grep -q '"items": *3' || fail "the backup does not hold three items: $out"
@@ -396,23 +396,23 @@ scenario_backup() {
 	[ "$bind_changed" != "$bind_before" ] && [ "$vol_changed" != "$vol_before" ] || fail 'the change did not alter the data'
 
 	step 'restore without confirmation and without a terminal is refused and changes nothing'
-	out=$(qd_fails backup restore demo-stack "$b1") || fail "backup restore without confirmation succeeded: $out"
+	out=$(qd_fails stack backup restore demo-stack "$b1") || fail "backup restore without confirmation succeeded: $out"
 	printf '%s' "$out" | grep -q -- '--yes' || fail "the refusal does not name --yes: $out"
 	[ "$(fixture_snap "$bind")" = "$bind_changed" ] && [ "$(fixture_snap "$vol")" = "$vol_changed" ] || fail 'the refused restore changed the data'
 	stack_running demo-stack || fail 'the refused restore stopped the stack'
 	log "scenario: restore refused: $out"
 
 	step 'restore with --yes brings back data/ and the volume byte-identical, owners and modes included'
-	out=$(qd backup restore demo-stack "$b1" --yes) || fail "backup restore failed: $out"
+	out=$(qd stack backup restore demo-stack "$b1" --yes) || fail "backup restore failed: $out"
 	[ "$(fixture_snap "$bind")" = "$bind_before" ] || fail "data/ differs after the restore: $(fixture_snap "$bind")"
 	[ "$(fixture_snap "$vol")" = "$vol_before" ] || fail "the volume differs after the restore: $(fixture_snap "$vol")"
 	stack_running demo-stack || fail "demo-stack is not running after the restore: $(stack_images demo-stack)"
 	log "scenario: restored $b1; data/ and volume identical to the backed-up state"
 
 	step 'retention keeps the newest two backups and deletes the oldest'
-	out=$(qd --output json backup create demo-stack) || fail "second backup failed: $out"
+	out=$(qd --output json stack backup create demo-stack) || fail "second backup failed: $out"
 	b2=$(printf '%s\n' "$out" | sed -n 's/.*"backup": *"\([^"]*\)".*/\1/p')
-	out=$(qd --output json backup create demo-stack) || fail "third backup failed: $out"
+	out=$(qd --output json stack backup create demo-stack) || fail "third backup failed: $out"
 	b3=$(printf '%s\n' "$out" | sed -n 's/.*"backup": *"\([^"]*\)".*/\1/p')
 	printf '%s' "$out" | grep -q "\"removed\": *\"$b1\"" || fail "the third backup did not report removing $b1: $out"
 	listed=$(backup_ids demo-stack | tr '\n' ' ')
@@ -423,10 +423,10 @@ scenario_backup() {
 	log "scenario: retention: list shows $listed, $b1 deleted"
 
 	step 'a backup path outside the stack directory is refused'
-	out=$(qd_fails check demo-badpath) || fail "check accepted a path outside the stack: $out"
+	out=$(qd_fails stack check demo-badpath) || fail "check accepted a path outside the stack: $out"
 	printf '%s' "$out" | grep -q -- "'..' is not allowed" || fail "check does not name the path error: $out"
 	log "scenario: check refused: $out"
-	out=$(qd_fails backup create demo-badpath) || fail "backup create accepted a path outside the stack: $out"
+	out=$(qd_fails stack backup create demo-badpath) || fail "backup create accepted a path outside the stack: $out"
 	printf '%s' "$out" | grep -q -- 'config-invalid' || fail "backup create does not refuse the invalid rules: $out"
 	if docker exec "$host" test -e /var/lib/qdeploy/backups/demo-badpath; then fail 'a refused backup left a store directory'; fi
 	log "scenario: backup create refused: $out"
@@ -437,7 +437,7 @@ json_value() {
 	printf '%s' "$1" | grep -o "\"$2\":\"[^\"]*\"" | head -n 1 | cut -d '"' -f 4
 }
 
-# updates_expect checks the single row of a 'qdeploy updates' JSON output: current, available, major_available
+# updates_expect checks the single row of a 'qdeploy stack updates' JSON output: current, available, major_available
 # (empty for none) and status.
 updates_expect() {
 	out=$1
@@ -454,39 +454,39 @@ updates_commit() {
 	restart_service
 	run=$(next_run demo-stack "$prev") || fail "no run of demo-stack started for: $2"
 	wait_for "the run $run" 240 run_finished demo-stack "$run"
-	qd log "$run" | grep -q ' result succeeded' || fail "the run for '$2' did not succeed: $(qd log "$run")"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run for '$2' did not succeed: $(qd stack log "$run")"
 }
 
 # scenario_updates shows the update detection against the registry: the stored result, the ceiling of the stack,
 # the major hint and a stack without rules. Detection changes nothing; only the admin's commits do.
 scenario_updates() {
 	step 'updates says a stack was never checked'
-	out=$(qd --output json updates demo-stack) || fail "updates failed: $out"
+	out=$(qd --output json stack updates demo-stack) || fail "updates failed: $out"
 	[ "$(json_value "$out" status)" = never-checked ] || fail "demo-stack is not reported as never checked: $out"
 
 	step 'updates --refresh asks the registry; the default ceiling is minor and a major version is only a hint'
-	out=$(qd --output json updates demo-stack --refresh) || fail "updates --refresh failed: $out"
+	out=$(qd --output json stack updates demo-stack --refresh) || fail "updates --refresh failed: $out"
 	updates_expect "$out" 1.0.1 1.1.0 5.0.0 update
 	[ -n "$(json_value "$out" checked)" ] || fail "the result has no time of the check: $out"
-	stored=$(qd --output json updates demo-stack) || fail "updates failed: $stored"
+	stored=$(qd --output json stack updates demo-stack) || fail "updates failed: $stored"
 	[ "$stored" = "$out" ] || fail "updates without --refresh does not show the stored result: $stored"
 	log "scenario: updates $out"
 
 	step 'a stack without rules is listed too'
-	out=$(qd --output json updates demo-cache --refresh) || fail "updates demo-cache failed: $out"
+	out=$(qd --output json stack updates demo-cache --refresh) || fail "updates demo-cache failed: $out"
 	updates_expect "$out" 1.1.0 1.1.0 5.0.0 current
 
 	step 'ceiling patch offers no minor step; ceiling major offers 5.0.0 without a hint'
 	updates_commit 's/^version: 1$/version: 1\nupdate:\n  ceiling: patch/' 'Set the demo-stack update ceiling to patch'
-	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
+	out=$(qd --output json stack updates demo-stack --refresh) || fail "updates failed: $out"
 	updates_expect "$out" 1.0.1 1.0.1 5.0.0 current
 	updates_commit 's/ceiling: patch/ceiling: major/' 'Set the demo-stack update ceiling to major'
-	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
+	out=$(qd --output json stack updates demo-stack --refresh) || fail "updates failed: $out"
 	updates_expect "$out" 1.0.1 5.0.0 '' update
 
 	step 'the demo-stack rules are restored'
 	updates_commit '/^update:$/d; /^  ceiling: major$/d' 'Remove the demo-stack update rules'
-	out=$(qd --output json updates demo-stack --refresh) || fail "updates failed: $out"
+	out=$(qd --output json stack updates demo-stack --refresh) || fail "updates failed: $out"
 	updates_expect "$out" 1.0.1 1.1.0 5.0.0 update
 	[ "$(stack_images demo-stack)" = "registry.$domain/demo/app:1.0.1" ] || fail "updates changed the running image: $(stack_images demo-stack)"
 	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git log --format=%s -n 1 -- demo-stack/.env')" = 'Update demo-stack to 1.0.1' ] ||
@@ -508,12 +508,12 @@ scenario_rollback() {
 	restart_service
 	run=$(next_run demo-stack "$prev") || fail 'no run of demo-stack started for the good commit'
 	wait_for "the run $run" 240 run_finished demo-stack "$run"
-	run_log=$(qd log "$run")
+	run_log=$(qd stack log "$run")
 	printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the good run did not succeed: $run_log"
 	[ "$(log_steps "$run_log")" = stop,backup,pull,up,check ] || fail "unexpected steps of the good run: $(log_steps "$run_log")"
 	good_backup=$(printf '%s\n' "$run_log" | sed -n 's/^[^ ]* info backup \([0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}\)$/\1/p')
 	[ -n "$good_backup" ] || fail "the good run made no backup: $run_log"
-	[ "$(backup_ids demo-stack | head -n 1)" = "$good_backup" ] || fail "backup list does not show $good_backup first: $(qd backup list demo-stack)"
+	[ "$(backup_ids demo-stack | head -n 1)" = "$good_backup" ] || fail "backup list does not show $good_backup first: $(qd stack backup list demo-stack)"
 	[ "$(stack_field demo-stack deployed)" = "$good_stack" ] || fail "demo-stack is not recorded as deployed at $good_stack"
 	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "demo-stack does not run 1.1.0: $(stack_images demo-stack)"
 	log "scenario: good run $run deployed $good_stack, backup $good_backup"
@@ -537,7 +537,7 @@ scenario_rollback() {
 	run=$(next_run demo-stack "$prev") || fail 'no run of demo-stack started for the failing commit'
 	# Once the run has its backup, the data changes under the new version; only a restore can undo that.
 	i=0
-	until qd log "$run" | grep -q ' info backup [0-9]\{8\}T'; do
+	until qd stack log "$run" | grep -q ' info backup [0-9]\{8\}T'; do
 		i=$((i + 1))
 		[ "$i" -lt 120 ] || fail "the run $run made no backup"
 		sleep 0.2
@@ -545,7 +545,7 @@ scenario_rollback() {
 	docker exec -i "$host" docker run --rm --network none -v "$bind:/data" -v "$vol:/state" "$backup_image" sh -ec \
 		"for d in /data /state; do cd \$d; $(fixture_change_script); done" </dev/null || fail 'cannot change the data during the run'
 	wait_for "the run $run" 240 run_finished demo-stack "$run"
-	run_log=$(qd log "$run")
+	run_log=$(qd stack log "$run")
 	printf '%s' "$run_log" | grep -q ' result rolled-back' || fail "the run did not end rolled-back: $run_log"
 	[ "$(log_steps "$run_log")" = "$rolled_back_steps" ] || fail "unexpected steps of the rolled-back run: $(log_steps "$run_log")"
 	run_backups=$(printf '%s\n' "$run_log" | sed -n 's/^[^ ]* info backup \([0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}\)$/\1/p')
@@ -553,7 +553,7 @@ scenario_rollback() {
 		fail "the backup and the restore do not name one backup: $run_backups"
 	run_backup=$(printf '%s\n' "$run_backups" | head -n 1)
 	case " $old_backups " in *" $run_backup "*) fail "the run restored an older backup: $run_backup" ;; esac
-	backup_ids demo-stack | grep -qx "$run_backup" || fail "backup list does not know $run_backup: $(qd backup list demo-stack)"
+	backup_ids demo-stack | grep -qx "$run_backup" || fail "backup list does not know $run_backup: $(qd stack backup list demo-stack)"
 	[ "$(fixture_snap "$bind")" = "$bind_before" ] || fail "data/ differs from the backed-up state after the rollback: $(fixture_snap "$bind")"
 	[ "$(fixture_snap "$vol")" = "$vol_before" ] || fail "the volume differs from the backed-up state after the rollback: $(fixture_snap "$vol")"
 	[ "$(docker exec "$host" cat "$bind/marker.txt")" = "$marker" ] || fail 'the marker of this run backup is not back'
@@ -587,7 +587,7 @@ scenario_rollback() {
 		fail "the run $run did not finish"
 	}
 	docker exec "$prefix-git" rm -f /srv/git/stacks.git/hooks/pre-receive
-	run_log=$(qd log "$run")
+	run_log=$(qd stack log "$run")
 	printf '%s' "$run_log" | grep -q ' result rollback-failed' || fail "the run did not end rollback-failed: $run_log"
 	[ "$(log_steps "$run_log")" = "$rollback_failed_steps" ] || fail "unexpected steps of the rollback-failed run: $(log_steps "$run_log")"
 	printf '%s' "$run_log" | grep -q 'rejected by the e2e hook' || fail "the run log does not show the remote refusing the push: $run_log"
@@ -598,29 +598,29 @@ scenario_rollback() {
 	log "scenario: run $run rollback-failed; demo-cache stopped and $(stack_field demo-cache paused)"
 
 	step 'deploy is refused while the stack is paused and the poll does not run it'
-	out=$(qd_fails deploy demo-cache) || fail "deploy of a paused stack succeeded: $out"
+	out=$(qd_fails stack deploy demo-cache) || fail "deploy of a paused stack succeeded: $out"
 	printf '%s' "$out" | grep -q 'paused' || fail "the refusal does not name the pause: $out"
-	count=$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	count=$(qd stack runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
 	restart_service
 	wait_for 'the poll after the restart' 60 poll_done
-	[ "$(qd runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'the poll ran a paused stack'
+	[ "$(qd stack runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'the poll ran a paused stack'
 	[ -n "$(stack_field demo-cache paused)" ] || fail 'the restart cleared the pause'
 	stack_field demo-cache findings | grep -q failed-commit || fail "the failed commit is not marked as a finding: $(stack_field demo-cache findings)"
 	log "scenario: deploy refused: $out"
 
 	step 'resume clears the pause, and the stack deploys a fixing commit'
-	out=$(qd --output json resume demo-cache) || fail "resume failed: $out"
+	out=$(qd --output json stack resume demo-cache) || fail "resume failed: $out"
 	printf '%s' "$out" | grep -q '"stack": *"demo-cache"' || fail "resume does not name the stack: $out"
 	[ -z "$(stack_field demo-cache paused)" ] || fail 'status still shows the pause after resume'
 	if stack_field demo-cache findings | grep -q paused; then fail 'the paused finding stays after resume'; fi
-	out=$(qd_fails resume demo-cache) || fail "a second resume succeeded: $out"
+	out=$(qd_fails stack resume demo-cache) || fail "a second resume succeeded: $out"
 	prev=$(newest_run demo-cache)
 	admin_commit demo-cache/.env 's/^DEMO_HEALTH=.*/DEMO_HEALTH=ok/; s/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=2.0.0/' 'Fix the demo-cache healthcheck and update to 2.0.0'
 	fix=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
 	restart_service
 	run=$(next_run demo-cache "$prev") || fail 'no run of demo-cache started for the fixing commit'
 	wait_for "the run $run" 240 run_finished demo-cache "$run"
-	qd log "$run" | grep -q ' result succeeded' || fail "the run of the fixing commit did not succeed: $(qd log "$run")"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run of the fixing commit did not succeed: $(qd stack log "$run")"
 	[ "$(stack_field demo-cache deployed)" = "$fix" ] || fail "demo-cache is not recorded as deployed at $fix"
 	[ "$(stack_images demo-cache)" = "$image:2.0.0" ] || fail "demo-cache does not run 2.0.0: $(stack_images demo-cache)"
 	stack_healthy demo-cache || fail 'demo-cache is not healthy after the fix'
@@ -643,7 +643,7 @@ update_reset() {
 	restart_service
 	run=$(next_run demo-stack "$prev") || fail "no run of demo-stack started for the reset to $1"
 	wait_for "the run $run" 240 run_finished demo-stack "$run"
-	qd log "$run" | grep -q ' result succeeded' || fail "the run for the reset to $1 did not succeed: $(qd log "$run")"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run for the reset to $1 did not succeed: $(qd stack log "$run")"
 	[ "$(stack_images demo-stack)" = "registry.$domain/demo/app:$1" ] || fail "demo-stack does not run $1: $(stack_images demo-stack)"
 }
 
@@ -671,27 +671,27 @@ update_steps() {
 		tr '\n' ',' | sed 's/,$//'
 }
 
-# scenario_update takes version steps with 'qdeploy update' against the real git server and registry: a direct
+# scenario_update takes version steps with 'qdeploy stack update' against the real git server and registry: a direct
 # update, a stepwise major jump with a commit and a backup per step, and a stepwise jump whose middle step has a
 # failing healthcheck. The image 4.0.0 is unhealthy by itself, so no commit but the update's own can break it.
 scenario_update() {
 	image=registry.$domain/demo/app
 
 	step 'a stack without qdeploy.yaml is not updated'
-	out=$(qd_fails update demo-cache) || fail "update accepted a stack without rules: $out"
+	out=$(qd_fails stack update demo-cache) || fail "update accepted a stack without rules: $out"
 	printf '%s' "$out" | grep -q 'qdeploy.yaml' || fail "the refusal does not name qdeploy.yaml: $out"
 
 	step 'a direct update creates one commit that moves only the image variable, and the stack runs the new version'
 	updates_commit 's/^version: 1$/version: 1\nupdate:\n  major: direct/' 'Set the demo-stack major updates to direct'
 	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "demo-stack does not run 1.1.0 before the update: $(stack_images demo-stack)"
 	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
-	runs_before=$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
-	out=$(qd --output json update demo-stack --version 3.0.0) || fail "update to 3.0.0 failed: $out"
+	runs_before=$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	out=$(qd --output json stack update demo-stack --version 3.0.0) || fail "update to 3.0.0 failed: $out"
 	[ "$(json_values "$out" to | tr '\n' ' ')" = '3.0.0 ' ] || fail "a direct update is not one step to 3.0.0: $out"
 	run=$(json_values "$out" run | head -n 1)
 	commit=$(json_values "$out" commit | head -n 1)
 	[ -n "$run" ] && [ -n "$commit" ] || fail "update reported no run and commit: $out"
-	run_log=$(qd log "$run")
+	run_log=$(qd stack log "$run")
 	log "scenario: direct update steps: $(update_steps "$run_log")"
 	printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the update run did not succeed: $run_log"
 	[ "$(update_steps "$run_log")" = stop,backup,commit,push,fast-forward,pull,up,check ] || fail "unexpected steps of the update run: $(update_steps "$run_log")"
@@ -700,7 +700,7 @@ scenario_update() {
 	[ "$(as_admin 'cd ~/stacks && git rev-parse HEAD')" = "$commit" ] || fail "the head of the branch is not the update commit $commit"
 	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$commit" ] || fail 'the update commit is not the head of the remote branch'
 	update_commit_only_version "$commit" 1.1.0 3.0.0
-	[ "$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 1))" ] || fail 'the update did not make exactly one run'
+	[ "$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 1))" ] || fail 'the update did not make exactly one run'
 	[ "$(stack_field demo-stack deployed)" = "$commit" ] || fail "demo-stack is not recorded as deployed at $commit"
 	[ "$(stack_images demo-stack)" = "$image:3.0.0" ] || fail "demo-stack does not run 3.0.0: $(stack_images demo-stack)"
 	stack_healthy demo-stack || fail 'demo-stack is not healthy after the update'
@@ -710,8 +710,8 @@ scenario_update() {
 	step 'a stepwise major jump takes one step per major version, each with its own commit and backup'
 	update_reset 1.1.0 stepwise
 	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
-	runs_before=$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
-	out=$(qd --output json update demo-stack --version 3.0.0) || fail "stepwise update to 3.0.0 failed: $out"
+	runs_before=$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	out=$(qd --output json stack update demo-stack --version 3.0.0) || fail "stepwise update to 3.0.0 failed: $out"
 	[ "$(json_values "$out" to | tr '\n' ' ')" = '2.0.0 3.0.0 ' ] || fail "the jump to 3.0.0 is not the steps 2.0.0 and 3.0.0: $out"
 	[ "$(json_values "$out" result | sort -u)" = succeeded ] || fail "not every step succeeded: $out"
 	runs=$(json_values "$out" run)
@@ -726,7 +726,7 @@ scenario_update() {
 	update_commit_only_version "$second_commit" 2.0.0 3.0.0
 	backups=
 	for id in $runs; do
-		run_log=$(qd log "$id")
+		run_log=$(qd stack log "$id")
 		printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the step run $id did not succeed: $run_log"
 		[ "$(update_steps "$run_log")" = stop,backup,commit,push,fast-forward,pull,up,check ] || fail "unexpected steps of the run $id: $(update_steps "$run_log")"
 		this_backup=$(update_run_backup "$run_log")
@@ -735,7 +735,7 @@ scenario_update() {
 		backup_ids demo-stack | grep -qx "$this_backup" || fail "backup list does not know $this_backup"
 		backups="$backups $this_backup"
 	done
-	[ "$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 2))" ] || fail 'the stepwise update did not make exactly two runs'
+	[ "$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 2))" ] || fail 'the stepwise update did not make exactly two runs'
 	[ "$(stack_images demo-stack)" = "$image:3.0.0" ] || fail "demo-stack does not run 3.0.0: $(stack_images demo-stack)"
 	[ "$(stack_field demo-stack deployed)" = "$second_commit" ] || fail "demo-stack is not recorded as deployed at $second_commit"
 	log "scenario: stepwise update: commits $(printf '%s' "$commits" | tr '\n' ' '), backups$backups"
@@ -744,16 +744,16 @@ scenario_update() {
 	update_reset 2.0.0 stepwise
 	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
 	deployed_before=$(stack_field demo-stack deployed)
-	runs_before=$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
-	out=$(qd_fails --output json update demo-stack --version 5.0.0) || fail "update across a failing step succeeded: $out"
+	runs_before=$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	out=$(qd_fails --output json stack update demo-stack --version 5.0.0) || fail "update across a failing step succeeded: $out"
 	log "scenario: failing jump: $out"
 	[ "$(json_values "$out" to | tr '\n' ' ')" = '3.0.0 4.0.0 5.0.0 ' ] || fail "the jump to 5.0.0 is not the steps 3.0.0, 4.0.0 and 5.0.0: $out"
 	[ "$(json_values "$out" result | tr '\n' ' ')" = 'succeeded rolled-back skipped ' ] || fail "unexpected results of the steps: $out"
 	runs=$(json_values "$out" run)
 	[ "$(printf '%s\n' "$runs" | wc -l)" = 2 ] || fail "only the first two steps should have a run: $out"
-	[ "$(qd runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 2))" ] || fail 'the later step was attempted or a step made no run'
+	[ "$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$((runs_before + 2))" ] || fail 'the later step was attempted or a step made no run'
 	good_run=$(printf '%s\n' "$runs" | sed -n 1p) bad_run=$(printf '%s\n' "$runs" | sed -n 2p)
-	good_log=$(qd log "$good_run") bad_log=$(qd log "$bad_run")
+	good_log=$(qd stack log "$good_run") bad_log=$(qd stack log "$bad_run")
 	printf '%s' "$good_log" | grep -q ' result succeeded' || fail "the run of the 3.0.0 step did not succeed: $good_log"
 	printf '%s' "$bad_log" | grep -q ' result rolled-back' || fail "the run of the 4.0.0 step did not end rolled-back: $bad_log"
 	printf '%s' "$bad_log" | grep -q 'unhealthy' || fail "the failed run does not name the unhealthy container: $bad_log"
@@ -835,11 +835,11 @@ scenario_stacks_repo() {
 	printf '%s' "$out" | grep -q "$pushed" || fail "repo fetch does not report the pushed head $pushed: $out"
 	log "scenario: repo fetch saw $pushed"
 
-	step 'stacks lists the demo stacks with image versions'
-	out=$(qd --output json stacks) || fail "stacks failed: $out"
-	log "scenario: stacks $out"
+	step 'stack list shows the demo stacks with image versions'
+	out=$(qd --output json stack list) || fail "stack list failed: $out"
+	log "scenario: stack list $out"
 	for want in demo-stack demo-cache DEMO_APP_VERSION=1.0.1 DEMO_APP_VERSION=1.0.0; do
-		printf '%s' "$out" | grep -q -- "$want" || fail "stacks does not show $want: $out"
+		printf '%s' "$out" | grep -q -- "$want" || fail "stack list does not show $want: $out"
 	done
 
 	scenario_deploy
@@ -914,7 +914,7 @@ window_log() {
 
 # stack_run_count prints the number of recorded runs of a stack.
 stack_run_count() {
-	qd runs "$1" | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-' || true
+	qd stack runs "$1" | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-' || true
 }
 
 # window_done succeeds when the service has begun the work of an opening since last_run read $window_last_before
@@ -949,23 +949,23 @@ scenario_window() {
 		set -- $pair
 		run=$(next_run "$1" "$2") || fail "no run of $1 started for the window setup commit"
 		wait_for "the run $run" 240 run_finished "$1" "$run"
-		qd log "$run" | grep -q ' result succeeded' || fail "the run of $1 for the window setup did not succeed: $(qd log "$run")"
+		qd stack log "$run" | grep -q ' result succeeded' || fail "the run of $1 for the window setup did not succeed: $(qd stack log "$run")"
 	done
 	for stack in demo-paused demo-pinned; do
 		wait_for "the first run of $stack" 120 stack_idle "$stack"
 		docker exec -u qdeploy "$host" sh -ec "umask 077 && printf 'DEMO_SECRET=%s\n' not-a-real-secret-e2e >/opt/stacks/$stack/secrets.env"
-		out=$(qd --output json deploy "$stack") || fail "deploy of $stack failed: $out"
+		out=$(qd --output json stack deploy "$stack") || fail "deploy of $stack failed: $out"
 		run=$(printf '%s\n' "$out" | sed -n 's/.*"run": *"\([^"]*\)".*/\1/p')
 		wait_for "the run $run" 240 run_finished "$stack" "$run"
-		qd log "$run" | grep -q ' result succeeded' || fail "the deploy of $stack did not succeed: $(qd log "$run")"
+		qd stack log "$run" | grep -q ' result succeeded' || fail "the deploy of $stack did not succeed: $(qd stack log "$run")"
 	done
 	[ "$(stack_images demo-stack)" = "$image:1.0.1" ] && [ "$(stack_images demo-cache)" = "$image:1.0.1" ] &&
 		[ "$(stack_images demo-paused)" = "$image:1.0.0" ] && [ "$(stack_images demo-pinned)" = "$image:1.0.0" ] ||
 		fail "the window stacks do not run their starting versions: $(for s in $win_stacks; do stack_images $s; done | tr '\n' ' ')"
 
 	step 'pause and pin mark the stacks'
-	out=$(qd --output json pause demo-paused) || fail "pause failed: $out"
-	out=$(qd --output json pin demo-pinned) || fail "pin failed: $out"
+	out=$(qd --output json stack pause demo-paused) || fail "pause failed: $out"
+	out=$(qd --output json stack pin demo-pinned) || fail "pin failed: $out"
 	[ -n "$(stack_field demo-paused operator_pause)" ] || fail "status does not show demo-paused as paused: $(qd --output json status)"
 	[ -n "$(stack_field demo-pinned pinned)" ] || fail "status does not show demo-pinned as pinned: $(qd --output json status)"
 	[ -z "$(stack_field demo-stack operator_pause)$(stack_field demo-stack pinned)$(stack_field demo-cache operator_pause)$(stack_field demo-cache pinned)" ] ||
@@ -1013,7 +1013,7 @@ scenario_window() {
 	[ "$(stack_run_count demo-cache)" = "$runs_demo_cache" ] || fail 'the window ran the manual stack'
 	[ "$(stack_field demo-cache deployed)" = "$deployed_demo_cache" ] || fail 'the window changed the deployed commit of the manual stack'
 	[ -z "$(as_admin "cd ~/stacks && git log --format=%H $setup_commit..HEAD -- demo-cache")" ] || fail 'the window committed to the manual stack'
-	out=$(qd --output json updates demo-cache) || fail "updates demo-cache failed: $out"
+	out=$(qd --output json stack updates demo-cache) || fail "updates demo-cache failed: $out"
 	updates_expect "$out" 1.0.1 1.1.0 5.0.0 update
 	notice=$(window_log | grep 'event=update-available' | grep 'stack=demo-cache' || true)
 	[ -n "$notice" ] || fail "the service log has no update-available line for demo-cache: $(window_log | tail -n 20)"
@@ -1026,15 +1026,15 @@ scenario_window() {
 		[ "$(stack_run_count "$stack")" = "$(eval "printf %s \"\$runs_$v\"")" ] || fail "the window ran $stack"
 		[ "$(stack_field "$stack" deployed)" = "$(eval "printf %s \"\$deployed_$v\"")" ] || fail "the window changed the deployed commit of $stack"
 		[ -z "$(as_admin "cd ~/stacks && git log --format=%H $setup_commit..HEAD -- $stack")" ] || fail "the window committed to $stack"
-		out=$(qd --output json updates "$stack") || fail "updates $stack failed: $out"
+		out=$(qd --output json stack updates "$stack") || fail "updates $stack failed: $out"
 		updates_expect "$out" 1.0.0 1.1.0 5.0.0 update
 		window_log | grep 'stack skipped' | grep "stack=$stack" | grep -q 'reason=' || fail "the service log does not say why $stack was skipped"
 		log "scenario: log: $(window_log | grep 'stack skipped' | grep "stack=$stack" | tail -n 1)"
 	done
 
 	step 'the marks are lifted and the window is moved away'
-	qd unpause demo-paused >/dev/null || fail 'unpause failed'
-	qd unpin demo-pinned >/dev/null || fail 'unpin failed'
+	qd stack unpause demo-paused >/dev/null || fail 'unpause failed'
+	qd stack unpin demo-pinned >/dev/null || fail 'unpin failed'
 	out=$(window_far_away) || fail "window set failed: $out"
 	[ "$(window_field open)" = false ] || fail "the window is still open after it was moved: $(qd --output json window show)"
 }
@@ -1098,9 +1098,9 @@ scenario_tui() {
 	restart_service
 	run=$(next_run demo-cache "$prev") || fail 'no run of demo-cache started for the changelog source'
 	wait_for "the run $run" 240 run_finished demo-cache "$run"
-	qd log "$run" | grep -q ' result succeeded' || fail "the run for the changelog source did not succeed: $(qd log "$run")"
-	qd updates --refresh >/dev/null || fail 'updates --refresh failed'
-	out=$(qd changelog demo-cache) || fail "changelog failed: $out"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run for the changelog source did not succeed: $(qd stack log "$run")"
+	qd stack updates --refresh >/dev/null || fail 'updates --refresh failed'
+	out=$(qd stack changelog demo-cache) || fail "changelog failed: $out"
 	printf '%s' "$out" | grep -q 'invented crash' || fail "the changelog of demo-cache has no release notes: $out"
 
 	step 'sudo qdeploy opens the interface and lists the demo stacks'
@@ -1151,7 +1151,7 @@ scenario_tui() {
 	screen_run=$(tui_screen | grep -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' | head -n 1)
 	[ -n "$screen_run" ] && [ "$screen_run" = "$(newest_run demo-cache)" ] ||
 		fail "the log on the screen is not the newest run of demo-cache ($screen_run): $(tui_screen)"
-	run_log=$(qd log "$screen_run")
+	run_log=$(qd stack log "$screen_run")
 	printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the update run did not succeed: $run_log"
 	[ "$(update_steps "$run_log")" = stop,backup,commit,push,fast-forward,pull,up,check ] || fail "unexpected steps of the update run: $(update_steps "$run_log")"
 	as_admin 'cd ~/stacks && git pull -q --ff-only'
@@ -1194,7 +1194,7 @@ scenario_tui() {
 	done
 	[ "$(stack_field demo-paused deployed)" = "$first_commit" ] && [ "$(stack_field demo-pinned deployed)" = "$second_commit" ] ||
 		fail 'the stacks are not recorded as deployed at their update commits'
-	first_log=$(qd log "$(newest_run demo-paused)") second_log=$(qd log "$(newest_run demo-pinned)")
+	first_log=$(qd stack log "$(newest_run demo-paused)") second_log=$(qd stack log "$(newest_run demo-pinned)")
 	first_end=$(printf '%s\n' "$first_log" | tail -n 1 | cut -d ' ' -f 1) second_start=$(printf '%s\n' "$second_log" | head -n 1 | cut -d ' ' -f 1)
 	[ "$(printf '%s\n%s\n' "$first_end" "$second_start" | sort | head -n 1)" = "$first_end" ] ||
 		fail "the second run started before the first ended: $first_end, $second_start"

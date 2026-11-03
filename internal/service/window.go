@@ -21,7 +21,7 @@ type UpdateNotice struct {
 }
 
 // windowService runs the work of each opening of the maintenance window: a registry check of every stack,
-// then the updates of the stacks in automatic mode, one after another, through the path 'qdeploy update' takes.
+// then the updates of the stacks in automatic mode, one after another, through the path 'qdeploy stack update' takes.
 type windowService struct {
 	upd    *updatesService
 	sched  *window.Scheduler
@@ -136,10 +136,10 @@ func windowResult(st window.Status) control.WindowResult {
 }
 
 // run is the work of one opening. Every stack is checked at the registries and the result stored, as
-// 'qdeploy updates --refresh' does, also for a paused or pinned stack, so an available update stays visible.
+// 'qdeploy stack updates --refresh' does, also for a paused or pinned stack, so an available update stays visible.
 // A stack in manual mode is only reported. The stacks in automatic mode are updated in name order, each once
 // the one before is done; a stack is skipped, with a log line that says why, when its marks forbid it, when it
-// has nothing to update, or when 'qdeploy update' would refuse it. Once the window has closed nothing new
+// has nothing to update, or when 'qdeploy stack update' would refuse it. Once the window has closed nothing new
 // begins: no further stack and no further version step; a step that has begun runs to its end.
 func (w *windowService) run(ctx context.Context, open func() bool) {
 	list, err := w.upd.loadStacks("")

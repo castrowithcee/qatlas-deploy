@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func run(t *testing.T, args ...string) (code int, stdout, stderr string) {
@@ -71,5 +74,47 @@ func TestManpage(t *testing.T) {
 	}
 	if code, _, _ := run(t, "manpage"); code != 2 {
 		t.Fatalf("manpage without --dir: code %d, want 2", code)
+	}
+}
+
+func TestCommandTree(t *testing.T) {
+	stackCommands := []string{"backup", "changelog", "check", "deploy", "list", "log", "pause", "pin", "resume", "runs",
+		"unpause", "unpin", "update", "updates"}
+	root, _, _, err := newRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Help topics are registered by the kit as commands without an action; they are not part of the surface.
+	var top []string
+	for _, c := range root.Commands() {
+		if c.Runnable() || c.HasSubCommands() {
+			top = append(top, c.Name())
+		}
+	}
+	slices.Sort(top)
+	want := []string{"credential", "key", "manpage", "repo", "run", "stack", "status", "tui", "version", "window"}
+	// Cobra adds help and completion itself; they are not part of the qdeploy surface.
+	var got []string
+	for _, n := range top {
+		if n != "completion" && n != "help" {
+			got = append(got, n)
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("top level commands = %v, want %v", got, want)
+	}
+	var stack *cobra.Command
+	for _, c := range root.Commands() {
+		if c.Name() == "stack" {
+			stack = c
+		}
+	}
+	var sub []string
+	for _, c := range stack.Commands() {
+		sub = append(sub, c.Name())
+	}
+	slices.Sort(sub)
+	if !slices.Equal(sub, stackCommands) {
+		t.Fatalf("stack commands = %v, want %v", sub, stackCommands)
 	}
 }

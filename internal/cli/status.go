@@ -151,14 +151,14 @@ func failureOf(err error) error {
 			NextStep: "Check the URL, the network and that the deploy key is entered in the git platform ('qdeploy key show').", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeRunActive:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
-			NextStep: "Wait for the active run to end ('qdeploy runs'), then run the command again.", Cause: err}
+			NextStep: "Wait for the active run to end ('qdeploy stack runs'), then run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodePaused:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
-			NextStep: "Find out why the rollback failed ('qdeploy runs <stack>', 'qdeploy log <run>'), fix the stack, then run 'qdeploy resume <stack>'.",
+			NextStep: "Find out why the rollback failed ('qdeploy stack runs <stack>', 'qdeploy stack log <run>'), fix the stack, then run 'qdeploy stack resume <stack>'.",
 			Cause:    err}
 	case errors.As(err, &remote) && remote.Code == control.CodePinned:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
-			NextStep: "Unpin the stack with 'qdeploy unpin <stack>', then run the command again.", Cause: err}
+			NextStep: "Unpin the stack with 'qdeploy stack unpin <stack>', then run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNotPaused:
 		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message,
 			NextStep: "Check the stack with 'qdeploy status'; only a paused stack can be resumed.", Cause: err}
@@ -167,13 +167,13 @@ func failureOf(err error) error {
 			NextStep: "Resolve the local changes in the working copy of the stack; the stack is skipped until then.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchStack:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
-			NextStep: "List the stacks with 'qdeploy stacks'.", Cause: err}
+			NextStep: "List the stacks with 'qdeploy stack list'.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchRun:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
-			NextStep: "List the runs with 'qdeploy runs'.", Cause: err}
+			NextStep: "List the runs with 'qdeploy stack runs'.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeUnreadable:
 		return &cli.Failure{Code: output.CodeConfigInvalid, Message: remote.Message,
-			NextStep: "Find the problem with 'qdeploy check', fix it in the stacks repository and run the command again.", Cause: err}
+			NextStep: "Find the problem with 'qdeploy stack check', fix it in the stacks repository and run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoDeployer:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Stacks are only reported in this version; nothing can be deployed yet.", Cause: err}
@@ -188,13 +188,13 @@ func failureOf(err error) error {
 			NextStep: "Add a backup section to the stack's qdeploy.yaml (see 'qdeploy help stack-rules').", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchBackup:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
-			NextStep: "List the backups with 'qdeploy backup list <stack>'.", Cause: err}
+			NextStep: "List the backups with 'qdeploy stack backup list <stack>'.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeBackupFailed:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Check the service log, then check that the stack runs; a failed backup is removed and a stopped stack is started again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeBadVersion:
 		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
-			NextStep: "Choose a version of the same variant above the current one; 'qdeploy updates <stack> --refresh' shows them.", Cause: err}
+			NextStep: "Choose a version of the same variant above the current one; 'qdeploy stack updates <stack> --refresh' shows them.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeRegistry:
 		return &cli.Failure{Code: output.CodeUnreachable, Message: remote.Message,
 			NextStep: "Check the network and the registry login (see 'qdeploy help credentials'), then run the command again.", Cause: err}
