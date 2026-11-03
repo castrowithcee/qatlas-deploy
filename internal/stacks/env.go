@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -104,4 +105,31 @@ func parseEnvValue(raw string) (string, error) {
 func onlyComment(rest string) bool {
 	rest = strings.TrimSpace(rest)
 	return rest == "" || strings.HasPrefix(rest, "#")
+}
+
+// SecretsFile is the file with the secrets of a stack. It is not versioned and lives only on the host.
+const SecretsFile = "secrets.env"
+
+// SecretKeys returns the sorted key names of secrets.env and whether the file exists. It never keeps, parses or
+// returns a value; lines that are not KEY=VALUE are skipped, and no error text contains file content.
+func SecretKeys(dir string) (keys []string, exists bool, err error) {
+	data, err := readBounded(dir, SecretsFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
+		key, _, ok := strings.Cut(line, "=")
+		key = strings.TrimSpace(key)
+		if ok && envKey.MatchString(key) && !seen[key] {
+			seen[key] = true
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	return keys, true, nil
 }

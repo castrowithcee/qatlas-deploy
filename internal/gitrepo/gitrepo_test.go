@@ -390,3 +390,57 @@ func TestRemoteURL(t *testing.T) {
 		t.Fatal("a directory that is no repository has a remote")
 	}
 }
+
+func TestTrackedFilesAndIsIgnored(t *testing.T) {
+	ctx := context.Background()
+	f := newRemote(t)
+	// The ignore rule comes after the file, so the file stays tracked as a misconfigured repository would have it.
+	f.commit(map[string]string{
+		"web/data/db.bin":    "x\n",
+		"web/secrets.env":    "DEMO_PASSWORD=not-a-real-secret\n",
+		"web-other/a.txt":    "x\n",
+		"web/sub/space name": "x\n",
+	})
+	f.commit(map[string]string{".gitignore": "secrets.env\n"})
+	r, _ := cloneFixture(t, f)
+
+	got, err := r.TrackedFiles(ctx, "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"web/compose.yaml", "web/data/db.bin", "web/secrets.env", "web/sub/space name"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("TrackedFiles = %v; want %v", got, want)
+	}
+	if got, err := r.TrackedFiles(ctx, "nothing"); err != nil || len(got) != 0 {
+		t.Fatalf("unknown folder: %v, %v", got, err)
+	}
+	// Pathspec magic is not interpreted.
+	if got, err := r.TrackedFiles(ctx, "w*"); err != nil || len(got) != 0 {
+		t.Fatalf("glob matched: %v, %v", got, err)
+	}
+	for _, bad := range []string{"", "/abs", "../x", "-x", "a/../b", "a//b"} {
+		if _, err := r.TrackedFiles(ctx, bad); err == nil {
+			t.Errorf("TrackedFiles(%q) accepted", bad)
+		}
+		if _, err := r.IsIgnored(ctx, bad); err == nil {
+			t.Errorf("IsIgnored(%q) accepted", bad)
+		}
+	}
+
+	for path, want := range map[string]bool{
+		"web/secrets.env": true, "db/secrets.env": true, "web/compose.yaml": false, "db/.env": false,
+		"w*/secrets.env": true, "web/*.env": false,
+	} {
+		if got, err := r.IsIgnored(ctx, path); err != nil || got != want {
+			t.Errorf("IsIgnored(%q) = %v, %v; want %v", path, got, err, want)
+		}
+	}
+	if _, err := Open(testConfig(t), filepath.Join(t.TempDir(), "missing")); err != nil {
+		t.Fatal(err)
+	}
+	broken, _ := Open(testConfig(t), filepath.Join(t.TempDir(), "missing"))
+	if _, err := broken.IsIgnored(ctx, "web/secrets.env"); err == nil {
+		t.Error("a missing repository must be an error, not 'not ignored'")
+	}
+}
