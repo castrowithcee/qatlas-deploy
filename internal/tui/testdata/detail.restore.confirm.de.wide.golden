@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen                                                               
+------------------------------------------------------------------------------------------------------------------------
+  demo-stack                                                                                                            
+                                                                                                                        
+  Modus    automatisch                                                                                                  
+  Zustand  deployt          #= Backup einspielen ==========================================#                            
+  Befunde  1 Warnung        | ! Das Backup 20261023T031000Z-4567cdef des Stacks demo-stack |                            
+                            |   einspielen?                                                |                            
+  Image-Versionen           |                                                              |                            
+    APP_VERSION  example/app| Der Stack wird gestoppt und seine aktuellen Daten werden mit |                            
+      1.4.2 -> 1.5.0  Update| dem Backup überschrieben. Danach wird der Stack wieder       |                            
+                            | gestartet. Das lässt sich nicht rückgängig machen.           |                            
+  Changelog                 | 10-23 03:10                                                  |                            
+    APP_VERSION  1.4.2 -> 1.| 11.0 MiB                                                     |                            
+      Quelle example/app    |                                                              |                            
+      1.5.0  Spring release | [ ja, ausführen ]  > abbrechen <                             |                            
+        Adds a dark theme.  | y ja, ausführen  n/esc/enter abbrechen                       |                            
+                            #==============================================================#                            
+        - faster start                                                                                                  
+        - fixes the upload limit                                                                                        
+      1.4.3  2026-10-20                                                                                                 
+        Fixes a crash on empty input.                                                                                   
+                                                                                                                   20/40

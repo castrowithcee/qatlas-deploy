@@ -23,6 +23,10 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
         Fixes a crash on empty input.                   
       mehr unter https://example.invalid/app/releases   
                                                         
+  Geheimnisse                                           
+    API_SIGNING_KEY                                     
+    DB_PASSWORD                                         
+                                                        
   Backups                                               
     Fehler: der Dienst hat die Anfrage abgelehnt: the   
     service is busy                                     
@@ -36,5 +40,5 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
                                                         
                                                         
-                                                        
-r Neu laden  1-4 Bereich  q Beenden     up/down Scrollen
+a Geheimnis setzen  x Geheimnis löschen                 
+R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden

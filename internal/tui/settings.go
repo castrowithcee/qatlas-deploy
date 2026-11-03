@@ -93,6 +93,9 @@ const (
 	opNotifyAdd
 	opNotifyRemove
 	opNotifyTest
+	opSecretSet
+	opSecretDelete
+	opRestore
 )
 
 // settingMsg carries the answer of a write. A write answers with the name it concerned, never with a value.
@@ -397,6 +400,19 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		cmds = append(cmds, m.loadPage(true))
 	case control.NotifyTestResult:
 		done(t.Lookup(textDoneTested, res.Name))
+	case control.SecretResult:
+		text := t.Lookup(textDoneSecretSet, res.Key, res.Stack)
+		switch {
+		case msg.op == opSecretDelete:
+			text = t.Lookup(textDoneSecretDeleted, res.Key, res.Stack)
+		case res.Replaced:
+			text = t.Lookup(textDoneSecretReplaced, res.Key, res.Stack)
+		}
+		done(text, t.Lookup(textSecretAppliesLater))
+		cmds = append(cmds, m.readSecrets())
+	case control.BackupRestoreResult:
+		done(t.Lookup(textDoneRestored, res.Backup.ID, res.Backup.Stack))
+		cmds = append(cmds, m.reloadNow(), m.readBackups())
 	default:
 		switch msg.op {
 		case opCredSet:
@@ -587,9 +603,7 @@ func (m *Model) settingsView(width, height int) string {
 	s := m.set
 	m.scrollNote = ""
 	if s.form != nil {
-		head := []string{m.heading(s.form.title, width), ""}
-		view, _ := s.form.form.View(m.styles, width, max(height-len(head), 1))
-		return strings.Join(head, "\n") + "\n" + view
+		return m.formView(width, height)
 	}
 	if s.page == "" {
 		view, _ := s.menu.View(m.styles, width, height)

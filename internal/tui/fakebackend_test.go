@@ -43,6 +43,11 @@ type fakeBackend struct {
 	credSets []control.CredentialSetArgs
 	adds     []control.NotifyAddArgs
 	windows  []control.WindowSetArgs
+
+	// secrets holds the key names by stack; secretSets and restores record the writes in order.
+	secrets    map[string][]string
+	secretSets []control.SecretSetArgs
+	restores   []control.BackupRestoreArgs
 }
 
 func (f *fakeBackend) count(name string) {
@@ -316,7 +321,8 @@ func demoBackend() *fakeBackend {
 				{ID: "20261016T031000Z-89abcdef", Stack: "demo-stack", Incomplete: true},
 			}},
 		},
-		errs: map[string]error{},
+		secrets: map[string][]string{"demo-stack": {"API_SIGNING_KEY", "DB_PASSWORD"}},
+		errs:    map[string]error{},
 	}
 }
 
@@ -483,4 +489,52 @@ func (f *fakeBackend) NotifyTest(_ context.Context, name string) (control.Notify
 		return control.NotifyTestResult{}, err
 	}
 	return control.NotifyTestResult{Name: name, Type: control.NotifyWebhook}, nil
+}
+
+func (f *fakeBackend) Secrets(_ context.Context, stack string) (control.SecretListResult, error) {
+	f.count("secrets")
+	if err := f.fail("secrets", stack); err != nil {
+		return control.SecretListResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return control.SecretListResult{Stack: stack, Keys: slices.Clone(f.secrets[stack])}, nil
+}
+
+func (f *fakeBackend) SecretSet(_ context.Context, stack, key, value string) (control.SecretResult, error) {
+	if err := f.act("secretset", stack+"/"+key); err != nil {
+		return control.SecretResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.secretSets = append(f.secretSets, control.SecretSetArgs{Stack: stack, Key: key, Value: value})
+	replaced := slices.Contains(f.secrets[stack], key)
+	if !replaced {
+		if f.secrets == nil {
+			f.secrets = map[string][]string{}
+		}
+		f.secrets[stack] = append(f.secrets[stack], key)
+		slices.Sort(f.secrets[stack])
+	}
+	return control.SecretResult{Stack: stack, Key: key, Replaced: replaced}, nil
+}
+
+func (f *fakeBackend) SecretDelete(_ context.Context, stack, key string) (control.SecretResult, error) {
+	if err := f.act("secretdelete", stack+"/"+key); err != nil {
+		return control.SecretResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.secrets[stack] = slices.DeleteFunc(f.secrets[stack], func(k string) bool { return k == key })
+	return control.SecretResult{Stack: stack, Key: key}, nil
+}
+
+func (f *fakeBackend) BackupRestore(_ context.Context, stack, id string) (control.BackupRestoreResult, error) {
+	if err := f.act("restore", stack+"/"+id); err != nil {
+		return control.BackupRestoreResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.restores = append(f.restores, control.BackupRestoreArgs{Stack: stack, ID: id, Confirm: true})
+	return control.BackupRestoreResult{Backup: control.BackupInfo{ID: id, Stack: stack}}, nil
 }

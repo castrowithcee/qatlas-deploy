@@ -176,6 +176,8 @@ func catalog() i18n.Catalogs[kittui.TextID] {
 	c := baseCatalog()
 	maps.Copy(c[i18n.English], settingsEnglish())
 	maps.Copy(c[i18n.German], settingsGerman())
+	maps.Copy(c[i18n.English], detailEnglish())
+	maps.Copy(c[i18n.German], detailGerman())
 	return c
 }
 

@@ -23,6 +23,10 @@ qdeploy  Wartungsfenster zu                                                     
         Fixes a crash on empty input.                                                                                   
       mehr unter https://example.invalid/app/releases                                                                   
                                                                                                                         
+  Geheimnisse                                                                                                           
+    API_SIGNING_KEY                                                                                                     
+    DB_PASSWORD                                                                                                         
+                                                                                                                        
   Backups                                                                                                               
     20261030T140100Z-0123abcd                                                                                           
       10-30 14:01  12.0 MiB                                                                                             
@@ -37,4 +41,4 @@ qdeploy  Wartungsfenster zu                                                     
     fehlgeschlagen  10-29 02:00  poll  850ms                                                                            
       20261029T020000Z-00000010                                                                                         
       compose pull failed: registry unreachable                                                                         
-r Neu laden  1-4 Bereich  q Beenden                                                                     up/down Scrollen
+a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden       up/down Scrollen

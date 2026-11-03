@@ -36,6 +36,8 @@ type settingsForm struct {
 	form  *kittui.Form
 	// notify is what the first step of a channel collected.
 	notify control.NotifyAddArgs
+	// stack is the stack a secret form belongs to.
+	stack string
 }
 
 // problem shows a problem without a field above the form.
@@ -170,6 +172,8 @@ func (m *Model) submitForm() tea.Cmd {
 		return m.submitNotifyBasics(f, text("name"), string(v["type"].Choice), v["events"].Selected)
 	case formNotifyDetail:
 		return m.submitNotifyDetail(f, v)
+	case formSecret:
+		return m.submitSecret(f, text("key"), v["value"].Text)
 	}
 	return nil
 }

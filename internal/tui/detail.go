@@ -38,7 +38,9 @@ type detailState struct {
 	gen       int
 	changelog control.ChangelogResult
 	backups   control.BackupListResult
+	secrets   control.SecretListResult
 	cl, bk    part
+	sec       part
 	// top is the first shown line; total and rows are what the last drawing found.
 	top, total, rows int
 }
@@ -54,6 +56,13 @@ type backupsMsg struct {
 	stack string
 	gen   int
 	res   control.BackupListResult
+	err   error
+}
+
+type secretsMsg struct {
+	stack string
+	gen   int
+	res   control.SecretListResult
 	err   error
 }
 
@@ -79,14 +88,48 @@ func (m *Model) loadDetail(force bool) tea.Cmd {
 			return changelogMsg{stack: stack, gen: gen, res: res, err: err}
 		})
 	}
-	if !d.bk.loading {
-		d.bk.loading = true
-		cmds = append(cmds, func() tea.Msg {
-			res, err := b.Backups(ctx, stack)
-			return backupsMsg{stack: stack, gen: gen, res: res, err: err}
-		})
+	return tea.Batch(append(cmds, m.readBackups(), m.readSecrets())...)
+}
+
+// readBackups reads the backups of the stack shown; a read under way is not asked twice.
+func (m *Model) readBackups() tea.Cmd {
+	d := &m.detail
+	if d.stack == "" || d.bk.loading {
+		return nil
 	}
-	return tea.Batch(cmds...)
+	d.bk.loading = true
+	ctx, b, stack, gen := m.ctx, m.backend, d.stack, d.gen
+	return func() tea.Msg {
+		res, err := b.Backups(ctx, stack)
+		return backupsMsg{stack: stack, gen: gen, res: res, err: err}
+	}
+}
+
+// readSecrets reads the key names of the secrets of the stack shown.
+func (m *Model) readSecrets() tea.Cmd {
+	d := &m.detail
+	if d.stack == "" || d.sec.loading {
+		return nil
+	}
+	d.sec.loading = true
+	ctx, b, stack, gen := m.ctx, m.backend, d.stack, d.gen
+	return func() tea.Msg {
+		res, err := b.Secrets(ctx, stack)
+		return secretsMsg{stack: stack, gen: gen, res: res, err: err}
+	}
+}
+
+func (m *Model) applySecrets(msg secretsMsg) {
+	d := &m.detail
+	if msg.gen != d.gen || msg.stack != d.stack {
+		return
+	}
+	d.sec.loading = false
+	if d.sec.err = msg.err; msg.err != nil {
+		d.sec.loaded, d.secrets = false, control.SecretListResult{}
+		return
+	}
+	d.sec.loaded, d.secrets = true, msg.res
 }
 
 func (m *Model) applyChangelog(msg changelogMsg) {
@@ -186,6 +229,7 @@ func (m *Model) detailLines(r stackRow, width int) []string {
 	}
 	section(textDetailVersions, m.versionLines(r.name, width))
 	section(textDetailChangelog, m.changelogLines(width))
+	section(textDetailSecrets, m.secretLines(width))
 	section(textDetailBackups, m.backupLines(width))
 	section(textDetailRuns, m.runLines(r.name, width))
 	return lines
@@ -379,6 +423,21 @@ func (m *Model) bodyLines(body string, indent, width int) []string {
 		lines = append(lines[:changelogBodyLines], m.line(indent, kittui.StyleHint, m.text.Lookup(textChangelogMore, more), width))
 	}
 	return lines
+}
+
+func (m *Model) secretLines(width int) []string {
+	d := &m.detail
+	if note, ready := m.partNote(d.sec, width); !ready {
+		return note
+	}
+	if len(d.secrets.Keys) == 0 {
+		return []string{m.line(detailIndent, kittui.StyleHint, m.text.Lookup(textSecretsNone), width)}
+	}
+	out := make([]string, len(d.secrets.Keys))
+	for i, k := range d.secrets.Keys {
+		out[i] = m.line(detailIndent, kittui.StyleText, k, width)
+	}
+	return out
 }
 
 func (m *Model) backupLines(width int) []string {

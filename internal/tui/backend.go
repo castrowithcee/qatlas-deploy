@@ -29,6 +29,8 @@ type Backend interface {
 	// Backups lists the backups of one stack, newest first.
 	Backups(ctx context.Context, stack string) (control.BackupListResult, error)
 	Window(ctx context.Context) (control.WindowResult, error)
+	// Secrets lists the key names of the secrets of one stack; never a value.
+	Secrets(ctx context.Context, stack string) (control.SecretListResult, error)
 
 	// The calls below change something in the service; the interface makes them only after a confirmation.
 
@@ -61,6 +63,12 @@ type Backend interface {
 	NotifyAdd(ctx context.Context, args control.NotifyAddArgs) (control.NotifyChannelInfo, error)
 	NotifyRemove(ctx context.Context, name string) error
 	NotifyTest(ctx context.Context, name string) (control.NotifyTestResult, error)
+
+	// The stack-detail writes. The value of SecretSet travels only in this call.
+	SecretSet(ctx context.Context, stack, key, value string) (control.SecretResult, error)
+	SecretDelete(ctx context.Context, stack, key string) (control.SecretResult, error)
+	// BackupRestore replaces the data of a stack with a backup and starts the stack again.
+	BackupRestore(ctx context.Context, stack, id string) (control.BackupRestoreResult, error)
 }
 
 // updateCallLimit bounds one update call, which waits for every step of the stack; it is the limit of the
@@ -69,6 +77,10 @@ const updateCallLimit = 24 * time.Hour
 
 // remoteCallLimit bounds the calls that wait on the git server; it is the limit of the repo command.
 const remoteCallLimit = 3 * time.Minute
+
+// restoreCallLimit bounds a restore, which waits for the stack to stop, unpack and start again; it is the limit
+// of the backup command.
+const restoreCallLimit = 6*time.Hour + time.Minute
 
 // ChannelBackend is the Backend over the service channel. Every call dials a connection of its own, so calls
 // may run concurrently.
@@ -232,5 +244,26 @@ func (b *ChannelBackend) NotifyRemove(ctx context.Context, name string) error {
 func (b *ChannelBackend) NotifyTest(ctx context.Context, name string) (res control.NotifyTestResult, err error) {
 	err = client.Do(ctx, b.endpoint, client.CallTimeout+control.NotifyTestTimeout, control.NotifyTestCommand,
 		control.NotifyNameArgs{Name: name}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Secrets(ctx context.Context, stack string) (res control.SecretListResult, err error) {
+	err = b.call(ctx, control.SecretListCommand, control.SecretListArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SecretSet(ctx context.Context, stack, key, value string) (res control.SecretResult, err error) {
+	err = b.call(ctx, control.SecretSetCommand, control.SecretSetArgs{Stack: stack, Key: key, Value: value}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SecretDelete(ctx context.Context, stack, key string) (res control.SecretResult, err error) {
+	err = b.call(ctx, control.SecretDeleteCommand, control.SecretKeyArgs{Stack: stack, Key: key}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) BackupRestore(ctx context.Context, stack, id string) (res control.BackupRestoreResult, err error) {
+	err = client.Do(ctx, b.endpoint, restoreCallLimit, control.BackupRestoreCommand,
+		control.BackupRestoreArgs{Stack: stack, ID: id, Confirm: true}, &res)
 	return res, err
 }

@@ -47,7 +47,9 @@ const (
 	actEdit     kittui.ActionID = "edit"
 	actTest     kittui.ActionID = "test"
 	actNo       kittui.ActionID = "no"
-	actShowLog  kittui.ActionID = "showlog"
+	// actRestore opens the choice of a backup in the stack detail.
+	actRestore kittui.ActionID = "restore"
+	actShowLog kittui.ActionID = "showlog"
 )
 
 // areaKeys are the keys of actArea, one per area in the order of the tab line.
@@ -94,6 +96,7 @@ func keyTable() []kittui.Action {
 		act(actRemove, kittui.LevelLetter, textKeyRemove, "x"),
 		act(actEdit, kittui.LevelLetter, textKeyEdit, "e"),
 		act(actTest, kittui.LevelLetter, textKeyTest, "T"),
+		act(actRestore, kittui.LevelLetter, textKeyRestore, "R"),
 		act(actYes, kittui.LevelConfirm, textAnswerYes, "y"),
 		act(actNo, kittui.LevelConfirm, textAnswerCancel, "n", "esc"),
 		act(actShowLog, kittui.LevelConfirm, textAnswerLog, "l"),

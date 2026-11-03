@@ -76,6 +76,10 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 		"notifyadd":     func() error { _, err := b.NotifyAdd(ctx, control.NotifyAddArgs{}); return err },
 		"notifyremove":  func() error { return b.NotifyRemove(ctx, "no-channel") },
 		"notifytest":    func() error { _, err := b.NotifyTest(ctx, "no-channel"); return err },
+		"secrets":       func() error { _, err := b.Secrets(ctx, "demo-stack"); return err },
+		"secretset":     func() error { _, err := b.SecretSet(ctx, "demo-stack", "BACKEND_TEST", "example-value"); return err },
+		"secretdelete":  func() error { _, err := b.SecretDelete(ctx, "demo-stack", "BACKEND_TEST"); return err },
+		"restore":       func() error { _, err := b.BackupRestore(ctx, "demo-stack", "20261023T031000Z-4567cdef"); return err },
 	}
 	for name, call := range calls {
 		var remote *control.Error

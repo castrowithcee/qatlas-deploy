@@ -93,6 +93,8 @@ type Model struct {
 	// chosen is the stack the detail area shows.
 	chosen kittui.ItemID
 	detail detailState
+	// pick is the choice of a secret or a backup the detail shows.
+	pick *picker
 	// scrollNote is the position in the detail, empty while it fits.
 	scrollNote string
 	runsList   *kittui.List
@@ -218,6 +220,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyChangelog(msg)
 	case backupsMsg:
 		m.applyBackups(msg)
+	case secretsMsg:
+		m.applySecrets(msg)
 	case settingsLoadMsg:
 		m.applySettingsLoad(msg)
 	case settingMsg:
@@ -304,6 +308,13 @@ func (m *Model) input() kittui.InputFocus {
 		return kittui.InputNavigation
 	}
 	switch m.area {
+	case areaDetail:
+		switch {
+		case m.set.form != nil:
+			return m.set.form.form.Input()
+		case m.pick != nil:
+			return m.pick.list.Input()
+		}
 	case areaSettings:
 		return m.settingsInput()
 	case areaStacks:
@@ -325,6 +336,9 @@ func (m *Model) typed(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
 		return m.open(open), handled
 	case m.area == areaSettings:
 		return m.settingsTyped(msg)
+	case m.area == areaDetail && m.pick != nil:
+		open, handled := m.pick.list.Update(msg)
+		return m.picked(open), handled
 	case m.area == areaRuns && m.log.open:
 		return nil, m.log.view.Update(msg)
 	case m.area == areaRuns:
@@ -339,7 +353,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.modal != nil {
 		return m.modalKey(msg)
 	}
-	if m.area == areaSettings && m.set.form != nil {
+	if (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil {
 		if m.set.busy {
 			if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actForceQuit {
 				return tea.Quit
@@ -385,9 +399,14 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 				m.toggleStackOnly()
 				return nil
 			}
-		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter:
-			if m.area == areaSettings {
+		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter, actRestore:
+			switch m.area {
+			case areaSettings:
 				if cmd, handled := m.settingsAction(id); handled {
+					return cmd
+				}
+			case areaDetail:
+				if cmd, handled := m.detailAction(id); handled {
 					return cmd
 				}
 			}
@@ -401,6 +420,12 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 				cmd, _ := m.settingsAction(actBack)
 				return cmd
 			case areaDetail:
+				if m.pick != nil {
+					if _, handled := m.pick.list.Update(msg); !handled {
+						m.pick = nil
+					}
+					return nil
+				}
 				return m.enter(areaStacks)
 			case areaRuns:
 				switch {
@@ -416,7 +441,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 				return nil
 			}
 		}
-		if m.area == areaDetail {
+		if m.area == areaDetail && m.pick == nil {
 			m.scrollDetail(id)
 			return nil
 		}
@@ -433,6 +458,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case m.area == areaSettings:
 		cmd, _ := m.settingsTyped(msg)
 		return cmd
+	case m.area == areaDetail && m.pick != nil:
+		open, _ := m.pick.list.Update(msg)
+		return m.picked(open)
 	}
 	return nil
 }
@@ -454,6 +482,9 @@ func (m *Model) reloadAll() tea.Cmd {
 
 // enter shows an area and starts what that area reads on its own.
 func (m *Model) enter(area kittui.AreaID) tea.Cmd {
+	if area != areaDetail {
+		m.pick = nil
+	}
 	m.area = area
 	switch area {
 	case areaDetail:
@@ -506,6 +537,11 @@ func (m *Model) footer() []kittui.Hint {
 	switch {
 	case m.area == areaSettings:
 		return m.settingsFooter(common, nav)
+	case m.area == areaDetail && m.set.form != nil:
+		return append(m.set.form.form.Hints(), kittui.Hint{Action: actBack, Label: textKeyCancelForm})
+	case m.area == areaDetail && m.pick != nil:
+		return append(append([]kittui.Hint{{Action: actEnter, Label: textKeyPick}, {Action: actBack, Label: kittui.TextKeyBack, Priority: 1}},
+			common...), nav...)
 	case m.area == areaDetail:
 		scroll := []kittui.Hint{
 			{Action: actUp, Label: kittui.TextHelpScroll, Kind: kittui.HintNavigation},
@@ -514,7 +550,7 @@ func (m *Model) footer() []kittui.Hint {
 		if _, ok := m.rows[m.chosen]; !ok {
 			return common
 		}
-		return append(common, scroll...)
+		return append(append(detailHints(), common...), scroll...)
 	case m.area == areaRuns && m.log.open:
 		if m.log.view.Searching() {
 			return m.log.view.Hints()
@@ -698,11 +734,18 @@ func (m *Model) workspace(width, height int) string {
 	if m.area == areaSettings {
 		return m.settingsView(width, height)
 	}
+	if m.area == areaDetail && m.set.form != nil {
+		return m.formView(width, height)
+	}
 	if !m.loaded {
 		return m.note(m.text.Lookup(textStacksLoading), width)
 	}
 	switch m.area {
 	case areaDetail:
+		if m.pick != nil {
+			m.scrollNote = ""
+			return m.pickView(width, height)
+		}
 		return m.detailView(width, height)
 	case areaRuns:
 		return m.runsView(width, height)
