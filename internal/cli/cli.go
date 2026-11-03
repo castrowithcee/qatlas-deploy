@@ -38,7 +38,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	var state notRunning
 	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, &state),
 		newKeyCommand(program, &state), newRepoCommand(program, &state), newStacksCommand(program, &state), newCheckCommand(program, &state),
-		newDeployCommand(program, &state), newRunsCommand(program, &state), newLogCommand(program, &state), newResumeCommand(program, &state), newPauseCommand(program, &state), newUnpauseCommand(program, &state), newPinCommand(program, &state), newUnpinCommand(program, &state), newBackupCommand(program, &state), newUpdatesCommand(program, &state), newUpdateCommand(program, &state), newChangelogCommand(program, &state),
+		newDeployCommand(program, &state), newRunsCommand(program, &state), newLogCommand(program, &state), newResumeCommand(program, &state), newPauseCommand(program, &state), newUnpauseCommand(program, &state), newPinCommand(program, &state), newUnpinCommand(program, &state), newWindowCommand(program, &state), newBackupCommand(program, &state), newUpdatesCommand(program, &state), newUpdateCommand(program, &state), newChangelogCommand(program, &state),
 		newCredentialCommand(program, &state, secrets), newManpageCommand(program))
 	code := program.Execute(args, stdout, stderr)
 	if code == cli.ExitRuntime && state.seen {

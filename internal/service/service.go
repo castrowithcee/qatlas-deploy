@@ -48,6 +48,11 @@ type Config struct {
 	Changelog changelog.Options
 	// PollInterval is the time between repository polls; zero means engine.DefaultInterval.
 	PollInterval time.Duration
+	// Clock drives the poll loop and the maintenance window; nil means the system clock. Tests inject their own.
+	Clock engine.Clock
+	// OnUpdateAvailable, when set, is told every stack in manual mode the maintenance window found an update
+	// for. It runs in the window's goroutine and must return quickly.
+	OnUpdateAvailable func(UpdateNotice)
 }
 
 // Run serves the channel until ctx ends and then returns nil: a stop request is the normal way for the service
@@ -80,16 +85,24 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	}
 	eng, err := engine.New(engine.Config{
 		StateDir: cfg.StateDir, Source: repo.engineSource, Lock: &repo.mu, Deployer: cfg.Deployer,
-		Redact: secrets.Apply, Interval: cfg.PollInterval, Logger: log,
+		Redact: secrets.Apply, Interval: cfg.PollInterval, Clock: cfg.Clock, Logger: log,
 	})
 	if err != nil {
 		return fmt.Errorf("prepare the engine: %w", err)
 	}
 	repo.onBound = eng.Wake
-	if err := registerRunCommands(registry, eng, cfg.Version, started); err != nil {
+	upd, err := registerUpdateCommands(registry, repo, eng, store, cfg.Registry, cfg.Changelog)
+	if err != nil {
 		return err
 	}
-	if err := registerUpdateCommands(registry, repo, eng, store, cfg.Registry, cfg.Changelog); err != nil {
+	win, err := newWindowService(cfg.StateDir, upd, cfg.Clock, log, cfg.OnUpdateAvailable)
+	if err != nil {
+		return fmt.Errorf("prepare the maintenance window: %w", err)
+	}
+	if err := registerWindowCommands(registry, win); err != nil {
+		return err
+	}
+	if err := registerRunCommands(registry, eng, cfg.Version, started, win.status); err != nil {
 		return err
 	}
 	if err := registerBackupCommands(registry, eng, cfg.Backups, secrets.Apply, log); err != nil {
@@ -103,6 +116,12 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		}
 	}()
 	defer func() { <-engineDone }()
+	windowDone := make(chan struct{})
+	go func() {
+		defer close(windowDone)
+		win.sched.Run(ctx)
+	}()
+	defer func() { <-windowDone }()
 	check := cfg.PeerCheck
 	if check == nil {
 		check = RequireRoot

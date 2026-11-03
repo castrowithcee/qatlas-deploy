@@ -32,7 +32,8 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Use:   "status",
 		Short: "Show whether the qdeploy service is running",
 		Long: "status asks the running service for its version and start time, the state of its last repository poll\n" +
-			"and, per stack, what is deployed, pending or running, the last run result, a pause after a failed rollback, the operator's pause and pin, and the findings. Only root may use the service\n" +
+			"and, per stack, what is deployed, pending or running, the last run result, a pause after a failed rollback, the operator's pause and pin, and the findings,\n" +
+			"and whether the maintenance window is open and when it opens next (see 'qdeploy window'). Only root may use the service\n" +
 			"channel, so run it with sudo. Without a running service it ends with exit code 3.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
@@ -48,7 +49,12 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 				{Name: "version", Value: st.Version},
 				{Name: "started_at", Value: st.StartedAt.UTC().Format(time.RFC3339)},
 			}
-			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: append(fields, engineFields(st.Engine)...)})
+			fields = append(fields, engineFields(st.Engine)...)
+			if w := st.Window; w != nil {
+				fields = append(fields, output.Field{Name: "window_open", Value: w.Open},
+					output.Field{Name: "window_next_opening", Value: w.NextOpening.Format(time.RFC3339)})
+			}
+			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: fields})
 		},
 	}
 }

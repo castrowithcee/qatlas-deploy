@@ -78,6 +78,13 @@ func (e *Engine) CheckUpdate(ctx context.Context, name string) (stacks.Stack, er
 // copy (ErrUndeployed) or when the working copy has other local changes (ErrCopyChanges). The steps run in
 // the caller's goroutine, each under the run time limit and independent of ctx.
 func (e *Engine) Update(ctx context.Context, name string, steps []VersionStep) ([]StepResult, error) {
+	return e.UpdateWhile(ctx, name, steps, nil)
+}
+
+// UpdateWhile is Update that asks proceed before each step and attempts no further step once it answers
+// false, as if the step before had failed: the steps done stay deployed. A step that has begun always runs to
+// its end. A nil proceed always goes on.
+func (e *Engine) UpdateWhile(ctx context.Context, name string, steps []VersionStep, proceed func() bool) ([]StepResult, error) {
 	if e.cfg.Deployer == nil {
 		return nil, ErrNoDeployer
 	}
@@ -119,7 +126,7 @@ func (e *Engine) Update(ctx context.Context, name string, steps []VersionStep) (
 		results[i].VersionStep = s
 	}
 	for i := range steps {
-		if e.base.Err() != nil {
+		if e.base.Err() != nil || (proceed != nil && !proceed()) {
 			break
 		}
 		r, err := e.stepRun(b, st, deployed)

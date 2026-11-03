@@ -70,17 +70,18 @@ type updatesService struct {
 	changelog *changelogSource
 }
 
-func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.Engine, store *credentials.Store, opts registry.Options, clog changelog.Options) error {
+func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.Engine, store *credentials.Store, opts registry.Options, clog changelog.Options) (*updatesService, error) {
 	cs := newChangelogSource(store, opts, clog, filepath.Join(repo.stateDir, changelogCacheDir))
 	cs.clean()
 	s := &updatesService{repo: repo, eng: eng, detector: &updates.Detector{Credential: registryCredentialFrom(store), Options: opts}, changelog: cs}
-	if err := r.Register(control.UpdatesListCommand, s.handleList); err != nil {
-		return err
+	for name, h := range map[string]control.Handler{
+		control.UpdatesListCommand: s.handleList, control.UpdateRunCommand: s.handleRun, control.ChangelogShowCommand: s.handleChangelog,
+	} {
+		if err := r.Register(name, h); err != nil {
+			return nil, err
+		}
 	}
-	if err := r.Register(control.UpdateRunCommand, s.handleRun); err != nil {
-		return err
-	}
-	return r.Register(control.ChangelogShowCommand, s.handleChangelog)
+	return s, nil
 }
 
 // loadStacks reads the working copy and narrows it to the named stack; an empty name keeps all of them.

@@ -42,14 +42,14 @@ func runsAnswer(err error) error {
 	return err
 }
 
-func registerRunCommands(r *control.Registry, eng *engine.Engine, version string, started time.Time) error {
+func registerRunCommands(r *control.Registry, eng *engine.Engine, version string, started time.Time, window func() *control.WindowResult) error {
 	commands := map[string]control.Handler{
 		control.StatusCommand: func(context.Context, json.RawMessage) (any, error) {
 			snap, err := eng.Snapshot()
 			if err != nil {
 				return nil, errors.New("the engine state cannot be read")
 			}
-			return control.StatusResult{Version: version, StartedAt: started, Engine: engineStatus(snap)}, nil
+			return control.StatusResult{Version: version, StartedAt: started, Engine: engineStatus(snap), Window: window()}, nil
 		},
 		control.DeployCommand: func(ctx context.Context, raw json.RawMessage) (any, error) {
 			var a control.DeployArgs
