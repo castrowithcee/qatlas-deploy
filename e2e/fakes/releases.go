@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"hash/fnv"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ var inventedReleases = map[string][]apiRelease{
 }
 
 var (
-	apiPath      = regexp.MustCompile(`^/repos/([^/]+/[^/]+)/releases(?:/(latest)|/tags/([^/]+)|/assets/([^/]+)/([^/]+))?$`)
+	apiPath      = regexp.MustCompile(`^/repos/([^/]+/[^/]+)/releases(?:/(latest)|/tags/([^/]+)|/assets/([0-9]+))?$`)
 	downloadPath = regexp.MustCompile(`^(?:/[^/]+/[^/]+)?/releases/(?:download/([^/]+)|latest/download)/([^/]+)$`)
 	latestPath   = regexp.MustCompile(`^((?:/[^/]+/[^/]+)?/releases)/latest$`)
 	tagPath      = regexp.MustCompile(`^(?:/[^/]+/[^/]+)?/releases/tag/([^/]+)$`)
@@ -69,7 +70,7 @@ func serveReleases(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case apiPath.MatchString(path):
 		m := apiPath.FindStringSubmatch(path)
-		serveAPI(w, r, m[1], m[2], m[3], m[4], m[5])
+		serveAPI(w, r, m[1], m[2], m[3], m[4])
 	case downloadPath.MatchString(path):
 		m := downloadPath.FindStringSubmatch(path)
 		tag := m[1]
@@ -100,15 +101,23 @@ func serveFile(w http.ResponseWriter, r *http.Request, path string) {
 	http.ServeFile(w, r, path)
 }
 
-func serveAPI(w http.ResponseWriter, r *http.Request, repo, latest, tag, assetTag, assetName string) {
+func serveAPI(w http.ResponseWriter, r *http.Request, repo, latest, tag, assetID string) {
 	releases, ok := releasesOf(repo, r.Host)
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
 		return
 	}
 	switch {
-	case assetName != "":
-		serveFile(w, r, filepath.Join(releaseRoot, filepath.Base(assetTag), filepath.Base(assetName)))
+	case assetID != "":
+		for _, rel := range releases {
+			for _, a := range rel.Assets {
+				if strconv.FormatUint(uint64(assetID32(rel.TagName, a.Name)), 10) == assetID {
+					serveFile(w, r, filepath.Join(releaseRoot, rel.TagName, a.Name))
+					return
+				}
+			}
+		}
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
 	case latest != "":
 		for _, rel := range releases {
 			if !rel.Prerelease && !rel.Draft {
@@ -160,7 +169,7 @@ func releasesOf(repo, host string) ([]apiRelease, bool) {
 			}
 			rel.Assets = append(rel.Assets, apiAsset{
 				Name:        e.Name(),
-				URL:         "https://" + host + "/repos/" + repo + "/releases/assets/" + tag + "/" + e.Name(),
+				URL:         "https://" + host + "/repos/" + repo + "/releases/assets/" + strconv.FormatUint(uint64(assetID32(tag, e.Name())), 10),
 				BrowserURL:  "https://" + host + "/" + repo + "/releases/download/" + tag + "/" + e.Name(),
 				Size:        info.Size(),
 				ContentType: "application/octet-stream",
@@ -169,6 +178,14 @@ func releasesOf(repo, host string) ([]apiRelease, bool) {
 		out = append(out, rel)
 	}
 	return out, true
+}
+
+// assetID32 gives a release file a numeric ID that stays the same when other releases appear; the update
+// client accepts only API asset URLs that end in digits.
+func assetID32(tag, name string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(tag + "/" + name))
+	return h.Sum32()
 }
 
 // tagDirs lists the release directories, newest version first.
