@@ -457,7 +457,7 @@ run_acceptance() {
 
 	step 'the stacks repository holds only n8n and bookstack, both in automatic mode'
 	as_admin "rm -rf ~/stacks && git clone -q $repo ~/stacks &&
-		cd ~/stacks && git rm -rq demo-stack demo-cache demo-badpath &&
+		cd ~/stacks && git rm -rq demo-stack demo-cache demo-badpath demo-plain &&
 		sed -i 's/^update:\$/update:\n  mode: automatic/' n8n/qdeploy.yaml bookstack/qdeploy.yaml &&
 		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am 'Keep n8n and bookstack in automatic mode' &&
 		git push -q origin main" || fail 'cannot prepare the stacks repository'
