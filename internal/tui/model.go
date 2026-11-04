@@ -60,6 +60,7 @@ const productName = "qdeploy"
 type config struct {
 	ctx      context.Context
 	backend  Backend
+	folders  Folders
 	lang     i18n.Lang
 	theme    string
 	profile  kittui.ColorProfile
@@ -77,6 +78,7 @@ type tickMsg struct{}
 type Model struct {
 	ctx     context.Context
 	backend Backend
+	folders Folders
 	keys    *kittui.Keymap
 	text    kittui.Translator
 	frame   *kittui.Frame
@@ -141,7 +143,7 @@ func newModel(c config) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Model{ctx: c.ctx, backend: c.backend, keys: keys, text: text, frame: kittui.NewFrame(keys, text),
+	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, frame: kittui.NewFrame(keys, text),
 		loc: c.loc, themes: themes, theme: c.theme, profile: c.profile, charset: c.charset, area: areaStacks,
 		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
 		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick,

@@ -31,7 +31,7 @@ const (
 	textBadImage      = "the image reference is not valid"
 	textBadCeiling    = "the update ceiling of the stack is not valid"
 	textNoValue       = "the version variable has no value"
-	textNotSemver     = "the current tag is not a complete semantic version"
+	textNotSemver     = "the current tag is not a complete MAJOR.MINOR.PATCH version"
 	textPrerelease    = "the current tag is a pre-release"
 
 	maxText = 200 // runes; with MaxUpdateText bytes this fits for any UTF-8 text
@@ -49,7 +49,7 @@ type Detector struct {
 }
 
 // Check asks the registries once per repository and returns the result for each stack, keyed by name. A
-// stack that cannot be read has no entry. One registry client per host serves the whole run, so bearer
+// stack that cannot be read, or that is deploy-only, has no entry. One registry client per host serves the whole run, so bearer
 // tokens are reused within it and dropped with it. It returns the context's error if the run is cancelled;
 // the results are then incomplete and must not be stored.
 func (d *Detector) Check(ctx context.Context, list []stacks.Stack) (map[string]engine.UpdateCheck, error) {
@@ -60,7 +60,7 @@ func (d *Detector) Check(ctx context.Context, list []stacks.Stack) (map[string]e
 	run := &run{d: d, clients: map[string]*registry.Client{}, creds: map[string]error{}, tags: map[string]tagResult{}}
 	out := make(map[string]engine.UpdateCheck, len(list))
 	for _, st := range list {
-		if st.Err != nil {
+		if st.Err != nil || st.EnvErr != nil {
 			continue
 		}
 		check := engine.UpdateCheck{Checked: now().UTC()}

@@ -46,17 +46,19 @@ var inventedReleases = map[string][]apiRelease{
 		{TagName: "v1.0.0", Name: "Demo image 1.0.0", Body: "First invented release.", PublishedAt: "2026-01-01T10:00:00Z"},
 	},
 	// The source labels of the real images n8n, BookStack and MariaDB name these repositories. The notes are
-	// invented, and the tags are plain versions (the real repositories tag n8n@x.y.z and vX.Y.Z-lsN, which the
-	// client does not read as versions).
+	// invented; the tags have the forms of the real repositories (n8n@x.y.z, vYY.MM.P-lsN), and n8n also lists a
+	// package of another name, which the changelog must ignore.
 	"n8n-io/n8n": {
-		{TagName: "v2.48.0", Name: "n8n 2.48.0", Body: "Invented test release: the build with the failing healthcheck.", PublishedAt: "2026-10-28T10:00:00Z"},
-		{TagName: "v2.47.0", Name: "n8n 2.47.0", Body: "Invented notes for n8n 2.47.0.\n\n- adds an invented workflow badge\n- fixes an invented webhook timeout", PublishedAt: "2026-10-21T10:00:00Z"},
-		{TagName: "v2.46.4", Name: "n8n 2.46.4", Body: "Invented fix release.", PublishedAt: "2026-10-14T10:00:00Z"},
+		{TagName: "n8n@2.48.0", Name: "n8n 2.48.0", Body: "Invented test release: the build with the failing healthcheck.", PublishedAt: "2026-10-28T10:00:00Z"},
+		{TagName: "@n8n/x@2.47.0", Name: "@n8n/x 2.47.0", Body: "Invented notes of a foreign package: must not appear.", PublishedAt: "2026-10-21T11:00:00Z"},
+		{TagName: "n8n@2.47.0", Name: "n8n 2.47.0", Body: "Invented notes for n8n 2.47.0.\n\n- adds an invented workflow badge\n- fixes an invented webhook timeout", PublishedAt: "2026-10-21T10:00:00Z"},
+		{TagName: "n8n@2.46.4", Name: "n8n 2.46.4", Body: "Invented fix release.", PublishedAt: "2026-10-14T10:00:00Z"},
 	},
 	"linuxserver/docker-bookstack": {
-		{TagName: "v26.10.0", Name: "BookStack 26.10.0", Body: "Invented test release: the build with the failing healthcheck.", PublishedAt: "2026-10-28T10:00:00Z"},
-		{TagName: "v26.09.1", Name: "BookStack 26.09.1", Body: "Invented notes for BookStack 26.09.1.\n\n- adds an invented page template\n- fixes an invented search ranking", PublishedAt: "2026-10-20T10:00:00Z"},
-		{TagName: "v26.05.5", Name: "BookStack 26.05.5", Body: "Invented fix release.", PublishedAt: "2026-06-08T10:00:00Z"},
+		{TagName: "v26.10.0-ls290", Name: "BookStack 26.10.0", Body: "Invented test release: the build with the failing healthcheck.", PublishedAt: "2026-10-28T10:00:00Z"},
+		{TagName: "v26.09.1-ls287", Name: "BookStack 26.09.1 ls287", Body: "Invented notes for BookStack 26.09.1.\n\n- adds an invented page template\n- fixes an invented search ranking", PublishedAt: "2026-10-20T10:00:00Z"},
+		{TagName: "v26.09.1-ls286", Name: "BookStack 26.09.1 ls286", Body: "Invented earlier build of BookStack 26.09.1.", PublishedAt: "2026-10-18T10:00:00Z"},
+		{TagName: "v26.05.5-ls280", Name: "BookStack 26.05.5", Body: "Invented fix release.", PublishedAt: "2026-06-08T10:00:00Z"},
 	},
 	"MariaDB/mariadb-docker": {
 		{TagName: "11.8.9", Name: "MariaDB 11.8.9", Body: "Invented notes for MariaDB 11.8.9: a fix for an invented replication stall.", PublishedAt: "2026-10-15T10:00:00Z"},

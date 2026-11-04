@@ -9,6 +9,8 @@
 # of the data kept; the wait of a stack command during a deliberately slow fetch is measured.
 # Sourced by run.sh acceptance after scenario.sh, whose helpers it uses.
 
+# The stack folder is the administrator's free choice; it does not exist until the setup creates it.
+acc_stacks=/srv/services/stacks
 acc_hook_path=/acceptance-hook-e2e
 acc_hook_signing=acceptance-signing-value-e2e
 acc_owner_email=owner@acceptance.example.test
@@ -111,7 +113,7 @@ acc_expect_items() {
 
 # acc_tree prints path, owner, group and mode of everything below the data directory of a stack.
 acc_tree() {
-	docker exec "$host" find "/opt/stacks/$1/data" -printf '%p\t%U:%G:%m\n' | sort
+	docker exec "$host" find "$acc_stacks/$1/data" -printf '%p\t%U:%G:%m\n' | sort
 }
 
 # acc_env_has fails unless the stacks repository on the remote holds the line $2 in the .env of the stack $1.
@@ -237,14 +239,22 @@ acc_first_setup() {
 	tui_send b
 	tui_wait 'Bind the stacks repository' 10
 	tui_type "git.$domain:stacks.git"
+	tui_send Tab
+	tui_type "$acc_stacks"
 	tui_send F2
+	tui_wait "Create the stack folder $acc_stacks?" 10
+	if docker exec "$host" test -e "$acc_stacks"; then fail 'the stack folder exists before the question was answered'; fi
+	tui_send y
 	expected=$(git_ed25519_fingerprint)
 	tui_wait "$(printf '%s' "$expected" | cut -c 1-30)" 60
 	tui_wait 'ssh-ed25519' 10
 	tui_send y
 	tui_wait 'The stacks repository is bound' 120
 	tui_send Enter
-	docker exec "$host" test -f /opt/stacks/n8n/compose.yaml || fail 'the clone is missing in /opt/stacks'
+	docker exec "$host" test -f "$acc_stacks/n8n/compose.yaml" || fail "the clone is missing in $acc_stacks"
+	[ "$(docker exec "$host" stat -c %U:%G:%a "$acc_stacks")" = qdeploy:qdeploy:755 ] ||
+		fail "$acc_stacks is $(docker exec "$host" stat -c %U:%G:%a "$acc_stacks"), want qdeploy:qdeploy:755"
+	docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF "$acc_stacks" || fail "the service has no write access to $acc_stacks"
 	acc "repository bound through the interface, host key $expected confirmed"
 
 	step 'the Stacks area lists n8n and bookstack; their first runs end without secrets'
@@ -270,9 +280,9 @@ $values
 VALUES_END
 		tui_send Escape
 		stack_secrets=$(printf '%s\n' "$values" | grep -v '^#' | grep -v '^$' | sed "s/^\\([^=]*\\)=\\(.*\\)\$/\\1='\\2'/")
-		[ "$(docker exec "$host" cat "/opt/stacks/$stack/secrets.env")" = "$stack_secrets" ] ||
+		[ "$(docker exec "$host" cat "$acc_stacks/$stack/secrets.env")" = "$stack_secrets" ] ||
 			fail "secrets.env of $stack does not hold the example secrets"
-		[ "$(docker exec "$host" stat -c %U:%a "/opt/stacks/$stack/secrets.env")" = qdeploy:600 ] ||
+		[ "$(docker exec "$host" stat -c %U:%a "$acc_stacks/$stack/secrets.env")" = qdeploy:600 ] ||
 			fail "secrets.env of $stack has the wrong owner or mode"
 	done
 	acc 'secrets of n8n and bookstack set through the interface (mode 600, owner qdeploy)'
@@ -306,7 +316,7 @@ VALUES_END
 	*) fail "n8n has no finding for the directory data with the owner 1000:1000: $(qd --output json status)" ;;
 	esac
 	log "status of n8n: \"stack.n8n.findings\": \"$finding\""
-	docker exec "$host" test ! -e /opt/stacks/n8n/data || fail 'the data directory of n8n exists before it was created'
+	docker exec "$host" test ! -e "$acc_stacks/n8n/data" || fail 'the data directory of n8n exists before it was created'
 	[ -z "$(docker exec "$host" docker ps -aq --filter label=com.docker.compose.project=n8n)" ] ||
 		fail 'containers of n8n exist although its data directory is missing'
 	acc "bookstack deployed without a finding; n8n waits with: $finding"
@@ -330,8 +340,8 @@ VALUES_END
 	tui_wait 'started at commit' 10
 	tui_send Enter
 	tui_send Escape
-	owner_mode=$(docker exec "$host" stat -c '%u:%g %a' /opt/stacks/n8n/data) || fail 'the data directory of n8n does not exist'
-	log "stat of /opt/stacks/n8n/data: $owner_mode"
+	owner_mode=$(docker exec "$host" stat -c '%u:%g %a' "$acc_stacks/n8n/data") || fail 'the data directory of n8n does not exist'
+	log "stat of $acc_stacks/n8n/data: $owner_mode"
 	[ "$owner_mode" = '1000:1000 750' ] || fail "the data directory of n8n has owner and mode '$owner_mode'"
 	run=$(next_run n8n "$prev") || fail 'no run of n8n started after the creation'
 	wait_for "the run $run" 600 run_finished n8n "$run"
@@ -351,9 +361,7 @@ VALUES_END
 acc_update_window() {
 	step 'the update check shows the changelog of both stacks'
 	out=$(qd --output json stack updates --refresh) || fail "updates --refresh failed: $out"
-	# BookStack tags such as 26.05.5 are not complete SemVer (zero-padded), so qdeploy offers no BookStack update
-	# and no BookStack notes; the database image of the stack is updated and shown.
-	for pair in "n8n 2.47.0 fixes an invented webhook timeout" "bookstack 11.8.9 an invented replication stall"; do
+	for pair in "n8n 2.47.0 fixes an invented webhook timeout" "bookstack 26.9.1 an invented search ranking" "bookstack 11.8.9 an invented replication stall"; do
 		set -- $pair
 		stack=$1 version=$2
 		shift 2
@@ -362,15 +370,7 @@ acc_update_window() {
 		acc "changelog of $stack shows the notes for $version: '$*'"
 	done
 
-	step 'BookStack moves to 26.09.1 by a version commit of the administrator (qdeploy does not order its tags)'
-	prev=$(newest_run bookstack)
-	admin_commit bookstack/.env 's/^BOOKSTACK_VERSION=.*/BOOKSTACK_VERSION=26.09.1/' 'Update bookstack BOOKSTACK_VERSION from 26.05.5 to 26.09.1'
-	restart_service
-	run=$(next_run bookstack "$prev") || fail 'no run of bookstack started for the version commit'
-	wait_for "the run $run" 600 run_finished bookstack "$run"
-	qd stack log "$run" | grep -q ' result succeeded' || fail "the run of bookstack did not succeed: $(qd stack log "$run")"
-
-	step 'the window opens and updates n8n and the database of bookstack by itself'
+	step 'the window opens and updates n8n, bookstack and its database by itself'
 	head_before=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
 	started=$(status_field started_at)
 	start=$(date -u -d '+2 minutes' +%H:%M)
@@ -405,8 +405,8 @@ acc_update_window() {
 acc_failed_update() {
 	stack=$1 var=$2 good=$3 bad=$4 image=$5 how=$6
 	# The marker goes where the backup rules of the stack save data: all of data/ for n8n, data/config for bookstack.
-	marker=/opt/stacks/$stack/data/late-marker
-	[ "$stack" != bookstack ] || marker=/opt/stacks/$stack/data/config/late-marker
+	marker=$acc_stacks/$stack/data/late-marker
+	[ "$stack" != bookstack ] || marker=$acc_stacks/$stack/data/config/late-marker
 	prev=$(newest_run "$stack")
 	rm -f "$work/update-$stack.rc"
 	as_admin 'cd ~/stacks && git pull -q --ff-only'
@@ -513,7 +513,7 @@ run_acceptance() {
 
 	step 'the stacks repository holds only n8n and bookstack, both in automatic mode'
 	as_admin "rm -rf ~/stacks && git clone -q $repo ~/stacks &&
-		cd ~/stacks && git rm -rq demo-stack demo-cache demo-badpath &&
+		cd ~/stacks && git rm -rq demo-stack demo-cache demo-badpath demo-plain &&
 		sed -i 's/^update:\$/update:\n  mode: automatic/' n8n/qdeploy.yaml bookstack/qdeploy.yaml &&
 		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am 'Keep n8n and bookstack in automatic mode' &&
 		git push -q origin main" || fail 'cannot prepare the stacks repository'
@@ -523,7 +523,9 @@ run_acceptance() {
 	if docker exec "$host" test -e /etc/systemd/system/qdeploy.service.d; then fail 'the unit has a drop-in'; fi
 	exec_start=$(docker exec "$host" systemctl show -p ExecStart --value qdeploy)
 	case $exec_start in *backup-image*) fail "the unit passes a backup image: $exec_start" ;; esac
-	acc 'installed from the test release with the installer; the service runs without --backup-image'
+	if docker exec "$host" test -e "$acc_stacks"; then fail "the installation created the stack folder $acc_stacks"; fi
+	[ "$(docker exec "$host" systemctl is-active qdeploy)" = active ] || fail 'the service does not run after the installation'
+	acc 'installed from the test release with the installer; the service runs without --backup-image and without a stack folder'
 
 	acc_first_setup
 
@@ -549,7 +551,7 @@ run_acceptance() {
 
 	step 'an update into a failing version restores the data, reverts the commit and runs the previous version'
 	acc_failed_update n8n N8N_VERSION 2.47.0 2.48.0 "$N8N_IMAGE" update
-	acc_failed_update bookstack BOOKSTACK_VERSION 26.09.1 26.10.0 "$BOOKSTACK_IMAGE" commit
+	acc_failed_update bookstack BOOKSTACK_VERSION 26.09.1 26.10.0 "$BOOKSTACK_IMAGE" update
 
 	step 'an older backup is restored and the owners and modes of the data stay'
 	acc_restore_older n8n

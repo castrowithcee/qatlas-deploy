@@ -183,27 +183,62 @@ func TestStartAndRestartCommands(t *testing.T) {
 	}
 }
 
-func TestMissingSecretsAbortsBeforeCompose(t *testing.T) {
+func TestDeployWithoutSecretsEnvPassesOnlyEnv(t *testing.T) {
 	st := newStack(t, false)
-	r := &fakeRunner{}
+	r := &fakeRunner{ps: []string{runningJSON}}
 	d, _ := newDeployer(r)
-	log := &fakeLog{}
-	err := d.deploy(context.Background(), st, log)
-	if err == nil || !strings.Contains(err.Error(), "secrets.env does not exist") || !strings.Contains(err.Error(), "missing-secrets-env") {
-		t.Fatalf("err = %v", err)
+	if err := d.deploy(context.Background(), st, &fakeLog{}); err != nil {
+		t.Fatal(err)
 	}
-	if len(r.calls) != 0 {
-		t.Errorf("compose was called: %v", r.calls)
+	want := []string{"compose", "--project-name", "demo-stack", "--project-directory", st.Dir,
+		"--env-file", ".env", "-f", "compose.yaml", "-f", "compose.override.yaml", "pull"}
+	if got := r.calls[0].Args; strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Errorf("args = %q", got)
 	}
 }
 
-func TestMissingEnvFileAborts(t *testing.T) {
-	st := newStack(t, true)
+func TestDeployWithoutAnyEnvFilePassesNone(t *testing.T) {
+	st := newStack(t, false)
 	_ = os.Remove(filepath.Join(st.Dir, ".env"))
-	r := &fakeRunner{}
+	r := &fakeRunner{ps: []string{runningJSON}}
 	d, _ := newDeployer(r)
-	if err := d.deploy(context.Background(), st, &fakeLog{}); err == nil || len(r.calls) != 0 {
-		t.Fatalf("err = %v calls = %d", err, len(r.calls))
+	if err := d.deploy(context.Background(), st, &fakeLog{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range r.calls {
+		if strings.Contains(strings.Join(c.Args, " "), "--env-file") {
+			t.Errorf("env file passed: %q", c.Args)
+		}
+	}
+}
+
+func TestProjectNameIsLeftToComposeOnlyWhenDerived(t *testing.T) {
+	has := func(args []string) bool { return strings.Contains(strings.Join(args, " "), "--project-name") }
+	x := &Executor{Env: []string{"PATH=/bin"}}
+
+	st := newStack(t, true)
+	st.NameDerived = true
+	c, err := x.command(st, st.Name, 0, "ps")
+	if err != nil || has(c.Args) {
+		t.Fatalf("derived name: err = %v, args = %q", err, c.Args)
+	}
+	if c, _ = x.command(st, "other-name", 0, "ps"); !has(c.Args) {
+		t.Errorf("a different name must be forced: %q", c.Args)
+	}
+
+	st.NameDerived = false
+	if c, _ = x.command(st, st.Name, 0, "ps"); !has(c.Args) {
+		t.Errorf("a name qdeploy did not derive must be forced: %q", c.Args)
+	}
+
+	// secrets.env is passed after .env and wins in Compose, so a name there needs the explicit flag.
+	st = newStack(t, true)
+	st.NameDerived = true
+	if err := os.WriteFile(filepath.Join(st.Dir, "secrets.env"), []byte("COMPOSE_PROJECT_NAME=elsewhere\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ = x.command(st, st.Name, 0, "ps"); !has(c.Args) {
+		t.Errorf("COMPOSE_PROJECT_NAME in secrets.env must force the name: %q", c.Args)
 	}
 }
 

@@ -11,20 +11,54 @@ import (
 
 var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
 
-// readEnv parses .env of a stack; a missing file is an empty environment.
-func readEnv(dir string) (map[string]string, error) {
+// EnvParseError is the EnvErr of a stack whose .env the strict parser cannot read. The message names the line
+// number, never the content.
+type EnvParseError struct{ Err error }
+
+func (e *EnvParseError) Error() string { return fmt.Sprintf("%s: %v", envFile, e.Err) }
+func (e *EnvParseError) Unwrap() error { return e.Err }
+
+// readEnv parses .env of a stack; a missing file is an empty environment. A file the parser cannot read comes
+// back as *EnvParseError together with the values of the lines that did parse, and risky says whether a line
+// that failed starts with COMPOSE_: what the stack is called and which files it uses then cannot be told.
+func readEnv(dir string) (env map[string]string, risky bool, err error) {
 	data, err := readBounded(dir, envFile)
 	if errors.Is(err, os.ErrNotExist) {
-		return map[string]string{}, nil
+		return map[string]string{}, false, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	env, err := parseEnv(string(data))
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", envFile, err)
+	env, err = parseEnv(string(data))
+	if err == nil {
+		return env, false, nil
 	}
-	return env, nil
+	env, risky = parseEnvTolerant(string(data))
+	return env, risky, &EnvParseError{Err: err}
+}
+
+// parseEnvTolerant keeps the lines that parse and skips the others; risky is set when a skipped line starts
+// with COMPOSE_.
+func parseEnvTolerant(text string) (env map[string]string, risky bool) {
+	env = map[string]string{}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+		key, raw, ok := strings.Cut(line, "=")
+		key = strings.TrimSpace(key)
+		val, err := parseEnvValue(strings.TrimSpace(raw))
+		if !ok || !envKey.MatchString(key) || err != nil {
+			if strings.HasPrefix(strings.ToUpper(key), "COMPOSE_") {
+				risky = true
+			}
+			continue
+		}
+		env[key] = val
+	}
+	return env, risky
 }
 
 // parseEnv reads KEY=VALUE lines. Values are literal: no variable references, no command substitution. Double
@@ -105,6 +139,18 @@ func parseEnvValue(raw string) (string, error) {
 func onlyComment(rest string) bool {
 	rest = strings.TrimSpace(rest)
 	return rest == "" || strings.HasPrefix(rest, "#")
+}
+
+// SecretLikeKey reports whether the name of an .env variable suggests a secret value: it contains PASSWORD,
+// SECRET, TOKEN or KEY, in any case.
+func SecretLikeKey(key string) bool {
+	key = strings.ToUpper(key)
+	for _, w := range []string{"PASSWORD", "SECRET", "TOKEN", "KEY"} {
+		if strings.Contains(key, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // SecretsFile is the file with the secrets of a stack. It is not versioned and lives only on the host.

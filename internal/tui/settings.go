@@ -84,6 +84,7 @@ type settingOp int
 
 const (
 	opProbe settingOp = iota
+	opFolder
 	opRepoSet
 	opFetch
 	opKeyGenerate
@@ -375,6 +376,8 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		m.tell(textSettingDoneTitle, text, details)
 	}
 	switch res := msg.res.(type) {
+	case folderReady:
+		return m.probeRepo()
 	case control.RepoProbeResult:
 		s.pending.probe = res
 		m.askBind()

@@ -111,6 +111,7 @@ func (r *run) record(out outcome) RunRecord {
 		cur := s.Stacks[rec.Stack]
 		x := rec
 		cur.LastRun = &x
+		cur.Folder = folderField(r.st)
 		cur.DataDirs = nil
 		cur.Findings = slices.DeleteFunc(cur.Findings, func(f Finding) bool { return f.Kind == FindingDataDirMissing })
 		if len(out.dirs) > 0 {
@@ -120,6 +121,7 @@ func (r *run) record(out outcome) RunRecord {
 		switch rec.Result {
 		case ResultSucceeded:
 			cur.Deployed, cur.FailedCommit = out.at, ""
+			cur.Findings = slices.DeleteFunc(cur.Findings, func(f Finding) bool { return f.Kind == FindingProjectRenamed })
 		case ResultFailed:
 			// Waiting for a human is not a failed commit: the same commit runs once the directories exist.
 			if marks && len(out.dirs) == 0 {
@@ -410,7 +412,7 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 	reason := fmt.Sprintf("run %s failed at the %s step", r.rec.ID, failedAt)
 	var at string
 	for attempt := 1; at == ""; attempt++ {
-		c, err := wc.RevertStack(ctx, r.st.Name, r.deployed, r.rec.Commit, reason)
+		c, err := wc.RevertStack(ctx, r.st.Folder, r.deployed, r.rec.Commit, reason)
 		if errors.Is(err, gitrepo.ErrNothingToRevert) {
 			log.Printf("nothing to revert: the branch already has the deployed state of the stack")
 			if at, err = wc.RemoteHead(ctx); err != nil {

@@ -260,6 +260,11 @@ func TestUpdateRefusals(t *testing.T) {
 				f.folders[[2]string{commit(1), commit(3)}] = []string{"web"}
 			})
 		}, nil, ErrUndeployed},
+		"deploy-only .env": {func(r *rig) {
+			if err := os.WriteFile(filepath.Join(r.wc, "web", ".env"), []byte("APP_VERSION=1.0.0\nnot a variable line\n"), 0o644); err != nil {
+				r.t.Fatal(err)
+			}
+		}, nil, ErrNotUpdatable},
 		"stale plan":    {func(*rig) {}, []VersionStep{step("0.9.0", "1.1.0")}, ErrStalePlan},
 		"broken chain":  {func(*rig) {}, []VersionStep{step("1.0.0", "1.1.0"), step("1.2.0", "2.0.0")}, ErrStalePlan},
 		"unknown var":   {func(*rig) {}, []VersionStep{{Variable: "NOPE", From: "1.0.0", To: "1.1.0"}}, ErrStalePlan},
@@ -293,6 +298,21 @@ func TestUpdateRefusals(t *testing.T) {
 				t.Fatalf("slot kept: %v", snap.Active)
 			}
 		})
+	}
+}
+
+func TestDeployOnlyStackIsStillDeployed(t *testing.T) {
+	r := updateRig(t)
+	if err := os.WriteFile(filepath.Join(r.wc, "web", ".env"), []byte("APP_VERSION=1.0.0\nnot a variable line\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := r.eng.Trigger(context.Background(), "web")
+	if err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+	r.eng.Wait()
+	if info.Stack != "web" {
+		t.Errorf("run = %+v", info)
 	}
 }
 

@@ -7,13 +7,17 @@
 package stacks
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"go.yaml.in/yaml/v3"
 )
 
 const (
@@ -31,7 +35,14 @@ const (
 
 // Stack is one top-level folder of the working copy that holds a compose file.
 type Stack struct {
+	// Name is the effective Compose project name and identifies the stack in state, backups, runs and the
+	// command line. Until it is resolved, and for a stack that fails before, it is the folder name.
 	Name string
+	// NameDerived says Name is what Compose itself derives from the files and env files qdeploy passes, so the
+	// command line needs no --project-name for it. It is false for a stack whose .env cannot be read.
+	NameDerived bool
+	// Folder is the directory name below the stacks repository root; every path and git pathspec uses it.
+	Folder string
 	// Dir is the stack folder inside the working copy.
 	Dir string
 	// ComposeFiles are the compose files in merge order, relative to Dir.
@@ -44,6 +55,10 @@ type Stack struct {
 	Findings []Finding
 	// Rules is nil when the stack has no qdeploy.yaml: it is deployed but never updated.
 	Rules *Rules
+	// EnvErr is set when .env cannot be parsed by qdeploy but the stack can still be deployed, because Compose
+	// reads .env itself: the stack is deploy-only and never updated. Env then holds only the lines that parse,
+	// and Images and Findings stay empty.
+	EnvErr error
 	// Err is set when the stack cannot be read; the other fields are then incomplete. One broken stack does not
 	// hide the others.
 	Err error
@@ -59,7 +74,7 @@ type RulesError struct {
 func (e *RulesError) Error() string { return e.Err.Error() }
 func (e *RulesError) Unwrap() error { return e.Err }
 
-// ComposeFileProblem is one entry of COMPOSE_FILE that cannot be used. Missing says the file does not exist;
+// ComposeFileProblem is one entry of the compose file list that cannot be used. Missing says the file does not exist;
 // otherwise the entry is unsafe or not a regular file.
 type ComposeFileProblem struct {
 	Entry   string
@@ -67,13 +82,18 @@ type ComposeFileProblem struct {
 	Reason  string
 }
 
-// ComposeFileError is the Err of a stack whose COMPOSE_FILE names unusable files; it lists every one.
+// ComposeFileError is the Err of a stack whose file list names unusable files; it lists every one. FromRules
+// says the list is compose.files of qdeploy.yaml, otherwise it is COMPOSE_FILE of .env.
 type ComposeFileError struct {
-	Problems []ComposeFileProblem
+	Problems  []ComposeFileProblem
+	FromRules bool
 }
 
 func (e *ComposeFileError) Error() string {
 	p := e.Problems[0]
+	if e.FromRules {
+		return fmt.Sprintf("%s: compose.files entry %q: %s", RulesFile, p.Entry, p.Reason)
+	}
 	return fmt.Sprintf("%s: COMPOSE_FILE entry %q: %s", envFile, p.Entry, p.Reason)
 }
 
@@ -108,29 +128,49 @@ func Load(dir string) ([]Stack, error) {
 		}
 		stacks = append(stacks, s)
 	}
+	owner := map[string]string{}
+	for i := range stacks {
+		st := &stacks[i]
+		if first, taken := owner[st.Name]; taken {
+			st.Err = fmt.Errorf("stack %s: the project name %q is already used by the folder %s", st.Name, st.Name, first)
+			continue
+		}
+		owner[st.Name] = st.Folder
+	}
 	sort.Slice(stacks, func(i, j int) bool { return stacks[i].Name < stacks[j].Name })
 	return stacks, nil
 }
 
 var defaultComposeNames = []string{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"}
 
-func loadStack(dir, name string) (Stack, bool) {
-	s := Stack{Name: name, Dir: dir, Env: map[string]string{}}
+func loadStack(dir, folder string) (Stack, bool) {
+	s := Stack{Name: folder, Folder: folder, Dir: dir, Env: map[string]string{}}
 	fail := func(err error) (Stack, bool) {
-		s.Err = fmt.Errorf("stack %s: %w", name, err)
+		s.Err = fmt.Errorf("stack %s: %w", s.Name, err)
 		return s, true
 	}
 
-	env, err := readEnv(dir)
-	if err != nil {
-		if hasAnyCompose(dir) {
+	env, risky, err := readEnv(dir)
+	// qdeploy.yaml is read now because compose.files decides which files the stack has; its own error is
+	// reported where it always was, after the compose files and images.
+	rules, rulesErr := readRules(dir)
+	var envParse *EnvParseError
+	switch {
+	case errors.As(err, &envParse) && !risky:
+		s.EnvErr = err
+	case err != nil:
+		if hasAnyCompose(dir) || (rules != nil && rules.ComposeFiles != nil) {
 			return fail(err)
 		}
 		return s, false
 	}
 	s.Env = env
 
-	files, err := composeFiles(dir, env)
+	var listed []string
+	if rulesErr == nil && rules != nil {
+		listed = rules.ComposeFiles
+	}
+	files, err := composeFiles(dir, env, listed)
 	if err != nil {
 		return fail(err)
 	}
@@ -139,17 +179,28 @@ func loadStack(dir, name string) (Stack, bool) {
 	}
 	s.ComposeFiles = files
 
-	images, err := readImages(dir, files)
+	if s.EnvErr == nil {
+		images, err := readImages(dir, files)
+		if err != nil {
+			return fail(err)
+		}
+		s.Images, s.Findings = resolveImages(images, env)
+	}
+
+	fileName, err := readComposeName(dir, files)
 	if err != nil {
 		return fail(err)
 	}
-	s.Images, s.Findings = resolveImages(images, env)
-
-	rules, err := readRules(dir)
+	name, err := projectNameOf(folder, env, fileName)
 	if err != nil {
-		return fail(&RulesError{Err: err})
+		return fail(err)
 	}
-	if rules != nil {
+	s.Name, s.NameDerived = name, s.EnvErr == nil
+
+	if rulesErr != nil {
+		return fail(&RulesError{Err: rulesErr})
+	}
+	if rules != nil && s.EnvErr == nil {
 		known := map[string]bool{}
 		for _, img := range s.Images {
 			known[img.Var] = true
@@ -174,6 +225,72 @@ func loadStack(dir, name string) (Stack, bool) {
 	return s, true
 }
 
+// readComposeName returns the top-level name of the compose files as Compose merges them: the last file that
+// sets a non-empty one wins. It is "" when no file sets one.
+func readComposeName(dir string, files []string) (string, error) {
+	name := ""
+	for _, f := range files {
+		data, err := readBounded(dir, f)
+		if err != nil {
+			return "", err
+		}
+		var doc struct {
+			Name yaml.Node `yaml:"name"`
+		}
+		if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&doc); err != nil && !errors.Is(err, io.EOF) {
+			return "", fmt.Errorf("%s: %w", f, err)
+		}
+		switch n := doc.Name; {
+		case n.Kind == 0 || n.Tag == "!!null":
+			continue
+		case n.Kind != yaml.ScalarNode || n.Tag != "!!str":
+			return "", fmt.Errorf("%s: name must be a string", f)
+		case n.Value != "":
+			name = n.Value
+		}
+	}
+	return name, nil
+}
+
+// projectNameOf resolves the project name the way Compose does: COMPOSE_PROJECT_NAME from .env, else the name
+// of the compose files, else the folder name. Compose normalizes the last two and rejects an invalid
+// COMPOSE_PROJECT_NAME instead of normalizing it.
+func projectNameOf(folder string, env map[string]string, fileName string) (string, error) {
+	if v := env["COMPOSE_PROJECT_NAME"]; v != "" {
+		if !validProjectName.MatchString(v) {
+			return "", fmt.Errorf("%s: COMPOSE_PROJECT_NAME is not a valid project name (lowercase letters, digits, - and _, starting with a letter or digit)", envFile)
+		}
+		return v, nil
+	}
+	if fileName != "" {
+		if strings.Contains(fileName, "$") {
+			return "", errors.New("the compose file's name uses variable interpolation, which qdeploy does not resolve; set COMPOSE_PROJECT_NAME in .env or write the name literally")
+		}
+		if name := normalizeProjectName(fileName); name != "" {
+			return name, nil
+		}
+		return "", errors.New("the compose file's name has no usable character for a project name")
+	}
+	if name := normalizeProjectName(folder); name != "" {
+		return name, nil
+	}
+	return "", fmt.Errorf("the folder name %q yields no valid project name; set COMPOSE_PROJECT_NAME in .env or name in the compose file", folder)
+}
+
+var validProjectName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+// normalizeProjectName is Compose's normalization: lowercase, characters outside [a-z0-9_-] dropped, leading
+// '-' and '_' removed.
+func normalizeProjectName(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimLeft(b.String(), "_-")
+}
+
 func keysOf[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -193,9 +310,21 @@ func hasAnyCompose(dir string) bool {
 
 var composeSeparator = regexp.MustCompile(`^[^\x00-\x1f]$`)
 
-// composeFiles applies COMPOSE_FILE from .env, or Compose's default lookup: the first default name that exists,
-// plus the override file of the same extension.
-func composeFiles(dir string, env map[string]string) ([]string, error) {
+// composeFiles applies listed (compose.files of qdeploy.yaml), else COMPOSE_FILE from .env, else Compose's
+// default lookup: the first default name that exists, plus the override file of the same extension.
+func composeFiles(dir string, env map[string]string, listed []string) ([]string, error) {
+	if listed != nil {
+		var problems []ComposeFileProblem
+		for _, p := range listed {
+			if err := checkRegular(dir, p); err != nil {
+				problems = append(problems, ComposeFileProblem{Entry: p, Missing: errors.Is(err, errNotFound), Reason: err.Error()})
+			}
+		}
+		if len(problems) > 0 {
+			return nil, &ComposeFileError{Problems: problems, FromRules: true}
+		}
+		return listed, nil
+	}
 	if list, ok := env["COMPOSE_FILE"]; ok && list != "" {
 		sep := ":"
 		if v, ok := env["COMPOSE_PATH_SEPARATOR"]; ok && v != "" {

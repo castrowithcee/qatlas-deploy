@@ -27,17 +27,20 @@ const (
 	TypeSMTP     = "smtp"
 )
 
-// The events a channel can select. The first four are the result words of a run.
+// The events a channel can select. The first four are the result words of a run; container-failed and
+// recovered come from the failure monitor.
 const (
 	EventSucceeded       = "succeeded"
 	EventFailed          = "failed"
 	EventRolledBack      = "rolled-back"
 	EventRollbackFailed  = "rollback-failed"
+	EventContainerFailed = "container-failed"
+	EventRecovered       = "recovered"
 	EventUpdateAvailable = "update-available"
 )
 
 // AllEvents lists every event in the order settings and answers show them.
-var AllEvents = []string{EventSucceeded, EventFailed, EventRolledBack, EventRollbackFailed, EventUpdateAvailable}
+var AllEvents = []string{EventSucceeded, EventFailed, EventRolledBack, EventRollbackFailed, EventContainerFailed, EventRecovered, EventUpdateAvailable}
 
 // The security of an SMTP channel.
 const (
@@ -119,7 +122,7 @@ func NormalizeEvents(events []string) ([]string, error) {
 	}
 	for _, e := range events {
 		if !slices.Contains(AllEvents, e) {
-			return nil, invalid("an event is not one of succeeded, failed, rolled-back, rollback-failed, update-available")
+			return nil, invalid("an event is not one of succeeded, failed, rolled-back, rollback-failed, container-failed, recovered, update-available")
 		}
 	}
 	return out, nil

@@ -24,6 +24,8 @@ func runsAnswer(err error) error {
 		return control.NewError(control.CodeNoSuchStack, "no such stack in the working copy")
 	case errors.Is(err, engine.ErrUnreadable):
 		return control.NewError(control.CodeUnreadable, "the stack cannot be read")
+	case errors.Is(err, engine.ErrNotUpdatable):
+		return control.NewError(control.CodeUnreadable, "the stack is deploy-only: its .env cannot be read, so it is not updated; 'qdeploy stack check' names the line")
 	case errors.Is(err, engine.ErrNoDeployer):
 		return control.NewError(control.CodeNoDeployer, "deployments are not available in this version")
 	case errors.Is(err, engine.ErrNoRepo):
@@ -191,6 +193,13 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 				}
 			}
 			item.Findings = append(item.Findings, info)
+		}
+		if f := s.Failure; f != nil {
+			detail := "since " + f.Since.UTC().Format(time.RFC3339) + ": " + f.Kind
+			if f.Container != "" {
+				detail += " " + f.Container
+			}
+			item.Findings = append(item.Findings, control.FindingInfo{Kind: engine.FindingContainerFailed, Detail: printable(detail)})
 		}
 		res.Stacks = append(res.Stacks, item)
 	}

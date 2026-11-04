@@ -31,7 +31,7 @@ Commands:
 - qdeploy repo fetch: fetch new commits without touching the working copy (run with sudo)
 - qdeploy stack list: list the stacks of the working copy with image versions, update mode and whether the stack is stopped (run with sudo)
 - qdeploy stack check [stack]: check the stacks of the working copy against the stacks-repo standard; exit code 1 on errors (run with sudo)
-- qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has (run with sudo)
+- qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has; the stack is named by its Compose project (see qdeploy help stack-standard), and for a stack with the finding project-renamed this decides to start the new project, next to the old one, which keeps running (run with sudo)
 - qdeploy stack runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy stack log <run>: print the log of a run (run with sudo)
 - qdeploy stack resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
@@ -74,10 +74,13 @@ const repositoryTopic = `The service clones the stacks repository of the host ov
 
 Binding:
 - qdeploy key generate, then enter the public key as a deploy key with write access in the git platform; qdeploy pushes its version and revert commits with it
-- qdeploy repo set <ssh-url> [--dir <path>]: the URL is user@host:path or ssh://[user@]host[:port]/path; the directory defaults to /opt/stacks and must be absolute
+- qdeploy repo set <ssh-url> --dir <path>: the URL is user@host:path or ssh://[user@]host[:port]/path; --dir names the stack folder, is required and has no default
 - On first contact the host key and its SHA256 fingerprint are shown. At a terminal you confirm it by answering the question (default no). Without a terminal, pass the expected fingerprint: --fingerprint SHA256:...
 - Compare the fingerprint with the one the git platform publishes before you confirm it.
-- The directory must not exist, be empty, or already be a clone of the same URL. A repository bound earlier is not replaced.
+- The stack folder is any absolute path, for example on another disk; each host chooses its own. It must be empty or already a clone of the same URL. A repository bound earlier is not replaced.
+- A folder that does not exist is created only after you confirmed its exact path: answer the question at a terminal, or pass --create without one. It gets the owner qdeploy:qdeploy and mode 0755. Neither the installer, the service nor an update creates a stack folder.
+- The service runs sandboxed and may write only where the systemd drop-in /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf allows it. repo set adds the folder there as ReadWritePaths=-<path> (entries are only ever added), reloads systemd and restarts the service once. A bound folder without that entry, as after an update from an older release, is added when you next run qdeploy as root.
+- The same steps are offered by sudo qdeploy in the Settings area.
 
 Afterwards:
 - qdeploy repo fetch: fetch new commits into the remote-tracking branch and report whether the working copy is behind; the working copy itself is not changed
@@ -88,8 +91,9 @@ const stackRulesTopic = `Each stack folder of the stacks repository may hold a q
 
 Fields (all optional except version):
 - version: 1
+- compose.files: the compose files of the stack as a list of relative paths inside the stack folder, in merge order like COMPOSE_FILE; it takes precedence over COMPOSE_FILE in .env and over the default names
 - update.mode: manual (default) or automatic
-- update.ceiling: patch, minor (default) or major; the largest version step taken
+- update.ceiling: patch, minor (default) or major; the largest version step taken; versions are MAJOR.MINOR.PATCH (SemVer or CalVer), and with CalVer the first part, for example the year, counts as major
 - update.major: stepwise (default, one major version at a time) or direct
 - update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
 - update.changelog.<VARIABLE>: GitHub repository (owner/name or a github.com address) whose releases are shown as changelog; it takes precedence over the image label org.opencontainers.image.source
@@ -149,29 +153,30 @@ Restore:
 const stackStandardTopic = `qdeploy stack check compares the working copy of the stacks repository with this standard. It reports each deviation as a finding with stack, rule, severity, cause and fix. Errors break or endanger a deploy or leak secrets; warnings leave the stack working. The exit code is 1 when there is at least one error.
 
 Layout of a stack folder:
-- compose.yaml, optionally more compose files such as compose.prod.yaml
-- .env: non-secret values such as image versions, domains, ports and COMPOSE_FILE
-- secrets.env: the secrets; never versioned, listed in .gitignore, present on the host only
+- one or more compose files: the list compose.files in qdeploy.yaml, else COMPOSE_FILE in .env (entries separated by ':', or by COMPOSE_PATH_SEPARATOR), else the first of compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml
+- .env (optional): non-secret values such as image versions, domains, ports, COMPOSE_FILE and COMPOSE_PROJECT_NAME; the values of keys whose name contains PASSWORD, SECRET, TOKEN or KEY are never shown or logged. An .env that qdeploy cannot read leaves the stack deploy-only: it is deployed but never updated, and qdeploy stack check reports unreadable-stack.
+- secrets.env (optional): the secrets; never versioned, listed in .gitignore, present on the host only
 - data (volumes, databases, uploads) never lives in the repository
+
+A stack is named by its Compose project name, which is not necessarily its folder: COMPOSE_PROJECT_NAME in .env, else the top-level name: of the compose files, else the folder name. This name is used by every command. When the project name of a deployed stack changes, both names get the finding project-renamed and nothing is deployed automatically: the old project keeps running and is not stopped. qdeploy stack deploy <new name> is the decision to start the new project next to the old one, with new volumes prefixed by the new name; the old project must be stopped by a person.
 
 Rules (rule ID, severity):
 - fixed-image-tag (error): an image version is written into a compose file; use a variable from .env
 - image-version-default (warning): the version only comes from a default in the compose file; set it in .env
-- floating-image-tag (error): a tag such as latest, no tag, or a tag without a SemVer core (x.y.z)
+- floating-image-tag (error): a tag such as latest, no tag, or a tag without a MAJOR.MINOR.PATCH core (SemVer or CalVer, x.y.z)
 - unset-image-variable (error): the version variable has no value
 - duplicate-key (error): a key stands in both .env and secrets.env; keep it in one file
-- missing-secrets-env (error): secrets.env does not exist; Compose runs with --env-file .env --env-file secrets.env
 - unreadable-secrets-env (error): secrets.env is a link or too large
 - tracked-secrets-env (error): git tracks secrets.env
 - secrets-env-not-ignored (warning): .gitignore does not cover secrets.env
 - tracked-data (error): git tracks files below data/
-- missing-compose-file (error): a file named in COMPOSE_FILE does not exist
-- invalid-compose-file (error): a COMPOSE_FILE entry is unsafe or not a regular file
+- missing-compose-file (error): a file named in compose.files or COMPOSE_FILE does not exist
+- invalid-compose-file (error): a compose.files or COMPOSE_FILE entry is unsafe or not a regular file
 - invalid-rules-file (error): qdeploy.yaml is invalid
 - unknown-rules-variable (error): qdeploy.yaml names an image variable the stack does not have
-- unreadable-stack (error): another file of the stack cannot be read
+- unreadable-stack (error): another file of the stack cannot be read, such as an .env qdeploy cannot parse
 
-Secret values are never shown or logged; the check compares only the key names of secrets.env with .env.`
+Secret values are never shown or logged; the check compares only the key names of secrets.env with .env. Compose runs with --env-file for each of .env and secrets.env that exists.`
 
 const dataDirectoriesTopic = `A data directory is a bind mount source inside the stack folder that git does not track, for example ./data/db. If it is missing when a container starts, Docker creates it owned by root, and an image that runs as another user then cannot write to it.
 
@@ -192,15 +197,17 @@ const notificationsTopic = `A notification channel receives the events it select
 - qdeploy notify remove <name>: remove a channel and its stored secrets
 - qdeploy notify test <name>: send one test message once, without retries; a failure carries the error class of the delivery (auth, permission, not-found, rate-limited, unreachable, timeout, tls, config-invalid, invalid-request or runtime) in its message and exit code
 
-Events (--events takes a comma list; without it the channel receives all):
+Events (--events takes a comma list; without it a new channel receives all; a stored channel keeps the events it selected):
 - succeeded: a run deployed a commit
 - failed: a run failed and no rollback was made
 - rolled-back: a run failed and the stack was rolled back to the previous state
 - rollback-failed: a run failed and the rollback failed too; the stack is stopped and paused
+- container-failed: the failure monitor found a container of an own stack failed (see qdeploy help containers); one message per failure with stack, kind, container and the time since which it failed
+- recovered: that failure ended; names the same container and how long it lasted
 - update-available: a newer image version was found for a stack in manual mode, once per version
 
 Channel types and settings:
-- webhook: posts JSON (event, stack, run, commit, error, items) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
+- webhook: posts JSON (event, stack, run, commit, error, items; for container-failed and recovered kind, container, since and, on recovered, at) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
 - slack: posts text to an incoming-webhook URL.
 - telegram: sends text to a chat; needs --chat-id, and --base-url for a Bot API server of your own.
 - smtp: sends an e-mail; needs --host, --from and --to (comma list or repeated); --port (default 587 with starttls, 465 with tls), --security starttls (default) or tls, and --user for a login. The connection is always encrypted.
@@ -231,5 +238,12 @@ Stacks: qdeploy stack start|stop|restart <stack> [--yes] act on all containers o
 Metrics: --metrics adds CPU (100 per fully used CPU) and memory of the running containers. Reading them takes about two seconds per running container, in parallel and within a time limit, so the command may wait up to two minutes. If a reading fails or the time runs out, the list says that the metrics are incomplete and the container shows none.
 
 Container engine: the service reads the engine's socket, by default /var/run/docker.sock; qdeploy run --docker-socket <path> names another one. If the engine cannot be reached, the service user may not use it, or it does not answer in time, the command says so and shows nothing.
+
+Failure monitor: every 30 seconds the service checks the containers of own stacks and reports a failure once, as the finding container-failed in qdeploy status and as the notification event container-failed; when the failure ends it sends recovered. The kinds:
+- exited: a container exited with a non-zero code or is dead (an exit with code 0, such as an init job, is fine)
+- unhealthy: its health check has been failing for more than 60 seconds
+- restart-loop: its restart count rose by 3 or more within 5 minutes
+- missing: a service that was running at the last good reading is gone
+Nothing is checked while a run or an action of the stack is active, nor for stopped (qdeploy stack stop), paused (either pause) and foreign stacks. A container stopped with qdeploy container stop is no failure. The monitor only reports; it never acts on a container.
 
 Environment: only the names of the variables are shown, never their values.`

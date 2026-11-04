@@ -15,6 +15,8 @@ import (
 // Options is what Run needs to start the interface on a terminal.
 type Options struct {
 	Backend Backend
+	// Folders prepares a stack folder on the host before the service clones into it; nil skips the step.
+	Folders Folders
 	In, Out *os.File
 	// Prefs are the device-local preferences; PrefsWarnings the problems found while loading them, of which the
 	// first is shown at start.
@@ -41,7 +43,7 @@ func Run(opts Options) error {
 	defer cancel()
 	env := os.Environ()
 	profile := kittui.DetectColorProfile(opts.Out, env)
-	m, err := newModel(config{ctx: ctx, backend: opts.Backend, lang: uiprefs.Language(opts.Prefs.Language),
+	m, err := newModel(config{ctx: ctx, backend: opts.Backend, folders: opts.Folders, lang: uiprefs.Language(opts.Prefs.Language),
 		theme: opts.Prefs.Theme, profile: profile, charset: kittui.DetectCharsetMode(env),
 		start: kittui.AreaID(opts.Prefs.Start), loc: time.Local, warnings: opts.PrefsWarnings})
 	if err != nil {

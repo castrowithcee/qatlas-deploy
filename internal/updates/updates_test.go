@@ -198,6 +198,11 @@ func TestUnreadableStackHasNoEntryAndCancelStops(t *testing.T) {
 	if _, ok := got["broken"]; ok {
 		t.Errorf("unreadable stack has an entry: %+v", got)
 	}
+	deployOnly := stackOf("deploy-only", "", nil, imgVar("V", host+"/demo/app", "1.0.0"))
+	deployOnly.EnvErr = errors.New(".env: line 2: expected KEY=VALUE")
+	if got := check(t, detector(srv.URL, anonymous), deployOnly); len(got) != 0 {
+		t.Errorf("deploy-only stack has an entry: %+v", got)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := detector(srv.URL, anonymous).Check(ctx, []stacks.Stack{stackOf("s", "", nil, imgVar("V", host+"/demo/app", "1.0.0"))}); err == nil {

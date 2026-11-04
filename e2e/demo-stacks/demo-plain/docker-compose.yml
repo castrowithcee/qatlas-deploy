@@ -1,0 +1,11 @@
+name: demo-shop
+
+services:
+  app:
+    image: registry.qdeploye2e.test/demo/app:${DEMO_APP_VERSION}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: demo-shop
+      DEMO_VERSION: ${DEMO_APP_VERSION}
+      DEMO_HEALTH: ${DEMO_HEALTH}
+      DEMO_PASSWORD: ${DEMO_PASSWORD}

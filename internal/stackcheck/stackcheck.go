@@ -7,11 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
+	"github.com/castrowithcee/qatlas-deploy/internal/version"
 )
 
 // Severities. An error breaks or endangers a deploy or leaks secrets; a warning leaves the stack working.
@@ -27,7 +27,6 @@ const (
 	RuleFloatingImageTag    = "floating-image-tag"
 	RuleUnsetImageVariable  = "unset-image-variable"
 	RuleDuplicateKey        = "duplicate-key"
-	RuleMissingSecretsEnv   = "missing-secrets-env"
 	RuleUnreadableSecrets   = "unreadable-secrets-env"
 	RuleTrackedSecretsEnv   = "tracked-secrets-env"
 	RuleSecretsNotIgnored   = "secrets-env-not-ignored"
@@ -56,7 +55,10 @@ type Git interface {
 	IsIgnored(ctx context.Context, path string) (bool, error)
 }
 
-var semverCore = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([^0-9].*)?$`)
+func isComplete(tag string) bool {
+	_, ok := version.ParseCore(tag)
+	return ok
+}
 
 // Check returns the findings for the given stacks, sorted by stack, severity, rule and cause. It fails only when
 // git cannot answer; a stack that cannot be read is a finding.
@@ -92,15 +94,12 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git) ([]Finding, error)
 	out = append(out, imageFindings(s)...)
 	out = append(out, errFindings(s)...)
 
-	keys, exists, err := stacks.SecretKeys(s.Dir)
+	keys, _, err := stacks.SecretKeys(s.Dir)
 	switch {
 	case err != nil:
 		add(RuleUnreadableSecrets, SeverityError, err.Error(),
 			"Make secrets.env a regular file inside the stack folder, not a link and not larger than "+
 				fmt.Sprint(stacks.MaxFileSize)+" bytes.")
-	case !exists:
-		add(RuleMissingSecretsEnv, SeverityError, "secrets.env does not exist in the working copy",
-			"Create secrets.env on the host with the stack's secrets (KEY=VALUE per line); Compose runs with --env-file secrets.env and refuses to start without it. Do not commit it.")
 	}
 	for _, k := range keys {
 		if _, both := s.Env[k]; both {
@@ -109,11 +108,11 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git) ([]Finding, error)
 		}
 	}
 
-	tracked, err := git.TrackedFiles(ctx, s.Name)
+	tracked, err := git.TrackedFiles(ctx, s.Folder)
 	if err != nil {
 		return nil, err
 	}
-	secretsPath, dataPrefix := s.Name+"/"+stacks.SecretsFile, s.Name+"/data/"
+	secretsPath, dataPrefix := s.Folder+"/"+stacks.SecretsFile, s.Folder+"/data/"
 	var data []string
 	for _, p := range tracked {
 		switch {
@@ -121,7 +120,7 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git) ([]Finding, error)
 			add(RuleTrackedSecretsEnv, SeverityError, "secrets.env is tracked by git, so its secrets are in the history",
 				"Run 'git rm --cached "+stacks.SecretsFile+"' in the stack folder, commit, add secrets.env to .gitignore, and rotate every secret that was committed.")
 		case strings.HasPrefix(p, dataPrefix):
-			data = append(data, strings.TrimPrefix(p, s.Name+"/"))
+			data = append(data, strings.TrimPrefix(p, s.Folder+"/"))
 		}
 	}
 	if len(data) > 0 {
@@ -153,10 +152,10 @@ func imageFindings(s stacks.Stack) []Finding {
 				"Write the image as image: "+f.Image+":${SERVICE_VERSION} and set SERVICE_VERSION=<x.y.z> in .env.")
 		case stacks.FindingFloatingTag:
 			add(RuleFloatingImageTag, SeverityError, cause,
-				"Set the version variable in .env to a release with a SemVer core such as 1.2.3; do not use latest or other floating tags.")
+				"Set the version variable in .env to a release with a MAJOR.MINOR.PATCH core such as 1.2.3; do not use latest or other floating tags.")
 		case stacks.FindingUnsetVariable:
 			add(RuleUnsetImageVariable, SeverityError, cause,
-				"Set the version variable in .env to a release with a SemVer core such as 1.2.3.")
+				"Set the version variable in .env to a release with a MAJOR.MINOR.PATCH core such as 1.2.3.")
 		}
 	}
 	floating := map[string]bool{}
@@ -169,10 +168,10 @@ func imageFindings(s stacks.Stack) []Finding {
 		if img.Source == stacks.SourceUnset || img.Value == "" || floating[img.Service] {
 			continue
 		}
-		if !semverCore.MatchString(img.Value) {
+		if !isComplete(img.Value) {
 			add(RuleFloatingImageTag, SeverityError,
-				fmt.Sprintf("service %s, image %s: variable %s holds %q, which has no SemVer core", img.Service, img.Image, img.Var, img.Value),
-				"Set "+img.Var+" in .env to a release with a SemVer core such as 1.2.3.")
+				fmt.Sprintf("service %s, image %s: variable %s holds %q, which has no MAJOR.MINOR.PATCH core", img.Service, img.Image, img.Var, img.Value),
+				"Set "+img.Var+" in .env to a release with a MAJOR.MINOR.PATCH core such as 1.2.3.")
 		}
 		if img.Source == stacks.SourceDefault {
 			add(RuleImageVersionDefault, SeverityWarning,
@@ -185,6 +184,10 @@ func imageFindings(s stacks.Stack) []Finding {
 
 // errFindings turns the reason a stack could not be read into findings.
 func errFindings(s stacks.Stack) []Finding {
+	if s.Err == nil && s.EnvErr != nil {
+		return []Finding{{Stack: s.Name, Rule: RuleUnreadableStack, Severity: SeverityError, Cause: s.EnvErr.Error(),
+			Fix: "Correct .env (KEY=VALUE per line); the stack is deployed, but not updated and not checked for image findings, until it parses."}}
+	}
 	if s.Err == nil {
 		return nil
 	}
@@ -196,14 +199,18 @@ func errFindings(s stacks.Stack) []Finding {
 	var rules *stacks.RulesError
 	switch {
 	case errors.As(s.Err, &compose):
+		list, where := "COMPOSE_FILE", ".env"
+		if compose.FromRules {
+			list, where = "compose.files", "qdeploy.yaml"
+		}
 		var out []Finding
 		for _, p := range compose.Problems {
 			if p.Missing {
-				out = append(out, mk(RuleMissingComposeFile, fmt.Sprintf("COMPOSE_FILE in .env names %q, which does not exist in the stack folder", p.Entry),
-					"Add the file, or remove it from COMPOSE_FILE in .env."))
+				out = append(out, mk(RuleMissingComposeFile, fmt.Sprintf("%s in %s names %q, which does not exist in the stack folder", list, where, p.Entry),
+					fmt.Sprintf("Add the file, or remove it from %s in %s.", list, where)))
 				continue
 			}
-			out = append(out, mk(RuleInvalidComposeFile, fmt.Sprintf("COMPOSE_FILE in .env names %q: %s", p.Entry, p.Reason),
+			out = append(out, mk(RuleInvalidComposeFile, fmt.Sprintf("%s in %s names %q: %s", list, where, p.Entry, p.Reason),
 				"Name regular files inside the stack folder by relative path, without '..' and without links."))
 		}
 		return out

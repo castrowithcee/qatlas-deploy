@@ -105,6 +105,17 @@ func (s *containerService) act(ctx context.Context, verb, ref string, grace time
 			return err
 		}
 		res.ContainerSummary = s.summary(after.Container)
+		if kind == control.ContainerKindOwn {
+			var add, remove []string
+			if verb == "stop" {
+				add = []string{id}
+			} else {
+				remove = []string{id}
+			}
+			if err := s.eng.UpdateStoppedContainers(project, add, remove); err != nil {
+				s.log.Warn("container stop marker not stored", "error", err)
+			}
+		}
 		return nil
 	}
 	if kind == control.ContainerKindOwn {

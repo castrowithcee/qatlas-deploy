@@ -150,16 +150,14 @@ setup_service() {
 	release_publish v0.1.0
 	as_admin 'curl -fsSL -o /tmp/install.sh https://github.com/castrowithcee/qatlas-deploy/releases/latest/download/install.sh &&
 		sudo sh /tmp/install.sh && rm -f /tmp/install.sh' || fail 'the installer failed'
-	# The unit lets the service write /opt/stacks only if it exists at start. The backup helper image is a local
-	# one, so a drop-in (which an update keeps) names it.
-	docker exec "$host" sh -ec 'install -d -o qdeploy -g qdeploy -m 0755 /opt/stacks' || fail 'cannot create /opt/stacks'
+	# The backup helper image is a local one, so a drop-in (which an update keeps) names it.
 	if [ "${1:-}" != default-backup-image ]; then
 		docker exec "$host" sh -ec '
 			install -d /etc/systemd/system/qdeploy.service.d
 			printf "[Service]\nExecStart=\nExecStart=/usr/local/bin/qdeploy run --backup-image '"$backup_image"'\n" >/etc/systemd/system/qdeploy.service.d/e2e.conf
 			systemctl daemon-reload' || fail 'cannot write the drop-in'
+		docker exec "$host" systemctl restart qdeploy || fail 'cannot restart the qdeploy service'
 	fi
-	docker exec "$host" systemctl restart qdeploy || fail 'cannot restart the qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
 	log 'scenario: qdeploy service running'
 
@@ -199,7 +197,7 @@ scenario_compose_integration() {
 		fail 'the Docker integration tests failed'
 	}
 	docker exec "$host" rm -f /tmp/compose.test
-	for name in TestDockerHealthyStackIsDeployedAndChecked TestDockerUnhealthyStackFailsTheCheck TestDockerMissingSecretsFileStopsBeforeCompose; do
+	for name in TestDockerHealthyStackIsDeployedAndChecked TestDockerUnhealthyStackFailsTheCheck TestDockerDeployWithoutSecretsFile; do
 		printf '%s' "$out" | grep -q -- "--- PASS: $name" || fail "$name did not pass: $out"
 	done
 	if printf '%s' "$out" | grep -q -- '--- SKIP'; then fail "an integration test was skipped: $out"; fi
@@ -338,6 +336,13 @@ scenario_deploy() {
 	wait_for 'the first run of demo-cache' 120 stack_idle demo-cache
 	log "scenario: first runs: demo-stack $(stack_field demo-stack last_run), demo-cache $(stack_field demo-cache last_run)"
 
+	step 'demo-plain (docker-compose.yml, name: demo-shop, no secrets.env) is deployed as project demo-shop'
+	wait_for 'the first run of demo-shop' 120 stack_idle demo-shop
+	[ "$(stack_images demo-shop)" = "registry.$domain/demo/app:1.0.0" ] || fail "demo-shop does not run the image 1.0.0: $(stack_images demo-shop)"
+	[ -z "$(stack_images demo-plain)" ] || fail "a project named after the folder demo-plain runs: $(stack_images demo-plain)"
+	qd --output json stack list | grep -q -- demo-shop || fail 'stack list does not name demo-shop'
+	if docker exec "$host" test -e /opt/stacks/demo-plain/secrets.env; then fail 'demo-plain has a secrets.env'; fi
+
 	step 'secrets.env is created on the host, owned by the service user'
 	for stack in demo-stack demo-cache; do
 		docker exec -u qdeploy "$host" sh -ec "umask 077 && printf 'DEMO_SECRET=%s\n' '$secret' >/opt/stacks/$stack/secrets.env"
@@ -375,6 +380,22 @@ $hook_signing_value
 	[ "$(stack_field demo-cache deployed)" = "$good" ] || fail "demo-cache is not recorded as deployed at $good: $(qd --output json status)"
 	[ "$(stack_images demo-cache)" = "registry.$domain/demo/app:1.1.0" ] || fail "demo-cache does not run the image 1.1.0: $(stack_images demo-cache)"
 	log "scenario: poll deployed demo-cache at $good"
+
+	# Here every stack runs its newest commit, so the poll at the restart of the repair has nothing to run.
+	step 'a bound installation without the grant gets it at the next root client command'
+	docker exec "$host" sh -ec 'rm -f /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf && systemctl daemon-reload' ||
+		fail 'cannot remove the stack folder grant'
+	if docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF /opt/stacks; then fail 'the grant is still active after its removal'; fi
+	pid=$(service_pid)
+	out=$(qd status) || fail "qdeploy status failed without the grant: $out"
+	printf '%s' "$out" | grep -qF 'has no write grant' || fail "no notice about the missing grant: $out"
+	docker exec "$host" grep -qx 'ReadWritePaths=-/opt/stacks' /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf ||
+		fail 'the grant was not written again'
+	docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF /opt/stacks || fail 'the service has no write access after the repair'
+	wait_for 'the service after the repair' 60 service_serving
+	[ "$(service_pid)" != "$pid" ] || fail 'the repair did not restart the service'
+	out=$(qd status) || fail "qdeploy status failed: $out"
+	if printf '%s' "$out" | grep -qF 'has no write grant'; then fail "the repair repeated: $out"; fi
 
 	step 'a commit with a failing healthcheck is rolled back with a revert commit on the remote branch'
 	as_admin 'cd ~/stacks &&
@@ -423,6 +444,7 @@ $hook_signing_value
 		n=$((n + 1))
 		if qd stack log "$id" | grep -qF -- "$secret"; then fail "the log of run $id holds the secret value"; fi
 	done
+	if qd stack log "$(newest_run demo-shop)" | grep -qF -- 'not-a-real-secret'; then fail 'the run log of demo-shop holds its DEMO_PASSWORD value'; fi
 	[ "$n" -ge 3 ] || fail "too few runs to check the logs: $n"
 	if qd stack runs | grep -qF -- "$secret"; then fail 'qdeploy stack runs shows the secret value'; fi
 	log "scenario: the secret value is in none of $n run logs"
@@ -993,22 +1015,37 @@ scenario_stacks_repo() {
 
 	step 'repo set refuses an unconfirmed host key without a terminal'
 	before=$(known_hosts_sum)
-	out=$(qd_fails repo set "$url") || fail "repo set without terminal and fingerprint succeeded: $out"
+	out=$(qd_fails repo set "$url" --dir /opt/stacks --create) || fail "repo set without terminal and fingerprint succeeded: $out"
 	printf '%s' "$out" | grep -q -- '--fingerprint' || fail "the refusal does not name --fingerprint: $out"
 	[ "$(known_hosts_sum)" = "$before" ] || fail 'a host key was pinned without confirmation'
-	[ -z "$(docker exec "$host" ls -A /opt/stacks)" ] || fail 'the stacks directory was filled without confirmation'
+	if docker exec "$host" test -e /opt/stacks; then fail 'the stack folder was created although the host key was not confirmed'; fi
+
+	step 'repo set without --dir and without --create creates no stack folder'
+	out=$(qd_fails repo set "$url" --fingerprint "$(git_ed25519_fingerprint)") || fail "repo set without --dir succeeded: $out"
+	printf '%s' "$out" | grep -q -- '--dir' || fail "the refusal does not name --dir: $out"
+	out=$(qd_fails repo set "$url" --dir /opt/stacks --fingerprint "$(git_ed25519_fingerprint)") ||
+		fail "repo set for a missing folder without --create succeeded: $out"
+	printf '%s' "$out" | grep -q -- '--create' || fail "the refusal does not name --create: $out"
+	if docker exec "$host" test -e /opt/stacks; then fail 'the stack folder was created without confirmation'; fi
+	if docker exec "$host" test -e /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf; then fail 'a refused repo set wrote the drop-in'; fi
 
 	step 'repo set refuses a wrong fingerprint'
-	out=$(qd_fails repo set "$url" --fingerprint SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA) ||
+	out=$(qd_fails repo set "$url" --dir /opt/stacks --create --fingerprint SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA) ||
 		fail "repo set with a wrong fingerprint succeeded: $out"
 	[ "$(known_hosts_sum)" = "$before" ] || fail 'a host key was pinned despite a wrong fingerprint'
+	if docker exec "$host" test -e /opt/stacks; then fail 'the stack folder was created despite a wrong fingerprint'; fi
 
 	step 'repo set pins the host key and clones'
 	expected=$(git_ed25519_fingerprint)
-	out=$(qd --output json repo set "$url" --fingerprint "$expected") || fail "repo set failed: $out"
+	out=$(qd --output json repo set "$url" --dir /opt/stacks --create --fingerprint "$expected") || fail "repo set failed: $out"
 	printf '%s' "$out" | grep -q "$expected" || fail "repo set does not report the fingerprint $expected: $out"
 	printf '%s' "$out" | grep -q '"cloned": *true' || fail "repo set did not clone: $out"
 	docker exec "$host" test -f /opt/stacks/demo-stack/compose.yaml || fail 'the clone is missing in /opt/stacks'
+	[ "$(docker exec "$host" stat -c %U:%G:%a /opt/stacks)" = qdeploy:qdeploy:755 ] ||
+		fail "/opt/stacks is $(docker exec "$host" stat -c %U:%G:%a /opt/stacks), want qdeploy:qdeploy:755"
+	docker exec "$host" grep -qx 'ReadWritePaths=-/opt/stacks' /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf ||
+		fail 'the drop-in does not grant /opt/stacks'
+	docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF /opt/stacks || fail 'the service has no write access to /opt/stacks'
 	log "scenario: repo set pinned $expected and cloned"
 
 	step 'repo fetch sees a commit pushed by the admin'
@@ -1039,6 +1076,8 @@ scenario_stacks_repo() {
 
 	scenario_stack_actions
 
+	scenario_container_monitor
+
 	scenario_backup
 
 	scenario_updates
@@ -1067,7 +1106,7 @@ scenario_stacks_repo() {
 	if [ -z "$rotate_failure" ]; then
 		new_fp=$(git_ed25519_fingerprint)
 		fetch_out=$(qd repo fetch) || fetch_rc=$?
-		set_out=$(qd repo set "$url" --fingerprint "$new_fp") || set_rc=$?
+		set_out=$(qd repo set "$url" --dir /opt/stacks --fingerprint "$new_fp") || set_rc=$?
 	fi
 	after=$(known_hosts_sum)
 	# Restore the original keys first, so a failed assertion below leaves the environment as it was.
@@ -1249,6 +1288,50 @@ scenario_stack_actions() {
 	log 'scenario: stack stop, start and restart passed'
 }
 
+# has_finding succeeds when the stack shows the finding $2 in qdeploy status.
+has_finding() {
+	stack_field "$1" findings | grep -q "$2"
+}
+
+# no_finding succeeds when the stack does not show the finding $2.
+no_finding() {
+	! has_finding "$1" "$2"
+}
+
+# scenario_container_monitor proves that the failure monitor reports a container of demo-stack that dies outside
+# qdeploy: the webhook hears container-failed and qdeploy status shows the finding; after the container runs
+# again the webhook hears recovered and the finding is gone. The restart policy is switched off for the kill
+# and back on afterwards; the monitor reads every 30 seconds and ends a failure after two clean readings.
+scenario_container_monitor() {
+	step 'a channel for the failure monitor events is added'
+	out=$(qd_in "$hook_url
+$hook_signing_value
+" notify add mon --type webhook --events container-failed,recovered) || fail "notify add failed: $out"
+	qd notify list | grep -q 'mon *webhook *container-failed,recovered' || fail "notify list does not show the channel: $(qd notify list)"
+
+	step 'a container killed outside qdeploy is reported and shown in status'
+	wait_for 'demo-stack idle' 120 stack_idle demo-stack
+	stack_healthy demo-stack || fail 'demo-stack is not healthy before the kill'
+	no_finding demo-stack container-failed || fail "demo-stack shows a failure before the kill: $(qd --output json status)"
+	victim=$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=demo-stack | head -n 1)
+	[ -n "$victim" ] || fail 'demo-stack has no container to kill'
+	docker exec "$host" docker update --restart=no "$victim" >/dev/null || fail 'cannot switch off the restart policy'
+	docker exec "$host" docker kill "$victim" >/dev/null || fail 'cannot kill the container'
+	wait_for 'the webhook for the failed container' 120 hook_seen /notify container-failed demo-stack
+	wait_for 'the finding container-failed in status' 60 has_finding demo-stack container-failed
+	stack_field demo-stack findings | grep -q 'exited' || fail "the finding does not name the kind exited: $(qd --output json status)"
+	log 'scenario: the killed container was reported and shown as a finding'
+
+	step 'the container runs again: recovered is reported and the finding ends'
+	docker exec "$host" docker update --restart=unless-stopped "$victim" >/dev/null || fail 'cannot restore the restart policy'
+	docker exec "$host" docker start "$victim" >/dev/null || fail 'cannot start the container again'
+	wait_for 'demo-stack healthy again' 90 stack_healthy demo-stack
+	wait_for 'the webhook for the recovered container' 150 hook_seen /notify recovered demo-stack
+	wait_for 'the finding to end' 60 no_finding demo-stack container-failed
+	out=$(qd notify remove mon) || fail "notify remove failed: $out"
+	log 'scenario: the container recovered and the finding ended'
+}
+
 # selfupdate_field prints one top-level field of qdeploy update status, run without root.
 selfupdate_field() {
 	as_admin "qdeploy --output json update status 2>&1" | sed -n "s/.*\"$1\": *\"\{0,1\}\([^\",}]*\).*/\1/p"
@@ -1301,6 +1384,9 @@ scenario_selfupdate() {
 	[ "$(selfupdate_field installed)" = v0.2.0 ] && [ "$(selfupdate_field update_available)" = false ] ||
 		fail "update status after the update: $(as_admin 'qdeploy --output json update status 2>&1')"
 	[ "$(docker exec "$host" cat /etc/systemd/system/qdeploy.service.d/e2e.conf | grep -c backup-image)" = 1 ] || fail 'the update removed the drop-in'
+	docker exec "$host" grep -qx 'ReadWritePaths=-/opt/stacks' /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf ||
+		fail 'the update removed the stack folder grant'
+	docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF /opt/stacks || fail 'the updated service has no write access to /opt/stacks'
 	log "scenario: updated to v0.2.0, pid $pid -> $(service_pid), service answering: $out"
 
 	step 'a release with a tampered checksums.txt is refused and changes nothing'
@@ -1874,6 +1960,8 @@ scenario_tui_setup() {
 	tui_send b
 	tui_wait 'Bind the stacks repository' 10
 	tui_type "git.$domain:stacks.git"
+	tui_send Tab
+	tui_type /opt/stacks
 	tui_send F2
 	expected=$(git_ed25519_fingerprint)
 	tui_wait "$(printf '%s' "$expected" | cut -c 1-30)" 60

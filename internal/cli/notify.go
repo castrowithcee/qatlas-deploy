@@ -59,8 +59,8 @@ func newNotifyAdd(program *cobracli.Program, state *notRunning, secrets *redact.
 		Use:   "add <name> --type webhook|slack|telegram|smtp [--events <list>] [type settings]",
 		Short: "Add a notification channel; its secret parts are read from the terminal or stdin",
 		Long: "add stores a channel. A name has 1 to 32 characters: lowercase letters, digits or '-', starting with a\n" +
-			"letter. --events takes a comma list of succeeded, failed, rolled-back, rollback-failed and\n" +
-			"update-available; without it the channel receives all of them.\n\n" +
+			"letter. --events takes a comma list of succeeded, failed, rolled-back, rollback-failed,\n" +
+			"container-failed, recovered and update-available; without it the channel receives all of them.\n\n" +
 			"Settings by type: webhook and slack take none; telegram takes --chat-id and optionally --base-url (the\n" +
 			"address of a Bot API server); smtp takes --host, --from and --to (a comma list or repeated), optionally\n" +
 			"--port, --security starttls (default) or tls, and --user.\n\n" +

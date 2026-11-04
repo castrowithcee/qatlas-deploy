@@ -764,6 +764,8 @@ const (
 	NotifyEventFailed          = "failed"
 	NotifyEventRolledBack      = "rolled-back"
 	NotifyEventRollbackFailed  = "rollback-failed"
+	NotifyEventContainerFailed = "container-failed"
+	NotifyEventRecovered       = "recovered"
 	NotifyEventUpdateAvailable = "update-available"
 )
 

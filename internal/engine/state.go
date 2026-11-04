@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
 const (
@@ -43,12 +45,25 @@ const (
 	FindingUnreadable   = "unreadable"    // the stack cannot be read and is skipped
 	FindingFailedCommit = "failed-commit" // the last run of this commit failed; only a new commit or a manual run retries
 	FindingDiff         = "diff-failed"   // the changes since the deployed commit cannot be determined
-	FindingRemoved      = "removed"       // the folder is gone from the repository; nothing is stopped
+	FindingRemoved      = "removed"       // the folder is gone or unreadable; nothing is stopped
 	FindingPaused       = "paused"        // a rollback failed; no run starts until the stack is resumed
 	FindingStopped      = "stopped"       // the operator stopped the stack; no run starts until it is started
 	// FindingDataDirMissing means bind-mount source directories are missing and the image runs as a non-root
 	// user, so Docker would create them owned by root; no run starts until they exist.
 	FindingDataDirMissing = "data-dir-missing"
+	// FindingProjectRenamed is a deployed stack whose folder now has another project name, on both names: the
+	// new name gets no automatic run, since the old project is not stopped; a manual run decides.
+	FindingProjectRenamed = "project-renamed"
+	// FindingContainerFailed is not stored with the findings of a poll; status derives it from StackState.Failure.
+	FindingContainerFailed = "container-failed"
+)
+
+// Kinds of a container failure found between runs, see Failure.
+const (
+	FailureExited      = "exited"       // a container exited or died without a stop through qdeploy
+	FailureUnhealthy   = "unhealthy"    // a container stayed unhealthy
+	FailureRestartLoop = "restart-loop" // a container's restart count keeps rising
+	FailureMissing     = "missing"      // a container of the deployed stack is gone
 )
 
 var (
@@ -79,6 +94,9 @@ type State struct {
 
 // StackState is what the engine knows about one stack.
 type StackState struct {
+	// Folder is the stack's folder in the repository, empty when it equals the name, as in every state written
+	// before a stack could have a name of its own.
+	Folder string `json:"folder,omitempty"`
 	// Deployed is the commit of the last successful run; empty for a stack that was never deployed.
 	Deployed string `json:"deployed,omitempty"`
 	// Pending is the commit the stack waits to be deployed at; empty when it is up to date.
@@ -103,6 +121,41 @@ type StackState struct {
 	DataDirs *DataDirWait `json:"data_dirs,omitempty"`
 	// Updates is the result of the last update detection; nil for a stack that was never checked.
 	Updates *UpdateCheck `json:"updates,omitempty"`
+	// Failure is the open container failure the monitor found between runs; nil while the stack runs.
+	Failure *Failure `json:"failure,omitempty"`
+	// Services are the Compose services seen running healthy at the monitor's last good observation; a
+	// service missing from the containers later is a failure. Empty until the first good observation after a run.
+	Services []string `json:"services,omitempty"`
+	// StoppedContainers are the IDs of containers stopped through qdeploy; the monitor does not report them
+	// until they run again or are gone.
+	StoppedContainers []string `json:"stopped_containers,omitempty"`
+}
+
+// MaxMonitorServices bounds Services.
+const MaxMonitorServices = 256
+
+// Failure is one failure of a stack's containers: what kind, which container (or service for a missing one)
+// and since when. It lasts until the stack runs again.
+type Failure struct {
+	Kind      string    `json:"kind"`
+	Container string    `json:"container,omitempty"`
+	Since     time.Time `json:"since"`
+}
+
+// folder returns the folder of the stack stored under name.
+func (s StackState) folder(name string) string {
+	if s.Folder == "" {
+		return name
+	}
+	return s.Folder
+}
+
+// folderField is what StackState.Folder holds for st.
+func folderField(st stacks.Stack) string {
+	if st.Folder == st.Name {
+		return ""
+	}
+	return st.Folder
 }
 
 // Limits of a stored update check. The detector clips to them, so a valid result is never refused.
@@ -206,6 +259,9 @@ func validateState(s State) error {
 		if name == "" || len(name) > maxNameLen {
 			return errors.New("invalid stack name")
 		}
+		if len(st.Folder) > maxNameLen {
+			return errors.New("invalid stack folder")
+		}
 		for _, c := range []string{st.Deployed, st.Pending, st.FailedCommit} {
 			if c != "" && !commitRe.MatchString(c) {
 				return errors.New("invalid commit id")
@@ -229,6 +285,9 @@ func validateState(s State) error {
 				return err
 			}
 		}
+		if err := validateMonitor(st); err != nil {
+			return err
+		}
 	}
 	for _, r := range s.Runs {
 		if !runIDRe.MatchString(r.ID) {
@@ -248,6 +307,36 @@ func validateDataDirs(w DataDirWait) error {
 	for _, d := range w.Dirs {
 		if !ValidDirPath(d.Path) || !ownerRe.MatchString(d.Owner) {
 			return errors.New("invalid data directory")
+		}
+	}
+	return nil
+}
+
+func validateMonitor(st StackState) error {
+	if f := st.Failure; f != nil {
+		switch f.Kind {
+		case FailureExited, FailureUnhealthy, FailureRestartLoop, FailureMissing:
+		default:
+			return errors.New("invalid failure kind")
+		}
+		if f.Since.IsZero() || len(f.Container) > maxNameLen {
+			return errors.New("invalid failure")
+		}
+	}
+	if len(st.Services) > MaxMonitorServices {
+		return errors.New("too many services")
+	}
+	for _, n := range st.Services {
+		if n == "" || len(n) > maxNameLen {
+			return errors.New("invalid service name")
+		}
+	}
+	if len(st.StoppedContainers) > MaxMonitorServices {
+		return errors.New("too many stopped containers")
+	}
+	for _, id := range st.StoppedContainers {
+		if id == "" || len(id) > maxNameLen {
+			return errors.New("invalid container id")
 		}
 	}
 	return nil
@@ -331,6 +420,12 @@ func (s State) clone() State {
 			u.Items = append([]UpdateItem(nil), u.Items...)
 			v.Updates = &u
 		}
+		if v.Failure != nil {
+			f := *v.Failure
+			v.Failure = &f
+		}
+		v.Services = append([]string(nil), v.Services...)
+		v.StoppedContainers = append([]string(nil), v.StoppedContainers...)
 		out.Stacks[k] = v
 	}
 	out.Runs = append([]RunRecord(nil), s.Runs...)

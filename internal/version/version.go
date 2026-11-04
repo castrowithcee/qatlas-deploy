@@ -2,8 +2,12 @@
 // pure: it does no I/O.
 //
 // Rules:
-//   - A tag is comparable if it is complete SemVer, MAJOR.MINOR.PATCH with an optional leading "v". Incomplete
-//     versions such as "1.2" or "16" and everything else are ignored as candidates.
+//   - A tag is comparable if it is a complete MAJOR.MINOR.PATCH version (SemVer or CalVer) with an optional
+//     leading "v". Each part is compared as a number, so "26.09.1" and "26.9.1" are the same version; for CalVer
+//     the first part (the year) counts as major. Incomplete versions such as "1.2", "22.04" or "16" and
+//     everything else are ignored as candidates.
+//   - Candidates with the same numbers differ only in zero padding. The one padded like the current tag wins,
+//     otherwise the smaller string.
 //   - Text after the first "-" is the variant ("alpine", "apache"). Only tags with exactly the prefix and the
 //     variant of the current tag are candidates. A suffix whose first dot- or dash-separated part is a number or
 //     one of alpha, beta, rc, pre, preview, dev, snapshot, nightly, canary, next, test or milestone (optionally
@@ -42,7 +46,7 @@ const (
 
 // Reasons for StatusNotComparable.
 const (
-	// ReasonNotSemver: the current tag is not complete SemVer, for example "latest", "16" or "1.2".
+	// ReasonNotSemver: the current tag is not a complete MAJOR.MINOR.PATCH version, for example "latest", "16" or "1.2".
 	ReasonNotSemver = "not-semver"
 	// ReasonPrerelease: the current tag is a pre-release, whose variant cannot be told from its suffix.
 	ReasonPrerelease = "prerelease"
@@ -79,7 +83,9 @@ type parsedTag struct {
 	tag                 string
 	prefix              string
 	major, minor, patch uint64
-	variant             string
+	// digits are the lengths of the three number strings, which tell the zero padding.
+	digits  [3]int
+	variant string
 }
 
 type parseKind int
@@ -91,7 +97,7 @@ const (
 )
 
 var (
-	tagRe = regexp.MustCompile(`^(v?)(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z][0-9A-Za-z.-]*))?$`)
+	tagRe = regexp.MustCompile(`^(v?)([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z][0-9A-Za-z.-]*))?$`)
 	preRe = regexp.MustCompile(`(?i)^(alpha|beta|rc|pre|preview|dev|snapshot|nightly|canary|next|test|milestone)[0-9]*$`)
 	numRe = regexp.MustCompile(`^[0-9]+$`)
 )
@@ -107,6 +113,7 @@ func parseTag(tag string) (parsedTag, parseKind) {
 		if *dst, err = strconv.ParseUint(m[2+i], 10, 63); err != nil {
 			return parsedTag{}, kindInvalid
 		}
+		p.digits[i] = len(m[2+i])
 	}
 	if p.variant != "" {
 		first, _, _ := strings.Cut(p.variant, ".")
@@ -126,6 +133,22 @@ func (a parsedTag) less(b parsedTag) bool {
 		return a.minor < b.minor
 	}
 	return a.patch < b.patch
+}
+
+// preferred reports whether a beats b, which has the same numbers, as the tag to offer for cur.
+func preferred(cur, a, b parsedTag) bool {
+	if sa, sb := a.digits == cur.digits, b.digits == cur.digits; sa != sb {
+		return sa
+	}
+	return a.tag < b.tag
+}
+
+// higher reports whether a is a better pick than b: higher numbers, then preferred.
+func higher(cur, a, b parsedTag) bool {
+	if b.less(a) {
+		return true
+	}
+	return !a.less(b) && preferred(cur, a, b)
 }
 
 // Select picks the update target for in.Current. The only error is an unknown ceiling.
@@ -157,10 +180,10 @@ func Select(in Input) (Result, error) {
 		if in.Filter != nil && !in.Filter.MatchString(tag) {
 			continue
 		}
-		if p.major > cur.major && (bestMajor == nil || bestMajor.less(p)) {
+		if p.major > cur.major && (bestMajor == nil || higher(cur, p, *bestMajor)) {
 			bestMajor = &p
 		}
-		if allowed(cur, p, ceiling) && (best == nil || best.less(p)) {
+		if allowed(cur, p, ceiling) && (best == nil || higher(cur, p, *best)) {
 			best = &p
 		}
 	}
@@ -187,7 +210,7 @@ func allowed(cur, p parsedTag, ceiling string) bool {
 
 // Errors of Path. Their texts are fixed and may be shown as they are.
 var (
-	ErrNotComparable = errors.New("the current version is not a complete stable semantic version")
+	ErrNotComparable = errors.New("the current version is not a complete stable MAJOR.MINOR.PATCH version")
 	ErrNotOffered    = errors.New("the version is not in the tag list of the registry")
 	ErrOtherVariant  = errors.New("the version is not a stable version of the same variant as the current one")
 	ErrNotHigher     = errors.New("the version is not higher than the current one")
@@ -227,7 +250,7 @@ func Path(in Input, target string, stepwise bool) ([]string, error) {
 		if in.Filter != nil && !in.Filter.MatchString(tag) {
 			continue
 		}
-		if b, ok := best[p.major]; !ok || b.less(p) {
+		if b, ok := best[p.major]; !ok || higher(cur, p, b) {
 			best[p.major] = p
 		}
 	}
@@ -247,7 +270,7 @@ type Core struct {
 	Prerelease bool
 }
 
-// ParseCore reads the numbers of a complete SemVer tag with an optional leading "v" and any suffix. ok is
+// ParseCore reads the numbers of a complete MAJOR.MINOR.PATCH tag with an optional leading "v" and any suffix. ok is
 // false for everything else.
 func ParseCore(tag string) (Core, bool) {
 	p, kind := parseTag(tag)

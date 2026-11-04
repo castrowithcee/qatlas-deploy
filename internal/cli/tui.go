@@ -74,7 +74,7 @@ func newTUICommand(state *notRunning) *cobra.Command {
 				}
 				return failureOf(err)
 			}
-			opts := tui.Options{Backend: backend, In: in, Out: out}
+			opts := tui.Options{Backend: backend, Folders: tuiFolders{}, In: in, Out: out}
 			schema, err := tui.PrefsSchema()
 			if err != nil {
 				return &cli.Failure{Code: output.CodeRuntime, Message: "the terminal interface cannot start: " + err.Error(),

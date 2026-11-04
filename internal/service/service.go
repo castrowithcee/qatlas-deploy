@@ -65,6 +65,11 @@ type Config struct {
 	// Notify configures the notification sender; tests give it the roots of a local server and short waits. Its
 	// Redactor is ignored: the service's own redactor is used.
 	Notify notify.Options
+	// MonitorInterval is the time between container readings of the failure monitor; zero means 30 seconds.
+	MonitorInterval time.Duration
+	// OnMonitorEvent, when set, is told every failed and recovered transition of an own stack's containers. It
+	// runs in the monitor's goroutine and must return quickly.
+	OnMonitorEvent func(MonitorEvent)
 	// OnUpdateAvailable, when set, is told every stack in manual mode the maintenance window found an update
 	// for. It runs in the window's goroutine and must return quickly.
 	OnUpdateAvailable func(UpdateNotice)
@@ -172,6 +177,17 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err := registerContainerCommands(registry, repo, eng, dock, cfg.ContainerWait, log); err != nil {
 		return err
 	}
+	mon := newContainerMonitor(monitorConfig{
+		Docker: dock, Engine: eng, Clock: cfg.Clock, Interval: cfg.MonitorInterval, Log: log,
+		StackDirs: func() map[string]string { return repo.stackDirs(log) },
+		Hook: func(ev MonitorEvent) {
+			logMonitorEvent(log, ev)
+			notifier.monitorEvent(ev)
+			if cfg.OnMonitorEvent != nil {
+				cfg.OnMonitorEvent(ev)
+			}
+		},
+	})
 	engineDone := make(chan struct{})
 	go func() {
 		defer close(engineDone)
@@ -180,6 +196,12 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		}
 	}()
 	defer func() { <-engineDone }()
+	monitorDone := make(chan struct{})
+	go func() {
+		defer close(monitorDone)
+		mon.run(ctx)
+	}()
+	defer func() { <-monitorDone }()
 	windowDone := make(chan struct{})
 	go func() {
 		defer close(windowDone)

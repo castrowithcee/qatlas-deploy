@@ -70,6 +70,9 @@ const (
 	textAskNotifyTest         kittui.TextID = "ask.notifytest"
 	textWhatNotifyTest        kittui.TextID = "what.notifytest"
 	textAskBind               kittui.TextID = "ask.bind"
+	textAskFolderCreate       kittui.TextID = "ask.foldercreate"
+	textWhatFolderCreate      kittui.TextID = "what.foldercreate"
+	textProblemDirRequired    kittui.TextID = "problem.dirrequired"
 	textWhatBind              kittui.TextID = "what.bind"
 	textWhatBindPinned        kittui.TextID = "what.bindpinned"
 	textDetailHost            kittui.TextID = "detail.host"
@@ -243,6 +246,9 @@ func settingsEnglish() map[kittui.TextID]string {
 		textWhatNotifyRemove:      "The channel and its stored secrets are deleted.",
 		textAskNotifyTest:         "Send a test message through %s?",
 		textWhatNotifyTest:        "One short message is sent to the channel, without retries.",
+		textAskFolderCreate:       "Create the stack folder %s?",
+		textWhatFolderCreate:      "The folder is created with owner qdeploy:qdeploy and mode 0755, the service is granted write access to it in a systemd drop-in and restarts once.",
+		textProblemDirRequired:    "The stack folder is required: enter an absolute path.",
 		textAskBind:               "Bind %s and trust this host key?",
 		textWhatBind:              "Compare the fingerprint with the git platform first. The key is stored only now, and the repository is cloned.",
 		textWhatBindPinned:        "The service already trusts exactly this host key. The repository is cloned.",
@@ -418,6 +424,9 @@ func settingsGerman() map[kittui.TextID]string {
 		textWhatNotifyRemove:      "Der Kanal und seine gespeicherten Geheimnisse werden gelöscht.",
 		textAskNotifyTest:         "Eine Testnachricht über %s senden?",
 		textWhatNotifyTest:        "Eine kurze Nachricht geht einmal an den Kanal, ohne Wiederholung.",
+		textAskFolderCreate:       "Stack-Ordner %s anlegen?",
+		textWhatFolderCreate:      "Der Ordner wird mit Eigentümer qdeploy:qdeploy und Modus 0755 angelegt, der Dienst erhält dafür in einem systemd-Drop-in Schreibzugriff und startet einmal neu.",
+		textProblemDirRequired:    "Der Stack-Ordner ist erforderlich: Gib einen absoluten Pfad ein.",
 		textAskBind:               "%s binden und diesem Hostschlüssel vertrauen?",
 		textWhatBind:              "Vergleiche den Fingerabdruck zuerst mit der Git-Plattform. Der Schlüssel wird erst jetzt gespeichert und das Repository geklont.",
 		textWhatBindPinned:        "Der Dienst vertraut genau diesem Hostschlüssel bereits. Das Repository wird geklont.",

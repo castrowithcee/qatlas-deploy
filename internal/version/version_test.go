@@ -40,7 +40,14 @@ func TestSelect(t *testing.T) {
 			[]string{"1.1.0-rc1", "1.1.0-beta.2", "2.0.0-alpha", "1.0.1-1", "1.0.1-snapshot", "1.0.1-dev", "1.0.1-RC2"}, "major", "", "1.0.0", "", StatusCurrent},
 		{"pre-release is skipped but stable wins", "1.0.0", []string{"1.2.0-rc1", "1.1.0"}, "", "", "1.1.0", "", StatusUpdate},
 		{"incomplete and foreign tags are ignored", "1.0.0",
-			[]string{"1.2", "16", "latest", "1.1.0.1", "v1", "stable", "01.2.3", "main", "1.0.1"}, "", "", "1.0.1", "", StatusUpdate},
+			[]string{"1.2", "16", "latest", "1.1.0.1", "v1", "stable", "20240101", "22.04", "main", "1.0.1"}, "", "", "1.0.1", "", StatusUpdate},
+		{"calver orders by number", "26.05.5", []string{"26.9.1", "27.01.0", "26.05.6"}, "major", "", "27.01.0", "", StatusUpdate},
+		{"calver minor ceiling stays in the year", "26.05.5", []string{"26.09.1", "27.01.0"}, "", "", "26.09.1", "27.01.0", StatusUpdate},
+		{"calver year change is manual", "26.05.5", []string{"27.01.0"}, "", "", "26.05.5", "27.01.0", StatusCurrent},
+		{"equal core prefers current padding", "26.05.5", []string{"26.09.1", "26.9.1"}, "", "", "26.09.1", "", StatusUpdate},
+		{"equal core prefers current padding unpadded", "26.5.5", []string{"26.09.1", "26.9.1"}, "", "", "26.9.1", "", StatusUpdate},
+		{"equal core otherwise smallest string", "26.5.5", []string{"26.010.1", "26.10.1", "26.0010.1"}, "", "", "26.0010.1", "", StatusUpdate},
+		{"same numbers are not an update", "26.05.5", []string{"26.5.5"}, "", "", "26.05.5", "", StatusCurrent},
 		{"filter narrows the candidates", "1.0.0", []string{"1.1.0", "1.2.0", "2.0.0"}, "major", `^1\.1\.`, "1.1.0", "", StatusUpdate},
 		{"filter can empty the candidates", "1.0.0", []string{"1.1.0"}, "", `^9\.`, "1.0.0", "", StatusCurrent},
 		{"filter applies to the major hint", "1.0.0", []string{"1.1.0", "2.0.0", "3.0.0"}, "minor", `^[12]\.`, "1.1.0", "2.0.0", StatusUpdate},
@@ -153,10 +160,13 @@ func TestParseCore(t *testing.T) {
 			t.Errorf("%s: %+v %v", tag, got, ok)
 		}
 	}
-	for _, tag := range []string{"", "latest", "1.2", "16", "01.2.3"} {
+	for _, tag := range []string{"", "latest", "1.2", "16", "20240101", "22.04"} {
 		if _, ok := ParseCore(tag); ok {
 			t.Errorf("%q parsed", tag)
 		}
+	}
+	if c, ok := ParseCore("v26.09.1-ls287"); !ok || c != (Core{26, 9, 1, false}) || c.String() != "26.9.1" {
+		t.Errorf("calver: %+v %v", c, ok)
 	}
 	a, _ := ParseCore("1.9.0")
 	b, _ := ParseCore("v1.10.0")
