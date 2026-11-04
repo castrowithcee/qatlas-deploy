@@ -1,0 +1,24 @@
+[Unit]
+Description=qdeploy stack deployment service
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/qdeploy run
+User=qdeploy
+Group=qdeploy
+SupplementaryGroups=docker
+RuntimeDirectory=qdeploy
+RuntimeDirectoryMode=0750
+StateDirectory=qdeploy
+StateDirectoryMode=0700
+ConfigurationDirectory=qdeploy
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=-/opt/stacks
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

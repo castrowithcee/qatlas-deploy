@@ -1,0 +1,17 @@
+{
+  "package": ".",
+  "versionVariable": "github.com/castrowithcee/qatlas-deploy/internal/cli.version",
+  "targets": ["linux/amd64", "linux/arm64"],
+  "manpageCommand": ["go", "run", ".", "manpage", "--dir", "{dir}"],
+  "files": [],
+  "installer": {
+    "displayName": "Qatlas Deploy",
+    "nextStep": "Next: create the stacks directory, then run sudo qdeploy tui. See the README for the steps."
+  },
+  "service": {
+    "unit": "packaging/qdeploy.service",
+    "groups": ["docker"],
+    "addInstallingUser": false,
+    "writableConfig": false
+  }
+}

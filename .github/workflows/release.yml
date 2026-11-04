@@ -1,0 +1,20 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+jobs:
+  release:
+    uses: castrowithcee/qatlas-kit/.github/workflows/release.yml@b31df669f77b10c20959d1e5eb6e8850bd20954c # v0.4.0
+    permissions:
+      contents: write
+    with:
+      program: qdeploy
+      namespace: qdeploy-release
+      environment: release
+    secrets:
+      RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
