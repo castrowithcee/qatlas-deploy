@@ -197,7 +197,7 @@ scenario_compose_integration() {
 		fail 'the Docker integration tests failed'
 	}
 	docker exec "$host" rm -f /tmp/compose.test
-	for name in TestDockerHealthyStackIsDeployedAndChecked TestDockerUnhealthyStackFailsTheCheck TestDockerMissingSecretsFileStopsBeforeCompose; do
+	for name in TestDockerHealthyStackIsDeployedAndChecked TestDockerUnhealthyStackFailsTheCheck TestDockerDeployWithoutSecretsFile; do
 		printf '%s' "$out" | grep -q -- "--- PASS: $name" || fail "$name did not pass: $out"
 	done
 	if printf '%s' "$out" | grep -q -- '--- SKIP'; then fail "an integration test was skipped: $out"; fi

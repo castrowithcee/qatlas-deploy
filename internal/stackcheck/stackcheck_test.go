@@ -132,8 +132,6 @@ func TestRules(t *testing.T) {
 			fakeGit{}, RuleUnsetImageVariable, SeverityError, "DEMO_VERSION", ".env"},
 		{"duplicate key", with(demoFiles(), map[string]string{".env": goodEnv + "DEMO_PASSWORD=x\n"}),
 			fakeGit{}, RuleDuplicateKey, SeverityError, "DEMO_PASSWORD", "exactly one file"},
-		{"secrets missing", with(demoFiles(), map[string]string{"secrets.env": "-"}),
-			fakeGit{}, RuleMissingSecretsEnv, SeverityError, "does not exist", "--env-file"},
 		{"secrets tracked", demoFiles(), fakeGit{tracked: []string{"demo-stack/secrets.env"}},
 			RuleTrackedSecretsEnv, SeverityError, "tracked by git", "rotate"},
 		{"secrets not ignored", demoFiles(), fakeGit{notIgnored: true},
@@ -235,7 +233,7 @@ func TestFindingsAreSorted(t *testing.T) {
 	for _, f := range fs {
 		got = append(got, f.Severity+"/"+f.Rule)
 	}
-	want := []string{"error/floating-image-tag", "error/missing-secrets-env", "warning/secrets-env-not-ignored"}
+	want := []string{"error/floating-image-tag", "warning/secrets-env-not-ignored"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -259,5 +257,28 @@ func TestSecretsEnvSymlinkIsRefused(t *testing.T) {
 	fs, err := Check(context.Background(), list, fakeGit{})
 	if err != nil || len(fs) != 1 || fs[0].Rule != RuleUnreadableSecrets || fs[0].Severity != SeverityError {
 		t.Fatalf("findings %+v, err %v", fs, err)
+	}
+}
+
+func TestStackWithoutSecretsEnvHasNoMissingFileFinding(t *testing.T) {
+	fs := checkFiles(t, with(demoFiles(), map[string]string{"secrets.env": "-"}), fakeGit{})
+	if len(fs) != 0 {
+		t.Fatalf("findings: %+v", fs)
+	}
+}
+
+func TestDeployOnlyEnvIsAFinding(t *testing.T) {
+	fs := checkFiles(t, with(demoFiles(), map[string]string{".env": goodEnv + "broken line\n"}), fakeGit{})
+	f := has(fs, RuleUnreadableStack)
+	if f == nil || f.Severity != SeverityError || !strings.Contains(f.Cause, ".env: line 2") || strings.Contains(f.Cause, "broken") {
+		t.Fatalf("findings: %+v", fs)
+	}
+}
+
+func TestComposeFilesOfRulesAreNamedInTheFinding(t *testing.T) {
+	fs := checkFiles(t, with(demoFiles(), map[string]string{"qdeploy.yaml": "version: 1\ncompose: {files: [compose.yaml, gone.yaml]}\n"}), fakeGit{})
+	f := has(fs, RuleMissingComposeFile)
+	if f == nil || !strings.Contains(f.Cause, "compose.files in qdeploy.yaml") || !strings.Contains(f.Cause, "gone.yaml") {
+		t.Fatalf("findings: %+v", fs)
 	}
 }

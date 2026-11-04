@@ -178,6 +178,8 @@ func (e *Engine) updatable(ctx context.Context, b Binding, name string) (stacks.
 		return stacks.Stack{}, "", ErrUnknownStack
 	case list[i].Err != nil:
 		return stacks.Stack{}, "", fmt.Errorf("%w: %s", ErrUnreadable, e.text(list[i].Err.Error()))
+	case list[i].EnvErr != nil:
+		return stacks.Stack{}, "", fmt.Errorf("%w: %s", ErrNotUpdatable, e.text(list[i].EnvErr.Error()))
 	}
 	return list[i], head, nil
 }

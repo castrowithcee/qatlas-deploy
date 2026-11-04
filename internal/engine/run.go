@@ -105,9 +105,11 @@ func (r *run) record(out outcome) RunRecord {
 		cur := s.Stacks[rec.Stack]
 		x := rec
 		cur.LastRun = &x
+		cur.Folder = folderField(r.st)
 		switch rec.Result {
 		case ResultSucceeded:
 			cur.Deployed, cur.FailedCommit = out.at, ""
+			cur.Findings = slices.DeleteFunc(cur.Findings, func(f Finding) bool { return f.Kind == FindingProjectRenamed })
 		case ResultFailed:
 			if marks {
 				cur.FailedCommit = rec.Commit

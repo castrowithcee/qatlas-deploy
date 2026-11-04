@@ -51,6 +51,8 @@ var (
 	ErrRunActive    = errors.New("a run of this stack is active")
 	ErrUnknownStack = errors.New("no such stack in the working copy")
 	ErrUnreadable   = errors.New("the stack cannot be read")
+	// ErrNotUpdatable is a stack that can be deployed but not updated, because its .env cannot be parsed.
+	ErrNotUpdatable = errors.New("the stack is deploy-only and cannot be updated")
 	ErrLocalChanges = errors.New("the stack has local changes in the working copy")
 	ErrStopped      = errors.New("the engine is stopped")
 	ErrPaused       = errors.New("the stack is paused after a failed rollback")
@@ -328,13 +330,32 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		findings []Finding
 		pending  string
 		start    bool
+		folder   string
 	}
 	verdicts := map[string]verdict{}
 	present := map[string]bool{}
+	// renamed maps a folder to the listed name it now has; an unreadable stack's name is not its project name.
+	renamed := map[string]string{}
+	// unreadable holds the folders that are listed but cannot be read; their old entry is not gone.
+	unreadable := map[string]bool{}
 	for _, st := range list {
 		present[st.Name] = true
+		if st.Err == nil {
+			renamed[st.Folder] = st.Name
+		} else {
+			unreadable[st.Folder] = true
+		}
+	}
+	// gone maps a folder to the deployed stacks no longer listed, whose Compose projects are still there.
+	gone := map[string][]string{}
+	for name, s := range snap.Stacks {
+		if !present[name] && s.Deployed != "" {
+			gone[s.folder(name)] = append(gone[s.folder(name)], name)
+		}
+	}
+	for _, st := range list {
 		old := snap.Stacks[st.Name]
-		v := verdict{}
+		v := verdict{folder: folderField(st)}
 		changedAtHead, errHead := folders.changed(old.Deployed, head, st.Folder)
 		changedAtRemote := changedAtHead
 		var errRemote error
@@ -359,6 +380,15 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		case changedAtHead:
 			v.start = true
 		}
+		// Deploying the new name would start a second copy of the stack next to the old project.
+		if from := gone[st.Folder]; st.Err == nil && old.Deployed == "" && len(from) > 0 {
+			slices.Sort(from)
+			v.start = false
+			v.findings = append([]Finding{{FindingProjectRenamed, e.text(fmt.Sprintf(
+				"the folder %s was deployed as project %s and is now project %s; nothing is deployed until a person "+
+					"decides: a manual deploy starts %s next to the old project, which is not stopped",
+				st.Folder, strings.Join(from, ", "), st.Name, st.Name))}}, v.findings...)
+		}
 		if old.Paused != nil {
 			v.start = false
 			v.findings = append([]Finding{{FindingPaused, e.pauseDetail(old.Paused)}}, v.findings...)
@@ -377,7 +407,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		s = normalize(s)
 		for name, v := range verdicts {
 			cur := s.Stacks[name]
-			cur.Findings, cur.Pending, cur.Removed = v.findings, v.pending, false
+			cur.Findings, cur.Pending, cur.Removed, cur.Folder = v.findings, v.pending, false, v.folder
 			s.Stacks[name] = cur
 		}
 		for name, cur := range s.Stacks {
@@ -390,6 +420,13 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 			}
 			cur.Removed, cur.Pending = true, ""
 			cur.Findings = []Finding{{FindingRemoved, "the folder is gone from the repository; nothing is stopped or removed"}}
+			if unreadable[cur.folder(name)] {
+				cur.Findings = []Finding{{FindingRemoved, "the stack cannot be read; nothing is stopped or removed"}}
+			}
+			if to := renamed[cur.folder(name)]; to != "" && cur.Deployed != "" {
+				cur.Findings = []Finding{{FindingProjectRenamed, e.text(fmt.Sprintf(
+					"the folder %s is now project %s; this project is not stopped or removed", cur.folder(name), to))}}
+			}
 			s.Stacks[name] = cur
 		}
 		s.LastPoll, s.Head, s.RemoteHead, s.Note, s.PollError = now, head, remote, note, ""

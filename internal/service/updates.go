@@ -106,6 +106,8 @@ func (s *updatesService) loadStacks(name string) ([]stacks.Stack, error) {
 			return nil, runsAnswer(engine.ErrUnknownStack)
 		case list[i].Err != nil:
 			return nil, runsAnswer(engine.ErrUnreadable)
+		case list[i].EnvErr != nil:
+			return nil, runsAnswer(engine.ErrNotUpdatable)
 		}
 		list = list[i : i+1]
 	}

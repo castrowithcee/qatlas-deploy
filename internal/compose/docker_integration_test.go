@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,15 +85,14 @@ func TestDockerUnhealthyStackFailsTheCheck(t *testing.T) {
 	}
 }
 
-func TestDockerMissingSecretsFileStopsBeforeCompose(t *testing.T) {
+func TestDockerDeployWithoutSecretsFile(t *testing.T) {
 	st, x := integrationStack(t, "ok")
-	d := &Deployer{Exec: x, Checker: &Checker{Exec: x}}
-	err := d.deploy(context.Background(), st, testLog{t})
-	if err == nil || !strings.Contains(err.Error(), stacks.SecretsFile) {
-		t.Fatalf("deploy error = %v, want a missing %s", err, stacks.SecretsFile)
+	d := &Deployer{Exec: x, Checker: &Checker{Exec: x, Deadline: 90 * time.Second}}
+	if err := d.deploy(context.Background(), st, testLog{t}); err != nil {
+		t.Fatalf("deploy without %s: %v", stacks.SecretsFile, err)
 	}
-	out, cerr := exec.Command("docker", "ps", "--all", "--quiet", "--filter", fmt.Sprintf("label=com.docker.compose.project=%s", st.Name)).Output()
-	if cerr != nil || strings.TrimSpace(string(out)) != "" {
-		t.Fatalf("containers exist for the project: %q, %v", out, cerr)
+	cs, err := x.Ps(context.Background(), st, testLog{t})
+	if err != nil || len(cs) != 1 || cs[0].State != "running" {
+		t.Fatalf("containers = %v, %v", cs, err)
 	}
 }

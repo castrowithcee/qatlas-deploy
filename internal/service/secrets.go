@@ -14,9 +14,15 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
-// registerStackSecrets puts the values of the stack's secrets.env into the redactor. The values stay in
-// memory; a file that cannot be read adds nothing, and the Compose call reports the problem itself.
+// registerStackSecrets puts the values of the stack's secrets.env and of its .env variables with a secret-like
+// name into the redactor. The values stay in memory; a file that cannot be read adds nothing, and the Compose
+// call reports the problem itself.
 func registerStackSecrets(r *redact.Redactor, st stacks.Stack) {
+	for k, v := range st.Env {
+		if stacks.SecretLikeKey(k) {
+			r.Add(v)
+		}
+	}
 	values, err := stacks.SecretValues(st.Dir)
 	if err != nil {
 		return

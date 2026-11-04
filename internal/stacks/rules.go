@@ -36,6 +36,9 @@ type Rules struct {
 	Update Update
 	Backup *Backup // nil: no backup configured
 	Check  Check
+	// ComposeFiles are the compose files in merge order from compose.files; nil leaves the choice to
+	// COMPOSE_FILE and the default names.
+	ComposeFiles []string
 }
 
 // Update says whether and how far a stack is updated.
@@ -80,7 +83,10 @@ type HTTPCheck struct {
 
 type rawRules struct {
 	Version *int `yaml:"version"`
-	Update  *struct {
+	Compose *struct {
+		Files []string `yaml:"files"`
+	} `yaml:"compose"`
+	Update *struct {
 		Mode    *string           `yaml:"mode"`
 		Ceiling *string           `yaml:"ceiling"`
 		Major   *string           `yaml:"major"`
@@ -164,6 +170,29 @@ func validateRules(raw rawRules) (*Rules, error) {
 		return nil, fmt.Errorf("version: unsupported value %d (use 1)", *raw.Version)
 	}
 	r := &Rules{Update: Update{Mode: ModeManual, Ceiling: CeilingMinor, Major: MajorStepwise}, Check: Check{Containers: true}}
+
+	if c := raw.Compose; c != nil {
+		if len(c.Files) == 0 {
+			return nil, errors.New("compose.files: needs at least one file")
+		}
+		if len(c.Files) > MaxComposeFiles {
+			return nil, fmt.Errorf("compose.files: more than %d files", MaxComposeFiles)
+		}
+		seen := map[string]bool{}
+		for i, f := range c.Files {
+			if err := checkRelative(f); err != nil {
+				return nil, fmt.Errorf("compose.files[%d]: %w", i, err)
+			}
+			if strings.HasPrefix(f, "-") {
+				return nil, fmt.Errorf("compose.files[%d]: a file name must not start with '-'", i)
+			}
+			if seen[f] {
+				return nil, fmt.Errorf("compose.files[%d]: %q is listed twice", i, f)
+			}
+			seen[f] = true
+		}
+		r.ComposeFiles = c.Files
+	}
 
 	if u := raw.Update; u != nil {
 		for _, f := range []struct {

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
 const (
@@ -41,9 +43,12 @@ const (
 	FindingUnreadable   = "unreadable"    // the stack cannot be read and is skipped
 	FindingFailedCommit = "failed-commit" // the last run of this commit failed; only a new commit or a manual run retries
 	FindingDiff         = "diff-failed"   // the changes since the deployed commit cannot be determined
-	FindingRemoved      = "removed"       // the folder is gone from the repository; nothing is stopped
+	FindingRemoved      = "removed"       // the folder is gone or unreadable; nothing is stopped
 	FindingPaused       = "paused"        // a rollback failed; no run starts until the stack is resumed
 	FindingStopped      = "stopped"       // the operator stopped the stack; no run starts until it is started
+	// FindingProjectRenamed is a deployed stack whose folder now has another project name, on both names: the
+	// new name gets no automatic run, since the old project is not stopped; a manual run decides.
+	FindingProjectRenamed = "project-renamed"
 	// FindingContainerFailed is not stored with the findings of a poll; status derives it from StackState.Failure.
 	FindingContainerFailed = "container-failed"
 )
@@ -80,6 +85,9 @@ type State struct {
 
 // StackState is what the engine knows about one stack.
 type StackState struct {
+	// Folder is the stack's folder in the repository, empty when it equals the name, as in every state written
+	// before a stack could have a name of its own.
+	Folder string `json:"folder,omitempty"`
 	// Deployed is the commit of the last successful run; empty for a stack that was never deployed.
 	Deployed string `json:"deployed,omitempty"`
 	// Pending is the commit the stack waits to be deployed at; empty when it is up to date.
@@ -121,6 +129,22 @@ type Failure struct {
 	Kind      string    `json:"kind"`
 	Container string    `json:"container,omitempty"`
 	Since     time.Time `json:"since"`
+}
+
+// folder returns the folder of the stack stored under name.
+func (s StackState) folder(name string) string {
+	if s.Folder == "" {
+		return name
+	}
+	return s.Folder
+}
+
+// folderField is what StackState.Folder holds for st.
+func folderField(st stacks.Stack) string {
+	if st.Folder == st.Name {
+		return ""
+	}
+	return st.Folder
 }
 
 // Limits of a stored update check. The detector clips to them, so a valid result is never refused.
@@ -206,6 +230,9 @@ func validateState(s State) error {
 	for name, st := range s.Stacks {
 		if name == "" || len(name) > maxNameLen {
 			return errors.New("invalid stack name")
+		}
+		if len(st.Folder) > maxNameLen {
+			return errors.New("invalid stack folder")
 		}
 		for _, c := range []string{st.Deployed, st.Pending, st.FailedCommit} {
 			if c != "" && !commitRe.MatchString(c) {

@@ -47,6 +47,9 @@ func (d *Detector) Plan(ctx context.Context, st stacks.Stack, target string) ([]
 	if st.Err != nil {
 		return nil, refuse("", "the stack cannot be read")
 	}
+	if st.EnvErr != nil {
+		return nil, refuse("", "the stack is deploy-only: "+st.EnvErr.Error())
+	}
 	if st.Rules == nil {
 		return nil, refuse("", "the stack has no qdeploy.yaml and is never updated")
 	}

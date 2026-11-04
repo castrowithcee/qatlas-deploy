@@ -36,7 +36,7 @@ func (x *Executor) Running(ctx context.Context, st stacks.Stack, log Logger) (bo
 // the project-scoped name Compose derives, or the name the file sets for an external volume. Compose resolves
 // it, so no naming convention is assumed here.
 //
-// The rendered configuration contains interpolated values of .env and secrets.env. It is read into memory,
+// The rendered configuration contains interpolated values of the env files. It is read into memory,
 // reduced to the volume names and never logged.
 func (x *Executor) VolumeNames(ctx context.Context, st stacks.Stack, log Logger) (map[string]string, error) {
 	c, err := x.command(st, st.Name, 0, "config", "--format", "json")
