@@ -43,6 +43,7 @@ const (
 	FindingDiff         = "diff-failed"   // the changes since the deployed commit cannot be determined
 	FindingRemoved      = "removed"       // the folder is gone from the repository; nothing is stopped
 	FindingPaused       = "paused"        // a rollback failed; no run starts until the stack is resumed
+	FindingStopped      = "stopped"       // the operator stopped the stack; no run starts until it is started
 )
 
 var (
@@ -86,6 +87,9 @@ type StackState struct {
 	// runs, polls and restarts; only SetPause and SetPin change them.
 	OperatorPause *Hold `json:"operator_pause,omitempty"`
 	Pin           *Hold `json:"pin,omitempty"`
+	// Stopped is set by a stop through qdeploy and cleared only by a start: polls, the window and manual
+	// restarts leave the stack as it is.
+	Stopped *Hold `json:"stopped,omitempty"`
 	// Updates is the result of the last update detection; nil for a stack that was never checked.
 	Updates *UpdateCheck `json:"updates,omitempty"`
 }
@@ -182,7 +186,7 @@ func validateState(s State) error {
 		if st.Paused != nil && !runIDRe.MatchString(st.Paused.Run) {
 			return errors.New("invalid run id")
 		}
-		for _, h := range []*Hold{st.OperatorPause, st.Pin} {
+		for _, h := range []*Hold{st.OperatorPause, st.Pin, st.Stopped} {
 			if h != nil && h.Since.IsZero() {
 				return errors.New("invalid hold")
 			}
@@ -261,6 +265,10 @@ func (s State) clone() State {
 		if v.Pin != nil {
 			h := *v.Pin
 			v.Pin = &h
+		}
+		if v.Stopped != nil {
+			h := *v.Stopped
+			v.Stopped = &h
 		}
 		if v.Updates != nil {
 			u := *v.Updates

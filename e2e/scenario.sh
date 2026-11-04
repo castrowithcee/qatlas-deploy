@@ -1037,6 +1037,8 @@ scenario_stacks_repo() {
 
 	scenario_container_actions
 
+	scenario_stack_actions
+
 	scenario_backup
 
 	scenario_updates
@@ -1174,6 +1176,77 @@ scenario_container_actions() {
 	[ "$missing_rc" -ne 0 ] || fail "container stop of a missing container succeeded: $missing_out"
 	printf '%s' "$missing_out" | grep -q 'no such container' || fail "the refusal of a missing container is unclear: $missing_out"
 	log 'scenario: container stop, start and restart acted on a single container'
+}
+
+# field_is succeeds when a flat field of a stack in qdeploy status has the given value.
+field_is() {
+	[ "$(stack_field "$1" "$2")" = "$3" ]
+}
+
+# running_containers prints how many containers of the stack run.
+running_containers() {
+	docker exec "$host" docker ps -q --filter "label=com.docker.compose.project=$1" | wc -l
+}
+
+# scenario_stack_actions proves that a stop through qdeploy keeps demo-cache stopped against a new commit and
+# the service restart that makes the poll run, that only a start clears the mark and lets the next poll deploy
+# the commit, and that a restart restarts demo-stack. Both stacks run again at the end.
+scenario_stack_actions() {
+	step 'stack stop asks first, stops demo-cache and shows the mark in status and stack list'
+	refuse_rc=0
+	refuse_out=$(qd stack stop demo-cache) || refuse_rc=$?
+	[ "$refuse_rc" -ne 0 ] || fail "stack stop without --yes succeeded: $refuse_out"
+	printf '%s' "$refuse_out" | grep -q -- '--yes' || fail "the refusal does not name --yes: $refuse_out"
+	[ "$(running_containers demo-cache)" -gt 0 ] || fail 'a refused stack stop stopped demo-cache'
+	out=$(qd stack stop demo-cache --yes) || fail "stack stop failed: $out"
+	[ "$(running_containers demo-cache)" -eq 0 ] || fail 'demo-cache still runs after stack stop'
+	[ -n "$(docker exec "$host" docker ps -aq --filter label=com.docker.compose.project=demo-cache)" ] || fail 'stack stop removed the containers of demo-cache'
+	[ -n "$(stack_field demo-cache stopped)" ] || fail "status does not show demo-cache as stopped: $(qd --output json status)"
+	qd stack list | grep demo-cache | grep -q 'stopped since' || fail "stack list does not show demo-cache as stopped: $(qd stack list)"
+	[ -z "$(stack_field demo-stack stopped)" ] || fail 'demo-stack is shown as stopped'
+	out=$(qd stack restart demo-cache --yes) && fail "stack restart of a stopped stack succeeded: $out"
+	printf '%s' "$out" | grep -q 'qdeploy stack start' || fail "the refusal does not name stack start: $out"
+
+	out=$(qd stack deploy demo-cache) && fail "stack deploy of a stopped stack succeeded: $out"
+	printf '%s' "$out" | grep -q 'qdeploy stack start' || fail "the refusal of stack deploy does not name stack start: $out"
+	[ "$(running_containers demo-cache)" -eq 0 ] || fail 'a refused stack deploy started demo-cache'
+
+	step 'a new commit does not start a run of the stopped stack, also not after a service restart'
+	count=$(qd stack runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	as_admin 'cd ~/stacks &&
+		printf "# stopped-stack marker\n" >>demo-cache/.env &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -am "Touch demo-cache while it is stopped" &&
+		git push -q origin main'
+	pushed=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	restart_service
+	wait_for 'the poll after the restart' 60 poll_done
+	wait_for 'the pending commit of demo-cache' 60 field_is demo-cache pending "$pushed"
+	[ "$(qd stack runs demo-cache | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$count" ] || fail 'a run of the stopped stack was started by the poll'
+	[ "$(running_containers demo-cache)" -eq 0 ] || fail 'demo-cache runs again after a new commit'
+	[ -n "$(stack_field demo-cache stopped)" ] || fail 'the stopped mark did not survive the service restart'
+	stack_field demo-cache findings | grep -q stopped || fail "demo-cache has no finding stopped: $(qd --output json status)"
+
+	step 'stack start clears the mark, starts demo-cache and the next poll deploys the commit'
+	out=$(qd stack start demo-cache --yes) || fail "stack start failed: $out"
+	[ -z "$(stack_field demo-cache stopped)" ] || fail "status still shows demo-cache as stopped: $(qd --output json status)"
+	[ "$(running_containers demo-cache)" -gt 0 ] || fail 'demo-cache does not run after stack start'
+	stack_healthy demo-cache || fail 'demo-cache is not healthy after stack start'
+	restart_service
+	wait_for 'the run of demo-cache after the start' 240 stack_idle demo-cache
+	wait_for 'the commit deployed on demo-cache' 240 field_is demo-cache deployed "$pushed"
+	stack_healthy demo-cache || fail 'demo-cache is not healthy after the run'
+	log "scenario: demo-cache stayed stopped against commit $pushed until stack start"
+
+	step 'stack restart restarts demo-stack'
+	ids=$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=demo-stack)
+	started_before=$(docker exec "$host" docker inspect -f '{{.State.StartedAt}}' $ids)
+	out=$(qd stack restart demo-stack --yes) || fail "stack restart failed: $out"
+	started_after=$(docker exec "$host" docker inspect -f '{{.State.StartedAt}}' $ids)
+	[ "$started_before" != "$started_after" ] || fail 'stack restart did not restart demo-stack'
+	stack_healthy demo-stack || fail 'demo-stack is not healthy after stack restart'
+	out=$(qd stack stop nope --yes) && fail "stack stop of an unknown stack succeeded: $out"
+	printf '%s' "$out" | grep -q 'no such stack' || fail "the refusal of an unknown stack is unclear: $out"
+	log 'scenario: stack stop, start and restart passed'
 }
 
 # selfupdate_field prints one top-level field of qdeploy update status, run without root.

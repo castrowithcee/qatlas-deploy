@@ -190,6 +190,8 @@ func (e *Engine) updateBase(ctx context.Context, b Binding, name, head string) (
 		return "", err
 	case cur.Paused != nil:
 		return "", ErrPaused
+	case cur.Stopped != nil:
+		return "", ErrStackStopped
 	case cur.Pin != nil:
 		return "", ErrPinned
 	case cur.Deployed == "":

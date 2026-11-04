@@ -56,6 +56,16 @@ func (d *Deployer) Up(ctx context.Context, st stacks.Stack, log *engine.Log) err
 	return d.Exec.Up(ctx, st, log)
 }
 
+// Start implements engine.Deployer.
+func (d *Deployer) Start(ctx context.Context, st stacks.Stack, log *engine.Log) error {
+	return d.Exec.Start(ctx, st, log)
+}
+
+// Restart implements engine.Deployer.
+func (d *Deployer) Restart(ctx context.Context, st stacks.Stack, log *engine.Log) error {
+	return d.Exec.Restart(ctx, st, log)
+}
+
 // Check implements engine.Deployer.
 func (d *Deployer) Check(ctx context.Context, st stacks.Stack, log *engine.Log) error {
 	if err := d.Checker.Check(ctx, st, log); err != nil {

@@ -291,6 +291,14 @@ func (d *fakeDeployer) Up(ctx context.Context, st stacks.Stack, _ *Log) error {
 	return d.do(ctx, "up", st)
 }
 
+func (d *fakeDeployer) Start(ctx context.Context, st stacks.Stack, _ *Log) error {
+	return d.do(ctx, "start", st)
+}
+
+func (d *fakeDeployer) Restart(ctx context.Context, st stacks.Stack, _ *Log) error {
+	return d.do(ctx, "restart", st)
+}
+
 func (d *fakeDeployer) Check(ctx context.Context, st stacks.Stack, _ *Log) error {
 	return d.do(ctx, "check", st)
 }

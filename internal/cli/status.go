@@ -103,6 +103,9 @@ func engineFields(e control.EngineStatus) []output.Field {
 		if s.Pinned != nil {
 			out = append(out, output.Field{Name: p + "pinned", Value: "since " + s.Pinned.Since.UTC().Format(time.RFC3339)})
 		}
+		if s.Stopped != nil {
+			out = append(out, output.Field{Name: p + "stopped", Value: "since " + s.Stopped.Since.UTC().Format(time.RFC3339)})
+		}
 	}
 	return out
 }
@@ -159,6 +162,12 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodePinned:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Unpin the stack with 'qdeploy stack unpin <stack>', then run the command again.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeStackStopped:
+		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
+			NextStep: "Run 'qdeploy stack start <stack>' to start it and clear the mark, then run the command again.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeStackAction:
+		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
+			NextStep: "Check the containers with 'qdeploy container list' and the service log; a start does not create missing containers.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNotPaused:
 		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message,
 			NextStep: "Check the stack with 'qdeploy status'; only a paused stack can be resumed.", Cause: err}

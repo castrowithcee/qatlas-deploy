@@ -24,6 +24,8 @@ func (okDeployer) Pull(_ context.Context, st stacks.Stack, log *engine.Log) erro
 	return nil
 }
 func (okDeployer) Up(context.Context, stacks.Stack, *engine.Log) error              { return nil }
+func (okDeployer) Start(context.Context, stacks.Stack, *engine.Log) error           { return nil }
+func (okDeployer) Restart(context.Context, stacks.Stack, *engine.Log) error         { return nil }
 func (okDeployer) Check(context.Context, stacks.Stack, *engine.Log) error           { return nil }
 func (okDeployer) Restore(context.Context, stacks.Stack, string, *engine.Log) error { return nil }
 
@@ -234,6 +236,39 @@ func TestPauseAndPinCommands(t *testing.T) {
 		if code, _, _ := run(t, "stack", tc.set); code == 0 {
 			t.Fatalf("%s without a stack succeeded", tc.set)
 		}
+	}
+}
+
+func TestStackActionCommands(t *testing.T) {
+	startBound(t, okDeployer{})
+	settle(t)
+	if code, _, stderr := run(t, "stack", "stop", "plain-stack"); code == 0 || !strings.Contains(stderr, "--yes") {
+		t.Fatalf("stop without a question answer: %d %q", code, stderr)
+	}
+	code, out, stderr := run(t, "stack", "stop", "plain-stack", "--yes", "--output", "json")
+	if code != 0 || !strings.Contains(out, "plain-stack") || !strings.Contains(out, "stop") {
+		t.Fatalf("stop: %d %q %q", code, out, stderr)
+	}
+	if _, out, _ := run(t, "status", "--output", "json"); !strings.Contains(out, "stack.plain-stack.stopped") {
+		t.Fatalf("status after stop = %s", out)
+	}
+	if _, out, _ := run(t, "stack", "list"); !strings.Contains(out, "stopped since") {
+		t.Fatalf("stack list after stop = %s", out)
+	}
+	if code, _, stderr := run(t, "stack", "restart", "plain-stack", "--yes"); code == 0 || !strings.Contains(stderr, "qdeploy stack start") {
+		t.Fatalf("restart of a stopped stack: %d %q", code, stderr)
+	}
+	if code, _, stderr := run(t, "stack", "start", "plain-stack", "--yes"); code != 0 {
+		t.Fatalf("start: %d %q", code, stderr)
+	}
+	if _, out, _ := run(t, "status", "--output", "json"); strings.Contains(out, "stack.plain-stack.stopped") {
+		t.Fatalf("status after start = %s", out)
+	}
+	if code, _, stderr := run(t, "stack", "restart", "plain-stack", "--yes"); code != 0 {
+		t.Fatalf("restart: %d %q", code, stderr)
+	}
+	if code, _, stderr := run(t, "stack", "stop", "nope", "--yes"); code == 0 || !strings.Contains(stderr, "qdeploy stack list") {
+		t.Fatalf("unknown: %d %q", code, stderr)
 	}
 }
 

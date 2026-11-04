@@ -111,6 +111,8 @@ type repoService struct {
 	git      Git
 	// onBound is called after a binding was stored, with mu held; it must not block.
 	onBound func()
+	// stopped tells whether the engine holds the stopped mark of a stack; nil before the engine exists.
+	stopped func(name string) *control.HoldInfo
 	// probe reads the host key of a server; tests replace it.
 	probe func(ctx context.Context, host, port string) (hostkey.Key, error)
 }
@@ -389,6 +391,9 @@ func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any,
 		}
 		if st.Err != nil {
 			info.Error = printable(st.Err.Error())
+		}
+		if s.stopped != nil {
+			info.Stopped = s.stopped(st.Name)
 		}
 		res.Stacks = append(res.Stacks, info)
 	}

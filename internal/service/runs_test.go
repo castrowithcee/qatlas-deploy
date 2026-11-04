@@ -19,6 +19,7 @@ type fakeDeployer struct {
 	block     chan struct{}
 	entered   chan struct{}
 	failCheck bool
+	calls     []string
 }
 
 // hold makes the next deployments wait until the returned function is called.
@@ -36,7 +37,10 @@ func (d *fakeDeployer) setFailCheck(fail bool) {
 	d.failCheck = fail
 }
 
-func (d *fakeDeployer) Stop(context.Context, stacks.Stack, *engine.Log) error { return nil }
+func (d *fakeDeployer) Stop(_ context.Context, st stacks.Stack, _ *engine.Log) error {
+	d.record("stop " + st.Name)
+	return nil
+}
 
 func (d *fakeDeployer) Backup(context.Context, stacks.Stack, string, *engine.Log) (string, error) {
 	return "", engine.ErrNoBackup
@@ -60,6 +64,34 @@ func (d *fakeDeployer) Pull(ctx context.Context, st stacks.Stack, log *engine.Lo
 }
 
 func (d *fakeDeployer) Up(context.Context, stacks.Stack, *engine.Log) error { return nil }
+
+func (d *fakeDeployer) Start(_ context.Context, st stacks.Stack, _ *engine.Log) error {
+	d.record("start " + st.Name)
+	return nil
+}
+
+func (d *fakeDeployer) Restart(_ context.Context, st stacks.Stack, _ *engine.Log) error {
+	d.record("restart " + st.Name)
+	return nil
+}
+
+func (d *fakeDeployer) callsOf(stack string) []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []string
+	for _, c := range d.calls {
+		if strings.HasSuffix(c, " "+stack) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func (d *fakeDeployer) record(call string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.calls = append(d.calls, call)
+}
 
 func (d *fakeDeployer) Check(context.Context, stacks.Stack, *engine.Log) error {
 	d.mu.Lock()
