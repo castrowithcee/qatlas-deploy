@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -99,7 +100,7 @@ func (x *Executor) Restart(ctx context.Context, st stacks.Stack, log Logger) err
 }
 
 func (x *Executor) step(ctx context.Context, st stacks.Stack, log Logger, timeout time.Duration, label string, words ...string) error {
-	c, err := x.command(st, 0, words...)
+	c, err := x.command(st, st.Name, 0, words...)
 	if err != nil {
 		return err
 	}
@@ -147,18 +148,20 @@ func logOutput(log Logger, res Result) {
 
 // command builds one docker compose call:
 //
-//	docker compose --project-name <stack> --project-directory <dir> --env-file .env --env-file secrets.env
+//	docker compose [--project-name <stack>] --project-directory <dir> [--env-file .env] [--env-file secrets.env]
 //	  -f <file> [-f <file> ...] <words>
 //
 // Every compose file is passed with -f in merge order, so COMPOSE_FILE from .env is never consulted and the
-// files are exactly those qdeploy read and validated. It fails, before anything runs, when secrets.env is
-// missing or a name is unusable.
-func (x *Executor) command(st stacks.Stack, maxOutput int, words ...string) (Command, error) {
+// files are exactly those qdeploy read and validated. An env file is passed only when it exists. The project
+// name is left to Compose when qdeploy resolved it the way Compose does (Stack.NameDerived) and secrets.env
+// cannot change it; otherwise it is forced. It fails, before anything runs, when an env file is unusable or a
+// name is unusable.
+func (x *Executor) command(st stacks.Stack, project string, maxOutput int, words ...string) (Command, error) {
 	if st.Err != nil {
 		return Command{}, fmt.Errorf("stack %s cannot be deployed: %w", st.Name, st.Err)
 	}
-	if !projectName.MatchString(st.Name) {
-		return Command{}, fmt.Errorf("stack name %q is not a valid Compose project name (lowercase letters, digits, - and _)", st.Name)
+	if !projectName.MatchString(project) {
+		return Command{}, fmt.Errorf("stack name %q is not a valid Compose project name (lowercase letters, digits, - and _)", project)
 	}
 	if st.Dir == "" {
 		return Command{}, errors.New("stack has no directory")
@@ -170,11 +173,18 @@ func (x *Executor) command(st stacks.Stack, maxOutput int, words ...string) (Com
 	if len(st.ComposeFiles) == 0 {
 		return Command{}, errors.New("stack has no compose file")
 	}
-	if err := requireEnvFiles(dir); err != nil {
+	envFiles, secretsSetName, err := envFilesOf(dir)
+	if err != nil {
 		return Command{}, err
 	}
-	args := []string{"compose", "--project-name", st.Name, "--project-directory", dir,
-		"--env-file", envFile, "--env-file", stacks.SecretsFile}
+	args := []string{"compose"}
+	if !st.NameDerived || project != st.Name || secretsSetName {
+		args = append(args, "--project-name", project)
+	}
+	args = append(args, "--project-directory", dir)
+	for _, f := range envFiles {
+		args = append(args, "--env-file", f)
+	}
 	for _, f := range st.ComposeFiles {
 		if err := composeFileName(f); err != nil {
 			return Command{}, fmt.Errorf("compose file %q: %w", f, err)
@@ -198,20 +208,26 @@ func composeFileName(f string) error {
 	return nil
 }
 
-// requireEnvFiles checks both env files without reading a value. secrets.env is not versioned; a stack
-// without it is not deployed (rule missing-secrets-env).
-func requireEnvFiles(dir string) error {
-	if _, exists, err := stacks.SecretKeys(dir); err != nil {
-		return fmt.Errorf("%s is not usable: %w", stacks.SecretsFile, err)
-	} else if !exists {
-		return fmt.Errorf("%s does not exist in the stack folder; create it on the host before the stack is deployed (rule missing-secrets-env)", stacks.SecretsFile)
-	}
+// envFilesOf returns the env files that exist, .env first, without reading a value. secretsSetName says
+// secrets.env sets COMPOSE_PROJECT_NAME, which Compose then prefers over .env. Both files are optional;
+// one that exists must be usable.
+func envFilesOf(dir string) (files []string, secretsSetName bool, err error) {
 	info, err := os.Lstat(filepath.Join(dir, envFile))
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+	case err != nil:
+		return nil, false, fmt.Errorf("%s: %w", envFile, err)
+	case !info.Mode().IsRegular():
+		return nil, false, fmt.Errorf("%s is not a regular file", envFile)
+	default:
+		files = append(files, envFile)
+	}
+	keys, exists, err := stacks.SecretKeys(dir)
 	if err != nil {
-		return fmt.Errorf("%s is missing in the stack folder", envFile)
+		return nil, false, fmt.Errorf("%s is not usable: %w", stacks.SecretsFile, err)
 	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", envFile)
+	if exists {
+		files = append(files, stacks.SecretsFile)
 	}
-	return nil
+	return files, slices.Contains(keys, "COMPOSE_PROJECT_NAME"), nil
 }

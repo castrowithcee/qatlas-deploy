@@ -49,7 +49,7 @@ func (c Container) String() string {
 
 // Ps lists every container of the project, stopped ones included.
 func (x *Executor) Ps(ctx context.Context, st stacks.Stack, log Logger) ([]Container, error) {
-	c, err := x.command(st, maxPSOutput, "ps", "--all", "--format", "json")
+	c, err := x.command(st, st.Name, maxPSOutput, "ps", "--all", "--format", "json")
 	if err != nil {
 		return nil, err
 	}

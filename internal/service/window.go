@@ -170,6 +170,9 @@ func (w *windowService) run(ctx context.Context, open func() bool) {
 		case st.Err != nil:
 			w.skip(st.Name, "the stack cannot be read")
 			continue
+		case st.EnvErr != nil:
+			w.skip(st.Name, "the stack is deploy-only because its .env cannot be read")
+			continue
 		case st.UpdateMode() == stacks.ModeManual:
 			w.report(st.Name, fresh[st.Name])
 			continue

@@ -75,6 +75,11 @@ func TestPlanRefusals(t *testing.T) {
 		{"filtered", "3.1.0", PlanVersion, filtered},
 		{"not comparable", "3.1.0", PlanVersion, planStack("minor", stacks.MajorStepwise, imgVar("APP_VERSION", host+"/demo/app", "latest"))},
 		{"two variables", "3.1.0", PlanVersion, planStack("minor", stacks.MajorStepwise, app, imgVar("DB_VERSION", host+"/demo/app", "1.0.0"))},
+		{"deploy-only", "", PlanRefused, func() stacks.Stack {
+			st := planStack("minor", stacks.MajorStepwise, app)
+			st.EnvErr = errors.New(".env: line 3: expected KEY=VALUE")
+			return st
+		}()},
 		{"no rules", "", PlanRefused, stacks.Stack{Name: "web", Images: []stacks.ImageVar{app}}},
 		{"not in .env", "", PlanRefused, planStack("minor", stacks.MajorStepwise, defaulted)},
 		{"one variable, two images", "", PlanRefused, planStack("minor", stacks.MajorStepwise, app, imgVar("APP_VERSION", host+"/demo/other", "2.0.0"))},

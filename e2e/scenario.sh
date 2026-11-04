@@ -197,7 +197,7 @@ scenario_compose_integration() {
 		fail 'the Docker integration tests failed'
 	}
 	docker exec "$host" rm -f /tmp/compose.test
-	for name in TestDockerHealthyStackIsDeployedAndChecked TestDockerUnhealthyStackFailsTheCheck TestDockerMissingSecretsFileStopsBeforeCompose; do
+	for name in TestDockerHealthyStackIsDeployedAndChecked TestDockerUnhealthyStackFailsTheCheck TestDockerDeployWithoutSecretsFile; do
 		printf '%s' "$out" | grep -q -- "--- PASS: $name" || fail "$name did not pass: $out"
 	done
 	if printf '%s' "$out" | grep -q -- '--- SKIP'; then fail "an integration test was skipped: $out"; fi
@@ -336,6 +336,13 @@ scenario_deploy() {
 	wait_for 'the first run of demo-cache' 120 stack_idle demo-cache
 	log "scenario: first runs: demo-stack $(stack_field demo-stack last_run), demo-cache $(stack_field demo-cache last_run)"
 
+	step 'demo-plain (docker-compose.yml, name: demo-shop, no secrets.env) is deployed as project demo-shop'
+	wait_for 'the first run of demo-shop' 120 stack_idle demo-shop
+	[ "$(stack_images demo-shop)" = "registry.$domain/demo/app:1.0.0" ] || fail "demo-shop does not run the image 1.0.0: $(stack_images demo-shop)"
+	[ -z "$(stack_images demo-plain)" ] || fail "a project named after the folder demo-plain runs: $(stack_images demo-plain)"
+	qd --output json stack list | grep -q -- demo-shop || fail 'stack list does not name demo-shop'
+	if docker exec "$host" test -e /opt/stacks/demo-plain/secrets.env; then fail 'demo-plain has a secrets.env'; fi
+
 	step 'secrets.env is created on the host, owned by the service user'
 	for stack in demo-stack demo-cache; do
 		docker exec -u qdeploy "$host" sh -ec "umask 077 && printf 'DEMO_SECRET=%s\n' '$secret' >/opt/stacks/$stack/secrets.env"
@@ -437,6 +444,7 @@ $hook_signing_value
 		n=$((n + 1))
 		if qd stack log "$id" | grep -qF -- "$secret"; then fail "the log of run $id holds the secret value"; fi
 	done
+	if qd stack log "$(newest_run demo-shop)" | grep -qF -- 'not-a-real-secret'; then fail 'the run log of demo-shop holds its DEMO_PASSWORD value'; fi
 	[ "$n" -ge 3 ] || fail "too few runs to check the logs: $n"
 	if qd stack runs | grep -qF -- "$secret"; then fail 'qdeploy stack runs shows the secret value'; fi
 	log "scenario: the secret value is in none of $n run logs"
