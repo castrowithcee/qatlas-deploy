@@ -193,31 +193,40 @@ func (c *Client) Changelogs(ctx context.Context, src Source, current, target str
 		return res
 	}
 	res.FetchedAt = fetched
-	res.Releases, res.Omitted = bound(pick(list, cc, haveCur, tc, target))
+	res.Releases, res.Omitted = bound(pick(list, src.Repo.Name, cc, haveCur, tc, target))
 	if len(res.Releases) == 0 {
 		res.Reason = ReasonNoReleases
 	}
 	return res
 }
 
-func normalize(tag string) string { return strings.TrimPrefix(tag, "v") }
+// stripPackage removes the "<name>@" prefix that monorepos put on release tags, such as "n8n@2.47.0", when
+// name is the repository name. Tags of other packages keep their prefix and are not versions.
+func stripPackage(tag, name string) string {
+	if n := len(name) + 1; len(tag) > n && tag[n-1] == '@' && strings.EqualFold(tag[:n-1], name) {
+		return tag[n:]
+	}
+	return tag
+}
+
+func normalize(tag, name string) string { return strings.TrimPrefix(stripPackage(tag, name), "v") }
 
 // pick selects the releases in (cur, target], newest first, one per version.
-func pick(all []Release, cur version.Core, haveCur bool, tc version.Core, target string) []Release {
+func pick(all []Release, name string, cur version.Core, haveCur bool, tc version.Core, target string) []Release {
 	type item struct {
 		core version.Core
 		rel  Release
 	}
 	var items []item
 	for _, r := range all {
-		core, ok := version.ParseCore(r.Tag)
+		core, ok := version.ParseCore(stripPackage(r.Tag, name))
 		if !ok || core.Compare(tc) > 0 {
 			continue
 		}
 		if haveCur && core.Compare(cur) <= 0 || !haveCur && core.Compare(tc) != 0 {
 			continue
 		}
-		exact := normalize(r.Tag) == normalize(target)
+		exact := normalize(r.Tag, name) == normalize(target, name)
 		if (r.Prerelease || core.Prerelease) && !exact {
 			continue
 		}
@@ -313,7 +322,7 @@ func (c *Client) fetch(ctx context.Context, repo Repo) ([]Release, Reason) {
 			if r.Draft {
 				continue
 			}
-			core, ok := version.ParseCore(r.TagName)
+			core, ok := version.ParseCore(stripPackage(r.TagName, repo.Name))
 			if !ok {
 				continue
 			}

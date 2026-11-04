@@ -31,7 +31,7 @@ const (
 	textBadImage      = "the image reference is not valid"
 	textBadCeiling    = "the update ceiling of the stack is not valid"
 	textNoValue       = "the version variable has no value"
-	textNotSemver     = "the current tag is not a complete semantic version"
+	textNotSemver     = "the current tag is not a complete MAJOR.MINOR.PATCH version"
 	textPrerelease    = "the current tag is a pre-release"
 
 	maxText = 200 // runes; with MaxUpdateText bytes this fits for any UTF-8 text

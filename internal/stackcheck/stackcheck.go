@@ -7,11 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
+	"github.com/castrowithcee/qatlas-deploy/internal/version"
 )
 
 // Severities. An error breaks or endangers a deploy or leaks secrets; a warning leaves the stack working.
@@ -56,7 +56,10 @@ type Git interface {
 	IsIgnored(ctx context.Context, path string) (bool, error)
 }
 
-var semverCore = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([^0-9].*)?$`)
+func isComplete(tag string) bool {
+	_, ok := version.ParseCore(tag)
+	return ok
+}
 
 // Check returns the findings for the given stacks, sorted by stack, severity, rule and cause. It fails only when
 // git cannot answer; a stack that cannot be read is a finding.
@@ -153,10 +156,10 @@ func imageFindings(s stacks.Stack) []Finding {
 				"Write the image as image: "+f.Image+":${SERVICE_VERSION} and set SERVICE_VERSION=<x.y.z> in .env.")
 		case stacks.FindingFloatingTag:
 			add(RuleFloatingImageTag, SeverityError, cause,
-				"Set the version variable in .env to a release with a SemVer core such as 1.2.3; do not use latest or other floating tags.")
+				"Set the version variable in .env to a release with a MAJOR.MINOR.PATCH core such as 1.2.3; do not use latest or other floating tags.")
 		case stacks.FindingUnsetVariable:
 			add(RuleUnsetImageVariable, SeverityError, cause,
-				"Set the version variable in .env to a release with a SemVer core such as 1.2.3.")
+				"Set the version variable in .env to a release with a MAJOR.MINOR.PATCH core such as 1.2.3.")
 		}
 	}
 	floating := map[string]bool{}
@@ -169,10 +172,10 @@ func imageFindings(s stacks.Stack) []Finding {
 		if img.Source == stacks.SourceUnset || img.Value == "" || floating[img.Service] {
 			continue
 		}
-		if !semverCore.MatchString(img.Value) {
+		if !isComplete(img.Value) {
 			add(RuleFloatingImageTag, SeverityError,
-				fmt.Sprintf("service %s, image %s: variable %s holds %q, which has no SemVer core", img.Service, img.Image, img.Var, img.Value),
-				"Set "+img.Var+" in .env to a release with a SemVer core such as 1.2.3.")
+				fmt.Sprintf("service %s, image %s: variable %s holds %q, which has no MAJOR.MINOR.PATCH core", img.Service, img.Image, img.Var, img.Value),
+				"Set "+img.Var+" in .env to a release with a MAJOR.MINOR.PATCH core such as 1.2.3.")
 		}
 		if img.Source == stacks.SourceDefault {
 			add(RuleImageVersionDefault, SeverityWarning,

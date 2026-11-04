@@ -295,9 +295,7 @@ VALUES_END
 acc_update_window() {
 	step 'the update check shows the changelog of both stacks'
 	out=$(qd --output json stack updates --refresh) || fail "updates --refresh failed: $out"
-	# BookStack tags such as 26.05.5 are not complete SemVer (zero-padded), so qdeploy offers no BookStack update
-	# and no BookStack notes; the database image of the stack is updated and shown.
-	for pair in "n8n 2.47.0 fixes an invented webhook timeout" "bookstack 11.8.9 an invented replication stall"; do
+	for pair in "n8n 2.47.0 fixes an invented webhook timeout" "bookstack 26.9.1 an invented search ranking" "bookstack 11.8.9 an invented replication stall"; do
 		set -- $pair
 		stack=$1 version=$2
 		shift 2
@@ -306,15 +304,7 @@ acc_update_window() {
 		acc "changelog of $stack shows the notes for $version: '$*'"
 	done
 
-	step 'BookStack moves to 26.09.1 by a version commit of the administrator (qdeploy does not order its tags)'
-	prev=$(newest_run bookstack)
-	admin_commit bookstack/.env 's/^BOOKSTACK_VERSION=.*/BOOKSTACK_VERSION=26.09.1/' 'Update bookstack BOOKSTACK_VERSION from 26.05.5 to 26.09.1'
-	restart_service
-	run=$(next_run bookstack "$prev") || fail 'no run of bookstack started for the version commit'
-	wait_for "the run $run" 600 run_finished bookstack "$run"
-	qd stack log "$run" | grep -q ' result succeeded' || fail "the run of bookstack did not succeed: $(qd stack log "$run")"
-
-	step 'the window opens and updates n8n and the database of bookstack by itself'
+	step 'the window opens and updates n8n, bookstack and its database by itself'
 	head_before=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
 	started=$(status_field started_at)
 	start=$(date -u -d '+2 minutes' +%H:%M)
@@ -493,7 +483,7 @@ run_acceptance() {
 
 	step 'an update into a failing version restores the data, reverts the commit and runs the previous version'
 	acc_failed_update n8n N8N_VERSION 2.47.0 2.48.0 "$N8N_IMAGE" update
-	acc_failed_update bookstack BOOKSTACK_VERSION 26.09.1 26.10.0 "$BOOKSTACK_IMAGE" commit
+	acc_failed_update bookstack BOOKSTACK_VERSION 26.09.1 26.10.0 "$BOOKSTACK_IMAGE" update
 
 	step 'an older backup is restored and the owners and modes of the data stay'
 	acc_restore_older n8n

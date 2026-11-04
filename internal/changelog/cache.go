@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	cacheVersion  = 1
+	cacheVersion  = 2
 	maxCacheBytes = 32 << 20
 	cacheSuffix   = ".json"
 	tmpPrefix     = ".tmp-"

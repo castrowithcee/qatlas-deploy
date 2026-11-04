@@ -148,6 +148,24 @@ func TestPrereleaseTarget(t *testing.T) {
 	}
 }
 
+func TestPackagePrefixAndCalVerTags(t *testing.T) {
+	f := newFake(t, []fakeRelease{
+		{tag: "Example-App@2.47.0"}, {tag: "@example-app/extra@2.46.0"}, {tag: "other@2.45.0"},
+		{tag: "example-app@2.44.0"}, {tag: "v26.09.1-ls287"}, {tag: "v26.09.1-ls286"}, {tag: "v26.05.5"},
+	})
+	res := f.client(Options{}).Changelogs(context.Background(), testSource, "2.43.0", "2.47.0")
+	if got := versions(res.Releases); got != "2.47.0,2.44.0" {
+		t.Fatalf("versions = %s", got)
+	}
+	if res.Releases[0].Tag != "Example-App@2.47.0" {
+		t.Fatalf("tag = %q", res.Releases[0].Tag)
+	}
+	res = f.client(Options{}).Changelogs(context.Background(), testSource, "26.05.5", "26.09.1")
+	if got := versions(res.Releases); got != "26.9.1" {
+		t.Fatalf("versions = %s", got)
+	}
+}
+
 func TestUnknownCurrentReturnsTargetOnly(t *testing.T) {
 	f := newFake(t, standardReleases())
 	res := f.client(Options{}).Changelogs(context.Background(), testSource, "latest", "v1.3.0")
