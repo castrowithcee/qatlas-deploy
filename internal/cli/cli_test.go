@@ -78,7 +78,7 @@ func TestManpage(t *testing.T) {
 }
 
 func TestCommandTree(t *testing.T) {
-	stackCommands := []string{"backup", "changelog", "check", "deploy", "list", "log", "pause", "pin", "restart", "resume", "runs",
+	stackCommands := []string{"backup", "changelog", "check", "datadir", "deploy", "list", "log", "pause", "pin", "restart", "resume", "runs",
 		"secret", "start", "stop", "unpause", "unpin", "update", "updates"}
 	root, _, _, err := newRoot()
 	if err != nil {
