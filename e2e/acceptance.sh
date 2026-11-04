@@ -264,6 +264,26 @@ acc_first_setup() {
 	wait_for 'the first run of n8n' 180 stack_idle n8n
 	wait_for 'the first run of bookstack' 180 stack_idle bookstack
 
+	# n8n runs as the user node (UID 1000) and Docker would create a missing bind mount source as root, so its first
+	# run waits until the directory exists with that owner; BookStack and MariaDB run as root.
+	step 'the first run of n8n waits for its data directory'
+	i=0
+	until stack_field n8n findings | grep -q data-dir-missing; do
+		i=$((i + 1))
+		[ "$i" -lt 90 ] || fail "n8n has no data-dir-missing finding: $(qd --output json status) $(qd stack runs n8n) $(docker exec "$host" docker ps -a)"
+		sleep 1
+	done
+	finding=$(stack_field n8n findings)
+	case $finding in
+	data-dir-missing:*' data (owner 1000:1000)'*) ;;
+	*) fail "n8n has no finding for the directory data with the owner 1000:1000: $(qd --output json status)" ;;
+	esac
+	log "status of n8n: \"stack.n8n.findings\": \"$finding\""
+	docker exec "$host" test ! -e "$acc_stacks/n8n/data" || fail 'the data directory of n8n exists before it was created'
+	[ -z "$(docker exec "$host" docker ps -aq --filter label=com.docker.compose.project=n8n)" ] ||
+		fail 'containers of n8n exist although its data directory is missing'
+	acc "n8n waits with: $finding"
+
 	step 'Stack detail: the secrets of secrets.example.env are set through the interface'
 	for stack in n8n bookstack; do
 		values=$(as_admin "cat ~/stacks/$stack/secrets.example.env")
@@ -287,39 +307,11 @@ VALUES_END
 	done
 	acc 'secrets of n8n and bookstack set through the interface (mode 600, owner qdeploy)'
 
-	# n8n runs as the user node (UID 1000) and Docker would create a missing bind mount source as root, so its deploy
-	# waits until the directory exists with that owner; BookStack and MariaDB run as root. The check needs the
-	# secrets, because it reads the rendered Compose file.
-	step 'Stacks: bookstack is deployed without asking; the deploy of n8n waits for its data directory'
+	step 'Stacks: bookstack is deployed without asking'
 	tui_send 1
 	acc_deploy_via_tui bookstack
 	[ -z "$(stack_field bookstack findings)" ] || fail "bookstack has findings: $(stack_field bookstack findings)"
-	prev=$(newest_run n8n)
-	tui_wait 'CURRENT' 10
-	acc_cursor_to n8n
-	tui_send d
-	tui_wait 'Deploy n8n?' 10
-	tui_send y
-	tui_wait 'deploy finished:' 600
-	tui_send Escape
-	run=$(next_run n8n "$prev") || fail 'no run of n8n'
-	wait_for "the run $run" 600 run_finished n8n "$run"
-	i=0
-	until stack_field n8n findings | grep -q data-dir-missing; do
-		i=$((i + 1))
-		[ "$i" -lt 90 ] || fail "n8n has no data-dir-missing finding: $(qd --output json status) $(qd stack runs n8n) $(docker exec "$host" docker ps -a)"
-		sleep 1
-	done
-	finding=$(stack_field n8n findings)
-	case $finding in
-	data-dir-missing:*' data (owner 1000:1000)'*) ;;
-	*) fail "n8n has no finding for the directory data with the owner 1000:1000: $(qd --output json status)" ;;
-	esac
-	log "status of n8n: \"stack.n8n.findings\": \"$finding\""
-	docker exec "$host" test ! -e "$acc_stacks/n8n/data" || fail 'the data directory of n8n exists before it was created'
-	[ -z "$(docker exec "$host" docker ps -aq --filter label=com.docker.compose.project=n8n)" ] ||
-		fail 'containers of n8n exist although its data directory is missing'
-	acc "bookstack deployed without a finding; n8n waits with: $finding"
+	acc 'bookstack deployed without a finding'
 
 	step 'Stack detail: the data directory of n8n is created through the interface with the proposed owner'
 	tui_send 1
