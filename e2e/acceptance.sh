@@ -9,6 +9,8 @@
 # of the data kept; the wait of a stack command during a deliberately slow fetch is measured.
 # Sourced by run.sh acceptance after scenario.sh, whose helpers it uses.
 
+# The stack folder is the administrator's free choice; it does not exist until the setup creates it.
+acc_stacks=/srv/services/stacks
 acc_hook_path=/acceptance-hook-e2e
 acc_hook_signing=acceptance-signing-value-e2e
 acc_owner_email=owner@acceptance.example.test
@@ -110,7 +112,7 @@ acc_expect_items() {
 
 # acc_tree prints path, owner, group and mode of everything below the data directory of a stack.
 acc_tree() {
-	docker exec "$host" find "/opt/stacks/$1/data" -printf '%p\t%U:%G:%m\n' | sort
+	docker exec "$host" find "$acc_stacks/$1/data" -printf '%p\t%U:%G:%m\n' | sort
 }
 
 # acc_env_has fails unless the stacks repository on the remote holds the line $2 in the .env of the stack $1.
@@ -236,14 +238,22 @@ acc_first_setup() {
 	tui_send b
 	tui_wait 'Bind the stacks repository' 10
 	tui_type "git.$domain:stacks.git"
+	tui_send Tab
+	tui_type "$acc_stacks"
 	tui_send F2
+	tui_wait "Create the stack folder $acc_stacks?" 10
+	if docker exec "$host" test -e "$acc_stacks"; then fail 'the stack folder exists before the question was answered'; fi
+	tui_send y
 	expected=$(git_ed25519_fingerprint)
 	tui_wait "$(printf '%s' "$expected" | cut -c 1-30)" 60
 	tui_wait 'ssh-ed25519' 10
 	tui_send y
 	tui_wait 'The stacks repository is bound' 120
 	tui_send Enter
-	docker exec "$host" test -f /opt/stacks/n8n/compose.yaml || fail 'the clone is missing in /opt/stacks'
+	docker exec "$host" test -f "$acc_stacks/n8n/compose.yaml" || fail "the clone is missing in $acc_stacks"
+	[ "$(docker exec "$host" stat -c %U:%G:%a "$acc_stacks")" = qdeploy:qdeploy:755 ] ||
+		fail "$acc_stacks is $(docker exec "$host" stat -c %U:%G:%a "$acc_stacks"), want qdeploy:qdeploy:755"
+	docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF "$acc_stacks" || fail "the service has no write access to $acc_stacks"
 	acc "repository bound through the interface, host key $expected confirmed"
 
 	step 'the Stacks area lists n8n and bookstack; their first runs end without secrets'
@@ -256,7 +266,7 @@ acc_first_setup() {
 	# n8n runs as the user node (UID 1000) and Docker would create a missing bind mount source as root, so the
 	# data directory has to belong to that user before the first start; this is the one step by hand.
 	step 'the administrator gives n8n the data directory its container user can write'
-	docker exec "$host" install -d -o 1000 -g 1000 -m 0750 /opt/stacks/n8n/data || fail 'cannot create the data directory of n8n'
+	docker exec "$host" install -d -o 1000 -g 1000 -m 0750 "$acc_stacks/n8n/data" || fail 'cannot create the data directory of n8n'
 	acc 'data directory of n8n created for UID 1000 by the administrator'
 
 	step 'Stack detail: the secrets of secrets.example.env are set through the interface'
@@ -275,9 +285,9 @@ $values
 VALUES_END
 		tui_send Escape
 		stack_secrets=$(printf '%s\n' "$values" | grep -v '^#' | grep -v '^$' | sed "s/^\\([^=]*\\)=\\(.*\\)\$/\\1='\\2'/")
-		[ "$(docker exec "$host" cat "/opt/stacks/$stack/secrets.env")" = "$stack_secrets" ] ||
+		[ "$(docker exec "$host" cat "$acc_stacks/$stack/secrets.env")" = "$stack_secrets" ] ||
 			fail "secrets.env of $stack does not hold the example secrets"
-		[ "$(docker exec "$host" stat -c %U:%a "/opt/stacks/$stack/secrets.env")" = qdeploy:600 ] ||
+		[ "$(docker exec "$host" stat -c %U:%a "$acc_stacks/$stack/secrets.env")" = qdeploy:600 ] ||
 			fail "secrets.env of $stack has the wrong owner or mode"
 	done
 	acc 'secrets of n8n and bookstack set through the interface (mode 600, owner qdeploy)'
@@ -349,8 +359,8 @@ acc_update_window() {
 acc_failed_update() {
 	stack=$1 var=$2 good=$3 bad=$4 image=$5 how=$6
 	# The marker goes where the backup rules of the stack save data: all of data/ for n8n, data/config for bookstack.
-	marker=/opt/stacks/$stack/data/late-marker
-	[ "$stack" != bookstack ] || marker=/opt/stacks/$stack/data/config/late-marker
+	marker=$acc_stacks/$stack/data/late-marker
+	[ "$stack" != bookstack ] || marker=$acc_stacks/$stack/data/config/late-marker
 	prev=$(newest_run "$stack")
 	rm -f "$work/update-$stack.rc"
 	as_admin 'cd ~/stacks && git pull -q --ff-only'
@@ -467,7 +477,9 @@ run_acceptance() {
 	if docker exec "$host" test -e /etc/systemd/system/qdeploy.service.d; then fail 'the unit has a drop-in'; fi
 	exec_start=$(docker exec "$host" systemctl show -p ExecStart --value qdeploy)
 	case $exec_start in *backup-image*) fail "the unit passes a backup image: $exec_start" ;; esac
-	acc 'installed from the test release with the installer; the service runs without --backup-image'
+	if docker exec "$host" test -e "$acc_stacks"; then fail "the installation created the stack folder $acc_stacks"; fi
+	[ "$(docker exec "$host" systemctl is-active qdeploy)" = active ] || fail 'the service does not run after the installation'
+	acc 'installed from the test release with the installer; the service runs without --backup-image and without a stack folder'
 
 	acc_first_setup
 

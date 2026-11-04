@@ -18,6 +18,7 @@ type repoEnv struct {
 	git   *servicetest.Git
 	srv   *hostkeytest.Server
 	dir   string
+	host  *hostDouble
 }
 
 func startRepoService(t *testing.T) *repoEnv {
@@ -29,6 +30,10 @@ func startRepoService(t *testing.T) *repoEnv {
 	t.Cleanup(func() { testGit = old })
 	startService(t, func(net.Conn) error { return nil })
 	e := &repoEnv{state: stateDir(), git: g, srv: hostkeytest.Start(t), dir: filepath.Join(t.TempDir(), "stacks")}
+	if err := os.Mkdir(e.dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e.host = useFolderHost(t)
 	if code, _, stderr := run(t, "key", "generate"); code != 0 {
 		t.Fatalf("key generate: %d %s", code, stderr)
 	}

@@ -41,6 +41,9 @@ func startWith(t *testing.T, dep engine.Deployer, opts ...func(*service.Config))
 	h.git.Files = servicetest.Stacks()
 	h.url = h.srv.URL()
 	h.dir = filepath.Join(t.TempDir(), "stacks")
+	if err := os.Mkdir(h.dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	ep := channeltest.Endpoint(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -237,6 +240,54 @@ func TestSetRefusesAnotherBinding(t *testing.T) {
 	}
 	h.dir += "-other"
 	wantCode(t, errOf(h.set(h.srv.Key().Fingerprint)), control.CodeRepoBound)
+}
+
+func TestSetNeverCreatesTheStackFolder(t *testing.T) {
+	h := start(t)
+	h.withKey()
+	h.dir = filepath.Join(h.dir, "missing")
+	err := errOf(h.set(h.srv.Key().Fingerprint))
+	wantCode(t, err, control.CodeInvalid)
+	if !strings.Contains(err.Error(), h.dir) || !strings.Contains(err.Error(), "sudo qdeploy") {
+		t.Fatalf("message %q lacks the path or the fix", err)
+	}
+	if _, statErr := os.Lstat(h.dir); statErr == nil || h.git.Clones() != 0 {
+		t.Fatalf("the service created the folder or cloned: %v, %d clones", statErr, h.git.Clones())
+	}
+}
+
+func TestSetNamesAFolderTheServiceCannotWrite(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes everywhere")
+	}
+	h := start(t)
+	h.withKey()
+	if err := os.Chmod(h.dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(h.dir, 0o755) })
+	err := errOf(h.set(h.srv.Key().Fingerprint))
+	wantCode(t, err, control.CodeInvalid)
+	if !strings.Contains(err.Error(), "not writable by the service") || !strings.Contains(err.Error(), "sudo qdeploy") {
+		t.Fatalf("message %q lacks cause or fix", err)
+	}
+	if h.git.Clones() != 0 {
+		t.Fatal("a clone was attempted")
+	}
+}
+
+func TestBoundDirReadsTheBinding(t *testing.T) {
+	h := start(t)
+	if _, ok := service.BoundDir(h.state); ok {
+		t.Fatal("a folder is bound before any set")
+	}
+	h.withKey()
+	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	if dir, ok := service.BoundDir(h.state); !ok || dir != h.dir {
+		t.Fatalf("BoundDir = %q, %v; want %q", dir, ok, h.dir)
+	}
 }
 
 func TestFetchAndStacksNeedABinding(t *testing.T) {

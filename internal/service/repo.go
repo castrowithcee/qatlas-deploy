@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"unicode"
 
 	"github.com/castrowithcee/qatlas-kit/configfile"
@@ -82,6 +83,23 @@ func validateRepoConfig(c repoConfig) error {
 		return err
 	}
 	return checkDirShape(c.Dir)
+}
+
+// ValidateStackDir reports whether dir has the shape the service accepts for a stack folder.
+func ValidateStackDir(dir string) error { return checkDirShape(dir) }
+
+// BoundDir returns the stack folder of the binding stored in stateDir; ok is false when none is bound or the
+// binding cannot be read.
+func BoundDir(stateDir string) (dir string, ok bool) {
+	data, err := os.ReadFile(filepath.Join(stateDir, repoConfigFile))
+	if err != nil {
+		return "", false
+	}
+	c, err := repoCodec.Decode(data)
+	if err != nil || checkDirShape(c.Dir) != nil {
+		return "", false
+	}
+	return c.Dir, true
 }
 
 func checkDirShape(dir string) error {
@@ -277,6 +295,9 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 		return nil, err
 	}
 	if wc == nil {
+		if err := checkWritableFolder(a.Dir); err != nil {
+			return nil, err
+		}
 		wc, err = s.git.Clone(ctx, gc, a.URL, a.Dir)
 		if err != nil {
 			return nil, gitFailure(err)
@@ -294,6 +315,27 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 		s.onBound()
 	}
 	return control.RepoSetResult{URL: a.URL, Dir: a.Dir, Fingerprint: key.Fingerprint, Head: head, Cloned: cloned}, nil
+}
+
+// checkWritableFolder refuses a stack folder the service could not clone into and says why and what to do.
+// The service never creates the folder: the root client does that after the operator confirmed the path. The
+// access check also reports a read-only mount, which is what the unit's sandbox shows for an unlisted path.
+func checkWritableFolder(dir string) error {
+	info, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return control.NewError(control.CodeInvalid, fmt.Sprintf(
+			"stack folder %s does not exist; run sudo qdeploy to create it after confirming the path", dir))
+	case err != nil:
+		return control.NewError(control.CodeInvalid, fmt.Sprintf("stack folder %s cannot be inspected by the service", dir))
+	case !info.IsDir():
+		return control.NewError(control.CodeInvalid, fmt.Sprintf("stack folder %s is not a directory", dir))
+	}
+	if err := syscall.Access(dir, 0x2); err != nil {
+		return control.NewError(control.CodeInvalid, fmt.Sprintf(
+			"stack folder %s is not writable by the service (%v); run sudo qdeploy to grant access", dir, err))
+	}
+	return nil
 }
 
 // existingClone returns the working copy at the directory when it already is a clone of the URL, nil when

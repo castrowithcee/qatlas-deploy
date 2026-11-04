@@ -150,16 +150,14 @@ setup_service() {
 	release_publish v0.1.0
 	as_admin 'curl -fsSL -o /tmp/install.sh https://github.com/castrowithcee/qatlas-deploy/releases/latest/download/install.sh &&
 		sudo sh /tmp/install.sh && rm -f /tmp/install.sh' || fail 'the installer failed'
-	# The unit lets the service write /opt/stacks only if it exists at start. The backup helper image is a local
-	# one, so a drop-in (which an update keeps) names it.
-	docker exec "$host" sh -ec 'install -d -o qdeploy -g qdeploy -m 0755 /opt/stacks' || fail 'cannot create /opt/stacks'
+	# The backup helper image is a local one, so a drop-in (which an update keeps) names it.
 	if [ "${1:-}" != default-backup-image ]; then
 		docker exec "$host" sh -ec '
 			install -d /etc/systemd/system/qdeploy.service.d
 			printf "[Service]\nExecStart=\nExecStart=/usr/local/bin/qdeploy run --backup-image '"$backup_image"'\n" >/etc/systemd/system/qdeploy.service.d/e2e.conf
 			systemctl daemon-reload' || fail 'cannot write the drop-in'
+		docker exec "$host" systemctl restart qdeploy || fail 'cannot restart the qdeploy service'
 	fi
-	docker exec "$host" systemctl restart qdeploy || fail 'cannot restart the qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
 	log 'scenario: qdeploy service running'
 
@@ -375,6 +373,22 @@ $hook_signing_value
 	[ "$(stack_field demo-cache deployed)" = "$good" ] || fail "demo-cache is not recorded as deployed at $good: $(qd --output json status)"
 	[ "$(stack_images demo-cache)" = "registry.$domain/demo/app:1.1.0" ] || fail "demo-cache does not run the image 1.1.0: $(stack_images demo-cache)"
 	log "scenario: poll deployed demo-cache at $good"
+
+	# Here every stack runs its newest commit, so the poll at the restart of the repair has nothing to run.
+	step 'a bound installation without the grant gets it at the next root client command'
+	docker exec "$host" sh -ec 'rm -f /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf && systemctl daemon-reload' ||
+		fail 'cannot remove the stack folder grant'
+	if docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF /opt/stacks; then fail 'the grant is still active after its removal'; fi
+	pid=$(service_pid)
+	out=$(qd status) || fail "qdeploy status failed without the grant: $out"
+	printf '%s' "$out" | grep -qF 'has no write grant' || fail "no notice about the missing grant: $out"
+	docker exec "$host" grep -qx 'ReadWritePaths=-/opt/stacks' /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf ||
+		fail 'the grant was not written again'
+	docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF /opt/stacks || fail 'the service has no write access after the repair'
+	wait_for 'the service after the repair' 60 service_serving
+	[ "$(service_pid)" != "$pid" ] || fail 'the repair did not restart the service'
+	out=$(qd status) || fail "qdeploy status failed: $out"
+	if printf '%s' "$out" | grep -qF 'has no write grant'; then fail "the repair repeated: $out"; fi
 
 	step 'a commit with a failing healthcheck is rolled back with a revert commit on the remote branch'
 	as_admin 'cd ~/stacks &&
@@ -993,22 +1007,37 @@ scenario_stacks_repo() {
 
 	step 'repo set refuses an unconfirmed host key without a terminal'
 	before=$(known_hosts_sum)
-	out=$(qd_fails repo set "$url") || fail "repo set without terminal and fingerprint succeeded: $out"
+	out=$(qd_fails repo set "$url" --dir /opt/stacks --create) || fail "repo set without terminal and fingerprint succeeded: $out"
 	printf '%s' "$out" | grep -q -- '--fingerprint' || fail "the refusal does not name --fingerprint: $out"
 	[ "$(known_hosts_sum)" = "$before" ] || fail 'a host key was pinned without confirmation'
-	[ -z "$(docker exec "$host" ls -A /opt/stacks)" ] || fail 'the stacks directory was filled without confirmation'
+	if docker exec "$host" test -e /opt/stacks; then fail 'the stack folder was created although the host key was not confirmed'; fi
+
+	step 'repo set without --dir and without --create creates no stack folder'
+	out=$(qd_fails repo set "$url" --fingerprint "$(git_ed25519_fingerprint)") || fail "repo set without --dir succeeded: $out"
+	printf '%s' "$out" | grep -q -- '--dir' || fail "the refusal does not name --dir: $out"
+	out=$(qd_fails repo set "$url" --dir /opt/stacks --fingerprint "$(git_ed25519_fingerprint)") ||
+		fail "repo set for a missing folder without --create succeeded: $out"
+	printf '%s' "$out" | grep -q -- '--create' || fail "the refusal does not name --create: $out"
+	if docker exec "$host" test -e /opt/stacks; then fail 'the stack folder was created without confirmation'; fi
+	if docker exec "$host" test -e /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf; then fail 'a refused repo set wrote the drop-in'; fi
 
 	step 'repo set refuses a wrong fingerprint'
-	out=$(qd_fails repo set "$url" --fingerprint SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA) ||
+	out=$(qd_fails repo set "$url" --dir /opt/stacks --create --fingerprint SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA) ||
 		fail "repo set with a wrong fingerprint succeeded: $out"
 	[ "$(known_hosts_sum)" = "$before" ] || fail 'a host key was pinned despite a wrong fingerprint'
+	if docker exec "$host" test -e /opt/stacks; then fail 'the stack folder was created despite a wrong fingerprint'; fi
 
 	step 'repo set pins the host key and clones'
 	expected=$(git_ed25519_fingerprint)
-	out=$(qd --output json repo set "$url" --fingerprint "$expected") || fail "repo set failed: $out"
+	out=$(qd --output json repo set "$url" --dir /opt/stacks --create --fingerprint "$expected") || fail "repo set failed: $out"
 	printf '%s' "$out" | grep -q "$expected" || fail "repo set does not report the fingerprint $expected: $out"
 	printf '%s' "$out" | grep -q '"cloned": *true' || fail "repo set did not clone: $out"
 	docker exec "$host" test -f /opt/stacks/demo-stack/compose.yaml || fail 'the clone is missing in /opt/stacks'
+	[ "$(docker exec "$host" stat -c %U:%G:%a /opt/stacks)" = qdeploy:qdeploy:755 ] ||
+		fail "/opt/stacks is $(docker exec "$host" stat -c %U:%G:%a /opt/stacks), want qdeploy:qdeploy:755"
+	docker exec "$host" grep -qx 'ReadWritePaths=-/opt/stacks' /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf ||
+		fail 'the drop-in does not grant /opt/stacks'
+	docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF /opt/stacks || fail 'the service has no write access to /opt/stacks'
 	log "scenario: repo set pinned $expected and cloned"
 
 	step 'repo fetch sees a commit pushed by the admin'
@@ -1067,7 +1096,7 @@ scenario_stacks_repo() {
 	if [ -z "$rotate_failure" ]; then
 		new_fp=$(git_ed25519_fingerprint)
 		fetch_out=$(qd repo fetch) || fetch_rc=$?
-		set_out=$(qd repo set "$url" --fingerprint "$new_fp") || set_rc=$?
+		set_out=$(qd repo set "$url" --dir /opt/stacks --fingerprint "$new_fp") || set_rc=$?
 	fi
 	after=$(known_hosts_sum)
 	# Restore the original keys first, so a failed assertion below leaves the environment as it was.
@@ -1301,6 +1330,9 @@ scenario_selfupdate() {
 	[ "$(selfupdate_field installed)" = v0.2.0 ] && [ "$(selfupdate_field update_available)" = false ] ||
 		fail "update status after the update: $(as_admin 'qdeploy --output json update status 2>&1')"
 	[ "$(docker exec "$host" cat /etc/systemd/system/qdeploy.service.d/e2e.conf | grep -c backup-image)" = 1 ] || fail 'the update removed the drop-in'
+	docker exec "$host" grep -qx 'ReadWritePaths=-/opt/stacks' /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf ||
+		fail 'the update removed the stack folder grant'
+	docker exec "$host" systemctl show -p ReadWritePaths qdeploy | grep -qF /opt/stacks || fail 'the updated service has no write access to /opt/stacks'
 	log "scenario: updated to v0.2.0, pid $pid -> $(service_pid), service answering: $out"
 
 	step 'a release with a tampered checksums.txt is refused and changes nothing'
@@ -1874,6 +1906,8 @@ scenario_tui_setup() {
 	tui_send b
 	tui_wait 'Bind the stacks repository' 10
 	tui_type "git.$domain:stacks.git"
+	tui_send Tab
+	tui_type /opt/stacks
 	tui_send F2
 	expected=$(git_ed25519_fingerprint)
 	tui_wait "$(printf '%s' "$expected" | cut -c 1-30)" 60

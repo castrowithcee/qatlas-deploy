@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -19,6 +22,7 @@ const (
 
 const (
 	repoURL     = "git@example.test:ops/stacks.git"
+	stackDir    = "/srv/stacks-example"
 	fingerprint = "SHA256:ExampleFingerprintForTestsOnly0000000000"
 )
 
@@ -109,6 +113,8 @@ func TestRepoBindAsksForTheFingerprintBeforeStoringIt(t *testing.T) {
 	send(m, toRepo...)
 	send(m, "b")
 	send(m, typed(repoURL)...)
+	send(m, "tab")
+	send(m, typed(stackDir)...)
 	// Leaving the question keeps the form, and nothing is stored.
 	send(m, "f2")
 	contains(t, m, "host: example.test", fingerprint, "ssh-ed25519")
@@ -124,7 +130,7 @@ func TestRepoBindAsksForTheFingerprintBeforeStoringIt(t *testing.T) {
 		t.Fatalf("enter confirmed the host key: %v", b.repoSet)
 	}
 	send(m, "f2", "y")
-	want := control.RepoSetArgs{URL: repoURL, Dir: "/opt/stacks", Fingerprint: fingerprint}
+	want := control.RepoSetArgs{URL: repoURL, Dir: stackDir, Fingerprint: fingerprint}
 	if len(b.repoSet) != 1 || b.repoSet[0] != want {
 		t.Fatalf("binds = %+v, want %+v", b.repoSet, want)
 	}
@@ -141,6 +147,8 @@ func TestRepoBindOfAPinnedHostSaysSo(t *testing.T) {
 	send(m, toRepo...)
 	send(m, "b")
 	send(m, typed(repoURL)...)
+	send(m, "tab")
+	send(m, typed(stackDir)...)
 	send(m, "f2")
 	contains(t, m, "already trusts exactly this host key")
 }
@@ -158,10 +166,10 @@ func TestRepoBindRefusesAMissingURLAndRelativeDirectoryBeforeAskingTheServer(t *
 	// A directory that is not absolute is refused the same way.
 	send(m, "esc", "b")
 	send(m, typed(repoURL)...)
+	// The stack folder is required, and it must be an absolute path.
+	send(m, "f2")
+	contains(t, m, "stack folder is required")
 	send(m, "tab")
-	for range len(defaultStacksDir) {
-		send(m, "backspace")
-	}
 	send(m, typed("stacks")...)
 	send(m, "f2")
 	contains(t, m, "absolute")
@@ -177,6 +185,8 @@ func TestRepoBindShowsWhyTheProbeFailed(t *testing.T) {
 	send(m, toRepo...)
 	send(m, "b")
 	send(m, typed(repoURL)...)
+	send(m, "tab")
+	send(m, typed(stackDir)...)
 	send(m, "f2")
 	contains(t, m, "cannot reach the server")
 	if m.modal != nil || len(b.repoSet) != 0 {
@@ -537,6 +547,8 @@ func TestWritesRefuseAKeyWhileOneIsUnderWay(t *testing.T) {
 	send(m, toRepo...)
 	send(m, "b")
 	send(m, typed(repoURL)...)
+	send(m, "tab")
+	send(m, typed(stackDir)...)
 	cmd := press(m, "f2")
 	if !m.set.busy {
 		t.Fatal("no write under way")
@@ -549,5 +561,90 @@ func TestWritesRefuseAKeyWhileOneIsUnderWay(t *testing.T) {
 	drain(m, cmd)
 	if m.set.busy {
 		t.Fatal("still busy")
+	}
+}
+
+// fakeFolders records the host side of binding a stack folder.
+type fakeFolders struct {
+	absent   bool
+	grantErr error
+	calls    []string
+}
+
+func (f *fakeFolders) Missing(dir string) (bool, error) {
+	f.calls = append(f.calls, "missing:"+dir)
+	return f.absent, nil
+}
+
+func (f *fakeFolders) Grant(_ context.Context, dir string, create bool) error {
+	f.calls = append(f.calls, fmt.Sprintf("grant:%s:%t", dir, create))
+	return f.grantErr
+}
+
+func TestRepoBindCreatesAMissingFolderOnlyAfterConfirmation(t *testing.T) {
+	for _, lang := range []struct {
+		lang i18n.Lang
+		want string
+	}{{i18n.English, "Create the stack folder " + stackDir}, {i18n.German, "Stack-Ordner " + stackDir + " anlegen"}} {
+		b := settingsBackend()
+		m := newTestModel(t, lang.lang, b, wideWidth, settingsRows)
+		f := &fakeFolders{absent: true}
+		m.folders = f
+		send(m, toRepo...)
+		send(m, "b")
+		send(m, typed(repoURL)...)
+		send(m, "tab")
+		send(m, typed(stackDir)...)
+		send(m, "f2")
+		contains(t, m, lang.want)
+		if got := f.calls; !slices.Equal(got, []string{"missing:" + stackDir}) || len(b.actions()) != 0 {
+			t.Fatalf("before the answer: folder calls %v, backend calls %v", got, b.actions())
+		}
+		send(m, "n")
+		send(m, "f2", "enter") // enter is the default answer, which is cancel
+		if len(f.calls) != 2 || len(b.actions()) != 0 {
+			t.Fatalf("a declined folder had an effect: %v, %v", f.calls, b.actions())
+		}
+		send(m, "f2", "y")
+		want := []string{"missing:" + stackDir, "missing:" + stackDir, "missing:" + stackDir, "grant:" + stackDir + ":true"}
+		if !slices.Equal(f.calls, want) {
+			t.Fatalf("folder calls = %v, want %v", f.calls, want)
+		}
+		if got := b.actions(); !slices.Equal(got, []string{"probe:" + repoURL}) {
+			t.Fatalf("the probe does not follow the folder: %v", got)
+		}
+	}
+}
+
+func TestRepoBindOfAnExistingFolderOnlyGrantsIt(t *testing.T) {
+	b := settingsBackend()
+	m := newSettingsModel(t, b)
+	f := &fakeFolders{}
+	m.folders = f
+	send(m, toRepo...)
+	send(m, "b")
+	send(m, typed(repoURL)...)
+	send(m, "tab")
+	send(m, typed(stackDir)...)
+	send(m, "f2")
+	if want := []string{"missing:" + stackDir, "grant:" + stackDir + ":false"}; !slices.Equal(f.calls, want) {
+		t.Fatalf("folder calls = %v, want %v", f.calls, want)
+	}
+	contains(t, m, "host: example.test")
+}
+
+func TestRepoBindStopsWhenTheFolderCannotBeGranted(t *testing.T) {
+	b := settingsBackend()
+	m := newSettingsModel(t, b)
+	m.folders = &fakeFolders{grantErr: errors.New("the service manager refused")}
+	send(m, toRepo...)
+	send(m, "b")
+	send(m, typed(repoURL)...)
+	send(m, "tab")
+	send(m, typed(stackDir)...)
+	send(m, "f2")
+	contains(t, m, "the service manager refused")
+	if len(b.actions()) != 0 || m.modal != nil {
+		t.Fatalf("the bind went on: %v", b.actions())
 	}
 }

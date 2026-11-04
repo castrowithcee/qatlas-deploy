@@ -67,10 +67,15 @@ func TestUnitMeetsRuntimeDirectoryContract(t *testing.T) {
 		"StateDirectoryMode=0700",
 		"NoNewPrivileges=yes",
 		"ProtectSystem=strict",
-		"ReadWritePaths=-/opt/stacks",
 	} {
 		if !lines[want] {
 			t.Errorf("unit lacks the line %q", want)
+		}
+	}
+	// The stack folders are the host's choice and reach the unit only through a drop-in.
+	for l := range lines {
+		if strings.HasPrefix(l, "ReadWritePaths=") {
+			t.Errorf("the shipped unit names a writable path: %q", l)
 		}
 	}
 }

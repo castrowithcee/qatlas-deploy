@@ -25,7 +25,7 @@ func TestGoldenSettingsRepoWithoutRepository(t *testing.T) {
 }
 
 func TestGoldenSettingsRepoForm(t *testing.T) {
-	goldenScreens(t, "settings.repo.form", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL))...)
+	goldenScreens(t, "settings.repo.form", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("tab"), typed(stackDir))...)
 }
 
 func TestGoldenSettingsRepoFormProblem(t *testing.T) {
@@ -33,7 +33,7 @@ func TestGoldenSettingsRepoFormProblem(t *testing.T) {
 }
 
 func TestGoldenSettingsBindQuestion(t *testing.T) {
-	goldenScreens(t, "settings.repo.bind", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("f2"))...)
+	goldenScreens(t, "settings.repo.bind", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("tab"), typed(stackDir), keys("f2"))...)
 }
 
 func TestGoldenSettingsFetched(t *testing.T) {
