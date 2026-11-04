@@ -1698,7 +1698,7 @@ scenario_tui_setup() {
 	tui_wait 'The channel tui-hook is added' 20
 	tui_send Enter
 	tui_wait 'tui-hook' 10
-	tui_send T
+	tui_send s
 	tui_wait 'Send a test message through tui-hook?' 10
 	tui_send y
 	tui_wait 'was delivered' 60

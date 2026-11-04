@@ -95,7 +95,7 @@ func keyTable() []kittui.Action {
 		act(actAdd, kittui.LevelLetter, textKeyAdd, "a"),
 		act(actRemove, kittui.LevelLetter, textKeyRemove, "x"),
 		act(actEdit, kittui.LevelLetter, textKeyEdit, "e"),
-		act(actTest, kittui.LevelLetter, textKeyTest, "T"),
+		act(actTest, kittui.LevelLetter, textKeyTest, "s"),
 		act(actRestore, kittui.LevelLetter, textKeyRestore, "R"),
 		act(actYes, kittui.LevelConfirm, textAnswerYes, "y"),
 		act(actNo, kittui.LevelConfirm, textAnswerCancel, "n", "esc"),

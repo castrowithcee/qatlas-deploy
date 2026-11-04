@@ -20,5 +20,5 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
                                                         
-a add  T send test  x remove  esc back  r reload        
+a add  s send test  x remove  esc back  r reload        
 1-4 area  q quit                     up/down choose  1/2

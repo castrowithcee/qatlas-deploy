@@ -222,7 +222,7 @@ acc_first_setup() {
 	tui_wait 'The channel acceptance-hook is added' 20
 	tui_send Enter
 	tui_wait 'acceptance-hook' 10
-	tui_send T
+	tui_send s
 	tui_wait 'Send a test message through acceptance-hook?' 10
 	tui_send y
 	tui_wait 'was delivered' 60

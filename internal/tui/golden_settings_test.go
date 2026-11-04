@@ -128,7 +128,7 @@ func TestGoldenSettingsNotifyQuestion(t *testing.T) {
 }
 
 func TestGoldenSettingsNotifyTestQuestion(t *testing.T) {
-	goldenScreens(t, "settings.notify.test", settingsRows, settingsBackend, seq(toNotify, keys("T"))...)
+	goldenScreens(t, "settings.notify.test", settingsRows, settingsBackend, seq(toNotify, keys("s"))...)
 }
 
 func TestGoldenSettingsNotifyRemoveQuestion(t *testing.T) {

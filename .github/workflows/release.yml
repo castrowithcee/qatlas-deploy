@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   release:
-    uses: castrowithcee/qatlas-kit/.github/workflows/release.yml@b31df669f77b10c20959d1e5eb6e8850bd20954c # v0.4.0
+    uses: castrowithcee/qatlas-kit/.github/workflows/release.yml@44f3d6ee35ac2fac84e6c477f4d5c7fcce3e7327 # v0.5.0
     permissions:
       contents: write
     with:

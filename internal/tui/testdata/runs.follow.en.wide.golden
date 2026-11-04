@@ -10,5 +10,5 @@ qdeploy  maintenance window closed                                              
   info pull example/shop:5.2.0                                                                                          
                                                                                                                         
                                                                                                                         
-* following - lines 1-6 of 6                                                                                            
+[ L following ]  [ / search ]  [ w wrap lines off ]  [ t timestamps off ]                                 lines 1-6 of 6
 / search  L follow  w wrap lines  t timestamps  r reload  1-4 area  q quit                                up/down scroll

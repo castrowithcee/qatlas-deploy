@@ -233,7 +233,7 @@ func (m *Model) confirmDialog(p plan, answers []kittui.Answer) (*kittui.Dialog, 
 		answers = []kittui.Answer{{Action: actYes, Label: textAnswerYes}, {Action: actNo, Label: textAnswerCancel}}
 	}
 	return kittui.NewDialog(kittui.DialogSpec{Title: info.word, Question: t.Lookup(info.ask, m.subject(p)),
-		Consequence: t.Lookup(info.consequence), Details: details, Answers: answers, Default: actNo,
+		Consequence: t.Lookup(info.consequence), Details: dialogLines(details), Answers: answers, Default: actNo,
 		Keys: kittui.DialogKeys{Enter: actEnter}}, m.keys, t)
 }
 
@@ -721,6 +721,15 @@ func (m *Model) summaryLinesOf(width int) []string {
 		for _, l := range o.lines {
 			lines = append(lines, m.wrapped(detailIndent, kittui.StyleText, l, width)...)
 		}
+	}
+	return lines
+}
+
+// dialogLines turns plain detail texts into unstyled dialog lines.
+func dialogLines(texts []string) []kittui.DialogLine {
+	lines := make([]kittui.DialogLine, len(texts))
+	for i, text := range texts {
+		lines[i] = kittui.DialogLine{Text: text}
 	}
 	return lines
 }

@@ -455,7 +455,7 @@ func (m *Model) ask(title kittui.TextID, question, consequence string, details [
 		m.warn(m.text.Lookup(textActionBusy))
 		return
 	}
-	spec := kittui.DialogSpec{Title: title, Question: question, Consequence: consequence, Details: details,
+	spec := kittui.DialogSpec{Title: title, Question: question, Consequence: consequence, Details: dialogLines(details),
 		Answers: []kittui.Answer{{Action: actYes, Label: textAnswerYes}, {Action: actNo, Label: textAnswerCancel}},
 		Default: actNo, Keys: kittui.DialogKeys{Enter: actEnter}}
 	if destructive {
@@ -472,7 +472,7 @@ func (m *Model) ask(title kittui.TextID, question, consequence string, details [
 // tell opens the result of a change, closed by any answer.
 func (m *Model) tell(title kittui.TextID, text string, details []string) {
 	dialog, err := kittui.NewDialog(kittui.DialogSpec{Title: title, Question: text,
-		Consequence: m.text.Lookup(textSettingDoneNote), Details: details,
+		Consequence: m.text.Lookup(textSettingDoneNote), Details: dialogLines(details),
 		Answers: []kittui.Answer{{Action: actNo, Label: textAnswerClose}}, Default: actNo,
 		Keys: kittui.DialogKeys{Enter: actEnter}}, m.keys, m.text)
 	if err != nil {
