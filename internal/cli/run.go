@@ -18,7 +18,7 @@ import (
 var stateDir = func() string { return service.DefaultStateDir }
 
 func newRunCommand() *cobra.Command {
-	var backupImage string
+	var backupImage, dockerSocket string
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the qdeploy service in the foreground",
@@ -31,10 +31,12 @@ func newRunCommand() *cobra.Command {
 			backups.Image = backupImage
 			return service.Run(ctx, slog.New(slog.NewTextHandler(c.ErrOrStderr(), nil)).With("pid", os.Getpid()),
 				service.Config{Version: version, Endpoint: serviceEndpoint(), StateDir: stateDir(),
-					Deployer: compose.New(backups.ForRuns()), Backups: backups})
+					Deployer: compose.New(backups.ForRuns()), Backups: backups, DockerSocket: dockerSocket})
 		},
 	}
 	cmd.Flags().StringVar(&backupImage, "backup-image", backup.DefaultImage,
 		"helper image of backups and restores; it needs a POSIX shell, find, rm and a tar that knows --numeric-owner")
+	cmd.Flags().StringVar(&dockerSocket, "docker-socket", service.DefaultDockerSocket,
+		"socket of the container engine the service reads containers from")
 	return cmd
 }

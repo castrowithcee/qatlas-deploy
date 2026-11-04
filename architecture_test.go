@@ -42,6 +42,12 @@ func TestArchitecture(t *testing.T) {
 			Hint: "the terminal interface reads the stacks, Docker and the service state through the service channel, never directly",
 		},
 		{
+			Name:  "cli-and-tui-read-containers-over-the-channel-only",
+			Files: archtest.Files{Under: []string{"internal/cli", "internal/tui"}, Tests: archtest.SkipTests},
+			Check: archtest.ForbidImportPaths(archtest.Exact("github.com/castrowithcee/qatlas-kit/docker")),
+			Hint:  "only the service talks to the container engine; the command surface and the terminal interface ask the service",
+		},
+		{
 			Name:  "helptopics-import-nothing-of-the-module",
 			Files: archtest.Files{Under: []string{"internal/helptopics"}, Tests: archtest.WithTests},
 			Check: archtest.AllowImports(),

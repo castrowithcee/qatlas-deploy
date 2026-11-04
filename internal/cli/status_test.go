@@ -37,6 +37,9 @@ var testDeployer engine.Deployer
 // testBackups is the backup manager of the next service a test starts; nil means none.
 var testBackups service.Backups
 
+// testDocker reads the containers of the next service a test starts; nil means the engine at the default socket.
+var testDocker service.Docker
+
 func useEndpoint(t *testing.T, ep localipc.ServiceEndpoint) {
 	t.Helper()
 	old := serviceEndpoint
@@ -68,7 +71,7 @@ func startServiceLogged(t *testing.T, check service.PeerCheck, logOut io.Writer)
 	done := make(chan error, 1)
 	go func() {
 		done <- service.Run(ctx, slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelDebug})),
-			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups, Registry: testRegistry, Changelog: testChangelog})
+			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups, Registry: testRegistry, Changelog: testChangelog, Docker: testDocker})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	path, err := ep.Path()
