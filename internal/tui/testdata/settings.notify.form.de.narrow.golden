@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
                                                         
 space Umschalten  F2 Speichern  esc verwerfen           
-                     tab Nächste Zone oder nächstes Feld
+               tab Nächstes Feld  shift+tab Voriges Feld

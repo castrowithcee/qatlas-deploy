@@ -482,11 +482,11 @@ func TestChannelTestAndRemovalAskFirst(t *testing.T) {
 	b := settingsBackend()
 	m := newSettingsModel(t, b)
 	send(m, toNotify...)
-	send(m, "T", "n", "x", "n")
+	send(m, "s", "n", "x", "n")
 	if len(b.actions()) != 0 {
 		t.Fatalf("calls %v", b.actions())
 	}
-	send(m, "T", "y")
+	send(m, "s", "y")
 	contains(t, m, "ops-hook was delivered")
 	send(m, "enter", "down", "x", "y")
 	if got := b.actions(); !slices.Equal(got, []string{"notifytest:ops-hook", "notifyremove:ops-mail"}) {
@@ -520,12 +520,12 @@ func TestServiceFailuresOfSettingsAreShownWithoutAValue(t *testing.T) {
 func TestSettingsKeysDoNothingOutsideTheirPage(t *testing.T) {
 	b := settingsBackend()
 	m := newSettingsModel(t, b)
-	send(m, "a", "x", "e", "b", "F", "G", "T")
+	send(m, "a", "x", "e", "b", "F", "G", "s")
 	if m.modal != nil || m.set.form != nil || len(b.actions()) != 0 {
 		t.Fatal("a settings key acted in the Stacks area")
 	}
 	send(m, toMenu...)
-	send(m, "a", "x", "e", "b", "F", "G", "T")
+	send(m, "a", "x", "e", "b", "F", "G", "s")
 	if m.modal != nil || m.set.form != nil || len(b.actions()) != 0 {
 		t.Fatal("a settings key acted on the menu")
 	}

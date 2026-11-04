@@ -9,6 +9,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   step deploy                                           
   info pull example/shop:5.2.0                          
                                                         
-* mitlaufend - Zeilen 1-6 von 6                         
+[ L an ]  [ / ]  [ w aus ]  [ t aus ]   Zeilen 1-6 von 6
 / Suchen  L mitlaufen  w Zeilen umbrechen  t Zeitstempel
 r Neu laden  1-4 Bereich  q Beenden     up/down Scrollen

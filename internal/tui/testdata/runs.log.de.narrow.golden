@@ -9,6 +9,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   info up -d finished                                   
   step verify                                           
   info all services healthy                             
-* mitlaufend - Zeilen 3-9 von 9                         
+[ L an ]  [ / ]  [ w aus ]  [ t aus ]   Zeilen 3-9 von 9
 / Suchen  L mitlaufen  w Zeilen umbrechen  t Zeitstempel
 r Neu laden  1-4 Bereich  q Beenden     up/down Scrollen

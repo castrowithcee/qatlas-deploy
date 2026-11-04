@@ -27,4 +27,4 @@ qdeploy  Wartungsfenster zu                 [esc] Zurück
                     8192 Zeichen ohne Steuerzeichen. -  
                     Korrigiere das Feld.                
 F2 Speichern  esc verwerfen                             
-                     tab Nächste Zone oder nächstes Feld
+               tab Nächstes Feld  shift+tab Voriges Feld
