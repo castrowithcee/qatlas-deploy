@@ -10,13 +10,15 @@
 #   e2e/run.sh requests           print the requests the webhook receiver recorded (JSON lines)
 #   e2e/run.sh messages           print the e-mails the mail server recorded (JSON lines)
 #   e2e/run.sh scenario           run the scenario once after up (see e2e/scenario.sh)
+#   e2e/run.sh acceptance         run the acceptance scenario once after up, on a fresh host (see e2e/acceptance.sh)
 #
 # On the host, e2e-admin reaches the stacks repo with: git clone git.qdeploye2e.test:stacks.git
 # The registry is registry.qdeploye2e.test (image demo/app, tags 1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0
 # 5.0.0); a demo container turns unhealthy with DEMO_HEALTH=fail, and the image 4.0.0 is always unhealthy.
 # It also holds two versions each of the real images of the stacks n8n and bookstack (n8nio/n8n,
-# linuxserver/bookstack, library/mariadb), copied from the internet by skopeo, plus the newer test tags
-# n8nio/n8n:2.48.0 and linuxserver/bookstack:26.10.0, which are derived images whose healthcheck always fails.
+# linuxserver/bookstack, library/mariadb), copied from the internet by skopeo. The newer test tags
+# n8nio/n8n:2.48.0 and linuxserver/bookstack:26.10.0, derived images whose healthcheck always fails, are pushed
+# only by the acceptance scenario, after its successful update, so the update ceiling cannot reach them earlier.
 # The registry is also the Docker Hub mirror of the host's Docker daemon, and holds busybox by the digest of
 # the default backup helper image, so qdeploy runs a backup there without --backup-image.
 #
@@ -304,18 +306,17 @@ push_broken_images() {
 		docker exec -w /tmp/broken-image "$host" sh -ec "
 			docker build -q --build-arg BASE=registry.$domain/$base -t registry.$domain/$repo:$tag . >/dev/null
 			docker push -q registry.$domain/$repo:$tag >/dev/null
-			docker rmi registry.$domain/$repo:$tag registry.$domain/$base >/dev/null"
+			docker rmi registry.$domain/$repo:$tag >/dev/null
+			# The base image may be in use by a running stack and then stays.
+			docker rmi registry.$domain/$base >/dev/null 2>&1 || true"
 	done
 	docker exec "$host" rm -rf /tmp/broken-image
 }
 
-# registry_entries lists "<path>:<tag>" of every real and derived image in the registry.
+# registry_entries lists "<path>:<tag>" of every real image in the registry after up.
 registry_entries() {
 	printf '%s\n' "$real_images" | while IFS='|' read -r _ to; do
 		printf '%s\n' "$to"
-	done
-	printf '%s\n' "$broken_images" | while IFS='|' read -r base tag; do
-		printf '%s:%s\n' "${base%:*}" "$tag"
 	done
 }
 
@@ -383,7 +384,6 @@ up() {
 	prepare_host
 	push_images
 	push_real_images
-	push_broken_images
 	load_backup_helper
 	check_services
 	done_=1
@@ -426,6 +426,12 @@ main() {
 		. "$here/scenario.sh"
 		run_scenario
 		;;
+	acceptance)
+		require_up
+		. "$here/scenario.sh"
+		. "$here/acceptance.sh"
+		run_acceptance
+		;;
 	exec)
 		require_up
 		user=$admin
@@ -441,7 +447,7 @@ main() {
 		exec docker exec -i -u "$user" "$host" "$@"
 		;;
 	*)
-		sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
 		[ -z "$cmd" ] || exit 2
 		;;
 	esac

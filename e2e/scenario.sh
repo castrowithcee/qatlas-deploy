@@ -140,21 +140,26 @@ release_publish() {
 	docker cp "${2:-$work/releases/$1}" "$prefix-releases:/srv/releases/$1" || fail "cannot publish the test release $1"
 }
 
+# setup_service installs qdeploy from the fake release and starts the service. With the argument default-backup-image
+# the service keeps the unit as installed and backs up with its default helper image; otherwise a drop-in names the
+# local helper image, and the second release for the self-update section is built too.
 setup_service() {
 	step 'install qdeploy from a signed test release with the published installer'
 	release_build v0.1.0
-	release_build v0.2.0
+	[ "${1:-}" = default-backup-image ] || release_build v0.2.0
 	release_publish v0.1.0
 	as_admin 'curl -fsSL -o /tmp/install.sh https://github.com/castrowithcee/qatlas-deploy/releases/latest/download/install.sh &&
 		sudo sh /tmp/install.sh && rm -f /tmp/install.sh' || fail 'the installer failed'
 	# The unit lets the service write /opt/stacks only if it exists at start. The backup helper image is a local
 	# one, so a drop-in (which an update keeps) names it.
-	docker exec "$host" sh -ec '
-		install -d -o qdeploy -g qdeploy -m 0755 /opt/stacks
-		install -d /etc/systemd/system/qdeploy.service.d
-		printf "[Service]\nExecStart=\nExecStart=/usr/local/bin/qdeploy run --backup-image '"$backup_image"'\n" >/etc/systemd/system/qdeploy.service.d/e2e.conf
-		systemctl daemon-reload
-		systemctl restart qdeploy' || fail 'cannot restart the qdeploy service'
+	docker exec "$host" sh -ec 'install -d -o qdeploy -g qdeploy -m 0755 /opt/stacks' || fail 'cannot create /opt/stacks'
+	if [ "${1:-}" != default-backup-image ]; then
+		docker exec "$host" sh -ec '
+			install -d /etc/systemd/system/qdeploy.service.d
+			printf "[Service]\nExecStart=\nExecStart=/usr/local/bin/qdeploy run --backup-image '"$backup_image"'\n" >/etc/systemd/system/qdeploy.service.d/e2e.conf
+			systemctl daemon-reload' || fail 'cannot write the drop-in'
+	fi
+	docker exec "$host" systemctl restart qdeploy || fail 'cannot restart the qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
 	log 'scenario: qdeploy service running'
 
