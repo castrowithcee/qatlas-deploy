@@ -511,3 +511,20 @@ func TestSuccessfulDeliveryAddsNothingToTheRunLog(t *testing.T) {
 		t.Fatalf("run log:\n%s", after.Text)
 	}
 }
+
+func TestNotifyAddAcceptsTheMonitorEvents(t *testing.T) {
+	rcv := newReceiver(t)
+	h := startWith(t, nil, withNotify(rcv))
+	var added control.NotifyChannelInfo
+	if err := h.call(control.NotifyAddCommand, control.NotifyAddArgs{
+		Name: "mon", Type: control.NotifyWebhook, Events: []string{control.NotifyEventRecovered, control.NotifyEventContainerFailed},
+		Secret: rcv.url("/ok"), Key: hookKey,
+	}, &added); err != nil || !slices.Equal(added.Events, []string{"container-failed", "recovered"}) {
+		t.Fatalf("add = %+v, %v", added, err)
+	}
+	var list control.NotifyListResult
+	if err := h.call(control.NotifyListCommand, struct{}{}, &list); err != nil || len(list.Channels) != 1 ||
+		!slices.Equal(list.Channels[0].Events, []string{"container-failed", "recovered"}) {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+}

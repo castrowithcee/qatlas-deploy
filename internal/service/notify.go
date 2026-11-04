@@ -93,6 +93,16 @@ func (n *notifyService) runEvent(ev engine.Event) {
 	n.disp.Submit(notifier.Event{Type: ev.Kind, Stack: ev.Stack, Run: ev.Run, Commit: ev.Commit, Error: ev.Error})
 }
 
+// monitorEvent queues the notice of a failed or recovered container. It only queues, so it never holds the
+// monitor.
+func (n *notifyService) monitorEvent(ev MonitorEvent) {
+	typ := notifier.EventContainerFailed
+	if ev.Recovered {
+		typ = notifier.EventRecovered
+	}
+	n.disp.Submit(notifier.Event{Type: typ, Stack: ev.Stack, Kind: ev.Kind, Container: ev.Container, Since: ev.Since, Time: ev.Time})
+}
+
 // updateAvailable queues an update notice for the versions no notice was made for yet. The window reports
 // only stacks in manual mode. A version is recorded once it is queued; while no channel selects the event it
 // stays unrecorded, so a channel added later hears of the update at the next opening.

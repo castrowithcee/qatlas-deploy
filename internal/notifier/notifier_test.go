@@ -410,3 +410,62 @@ func TestAFailingChannelIsLoggedAndTheOthersStillGetTheEvent(t *testing.T) {
 		t.Fatalf("the log carries a credential: %s", out)
 	}
 }
+
+func TestContainerMessagesNameStackKindContainerAndTimes(t *testing.T) {
+	since := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	at := since.Add(95 * time.Second)
+	failed := notifier.Message(notifier.Event{Type: notifier.EventContainerFailed, Stack: "web", Kind: "unhealthy", Container: "web-app-1", Since: since, Time: since})
+	if failed.Subject != "Stack web: Container web-app-1 failed (unhealthy)" || failed.Event != "container-failed" {
+		t.Errorf("failed = %q, %q", failed.Event, failed.Subject)
+	}
+	for _, want := range []string{"web-app-1 of stack web is unhealthy", "Since: 2026-03-01T10:00:00Z"} {
+		if !strings.Contains(failed.Text, want) {
+			t.Errorf("failed text %q lacks %q", failed.Text, want)
+		}
+	}
+	var body map[string]any
+	if err := json.Unmarshal(failed.JSON, &body); err != nil || body["event"] != "container-failed" || body["stack"] != "web" ||
+		body["kind"] != "unhealthy" || body["container"] != "web-app-1" || body["since"] != "2026-03-01T10:00:00Z" || body["at"] != nil {
+		t.Errorf("failed json = %s, %v", failed.JSON, err)
+	}
+
+	rec := notifier.Message(notifier.Event{Type: notifier.EventRecovered, Stack: "web", Kind: "missing", Container: "app", Since: since, Time: at})
+	if rec.Subject != "Stack web: Service app recovered" {
+		t.Errorf("recovered subject = %q", rec.Subject)
+	}
+	for _, want := range []string{"Service app of stack web is fine again", "(missing)", "Failed since: 2026-03-01T10:00:00Z", "down for 1m35s"} {
+		if !strings.Contains(rec.Text, want) {
+			t.Errorf("recovered text %q lacks %q", rec.Text, want)
+		}
+	}
+	body = nil
+	if err := json.Unmarshal(rec.JSON, &body); err != nil || body["event"] != "recovered" || body["kind"] != "missing" || body["at"] != "2026-03-01T10:01:35Z" {
+		t.Errorf("recovered json = %s, %v", rec.JSON, err)
+	}
+}
+
+func TestChannelsWithoutTheMonitorEventsNeverGetThem(t *testing.T) {
+	oldAll := []string{"succeeded", "failed", "rolled-back", "rollback-failed", "update-available"}
+	list := []notifier.Channel{
+		{Name: "old", Type: notifier.TypeWebhook, Events: oldAll},
+		{Name: "mon", Type: notifier.TypeWebhook, Events: []string{notifier.EventContainerFailed, notifier.EventRecovered}},
+	}
+	// A stored list is kept as it is: it does not grow the events added later.
+	if got, err := notifier.NormalizeEvents(oldAll); err != nil || !slices.Equal(got, oldAll) {
+		t.Fatalf("stored list = %v, %v", got, err)
+	}
+	if got, err := notifier.NormalizeEvents([]string{"recovered", "container-failed"}); err != nil || !slices.Equal(got, []string{"container-failed", "recovered"}) {
+		t.Fatalf("new events = %v, %v", got, err)
+	}
+	fs := &fakeSender{}
+	d, _ := dispatcher(t, fs, list, nil)
+	d.Submit(notifier.Event{Type: notifier.EventContainerFailed, Stack: "web", Kind: "exited", Container: "web-app-1"})
+	d.Submit(notifier.Event{Type: notifier.EventRecovered, Stack: "web", Kind: "exited", Container: "web-app-1"})
+	d.Close()
+	if got := fs.events("https://hooks.example.test/old"); len(got) != 0 {
+		t.Errorf("old = %v", got)
+	}
+	if got := fs.events("https://hooks.example.test/mon"); !slices.Equal(got, []string{"container-failed", "recovered"}) {
+		t.Errorf("mon = %v", got)
+	}
+}

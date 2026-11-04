@@ -44,6 +44,16 @@ const (
 	FindingRemoved      = "removed"       // the folder is gone from the repository; nothing is stopped
 	FindingPaused       = "paused"        // a rollback failed; no run starts until the stack is resumed
 	FindingStopped      = "stopped"       // the operator stopped the stack; no run starts until it is started
+	// FindingContainerFailed is not stored with the findings of a poll; status derives it from StackState.Failure.
+	FindingContainerFailed = "container-failed"
+)
+
+// Kinds of a container failure found between runs, see Failure.
+const (
+	FailureExited      = "exited"       // a container exited or died without a stop through qdeploy
+	FailureUnhealthy   = "unhealthy"    // a container stayed unhealthy
+	FailureRestartLoop = "restart-loop" // a container's restart count keeps rising
+	FailureMissing     = "missing"      // a container of the deployed stack is gone
 )
 
 var (
@@ -92,6 +102,25 @@ type StackState struct {
 	Stopped *Hold `json:"stopped,omitempty"`
 	// Updates is the result of the last update detection; nil for a stack that was never checked.
 	Updates *UpdateCheck `json:"updates,omitempty"`
+	// Failure is the open container failure the monitor found between runs; nil while the stack runs.
+	Failure *Failure `json:"failure,omitempty"`
+	// Services are the Compose services seen running healthy at the monitor's last good observation; a
+	// service missing from the containers later is a failure. Empty until the first good observation after a run.
+	Services []string `json:"services,omitempty"`
+	// StoppedContainers are the IDs of containers stopped through qdeploy; the monitor does not report them
+	// until they run again or are gone.
+	StoppedContainers []string `json:"stopped_containers,omitempty"`
+}
+
+// MaxMonitorServices bounds Services.
+const MaxMonitorServices = 256
+
+// Failure is one failure of a stack's containers: what kind, which container (or service for a missing one)
+// and since when. It lasts until the stack runs again.
+type Failure struct {
+	Kind      string    `json:"kind"`
+	Container string    `json:"container,omitempty"`
+	Since     time.Time `json:"since"`
 }
 
 // Limits of a stored update check. The detector clips to them, so a valid result is never refused.
@@ -196,6 +225,9 @@ func validateState(s State) error {
 				return err
 			}
 		}
+		if err := validateMonitor(st); err != nil {
+			return err
+		}
 	}
 	for _, r := range s.Runs {
 		if !runIDRe.MatchString(r.ID) {
@@ -203,6 +235,36 @@ func validateState(s State) error {
 		}
 		if r.RolledBackTo != "" && !commitRe.MatchString(r.RolledBackTo) {
 			return errors.New("invalid commit id")
+		}
+	}
+	return nil
+}
+
+func validateMonitor(st StackState) error {
+	if f := st.Failure; f != nil {
+		switch f.Kind {
+		case FailureExited, FailureUnhealthy, FailureRestartLoop, FailureMissing:
+		default:
+			return errors.New("invalid failure kind")
+		}
+		if f.Since.IsZero() || len(f.Container) > maxNameLen {
+			return errors.New("invalid failure")
+		}
+	}
+	if len(st.Services) > MaxMonitorServices {
+		return errors.New("too many services")
+	}
+	for _, n := range st.Services {
+		if n == "" || len(n) > maxNameLen {
+			return errors.New("invalid service name")
+		}
+	}
+	if len(st.StoppedContainers) > MaxMonitorServices {
+		return errors.New("too many stopped containers")
+	}
+	for _, id := range st.StoppedContainers {
+		if id == "" || len(id) > maxNameLen {
+			return errors.New("invalid container id")
 		}
 	}
 	return nil
@@ -275,6 +337,12 @@ func (s State) clone() State {
 			u.Items = append([]UpdateItem(nil), u.Items...)
 			v.Updates = &u
 		}
+		if v.Failure != nil {
+			f := *v.Failure
+			v.Failure = &f
+		}
+		v.Services = append([]string(nil), v.Services...)
+		v.StoppedContainers = append([]string(nil), v.StoppedContainers...)
 		out.Stacks[k] = v
 	}
 	out.Runs = append([]RunRecord(nil), s.Runs...)

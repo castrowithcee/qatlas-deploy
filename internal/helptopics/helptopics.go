@@ -180,15 +180,17 @@ const notificationsTopic = `A notification channel receives the events it select
 - qdeploy notify remove <name>: remove a channel and its stored secrets
 - qdeploy notify test <name>: send one test message once, without retries; a failure carries the error class of the delivery (auth, permission, not-found, rate-limited, unreachable, timeout, tls, config-invalid, invalid-request or runtime) in its message and exit code
 
-Events (--events takes a comma list; without it the channel receives all):
+Events (--events takes a comma list; without it a new channel receives all; a stored channel keeps the events it selected):
 - succeeded: a run deployed a commit
 - failed: a run failed and no rollback was made
 - rolled-back: a run failed and the stack was rolled back to the previous state
 - rollback-failed: a run failed and the rollback failed too; the stack is stopped and paused
+- container-failed: the failure monitor found a container of an own stack failed (see qdeploy help containers); one message per failure with stack, kind, container and the time since which it failed
+- recovered: that failure ended; names the same container and how long it lasted
 - update-available: a newer image version was found for a stack in manual mode, once per version
 
 Channel types and settings:
-- webhook: posts JSON (event, stack, run, commit, error, items) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
+- webhook: posts JSON (event, stack, run, commit, error, items; for container-failed and recovered kind, container, since and, on recovered, at) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
 - slack: posts text to an incoming-webhook URL.
 - telegram: sends text to a chat; needs --chat-id, and --base-url for a Bot API server of your own.
 - smtp: sends an e-mail; needs --host, --from and --to (comma list or repeated); --port (default 587 with starttls, 465 with tls), --security starttls (default) or tls, and --user for a login. The connection is always encrypted.
@@ -219,5 +221,12 @@ Stacks: qdeploy stack start|stop|restart <stack> [--yes] act on all containers o
 Metrics: --metrics adds CPU (100 per fully used CPU) and memory of the running containers. Reading them takes about two seconds per running container, in parallel and within a time limit, so the command may wait up to two minutes. If a reading fails or the time runs out, the list says that the metrics are incomplete and the container shows none.
 
 Container engine: the service reads the engine's socket, by default /var/run/docker.sock; qdeploy run --docker-socket <path> names another one. If the engine cannot be reached, the service user may not use it, or it does not answer in time, the command says so and shows nothing.
+
+Failure monitor: every 30 seconds the service checks the containers of own stacks and reports a failure once, as the finding container-failed in qdeploy status and as the notification event container-failed; when the failure ends it sends recovered. The kinds:
+- exited: a container exited with a non-zero code or is dead (an exit with code 0, such as an init job, is fine)
+- unhealthy: its health check has been failing for more than 60 seconds
+- restart-loop: its restart count rose by 3 or more within 5 minutes
+- missing: a service that was running at the last good reading is gone
+Nothing is checked while a run or an action of the stack is active, nor for stopped (qdeploy stack stop), paused (either pause) and foreign stacks. A container stopped with qdeploy container stop is no failure. The monitor only reports; it never acts on a container.
 
 Environment: only the names of the variables are shown, never their values.`
