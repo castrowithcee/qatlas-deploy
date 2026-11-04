@@ -46,6 +46,23 @@ func TestUpdateCommand(t *testing.T) {
 	}
 }
 
+func TestUpdateVersionFlags(t *testing.T) {
+	startUpdate(t, okDeployer{})
+	if code, _, stderr := run(t, "stack", "update", "demo-stack", "--var", "DEMO_APP_VERSION"); code == 0 || !strings.Contains(stderr, "--var needs --version") {
+		t.Fatalf("var alone: %d %q", code, stderr)
+	}
+	if code, _, stderr := run(t, "stack", "update", "demo-stack", "plain-stack", "--version", "9.0.0"); code == 0 || !strings.Contains(stderr, "exactly one stack") {
+		t.Fatalf("two stacks: %d %q", code, stderr)
+	}
+	if code, _, stderr := run(t, "stack", "update", "demo-stack", "--version", "1.3.0", "--var", "OTHER_VERSION"); code == 0 || !strings.Contains(stderr, "DEMO_APP_VERSION") {
+		t.Fatalf("unknown variable: %d %q", code, stderr)
+	}
+	code, out, stderr := run(t, "stack", "update", "demo-stack", "--version", "1.3.0", "--var", "DEMO_APP_VERSION", "--output", "json")
+	if code != 0 || !strings.Contains(out, `"to": "1.3.0"`) && !strings.Contains(out, `"to":"1.3.0"`) {
+		t.Fatalf("named variable: %d %s %s", code, out, stderr)
+	}
+}
+
 func TestUpdateFailedStepExitsWithOne(t *testing.T) {
 	dep := &checkDeployer{}
 	startUpdate(t, dep)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
@@ -48,9 +49,29 @@ func TestPlanTargets(t *testing.T) {
 		{"each variable in turn", planStack("minor", stacks.MajorStepwise, app, imgVar("DB_VERSION", host+"/demo/db", "5.0.0"), app),
 			"", append(steps("APP_VERSION", "1.0.0", "1.1.0"), steps("DB_VERSION", "5.0.0", "5.0.1")...)},
 	} {
-		got, err := d.Plan(context.Background(), tc.st, tc.target)
+		got, err := d.Plan(context.Background(), tc.st, tc.target, "")
 		if err != nil || !slices.Equal(got, tc.want) {
 			t.Errorf("%s: %+v, %v; want %+v", tc.name, got, err, tc.want)
+		}
+	}
+}
+
+func TestPlanVariable(t *testing.T) {
+	srv := registrytest.New(t, registrytest.Config{Repos: map[string][]string{"demo/app": planTags, "demo/db": {"5.0.0", "5.0.1"}}})
+	d := detector(srv.URL, anonymous)
+	st := planStack("minor", stacks.MajorStepwise, imgVar("APP_VERSION", host+"/demo/app", "1.0.0"), imgVar("DB_VERSION", host+"/demo/db", "5.0.0"))
+	got, err := d.Plan(context.Background(), st, "5.0.1", "DB_VERSION")
+	if err != nil || !slices.Equal(got, steps("DB_VERSION", "5.0.0", "5.0.1")) {
+		t.Errorf("named variable: %+v, %v", got, err)
+	}
+	for _, tc := range []struct{ variable, want string }{
+		{"", "--var: APP_VERSION, DB_VERSION"},
+		{"OTHER", "no image version variable OTHER; its variables are APP_VERSION, DB_VERSION"},
+	} {
+		got, err := d.Plan(context.Background(), st, "5.0.1", tc.variable)
+		var pe *PlanError
+		if !errors.As(err, &pe) || pe.Kind != PlanVersion || got != nil || !strings.Contains(pe.Text, tc.want) {
+			t.Errorf("variable %q: %+v, %v; want %q", tc.variable, got, err, tc.want)
 		}
 	}
 }
@@ -85,7 +106,7 @@ func TestPlanRefusals(t *testing.T) {
 		{"one variable, two images", "", PlanRefused, planStack("minor", stacks.MajorStepwise, app, imgVar("APP_VERSION", host+"/demo/other", "2.0.0"))},
 		{"registry", "", PlanRegistry, planStack("minor", stacks.MajorStepwise, imgVar("APP_VERSION", host+"/demo/missing", "2.0.0"))},
 	} {
-		got, err := d.Plan(context.Background(), tc.st, tc.target)
+		got, err := d.Plan(context.Background(), tc.st, tc.target, "")
 		var pe *PlanError
 		if !errors.As(err, &pe) || pe.Kind != tc.kind || got != nil {
 			t.Errorf("%s: %+v, %v; want a %s error", tc.name, got, err, tc.kind)
