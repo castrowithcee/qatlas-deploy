@@ -15,7 +15,7 @@ func All() []helptopics.Topic {
 		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
 		{Name: "notifications", Short: "Notification channels: events, types and secrets", Text: notificationsTopic},
-		{Name: "containers", Short: "Reading the containers of the host: kinds, states, metrics", Text: containersTopic},
+		{Name: "containers", Short: "The containers of the host: kinds, states, metrics, start, stop, restart", Text: containersTopic},
 	}
 }
 
@@ -46,6 +46,7 @@ Commands:
 - qdeploy notify list|add|remove|test: manage the notification channels (webhook, Slack, Telegram, e-mail) and send a test message through one (run with sudo; see qdeploy help notifications)
 - qdeploy update [version], qdeploy update status: update qdeploy itself to the latest stable release or to a given newer one from its signed GitHub releases and restart the service; status shows the installed version and the latest release and changes nothing (update runs with sudo and needs --confirm; stack updates are qdeploy stack update)
 - qdeploy container list [--metrics], qdeploy container show <name>: show every container of the host, own stacks, foreign Compose projects and single containers, with state; changes nothing (run with sudo; see qdeploy help containers)
+- qdeploy container start|stop|restart <name> [--yes]: start, stop or restart one container of the host after a question (run with sudo; see qdeploy help containers)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`
 
@@ -192,11 +193,12 @@ Secrets: the webhook URL and its signing key, the Slack URL, the Telegram bot to
 
 Delivery runs in the background after the event; a failing channel is retried a few times and never delays or fails a run. A delivery that still fails is noted in the log of its run (qdeploy stack log <run>) and in the service log.`
 
-const containersTopic = `qdeploy container list and qdeploy container show read the containers of the whole host from the container engine and change nothing. Run them with sudo; the service must run.
+const containersTopic = `qdeploy container list and qdeploy container show read the containers of the whole host from the container engine and change nothing. qdeploy container start, stop and restart act on one container. Run them with sudo; the service must run.
 
 Commands:
 - qdeploy container list [--metrics]: every container, grouped; add --output json for the service's result as it is
 - qdeploy container show <name>: one container by name or ID, with its group, state, ports, mounts, networks, labels and the names of its environment variables
+- qdeploy container start|stop|restart <name> [--yes]: act on one container by name or ID, also a foreign or single one
 
 Kinds of a group:
 - own: a Compose project that is a stack of the bound stacks repository and was started from that stack's folder
@@ -205,6 +207,8 @@ Kinds of a group:
 - conflict: a foreign project that has the name of a stack of this host but was started from another folder; it is not the stack and is marked in the list
 
 State of a group is the worst state of its containers, in this order: unhealthy, restarting, stopped, starting, ok. The uptime of a group is that of its youngest running container; restarts are summed.
+
+Actions: the command names the container and its kind and asks first (default no); --yes answers the question, and without a terminal --yes is required. A stop signals the container and kills it after ten seconds; stopping a stopped or starting a running container changes nothing. After a start or restart the service waits up to a minute until the container runs and, if it has a health check, is healthy; if it is not ready by then the command shows the state and fails. A container of a stack of this host is refused while a run of that stack is active.
 
 Metrics: --metrics adds CPU (100 per fully used CPU) and memory of the running containers. Reading them takes about two seconds per running container, in parallel and within a time limit, so the command may wait up to two minutes. If a reading fails or the time runs out, the list says that the metrics are incomplete and the container shows none.
 

@@ -22,12 +22,16 @@ import (
 func newContainerCommand(program *cobracli.Program, state *notRunning) *cobra.Command {
 	group := &cobra.Command{
 		Use:   "container",
-		Short: "Show the containers of the host",
+		Short: "Show the containers of the host and start, stop or restart one",
 		Long: "The container commands read every container of the host from the container engine: the stacks of this\n" +
-			"host (own), other Compose projects (foreign) and containers that belong to no project (single). They\n" +
-			"change nothing. Only root may use the service channel, so run them with sudo. See 'qdeploy help containers'.",
+			"host (own), other Compose projects (foreign) and containers that belong to no project (single). list\n" +
+			"and show change nothing; start, stop and restart act on one container after a question. Only root may\n" +
+			"use the service channel, so run them with sudo. See 'qdeploy help containers'.",
 	}
 	group.AddCommand(newContainerList(program, state), newContainerShow(program, state))
+	for _, verb := range []string{"start", "stop", "restart"} {
+		group.AddCommand(newContainerAction(program, state, verb))
+	}
 	return group
 }
 
@@ -78,6 +82,73 @@ func newContainerShow(program *cobracli.Program, state *notRunning) *cobra.Comma
 			return encodeContainerDetail(c.OutOrStdout(), program.Format(), d)
 		},
 	}
+}
+
+var containerActionCommands = map[string]string{
+	"start": control.ContainerStartCommand, "stop": control.ContainerStopCommand, "restart": control.ContainerRestartCommand,
+}
+
+func newContainerAction(program *cobracli.Program, state *notRunning, verb string) *cobra.Command {
+	var gate *cobracli.Gate
+	long := map[string]string{
+		"start": "start starts a stopped container and waits up to a minute until it runs and, if it has a health check,\n" +
+			"is healthy. A container that already runs is left as it is.",
+		"stop": "stop signals the container to end and kills it after ten seconds. A container that is already stopped\n" +
+			"is left as it is.",
+		"restart": "restart stops the container as stop does, starts it and waits up to a minute until it runs and, if it\n" +
+			"has a health check, is healthy.",
+	}[verb]
+	cmd := &cobra.Command{
+		Use:   verb + " <name> [--yes]",
+		Short: map[string]string{"start": "Start a container", "stop": "Stop a container", "restart": "Restart a container"}[verb],
+		Long: long + "\nIt takes the name or the ID of any container of the host, also a foreign or single one. A\n" +
+			"container of a stack of this host is refused while a run of that stack is active. At a terminal the\n" +
+			"command asks first (default no); without a terminal it refuses unless --yes is given (with --agent,\n" +
+			"--yes is always needed).",
+		Args: cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			var d control.ContainerDetail
+			if err := containerCall(c, state, client.CallTimeout, control.ContainerGetCommand, control.ContainerGetArgs{Name: args[0]}, &d); err != nil {
+				return err
+			}
+			question := fmt.Sprintf("%s container %s (%s)?", strings.ToUpper(verb[:1])+verb[1:], d.Name, containerKindText(d))
+			return gate.Run(cobracli.Request{Question: question}, func() error {
+				var res control.ContainerActionResult
+				if err := containerCall(c, state, control.ContainerActionTimeout, containerActionCommands[verb],
+					control.ContainerActionArgs{Name: d.ID}, &res); err != nil {
+					return err
+				}
+				if err := encodeContainerAction(c.OutOrStdout(), program.Format(), res); err != nil {
+					return err
+				}
+				if res.NotReady != "" {
+					return &cli.Failure{Code: output.CodeRuntime, Message: "container " + res.Name + " is not ready: " + res.NotReady,
+						NextStep: "Check the container with 'qdeploy container show " + res.Name + "'."}
+				}
+				return nil
+			})
+		},
+	}
+	gate = program.AddGate(cmd, cobracli.Gates{Question: true})
+	return cmd
+}
+
+func containerKindText(d control.ContainerDetail) string {
+	switch d.Kind {
+	case control.ContainerKindOwn:
+		return "own, stack " + d.Project
+	case control.ContainerKindForeign:
+		return "foreign, project " + d.Project
+	}
+	return "single"
+}
+
+func encodeContainerAction(w io.Writer, format output.Format, res control.ContainerActionResult) error {
+	return output.Encode(w, format, output.Object{Fields: []output.Field{
+		{Name: "name", Value: res.Name}, {Name: "kind", Value: res.Kind}, {Name: "state", Value: res.State},
+		{Name: "engine_state", Value: res.EngineState}, {Name: "health", Value: res.Health},
+		{Name: "not_ready", Value: res.NotReady},
+	}})
 }
 
 // containerCall adds the codes of the container engine to what failureOf knows.

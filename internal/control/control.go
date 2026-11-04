@@ -793,6 +793,39 @@ const (
 	ContainerGetCommand  = "container.get"
 )
 
+// ContainerStartCommand, ContainerStopCommand and ContainerRestartCommand act on one container by name or ID.
+// A container of an own stack is acted on while the stack's run slot is held, so an active run of that stack is
+// refused with CodeRunActive.
+const (
+	ContainerStartCommand   = "container.start"
+	ContainerStopCommand    = "container.stop"
+	ContainerRestartCommand = "container.restart"
+)
+
+// ContainerActionTimeout is how long a client should wait for a container action: the default grace period of
+// a stop or restart plus the wait of a start or restart until the container is ready.
+const ContainerActionTimeout = 3 * time.Minute
+
+// ContainerActionArgs names the container. GraceSeconds is how long a stop or restart waits for the container
+// to end before the engine kills it; zero means ContainerDefaultGraceSeconds, the largest value is one hour.
+type ContainerActionArgs struct {
+	Name         string `json:"name"`
+	GraceSeconds int    `json:"grace_seconds,omitempty"`
+}
+
+// ContainerDefaultGraceSeconds is the grace period of a stop or restart that names none.
+const ContainerDefaultGraceSeconds = 10
+
+// ContainerActionResult answers a container action with the container as it is afterwards. Kind is the kind of
+// its group. After a start or restart the service waits for the container to run and, if it has a health
+// check, to be healthy; NotReady then says why it was not at the end of the wait (exited, restarting,
+// not-running, unhealthy or starting) and is empty if it was ready. A stop never waits and has no NotReady.
+type ContainerActionResult struct {
+	ContainerSummary
+	Kind     string `json:"kind"`
+	NotReady string `json:"not_ready,omitempty"`
+}
+
 // The codes of a container engine that cannot be used; a missing container is CodeNotFound and an answer
 // beyond MaxResponseBytes is CodeTooLarge.
 const (

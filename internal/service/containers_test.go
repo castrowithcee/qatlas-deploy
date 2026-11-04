@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -34,6 +35,59 @@ type fakeDocker struct {
 	statsErr map[string]error
 
 	inflight, peak atomic.Int32
+
+	mu       sync.Mutex
+	acts     []string
+	actErr   error
+	waitOpts docker.WaitOptions
+	waitFn   func(ctx context.Context) ([]docker.WaitResult, error)
+}
+
+// setState changes the state of a container held in details, by name and by ID.
+func (f *fakeDocker) setState(state string) func(ref string) {
+	return func(ref string) {
+		d := f.details[ref]
+		d.State = state
+		f.details[d.Name], f.details[d.ID] = d, d
+	}
+}
+
+func (f *fakeDocker) record(verb, ref string, state string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.acts = append(f.acts, verb+" "+ref)
+	if f.actErr != nil {
+		return f.actErr
+	}
+	f.setState(state)(ref)
+	return nil
+}
+
+func (f *fakeDocker) calls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.acts...)
+}
+
+func (f *fakeDocker) Start(_ context.Context, ref string) error {
+	return f.record("start", ref, "running")
+}
+func (f *fakeDocker) Stop(_ context.Context, ref string, g time.Duration) error {
+	return f.record(fmt.Sprintf("stop/%s", g), ref, "exited")
+}
+func (f *fakeDocker) Restart(_ context.Context, ref string, g time.Duration) error {
+	return f.record(fmt.Sprintf("restart/%s", g), ref, "running")
+}
+
+func (f *fakeDocker) WaitHealthy(ctx context.Context, refs []string, o docker.WaitOptions) ([]docker.WaitResult, error) {
+	f.mu.Lock()
+	f.waitOpts = o
+	fn := f.waitFn
+	f.mu.Unlock()
+	if fn != nil {
+		return fn(ctx)
+	}
+	return []docker.WaitResult{{Ref: refs[0], OK: true}}, nil
 }
 
 func (f *fakeDocker) List(context.Context) ([]docker.Container, error) { return f.list, f.listErr }
@@ -392,5 +446,154 @@ func TestContainerAnswerBeyondTheBoundIsRefused(t *testing.T) {
 	var res control.ContainerListResult
 	if err := h.call(control.ContainerListCommand, control.ContainerListArgs{}, &res); err != nil || len(res.Groups) != 20 {
 		t.Fatalf("small list: %v, %d groups", err, len(res.Groups))
+	}
+}
+
+// actionDocker holds one container twice, by name and by ID, as the engine resolves either.
+func actionDocker(name, id string, labels map[string]string, state string) *fakeDocker {
+	c := running(id, name, labels)
+	c.State = state
+	d := docker.Details{Container: c}
+	return &fakeDocker{details: map[string]docker.Details{name: d, id: d}}
+}
+
+func TestContainerActionsOnForeignAndSingle(t *testing.T) {
+	fd := actionDocker("lonely", "c1", nil, "exited")
+	h := startWith(t, nil, withDocker(fd))
+	var res control.ContainerActionResult
+	if err := h.call(control.ContainerStartCommand, control.ContainerActionArgs{Name: "lonely"}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Kind != control.ContainerKindSingle || res.State != control.ContainerOK || res.EngineState != "running" || res.NotReady != "" {
+		t.Fatalf("start = %+v", res)
+	}
+	if err := h.call(control.ContainerStopCommand, control.ContainerActionArgs{Name: "lonely", GraceSeconds: 3}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.State != control.ContainerStopped || res.EngineState != "exited" {
+		t.Fatalf("stop = %+v", res)
+	}
+	if err := h.call(control.ContainerRestartCommand, control.ContainerActionArgs{Name: "lonely"}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.State != control.ContainerOK {
+		t.Fatalf("restart = %+v", res)
+	}
+	want := "start c1,stop/3s c1,restart/10s c1"
+	if got := strings.Join(fd.calls(), ","); got != want {
+		t.Fatalf("calls = %s, want %s", got, want)
+	}
+	logs := h.logs.String()
+	for _, w := range []string{`action=start target=lonely kind=single result=ok`, `action=stop target=lonely`, `action=restart target=lonely`} {
+		if !strings.Contains(logs, w) {
+			t.Errorf("journal lacks %q:\n%s", w, logs)
+		}
+	}
+}
+
+func TestContainerActionOfForeignProjectNeedsNoRunSlot(t *testing.T) {
+	d := &fakeDeployer{}
+	// Foreign: the project is a stack of the repository but started from another folder.
+	fd := actionDocker("plain-stack-app-1", "c1", map[string]string{lblProject: "plain-stack", lblDir: "/srv/other/plain-stack"}, "exited")
+	h := boundWith(t, d, nil, withDocker(fd))
+	_, release := d.hold()
+	defer release()
+	if err := h.call(control.DeployCommand, control.DeployArgs{Stack: "plain-stack"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var res control.ContainerActionResult
+	if err := h.call(control.ContainerStartCommand, control.ContainerActionArgs{Name: "plain-stack-app-1"}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Kind != control.ContainerKindForeign || len(fd.calls()) != 1 {
+		t.Fatalf("res = %+v, calls = %v", res, fd.calls())
+	}
+}
+
+func TestContainerActionOfOwnStackHonorsTheRunSlot(t *testing.T) {
+	d := &fakeDeployer{}
+	fd := &fakeDocker{details: map[string]docker.Details{}}
+	h := boundWith(t, d, nil, withDocker(fd))
+	labels := map[string]string{lblProject: "plain-stack", lblDir: filepath.Join(h.dir, "plain-stack")}
+	c := running("c1", "plain-stack-app-1", labels)
+	fd.details["plain-stack-app-1"], fd.details["c1"] = docker.Details{Container: c}, docker.Details{Container: c}
+
+	entered, release := d.hold()
+	if err := h.call(control.DeployCommand, control.DeployArgs{Stack: "plain-stack"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	for _, command := range []string{control.ContainerStartCommand, control.ContainerStopCommand, control.ContainerRestartCommand} {
+		wantCode(t, h.call(command, control.ContainerActionArgs{Name: "plain-stack-app-1"}, nil), control.CodeRunActive)
+	}
+	if got := fd.calls(); len(got) != 0 {
+		t.Fatalf("the engine was called during a run: %v", got)
+	}
+	release()
+	var res control.ContainerActionResult
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		err := h.call(control.ContainerStopCommand, control.ContainerActionArgs{Name: "plain-stack-app-1"}, &res)
+		if err == nil {
+			break
+		}
+		wantCode(t, err, control.CodeRunActive)
+		if time.Now().After(deadline) {
+			t.Fatal("the run slot was not released")
+		}
+	}
+	if res.Kind != control.ContainerKindOwn || res.State != control.ContainerStopped {
+		t.Fatalf("res = %+v", res)
+	}
+	if !strings.Contains(h.logs.String(), "target=plain-stack-app-1 kind=own result=run-active") {
+		t.Fatalf("the refusal is not in the journal:\n%s", h.logs.String())
+	}
+}
+
+func TestContainerActionWaitIsBoundedAndReported(t *testing.T) {
+	fd := actionDocker("lonely", "c1", nil, "exited")
+	fd.waitFn = func(context.Context) ([]docker.WaitResult, error) {
+		return []docker.WaitResult{{Ref: "c1", Reason: docker.ReasonUnhealthy}}, nil
+	}
+	h := startWith(t, nil, withDocker(fd), func(c *service.Config) { c.ContainerWait = 2 * time.Second })
+	var res control.ContainerActionResult
+	if err := h.call(control.ContainerStartCommand, control.ContainerActionArgs{Name: "lonely"}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.NotReady != "unhealthy" || fd.waitOpts.Deadline != 2*time.Second {
+		t.Fatalf("res = %+v, wait = %+v", res, fd.waitOpts)
+	}
+	if !strings.Contains(h.logs.String(), "result=not-ready:unhealthy") && !strings.Contains(h.logs.String(), `result="not-ready: unhealthy"`) {
+		t.Fatalf("journal: %s", h.logs.String())
+	}
+	// A stop does not wait.
+	fd.waitOpts = docker.WaitOptions{}
+	res = control.ContainerActionResult{}
+	if err := h.call(control.ContainerStopCommand, control.ContainerActionArgs{Name: "lonely"}, &res); err != nil || res.NotReady != "" || fd.waitOpts.Deadline != 0 {
+		t.Fatalf("stop: %v %+v %+v", err, res, fd.waitOpts)
+	}
+	// A failing wait is mapped like any engine failure.
+	fd.waitFn = func(context.Context) ([]docker.WaitResult, error) {
+		return nil, &docker.Error{Code: output.CodeTimeout, Message: "x"}
+	}
+	wantCode(t, h.call(control.ContainerRestartCommand, control.ContainerActionArgs{Name: "lonely"}, nil), control.CodeDockerTimeout)
+}
+
+func TestContainerActionErrors(t *testing.T) {
+	fd := actionDocker("lonely", "c1", nil, "running")
+	h := startWith(t, nil, withDocker(fd))
+	wantCode(t, h.call(control.ContainerStopCommand, control.ContainerActionArgs{Name: "missing"}, nil), control.CodeNotFound)
+	wantCode(t, h.call(control.ContainerStopCommand, control.ContainerActionArgs{}, nil), control.CodeBadRequest)
+	wantCode(t, h.call(control.ContainerStopCommand, control.ContainerActionArgs{Name: "lonely", GraceSeconds: -1}, nil), control.CodeInvalid)
+	wantCode(t, h.call(control.ContainerStopCommand, control.ContainerActionArgs{Name: "lonely", GraceSeconds: 3601}, nil), control.CodeInvalid)
+	for code, want := range map[output.Code]string{
+		output.CodeUnreachable: control.CodeDockerUnreachable, output.CodePermission: control.CodeDockerPermission,
+		output.CodeTimeout: control.CodeDockerTimeout, output.CodeInvalidRequest: control.CodeInvalid,
+	} {
+		fd.actErr = &docker.Error{Code: code, Message: "engine text"}
+		err := h.call(control.ContainerStopCommand, control.ContainerActionArgs{Name: "lonely"}, nil)
+		wantCode(t, err, want)
+		if strings.Contains(err.Error(), "engine text") {
+			t.Errorf("engine text leaked: %v", err)
+		}
 	}
 }

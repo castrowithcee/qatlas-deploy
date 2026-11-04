@@ -55,6 +55,9 @@ type Config struct {
 	// Docker reads the containers of the host. Nil means the container engine at DockerSocket; tests inject
 	// their own.
 	Docker Docker
+	// ContainerWait bounds how long a container start or restart waits for the container to be ready; zero means
+	// one minute. Tests shorten it.
+	ContainerWait time.Duration
 	// PollInterval is the time between repository polls; zero means engine.DefaultInterval.
 	PollInterval time.Duration
 	// Clock drives the poll loop and the maintenance window; nil means the system clock. Tests inject their own.
@@ -157,7 +160,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		defer client.Close()
 		dock = client
 	}
-	if err := registerContainerCommands(registry, repo, dock, log); err != nil {
+	if err := registerContainerCommands(registry, repo, eng, dock, cfg.ContainerWait, log); err != nil {
 		return err
 	}
 	engineDone := make(chan struct{})

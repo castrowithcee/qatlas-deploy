@@ -1035,6 +1035,8 @@ scenario_stacks_repo() {
 
 	scenario_containers
 
+	scenario_container_actions
+
 	scenario_backup
 
 	scenario_updates
@@ -1132,6 +1134,46 @@ scenario_containers() {
 		if printf '%s' "$text" | grep -qF -- "$planted"; then fail 'an environment value shows in the container output'; fi
 	done
 	log 'scenario: container list showed own, foreign and single; the planted value stayed hidden'
+}
+
+# scenario_container_actions proves that qdeploy container stop, start and restart act on a single container and
+# that the question needs --yes without a terminal. The container is removed before the answers are checked.
+scenario_container_actions() {
+	step 'container stop, start and restart act on a single container'
+	image=registry.$domain/demo/app:1.0.0
+	single=$prefix-single-act
+	docker exec "$host" docker rm -f "$single" >/dev/null 2>&1 || true
+	docker exec "$host" docker run -d --name "$single" --label "$label" "$image" >/dev/null ||
+		fail 'cannot start the single container'
+	wait_for 'the single container' 30 health_is "$single" healthy
+
+	refuse_rc=0 stop_rc=0 start_rc=0 restart_rc=0 missing_rc=0
+	refuse_out=$(qd container stop "$single") || refuse_rc=$?
+	refuse_state=$(qd --output json container show "$single")
+	stop_out=$(qd container stop "$single" --yes) || stop_rc=$?
+	stop_state=$(qd --output json container show "$single")
+	start_out=$(qd container start "$single" --yes) || start_rc=$?
+	start_state=$(qd --output json container show "$single")
+	started_before=$(docker exec "$host" docker inspect -f '{{.State.StartedAt}}' "$single")
+	restart_out=$(qd container restart "$single" --yes) || restart_rc=$?
+	restart_state=$(qd --output json container show "$single")
+	started_after=$(docker exec "$host" docker inspect -f '{{.State.StartedAt}}' "$single")
+	missing_out=$(qd container stop "$prefix-no-such-container" --yes) || missing_rc=$?
+	docker exec "$host" docker rm -f "$single" >/dev/null 2>&1
+
+	[ "$refuse_rc" -ne 0 ] || fail "container stop without --yes succeeded: $refuse_out"
+	printf '%s' "$refuse_out" | grep -q -- '--yes' || fail "the refusal does not name --yes: $refuse_out"
+	printf '%s' "$refuse_state" | grep -q '"engine_state": *"running"' || fail "a refused stop changed the container: $refuse_state"
+	[ "$stop_rc" -eq 0 ] || fail "container stop failed: $stop_out"
+	printf '%s' "$stop_state" | grep -q '"state": *"stopped"' || fail "the container is not stopped after container stop: $stop_state"
+	[ "$start_rc" -eq 0 ] || fail "container start failed: $start_out"
+	printf '%s' "$start_state" | grep -q '"engine_state": *"running"' || fail "the container does not run after container start: $start_state"
+	[ "$restart_rc" -eq 0 ] || fail "container restart failed: $restart_out"
+	printf '%s' "$restart_state" | grep -q '"engine_state": *"running"' || fail "the container does not run after container restart: $restart_state"
+	[ "$started_before" != "$started_after" ] || fail 'container restart did not restart the container'
+	[ "$missing_rc" -ne 0 ] || fail "container stop of a missing container succeeded: $missing_out"
+	printf '%s' "$missing_out" | grep -q 'no such container' || fail "the refusal of a missing container is unclear: $missing_out"
+	log 'scenario: container stop, start and restart acted on a single container'
 }
 
 # selfupdate_field prints one top-level field of qdeploy update status, run without root.
