@@ -1,0 +1,30 @@
+qdeploy  Wartungsfenster zu                 [esc] Zurück
+  1 Stacks [2 Stack-Details] 3 Läufe 4 Einstellungen    
+--------------------------------------------------------
+  Datenordner anlegen                                   
+                                                        
+  Fehlend unter /srv/stacks/demo-stack:                 
+    data/db                                             
+    data/files                                          
+                                                        
+           #===========================================#
+> Besitzer | 1000:10x_                                 |
+           #===========================================#
+           UID:GID des Benutzers, als der der Container 
+           läuft, z. B. 1000:1000                       
+           [!] Der Besitzer muss UID:GID mit            
+           Dezimalzahlen sein, z. B. 1000:1000. -       
+           Korrigiere das Feld.                         
+           +-------------------------------------------+
+  Modus    | 0750                                      |
+           +-------------------------------------------+
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+F2 Speichern  esc verwerfen                             
+               tab Nächstes Feld  shift+tab Voriges Feld

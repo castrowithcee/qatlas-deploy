@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 Stacks [2 Stack-Details] 3 Läufe 4 Einstellungen    
+--------------------------------------------------------
+  demo-stack                                            
+                                                        
+  Modus    automatisch                                  
+  #= Erledigt =======================================#  
+  | ! Datenordner für den Stack demo-stack angelegt. |  
+  |                                                  |  
+  | Der Dienst hat die Änderung vorgenommen.         |  
+  | angelegt: data/db                                |  
+  | Elternordner: data                               |  
+  | bereits vorhanden: data/files                    |  
+  | Lauf 20261031T100000Z-demo-stack bei Commit      |  
+  | 222222222222 gestartet                           |  
+  |                                                  |  
+  | > schließen <                                    |  
+  | n/esc/enter schließen                            |  
+  #==================================================#  
+                                                        
+  Changelog                                             
+    APP_VERSION  1.4.2 -> 1.5.0                         
+      Quelle example/app                                
+                                                   20/47

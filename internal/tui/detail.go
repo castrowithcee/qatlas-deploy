@@ -223,6 +223,7 @@ func (m *Model) heading(key kittui.TextID, width int) string {
 func (m *Model) detailLines(r stackRow, width int) []string {
 	lines := []string{"  " + m.styles.TitleLine(r.name, "", max(width-2, 1)), ""}
 	lines = append(lines, m.summaryLines(r, width)...)
+	lines = append(lines, m.dataDirSection(r.name, width)...)
 	section := func(key kittui.TextID, body []string) {
 		lines = append(lines, "", m.heading(key, width))
 		lines = append(lines, body...)
