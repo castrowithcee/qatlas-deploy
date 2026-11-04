@@ -227,7 +227,7 @@ func (w *windowService) update(ctx context.Context, name string, check engine.Up
 	st, err := eng.CheckUpdate(pctx, name)
 	var steps []engine.VersionStep
 	if err == nil {
-		steps, err = w.upd.detector.Plan(pctx, st, "")
+		steps, err = w.upd.detector.Plan(pctx, st, "", "")
 	}
 	switch {
 	case err != nil:

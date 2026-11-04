@@ -3,6 +3,7 @@ package updates
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/registry"
@@ -36,11 +37,12 @@ func (e *PlanError) Error() string {
 
 // Plan returns the steps that update the stack, from the tags the registries list now. Without target, every
 // image version variable whose rules allow a newer version moves to the version detection would select; with
-// target, the stack's only image version variable moves to target, which may lie above the ceiling. A move
-// across major versions under update.major stepwise visits the highest version of every major version on the
-// way. The variables keep the order of the stack's images; a stack with nothing to update has no steps. It
-// only reads.
-func (d *Detector) Plan(ctx context.Context, st stacks.Stack, target string) ([]engine.VersionStep, error) {
+// target, one image version variable moves to target, which may lie above the ceiling: the one named by
+// variable, or the stack's only one when variable is empty; no other variable is considered. A move across
+// major versions under update.major stepwise visits the highest version of every major version on the way.
+// The variables keep the order of the stack's images; a stack with nothing to update has no steps. It only
+// reads.
+func (d *Detector) Plan(ctx context.Context, st stacks.Stack, target, variable string) ([]engine.VersionStep, error) {
 	refuse := func(variable, text string) error {
 		return &PlanError{Kind: PlanRefused, Variable: variable, Text: text}
 	}
@@ -60,8 +62,23 @@ func (d *Detector) Plan(ctx context.Context, st stacks.Stack, target string) ([]
 			return nil, refuse(img.Var, "the variable is the tag of more than one image")
 		}
 	}
-	if target != "" && len(vars) != 1 {
-		return nil, &PlanError{Kind: PlanVersion, Text: "a version can only be given for a stack with exactly one image version variable"}
+	if target != "" {
+		names := make([]string, len(vars))
+		for i, v := range vars {
+			names[i] = clip(v.Var)
+		}
+		switch {
+		case variable != "":
+			i := slices.IndexFunc(vars, func(v stacks.ImageVar) bool { return v.Var == variable })
+			if i < 0 {
+				return nil, &PlanError{Kind: PlanVersion, Text: "the stack has no image version variable " + clip(variable) +
+					"; its variables are " + strings.Join(names, ", ")}
+			}
+			vars = []stacks.ImageVar{vars[i]}
+		case len(vars) != 1:
+			return nil, &PlanError{Kind: PlanVersion, Text: "the stack has several image version variables; name one with --var: " +
+				strings.Join(names, ", ")}
+		}
 	}
 
 	run := &run{d: d, clients: map[string]*registry.Client{}, creds: map[string]error{}, tags: map[string]tagResult{}}

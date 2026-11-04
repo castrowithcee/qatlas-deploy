@@ -211,6 +211,12 @@ func (s *updatesService) handleRun(ctx context.Context, raw json.RawMessage) (an
 	if len(a.Stacks) == 0 || len(a.Stacks) > control.MaxUpdateStacks {
 		return nil, control.NewError(control.CodeInvalid, "name at least one stack")
 	}
+	if a.Variable != "" && a.Version == "" {
+		return nil, control.NewError(control.CodeInvalid, "a variable needs a version")
+	}
+	if a.Version != "" && len(a.Stacks) != 1 {
+		return nil, control.NewError(control.CodeInvalid, "a version can only be given for exactly one stack")
+	}
 	for i, name := range a.Stacks {
 		if slices.Contains(a.Stacks[:i], name) {
 			return nil, control.NewError(control.CodeInvalid, "a stack is named more than once")
@@ -224,7 +230,7 @@ func (s *updatesService) handleRun(ctx context.Context, raw json.RawMessage) (an
 	for i, name := range a.Stacks {
 		st, err := s.eng.CheckUpdate(pctx, name)
 		if err == nil {
-			plans[i], err = s.detector.Plan(pctx, st, a.Version)
+			plans[i], err = s.detector.Plan(pctx, st, a.Version, a.Variable)
 		}
 		if err != nil {
 			return nil, forStack(name, updateAnswer(pctx, err))

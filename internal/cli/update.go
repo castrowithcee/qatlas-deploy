@@ -28,13 +28,14 @@ const (
 var updateRunColumns = []string{"stack", "variable", "from", "to", "run", "commit", "result", "error"}
 
 func newUpdateCommand(program *cobracli.Program, state *notRunning) *cobra.Command {
-	var target string
+	var target, variable string
 	cmd := &cobra.Command{
-		Use:   "update <stack>... [--version <v>]",
+		Use:   "update <stack>... [--version <v> [--var <NAME>]]",
 		Short: "Update the image versions of stacks with a commit and a secured run per version step",
 		Long: "update moves the image version variables of each named stack to the version its rules allow, asking\n" +
-			"the registries now; --version names the version instead, also above the ceiling, for a stack with one\n" +
-			"image version variable. It must be in the registry's tag list, of the same variant and higher than the\n" +
+			"the registries now; --version names the version instead, also above the ceiling, for exactly one stack.\n" +
+			"A stack with several image version variables needs --var NAME for the one --version raises, the others\n" +
+			"stay. The version must be in the registry's tag list, of the same variant and higher than the\n" +
 			"current version. Under update.major stepwise a jump across major versions takes the highest version of\n" +
 			"each major version on the way, one step each.\n\n" +
 			"Each step stops the stack, backs up its data, commits the new version to the stack's .env (only that\n" +
@@ -47,13 +48,19 @@ func newUpdateCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 			"step is done and exits with 1 when a stack was not updated.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return usageFailure("update needs at least one stack", "Run 'qdeploy stack update <stack>... [--version <v>]'.")
+				return usageFailure("update needs at least one stack", "Run 'qdeploy stack update <stack>... [--version <v> [--var <NAME>]]'.")
+			}
+			if variable != "" && target == "" {
+				return usageFailure("--var needs --version", "Run 'qdeploy stack update <stack> --version <v> --var <NAME>'.")
+			}
+			if target != "" && len(args) > 1 {
+				return usageFailure("--version needs exactly one stack", "Name one stack, or leave out --version.")
 			}
 			return nil
 		},
 		RunE: func(c *cobra.Command, args []string) error {
 			var res control.UpdateRunResult
-			a := control.UpdateRunArgs{Stacks: args, Version: target}
+			a := control.UpdateRunArgs{Stacks: args, Version: target, Variable: variable}
 			if err := remoteCall(c, state, updateCallLimit, control.UpdateRunCommand, a, &res); err != nil {
 				return err
 			}
@@ -70,6 +77,7 @@ func newUpdateCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		},
 	}
 	cmd.Flags().StringVar(&target, "version", "", "the version to move to instead of the one the rules allow")
+	cmd.Flags().StringVar(&variable, "var", "", "the image version variable --version raises, for a stack with several")
 	return cmd
 }
 

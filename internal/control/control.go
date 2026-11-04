@@ -622,10 +622,13 @@ const UpdateRunCommand = "update.run"
 const MaxUpdateStacks = 256
 
 // UpdateRunArgs are the arguments of UpdateRunCommand. Without Version each stack moves to what its rules
-// allow; with it, the stack's only image version variable moves to Version, also above the ceiling.
+// allow; with it, the named Variable (or the stack's only one) moves to Version, also above the ceiling.
+// Version needs exactly one stack.
 type UpdateRunArgs struct {
 	Stacks  []string `json:"stacks"`
 	Version string   `json:"version,omitempty"`
+	// Variable names the image version variable Version applies to; it needs Version.
+	Variable string `json:"variable,omitempty"`
 }
 
 // UpdateRunResult answers UpdateRunCommand with one entry per stack, in the order requested.
