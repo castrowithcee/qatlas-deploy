@@ -1033,6 +1033,8 @@ scenario_stacks_repo() {
 
 	scenario_deploy
 
+	scenario_containers
+
 	scenario_backup
 
 	scenario_updates
@@ -1084,6 +1086,52 @@ scenario_stacks_repo() {
 	qd repo fetch >/dev/null || fail 'repo fetch fails after the host keys were restored'
 
 	scenario_tui_setup
+}
+
+# scenario_containers proves that qdeploy container list and show tell the three kinds apart on the host: the
+# deployed demo stack is own, a Compose project from a folder outside the stacks repository is foreign, and a
+# container started with docker run is single. The planted environment value must not show anywhere. What the
+# scenario starts is removed before the answers are checked, so a failed check leaves nothing behind.
+scenario_containers() {
+	step 'container list shows own stacks, foreign projects and single containers'
+	image=registry.$domain/demo/app:1.0.0
+	foreign=$prefix-foreign single=$prefix-single planted=invented-planted-value-e2e
+	foreign_dir=/tmp/$foreign
+	docker exec "$host" sh -ec "rm -rf '$foreign_dir' && mkdir -p '$foreign_dir'" || fail 'cannot prepare the foreign project'
+	printf 'services:\n  app:\n    image: %s\n    labels:\n      - %s\n' "$image" "$label" |
+		docker exec -i "$host" sh -ec "cat >'$foreign_dir/compose.yaml'" || fail 'cannot write the compose file of the foreign project'
+	docker exec "$host" docker rm -f "$single" >/dev/null 2>&1 || true
+	docker exec "$host" docker run -d --name "$single" --label "$label" -e "E2E_PLANTED=$planted" "$image" >/dev/null ||
+		fail 'cannot start the single container'
+	docker exec "$host" docker compose -f "$foreign_dir/compose.yaml" -p "$foreign" up -d >/dev/null 2>&1 ||
+		fail 'cannot start the foreign project'
+	wait_for 'the single container' 30 health_is "$single" healthy
+	wait_for 'the foreign project' 30 stack_healthy "$foreign"
+
+	list_rc=0 show_rc=0 table_rc=0 missing_rc=0
+	list_json=$(qd --output json container list) || list_rc=$?
+	show_json=$(qd --output json container show "$single") || show_rc=$?
+	list_table=$(qd container list) || table_rc=$?
+	missing_out=$(qd container show "$prefix-no-such-container") || missing_rc=$?
+	docker exec "$host" docker compose -f "$foreign_dir/compose.yaml" -p "$foreign" down >/dev/null 2>&1 || true
+	docker exec "$host" sh -c "docker rm -f '$single' >/dev/null 2>&1; rm -rf '$foreign_dir'"
+
+	[ "$list_rc" -eq 0 ] || fail "container list failed: $list_json"
+	[ "$show_rc" -eq 0 ] || fail "container show failed: $show_json"
+	[ "$table_rc" -eq 0 ] || fail "container list (table) failed: $list_table"
+	[ "$missing_rc" -ne 0 ] || fail "container show of a missing container succeeded: $missing_out"
+	printf '%s' "$list_json" | grep -q '"kind": *"own", *"name": *"demo-stack"' || fail "demo-stack is not an own group: $list_json"
+	printf '%s' "$list_json" | grep -q "\"kind\": *\"foreign\", *\"name\": *\"$foreign\"" || fail "$foreign is not a foreign group: $list_json"
+	printf '%s' "$list_json" | grep -q "\"working_dir\": *\"$foreign_dir\"" || fail "the foreign group does not show its working directory: $list_json"
+	printf '%s' "$list_json" | grep -q "\"kind\": *\"single\", *\"name\": *\"$single\"" || fail "$single is not a single group: $list_json"
+	printf '%s' "$list_table" | grep -q "^single  *$single " || fail "the table does not show $single as single: $list_table"
+	printf '%s' "$show_json" | grep -q '"E2E_PLANTED"' || fail "container show does not name the planted variable: $show_json"
+	printf '%s' "$show_json" | grep -q '"kind": *"single"' || fail "container show does not name the kind: $show_json"
+	printf '%s' "$missing_out" | grep -q 'no such container' || fail "the refusal of a missing container is unclear: $missing_out"
+	for text in "$list_json" "$show_json" "$list_table"; do
+		if printf '%s' "$text" | grep -qF -- "$planted"; then fail 'an environment value shows in the container output'; fi
+	done
+	log 'scenario: container list showed own, foreign and single; the planted value stayed hidden'
 }
 
 # selfupdate_field prints one top-level field of qdeploy update status, run without root.

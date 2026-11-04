@@ -785,3 +785,135 @@ type NotifyTestResult struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
+
+// ContainerListCommand shows every container of the host, grouped into stacks of this host, foreign Compose
+// projects and single containers. ContainerGetCommand shows the details of one container. Both only read.
+const (
+	ContainerListCommand = "container.list"
+	ContainerGetCommand  = "container.get"
+)
+
+// The codes of a container engine that cannot be used; a missing container is CodeNotFound and an answer
+// beyond MaxResponseBytes is CodeTooLarge.
+const (
+	CodeDockerUnreachable = "docker-unreachable"
+	CodeDockerPermission  = "docker-permission"
+	CodeDockerTimeout     = "docker-timeout"
+)
+
+// The kinds of a container group. A group is own when its Compose project is a stack of the bound repository
+// and was started from that stack's folder, foreign when it is another Compose project, single when its
+// containers belong to no project.
+const (
+	ContainerKindOwn     = "own"
+	ContainerKindForeign = "foreign"
+	ContainerKindSingle  = "single"
+)
+
+// The states of a container or group, worst first: unhealthy, restarting, stopped, starting, ok.
+const (
+	ContainerUnhealthy  = "unhealthy"
+	ContainerRestarting = "restarting"
+	ContainerStopped    = "stopped"
+	ContainerStarting   = "starting"
+	ContainerOK         = "ok"
+)
+
+// ContainerListTimeout is how long a client should wait for ContainerListCommand with metrics.
+const ContainerListTimeout = 2 * time.Minute
+
+// ContainerListArgs are the arguments of ContainerListCommand. Metrics adds CPU and memory readings, which
+// take about two seconds per running container.
+type ContainerListArgs struct {
+	Metrics bool `json:"metrics,omitempty"`
+}
+
+// ContainerListResult answers ContainerListCommand: own groups first, then foreign ones, then single
+// containers, each by name. MetricsIncomplete is set when metrics were asked for and a running container has
+// none, because its reading failed or the time for the readings ran out.
+type ContainerListResult struct {
+	Groups            []ContainerGroup `json:"groups"`
+	MetricsIncomplete bool             `json:"metrics_incomplete,omitempty"`
+}
+
+// ContainerGroup is one stack, Compose project or single container. Conflict marks a foreign project that has
+// the name of a stack of this host but was started from another folder. State is the worst state of its
+// containers; UptimeSeconds is the shortest one among running containers; Restarts is the sum. WorkingDir and
+// ConfigFiles come from the Compose labels of a foreign project. Metrics sums the readings of the containers
+// that have one.
+type ContainerGroup struct {
+	Kind          string             `json:"kind"`
+	Name          string             `json:"name"`
+	Conflict      bool               `json:"conflict,omitempty"`
+	State         string             `json:"state"`
+	UptimeSeconds int64              `json:"uptime_seconds"`
+	Restarts      int                `json:"restarts"`
+	WorkingDir    string             `json:"working_dir,omitempty"`
+	ConfigFiles   []string           `json:"config_files,omitempty"`
+	Metrics       *ContainerMetrics  `json:"metrics,omitempty"`
+	Containers    []ContainerSummary `json:"containers"`
+}
+
+// ContainerSummary is one container in a group. EngineState is the word of the container engine, such as
+// running or exited; Health is empty without a health check.
+type ContainerSummary struct {
+	Name          string            `json:"name"`
+	Image         string            `json:"image"`
+	State         string            `json:"state"`
+	EngineState   string            `json:"engine_state"`
+	Health        string            `json:"health,omitempty"`
+	UptimeSeconds int64             `json:"uptime_seconds"`
+	Restarts      int               `json:"restarts"`
+	Metrics       *ContainerMetrics `json:"metrics,omitempty"`
+}
+
+// ContainerMetrics is one reading. CPUPercent is 100 per fully used CPU; MemoryLimit is zero in a group's sum.
+type ContainerMetrics struct {
+	CPUPercent  float64 `json:"cpu_percent"`
+	MemoryUsed  uint64  `json:"memory_used"`
+	MemoryLimit uint64  `json:"memory_limit,omitempty"`
+}
+
+// ContainerGetArgs names a container by name or ID.
+type ContainerGetArgs struct {
+	Name string `json:"name"`
+}
+
+// ContainerDetail answers ContainerGetCommand. Project, Kind and Conflict classify the container like its
+// group in ContainerListResult. EnvNames are the names of the environment variables; their values never
+// leave the service.
+type ContainerDetail struct {
+	ContainerSummary
+	ID       string             `json:"id"`
+	Kind     string             `json:"kind"`
+	Project  string             `json:"project,omitempty"`
+	Conflict bool               `json:"conflict,omitempty"`
+	Ports    []ContainerPort    `json:"ports"`
+	Mounts   []ContainerMount   `json:"mounts"`
+	Networks []ContainerNetwork `json:"networks"`
+	Labels   map[string]string  `json:"labels"`
+	EnvNames []string           `json:"env_names"`
+}
+
+// ContainerPort is a port of a container; PublicPort and HostIP are zero or empty if it is not published.
+type ContainerPort struct {
+	PrivatePort int    `json:"private_port"`
+	PublicPort  int    `json:"public_port,omitempty"`
+	Protocol    string `json:"protocol"`
+	HostIP      string `json:"host_ip,omitempty"`
+}
+
+// ContainerMount is a mount of a container; Type is volume, bind, tmpfs or another type of the engine.
+type ContainerMount struct {
+	Type        string `json:"type"`
+	Name        string `json:"name,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Destination string `json:"destination"`
+	ReadOnly    bool   `json:"read_only,omitempty"`
+}
+
+// ContainerNetwork is a network a container is attached to.
+type ContainerNetwork struct {
+	Name      string `json:"name"`
+	IPAddress string `json:"ip_address,omitempty"`
+}

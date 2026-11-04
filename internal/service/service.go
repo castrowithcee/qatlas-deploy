@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/castrowithcee/qatlas-kit/docker"
 	"github.com/castrowithcee/qatlas-kit/localipc"
 	"github.com/castrowithcee/qatlas-kit/notify"
 	"github.com/castrowithcee/qatlas-kit/redact"
@@ -48,6 +49,12 @@ type Config struct {
 	// Changelog configures the GitHub client of the changelogs; tests point it at a local server. Its Token and
 	// CacheDir are ignored: the token comes from the credential "github.com" and the cache lives in StateDir.
 	Changelog changelog.Options
+	// DockerSocket is the socket of the container engine; empty means DefaultDockerSocket. It is read only
+	// when Docker is nil.
+	DockerSocket string
+	// Docker reads the containers of the host. Nil means the container engine at DockerSocket; tests inject
+	// their own.
+	Docker Docker
 	// PollInterval is the time between repository polls; zero means engine.DefaultInterval.
 	PollInterval time.Duration
 	// Clock drives the poll loop and the maintenance window; nil means the system clock. Tests inject their own.
@@ -135,6 +142,22 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		return err
 	}
 	if err := registerSecretCommands(registry, eng, repo.engineSource, secrets, log); err != nil {
+		return err
+	}
+	dock := cfg.Docker
+	if dock == nil {
+		socket := cfg.DockerSocket
+		if socket == "" {
+			socket = DefaultDockerSocket
+		}
+		client, err := docker.New(docker.Options{Socket: socket})
+		if err != nil {
+			return fmt.Errorf("prepare the container engine client: %w", err)
+		}
+		defer client.Close()
+		dock = client
+	}
+	if err := registerContainerCommands(registry, repo, dock, log); err != nil {
 		return err
 	}
 	engineDone := make(chan struct{})

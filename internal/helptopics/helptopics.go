@@ -15,6 +15,7 @@ func All() []helptopics.Topic {
 		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
 		{Name: "notifications", Short: "Notification channels: events, types and secrets", Text: notificationsTopic},
+		{Name: "containers", Short: "Reading the containers of the host: kinds, states, metrics", Text: containersTopic},
 	}
 }
 
@@ -44,6 +45,7 @@ Commands:
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy notify list|add|remove|test: manage the notification channels (webhook, Slack, Telegram, e-mail) and send a test message through one (run with sudo; see qdeploy help notifications)
 - qdeploy update [version], qdeploy update status: update qdeploy itself to the latest stable release or to a given newer one from its signed GitHub releases and restart the service; status shows the installed version and the latest release and changes nothing (update runs with sudo and needs --confirm; stack updates are qdeploy stack update)
+- qdeploy container list [--metrics], qdeploy container show <name>: show every container of the host, own stacks, foreign Compose projects and single containers, with state; changes nothing (run with sudo; see qdeploy help containers)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`
 
@@ -189,3 +191,23 @@ Channel types and settings:
 Secrets: the webhook URL and its signing key, the Slack URL, the Telegram bot token and the SMTP password. They are never an argument or a flag value. At a terminal they are asked for without echo; piped on standard input they are lines in that order (webhook: URL, then key; smtp: the password only with --user). The service stores them as credentials, shows them nowhere and removes them from its log output.
 
 Delivery runs in the background after the event; a failing channel is retried a few times and never delays or fails a run. A delivery that still fails is noted in the log of its run (qdeploy stack log <run>) and in the service log.`
+
+const containersTopic = `qdeploy container list and qdeploy container show read the containers of the whole host from the container engine and change nothing. Run them with sudo; the service must run.
+
+Commands:
+- qdeploy container list [--metrics]: every container, grouped; add --output json for the service's result as it is
+- qdeploy container show <name>: one container by name or ID, with its group, state, ports, mounts, networks, labels and the names of its environment variables
+
+Kinds of a group:
+- own: a Compose project that is a stack of the bound stacks repository and was started from that stack's folder
+- foreign: any other Compose project; it shows its working directory and compose files
+- single: a container that belongs to no Compose project
+- conflict: a foreign project that has the name of a stack of this host but was started from another folder; it is not the stack and is marked in the list
+
+State of a group is the worst state of its containers, in this order: unhealthy, restarting, stopped, starting, ok. The uptime of a group is that of its youngest running container; restarts are summed.
+
+Metrics: --metrics adds CPU (100 per fully used CPU) and memory of the running containers. Reading them takes about two seconds per running container, in parallel and within a time limit, so the command may wait up to two minutes. If a reading fails or the time runs out, the list says that the metrics are incomplete and the container shows none.
+
+Container engine: the service reads the engine's socket, by default /var/run/docker.sock; qdeploy run --docker-socket <path> names another one. If the engine cannot be reached, the service user may not use it, or it does not answer in time, the command says so and shows nothing.
+
+Environment: only the names of the variables are shown, never their values.`
