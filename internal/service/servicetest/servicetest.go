@@ -32,6 +32,8 @@ type Git struct {
 	RevertErr error
 
 	mu      sync.Mutex
+	gate    chan struct{} // set by BlockFetch
+	entered chan struct{}
 	origins map[string]string
 	clones  int
 	last    gitrepo.Config
@@ -56,6 +58,24 @@ func (g *Git) SetFetchErr(err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.FetchErr = err
+}
+
+// BlockFetch makes every Fetch wait until release is called; entered gets a value for each Fetch that waits.
+// The wait is outside the fake's mutex, so the other calls go on meanwhile.
+func (g *Git) BlockFetch() (entered <-chan struct{}, release func()) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	gate, in := make(chan struct{}), make(chan struct{}, 16)
+	g.gate, g.entered = gate, in
+	var once sync.Once
+	return in, func() {
+		once.Do(func() {
+			g.mu.Lock()
+			g.gate, g.entered = nil, nil
+			g.mu.Unlock()
+			close(gate)
+		})
+	}
 }
 
 // SetRevertErr sets the answer of RevertStack.
@@ -131,7 +151,21 @@ type copyOf struct {
 	dir string
 }
 
-func (c *copyOf) Fetch(context.Context) error {
+func (c *copyOf) Fetch(ctx context.Context) error {
+	c.g.mu.Lock()
+	gate, in := c.g.gate, c.g.entered
+	c.g.mu.Unlock()
+	if gate != nil {
+		select {
+		case in <- struct{}{}:
+		default:
+		}
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	c.g.mu.Lock()
 	defer c.g.mu.Unlock()
 	return c.g.FetchErr
@@ -161,17 +195,17 @@ func (c *copyOf) ChangedFolders(context.Context, string, string) ([]string, erro
 func (c *copyOf) IsAncestor(context.Context, string, string) (bool, error) { return true, nil }
 
 // FastForward follows a pushed commit of CommitFile and does nothing otherwise.
-func (c *copyOf) FastForward(context.Context) error {
+func (c *copyOf) FastForward(_ context.Context, to string) error {
 	c.g.mu.Lock()
 	defer c.g.mu.Unlock()
-	fc, ok := c.g.commits[c.g.Remote]
-	if !ok || c.g.Head == c.g.Remote {
+	fc, ok := c.g.commits[to]
+	if !ok || c.g.Head == to {
 		return nil
 	}
 	if err := os.WriteFile(filepath.Join(c.dir, filepath.FromSlash(fc.path)), fc.content, 0o644); err != nil {
 		return err
 	}
-	c.g.Head = c.g.Remote
+	c.g.Head = to
 	return nil
 }
 

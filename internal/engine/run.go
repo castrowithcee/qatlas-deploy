@@ -100,7 +100,7 @@ func (r *run) record(out outcome) RunRecord {
 
 	now := e.cfg.Clock.Now().UTC()
 	var dropped []RunRecord
-	_, uerr := e.store.Update(func(s State) (State, error) {
+	uerr := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur := s.Stacks[rec.Stack]
 		x := rec
@@ -305,8 +305,8 @@ func (r *run) rollback(ctx context.Context, failedAt, backup, skip string) (stri
 
 // revert moves the working copy to a commit whose stack folder equals the deployed state: a revert commit on
 // the freshly fetched branch, pushed as a fast-forward, or the branch itself when it already has that state.
-// It waits until no other run relies on the working copy and keeps everyone else off it meanwhile; it returns
-// holding the run's hold again.
+// It waits until no other run relies on the working copy and keeps everyone else off it meanwhile, and holds
+// the ref lock from its fetch to its fast-forward; it returns holding the run's hold again.
 func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 	e, log, wc := r.e, r.log, r.b.Copy
 	log.Step("revert")
@@ -319,6 +319,8 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 		e.share()
 		r.held = true
 	}()
+	e.refs.Lock()
+	defer e.refs.Unlock()
 
 	if err := wc.Fetch(ctx); err != nil {
 		return "", fmt.Errorf("fetch: %w", err)
@@ -378,7 +380,7 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 // The caller has the working copy to itself.
 func (r *run) follow(ctx context.Context, at, what string) error {
 	e, log, wc := r.e, r.log, r.b.Copy
-	if err := r.step("fast-forward", func() error { return wc.FastForward(ctx) }); err != nil {
+	if err := r.step("fast-forward", func() error { return wc.FastForward(ctx, at) }); err != nil {
 		return err
 	}
 	head, err := wc.Head(ctx)
@@ -415,10 +417,15 @@ func (r *run) stopAfterFailure() {
 }
 
 // The working copy's position is shared by every active run and claim (a hold, see start and claim) and
-// moved only by poll's fast-forward, which needs no run active, and by a rollback, which needs exclusive. New
-// holds are taken only with the working-copy lock held, so exclusive owning that lock while holds is zero
-// keeps everyone off the position. Nobody waits for holds with the lock held, which keeps two rollbacks and
-// a poll from waiting on each other.
+// moved only by poll's fast-forward, which needs no run active, and by an update's commit or a rollback, which
+// need exclusive. New holds are taken only with the working-copy lock held, so exclusive owning that lock while
+// holds is zero keeps everyone off the position. Nobody waits for holds with the lock held, which keeps two
+// rollbacks and a poll from waiting on each other.
+//
+// The lock order is pollMu, then the working-copy lock, then the ref lock; each may be skipped. A poll's fetch
+// holds pollMu and the ref lock and releases the ref lock before it takes the working-copy lock; in the engine
+// only an update's commit and a rollback's revert hold the working-copy lock over a fetch or a push. Commands
+// wait for the working-copy lock at most LockWait.
 
 // exclusive waits until no hold is left and returns with the working-copy lock held. The caller holds
 // neither a hold nor the lock.
@@ -466,6 +473,20 @@ func (e *Engine) releaseHold() {
 	}
 }
 
+// lockCommand takes the working-copy lock for a command: it gives up with ErrBusy after LockWait, which an
+// update's commit and push or a rollback's revert can exceed.
+func (e *Engine) lockCommand(ctx context.Context) error {
+	wctx, cancel := context.WithTimeout(ctx, e.cfg.LockWait)
+	defer cancel()
+	if err := e.lockContext(wctx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return ErrBusy
+		}
+		return err
+	}
+	return nil
+}
+
 // lockContext takes the working-copy lock unless ctx ends first; a lock taken too late is released.
 func (e *Engine) lockContext(ctx context.Context) error {
 	got := make(chan struct{})
@@ -489,7 +510,7 @@ func (e *Engine) lockContext(ctx context.Context) error {
 // marked, so the stack runs again on a new commit or a manual trigger. ErrNotPaused when it is not paused.
 func (e *Engine) Resume(name string) (Pause, error) {
 	var was Pause
-	_, err := e.store.Update(func(s State) (State, error) {
+	err := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur, ok := s.Stacks[name]
 		if !ok || cur.Paused == nil {

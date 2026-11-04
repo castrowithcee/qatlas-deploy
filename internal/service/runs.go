@@ -40,6 +40,8 @@ func runsAnswer(err error) error {
 		return control.NewError(control.CodeStackStopped, "the stack was stopped through qdeploy; start it with start first")
 	case errors.Is(err, engine.ErrNoSuchRun):
 		return control.NewError(control.CodeNoSuchRun, "no such run")
+	case errors.Is(err, engine.ErrBusy):
+		return control.NewError(control.CodeBusy, "the working copy is busy with an update or a rollback; try again")
 	}
 	return err
 }
@@ -136,7 +138,7 @@ func holdHandler(set func(context.Context, string, bool) (bool, error), on bool)
 		switch {
 		case err == nil:
 			return control.HoldResult{Stack: printable(a.Stack), Active: on, Changed: changed}, nil
-		case errors.Is(err, engine.ErrUnknownStack), errors.Is(err, engine.ErrNoRepo):
+		case errors.Is(err, engine.ErrUnknownStack), errors.Is(err, engine.ErrNoRepo), errors.Is(err, engine.ErrBusy):
 			return nil, runsAnswer(err)
 		}
 		return nil, errors.New("the engine state cannot be written")

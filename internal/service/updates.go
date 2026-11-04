@@ -84,20 +84,16 @@ func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.
 	return s, nil
 }
 
-// loadStacks reads the working copy and narrows it to the named stack; an empty name keeps all of them.
+// loadStacks reads the working copy and narrows it to the named stack; an empty name keeps all of them. Like
+// the stack list it takes no lock: it reads the working copy as it is.
 func (s *updatesService) loadStacks(name string) ([]stacks.Stack, error) {
-	s.repo.mu.Lock()
 	c, err := s.repo.bound()
-	var list []stacks.Stack
-	if err == nil {
-		list, err = stacks.Load(c.Dir)
-		if err != nil {
-			err = control.NewError(control.CodeNoRepo, "the working copy cannot be read; run 'qdeploy repo set' again")
-		}
-	}
-	s.repo.mu.Unlock()
 	if err != nil {
 		return nil, err
+	}
+	list, err := stacks.Load(c.Dir)
+	if err != nil {
+		return nil, control.NewError(control.CodeNoRepo, "the working copy cannot be read; run 'qdeploy repo set' again")
 	}
 	if name != "" {
 		i := slices.IndexFunc(list, func(st stacks.Stack) bool { return st.Name == name })

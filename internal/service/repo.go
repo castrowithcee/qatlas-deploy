@@ -40,7 +40,7 @@ type WorkingCopy interface {
 	RemoteURL(ctx context.Context) (string, error)
 	Status(ctx context.Context) ([]gitrepo.Change, error)
 	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
-	FastForward(ctx context.Context) error
+	FastForward(ctx context.Context, commit string) error
 	RevertStack(ctx context.Context, stack, deployed, failed, reason string) (string, error)
 	CommitFile(ctx context.Context, path string, edit func(old []byte) ([]byte, error), message string) (string, error)
 	IsAncestor(ctx context.Context, a, b string) (bool, error)
@@ -104,7 +104,12 @@ var repoCodec = configfile.Codec[repoConfig]{
 }
 
 type repoService struct {
+	// mu is the working-copy lock, shared with the engine (engine.Config.Lock): it serializes moving and
+	// evaluating the working copy and guards the check and pin of host keys. refs is the ref lock
+	// (engine.Config.Refs): it serializes fetches and updates of the remote-tracking ref. Whoever needs both
+	// takes mu first. Reading the binding needs neither: it is replaced as a whole.
 	mu       sync.Mutex
+	refs     sync.Mutex
 	stateDir string
 	keys     *credentials.Store
 	cfg      *configfile.Store[repoConfig]
@@ -147,11 +152,9 @@ func (s *repoService) bound() (repoConfig, error) {
 }
 
 // engineSource is the engine's view of the binding: read again in every poll, so a binding made later by
-// "repo set" is picked up. The engine takes mu itself around its use of the working copy.
+// "repo set" is picked up. The engine takes mu and refs itself around its use of the working copy.
 func (s *repoService) engineSource() (engine.Binding, error) {
-	s.mu.Lock()
 	c, err := s.bound()
-	s.mu.Unlock()
 	var ce *control.Error
 	if errors.As(err, &ce) && ce.Code == control.CodeNoRepo {
 		return engine.Binding{}, engine.ErrNoRepo
@@ -183,13 +186,13 @@ func (s *repoService) handleProbe(ctx context.Context, raw json.RawMessage) (any
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	key, err := s.probeHost(ctx, host, port)
 	if err != nil {
 		return nil, err
 	}
+	s.mu.Lock()
 	state, err := hostkey.Check(s.knownHosts(), host, port, key)
+	s.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -341,8 +344,6 @@ func (s *repoService) handleFetch(ctx context.Context, raw json.RawMessage) (any
 	if err := decodeArgs(raw, &none); err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	c, err := s.bound()
 	if err != nil {
 		return nil, err
@@ -351,6 +352,9 @@ func (s *repoService) handleFetch(ctx context.Context, raw json.RawMessage) (any
 	if err != nil {
 		return nil, gitFailure(err)
 	}
+	// The ref lock alone: a fetch moves no working copy, so nobody waits for it but other fetches and pushes.
+	s.refs.Lock()
+	defer s.refs.Unlock()
 	if err := wc.Fetch(ctx); err != nil {
 		return nil, gitFailure(err)
 	}
@@ -370,9 +374,7 @@ func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any,
 	if err := decodeArgs(raw, &none); err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
 	c, err := s.bound()
-	s.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -405,9 +407,7 @@ func (s *repoService) handleCheck(ctx context.Context, raw json.RawMessage) (any
 	if err := decodeArgs(raw, &a); err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
 	c, err := s.bound()
-	s.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}

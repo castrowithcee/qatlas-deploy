@@ -142,17 +142,19 @@ func (r *Repo) RemoteHead(ctx context.Context) (string, error) {
 	return r.revParse(ctx, "refs/remotes/origin/"+branch+"^{commit}")
 }
 
-// FastForward moves the checked-out branch to the remote-tracking ref of the last Fetch, and only if that is a
-// fast-forward. It never resets, stashes or checks out: git itself refuses when the update would overwrite a
-// local change, and a diverged branch stays untouched. Callers still check Status first, because git would
-// merge around local changes that do not collide with the update.
-func (r *Repo) FastForward(ctx context.Context) error {
-	branch, err := r.branch(ctx)
-	if err != nil {
+// FastForward moves the checked-out branch to commit, a full commit id the caller read before, and only if that
+// is a fast-forward. Naming the commit keeps a fetch that moves the remote-tracking ref in between from moving
+// the branch further. It never resets, stashes or checks out: git itself refuses when the update would
+// overwrite a local change, and a diverged branch stays untouched. Callers still check Status first, because
+// git would merge around local changes that do not collide with the update.
+func (r *Repo) FastForward(ctx context.Context, commit string) error {
+	if !hexRe.MatchString(commit) {
+		return errors.New("commit must be a full lowercase commit id")
+	}
+	if _, err := r.branch(ctx); err != nil {
 		return err
 	}
-	_, err = r.run(ctx, true, maxStdout, "merge", "--quiet", "--ff-only", "--no-autostash", "--no-verify",
-		"refs/remotes/origin/"+branch)
+	_, err := r.run(ctx, true, maxStdout, "merge", "--quiet", "--ff-only", "--no-autostash", "--no-verify", commit)
 	if err != nil {
 		return fmt.Errorf("fast-forward failed: %w", err)
 	}
