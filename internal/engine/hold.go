@@ -15,6 +15,8 @@ const (
 	BlockPause = "paused"
 	// BlockPin is the operator's pin: the window never changes the stack's versions.
 	BlockPin = "pinned"
+	// BlockStopped is a stack the operator stopped through qdeploy; only a start clears it.
+	BlockStopped = "stopped"
 	// BlockRemoved is a stack whose folder is gone from the repository.
 	BlockRemoved = "removed"
 )
@@ -47,6 +49,9 @@ func windowVerdict(st StackState) WindowVerdict {
 	}
 	if st.Pin != nil {
 		reasons = append(reasons, BlockPin)
+	}
+	if st.Stopped != nil {
+		reasons = append(reasons, BlockStopped)
 	}
 	if st.Removed {
 		reasons = append(reasons, BlockRemoved)

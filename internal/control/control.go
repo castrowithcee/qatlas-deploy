@@ -66,6 +66,8 @@ const (
 	CodePaused         = "paused"
 	CodeNotPaused      = "not-paused"
 	CodePinned         = "pinned"
+	CodeStackStopped   = "stack-stopped"
+	CodeStackAction    = "stack-action-failed"
 
 	CodeNoBackups     = "no-backups"
 	CodeNoBackupRules = "no-backup-rules"
@@ -197,6 +199,8 @@ type StackStatus struct {
 	// OperatorPause and Pinned are the operator's marks for the maintenance window, unrelated to Paused.
 	OperatorPause *HoldInfo `json:"operator_pause,omitempty"`
 	Pinned        *HoldInfo `json:"pinned,omitempty"`
+	// Stopped is set while the stack was stopped through qdeploy and gets no runs until it is started.
+	Stopped *HoldInfo `json:"stopped,omitempty"`
 }
 
 // HoldInfo says since when an operator mark is set.
@@ -245,6 +249,30 @@ type HoldResult struct {
 	Stack   string `json:"stack"`
 	Active  bool   `json:"active"`
 	Changed bool   `json:"changed"`
+}
+
+// StackStartCommand, StackStopCommand and StackRestartCommand start, stop or restart the containers of an own
+// stack under its run slot. A stop sets the stopped mark, only a start clears it, and a restart of a stopped
+// stack is refused with CodeStackStopped. A failure of Compose answers CodeStackAction.
+const (
+	StackStartCommand   = "stack.start"
+	StackStopCommand    = "stack.stop"
+	StackRestartCommand = "stack.restart"
+)
+
+// StackActionTimeout is how long a client should wait for a stack action: the Compose call and the check.
+const StackActionTimeout = 10 * time.Minute
+
+// StackActionArgs are the arguments of the stack actions.
+type StackActionArgs struct {
+	Stack string `json:"stack"`
+}
+
+// StackActionResult answers them. Stopped is whether the stack carries the stopped mark afterwards.
+type StackActionResult struct {
+	Stack   string `json:"stack"`
+	Action  string `json:"action"`
+	Stopped bool   `json:"stopped"`
 }
 
 // ResumeArgs are the arguments of ResumeCommand.
@@ -409,6 +437,8 @@ type StackInfo struct {
 	Images   []ImageInfo `json:"images"`
 	Findings int         `json:"findings"`
 	Error    string      `json:"error,omitempty"`
+	// Stopped is set while the stack was stopped through qdeploy.
+	Stopped *HoldInfo `json:"stopped,omitempty"`
 }
 
 // ImageInfo is a service image whose tag is a variable; Version is empty when no value is set.

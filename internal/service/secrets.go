@@ -53,6 +53,16 @@ func (d redactingDeployer) Up(ctx context.Context, st stacks.Stack, log *engine.
 	return d.next.Up(ctx, st, log)
 }
 
+func (d redactingDeployer) Start(ctx context.Context, st stacks.Stack, log *engine.Log) error {
+	registerStackSecrets(d.r, st)
+	return d.next.Start(ctx, st, log)
+}
+
+func (d redactingDeployer) Restart(ctx context.Context, st stacks.Stack, log *engine.Log) error {
+	registerStackSecrets(d.r, st)
+	return d.next.Restart(ctx, st, log)
+}
+
 func (d redactingDeployer) Check(ctx context.Context, st stacks.Stack, log *engine.Log) error {
 	registerStackSecrets(d.r, st)
 	return d.next.Check(ctx, st, log)

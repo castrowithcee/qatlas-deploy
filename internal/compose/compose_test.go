@@ -166,6 +166,23 @@ func TestStopCommand(t *testing.T) {
 	}
 }
 
+func TestStartAndRestartCommands(t *testing.T) {
+	st := newStack(t, true)
+	r := &fakeRunner{}
+	d, _ := newDeployer(r)
+	if err := d.Exec.Start(context.Background(), st, &fakeLog{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Exec.Restart(context.Background(), st, &fakeLog{}); err != nil {
+		t.Fatal(err)
+	}
+	for i, verb := range []string{"start", "restart"} {
+		if got := r.calls[i].Args; got[len(got)-1] != verb || len(got) != len(globalArgs(st))+1 {
+			t.Errorf("%s args = %q", verb, got)
+		}
+	}
+}
+
 func TestMissingSecretsAbortsBeforeCompose(t *testing.T) {
 	st := newStack(t, false)
 	r := &fakeRunner{}

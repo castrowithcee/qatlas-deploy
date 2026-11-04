@@ -144,6 +144,15 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		func(st stacks.Stack) { registerStackSecrets(secrets, st) }, log); err != nil {
 		return err
 	}
+	if err := registerStackActionCommands(registry, eng, secrets.Apply, log); err != nil {
+		return err
+	}
+	repo.stopped = func(name string) *control.HoldInfo {
+		if st, ok, err := eng.Stack(name); err == nil && ok && st.Stopped != nil {
+			return &control.HoldInfo{Since: st.Stopped.Since}
+		}
+		return nil
+	}
 	if err := registerSecretCommands(registry, eng, repo.engineSource, secrets, log); err != nil {
 		return err
 	}

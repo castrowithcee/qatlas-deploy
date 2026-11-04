@@ -28,7 +28,7 @@ Commands:
 - qdeploy key generate|show: create the SSH deploy key and show its public part (run with sudo)
 - qdeploy repo set <ssh-url> [--dir <path>]: bind the stacks repository, confirm its host key and clone it (run with sudo)
 - qdeploy repo fetch: fetch new commits without touching the working copy (run with sudo)
-- qdeploy stack list: list the stacks of the working copy with image versions and update mode (run with sudo)
+- qdeploy stack list: list the stacks of the working copy with image versions, update mode and whether the stack is stopped (run with sudo)
 - qdeploy stack check [stack]: check the stacks of the working copy against the stacks-repo standard; exit code 1 on errors (run with sudo)
 - qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has (run with sudo)
 - qdeploy stack runs [stack]: list the recorded runs, newest first (run with sudo)
@@ -36,6 +36,7 @@ Commands:
 - qdeploy stack resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
 - qdeploy stack pause|unpause <stack>: keep the maintenance window from running a stack, or lift that; unrelated to the pause of a failed rollback (run with sudo)
 - qdeploy stack pin|unpin <stack>: hold the image versions of a stack, so the maintenance window and qdeploy stack update leave them alone, or release them (run with sudo)
+- qdeploy stack start|stop|restart <stack> [--yes]: start, stop or restart the containers of a stack after a question; a stop keeps the stack stopped against new commits and the maintenance window until a start, and qdeploy status and stack list show it (run with sudo; see qdeploy help containers)
 - qdeploy window show|set: show the maintenance window, in which the service checks the registries and updates the stacks in automatic mode, or change its weekdays, start, duration and time zone; the running service follows at once (run with sudo)
 - qdeploy stack update <stack>... [--version <v>]: update the image versions of stacks, each version step a commit of the stack's .env pushed to the branch and a run with backup, check and rollback (run with sudo)
 - qdeploy stack updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
@@ -209,6 +210,8 @@ Kinds of a group:
 State of a group is the worst state of its containers, in this order: unhealthy, restarting, stopped, starting, ok. The uptime of a group is that of its youngest running container; restarts are summed.
 
 Actions: the command names the container and its kind and asks first (default no); --yes answers the question, and without a terminal --yes is required. A stop signals the container and kills it after ten seconds; stopping a stopped or starting a running container changes nothing. After a start or restart the service waits up to a minute until the container runs and, if it has a health check, is healthy; if it is not ready by then the command shows the state and fails. A container of a stack of this host is refused while a run of that stack is active.
+
+Stacks: qdeploy stack start|stop|restart <stack> [--yes] act on all containers of an own stack of the working copy, ask first like the container actions and are refused while a run of the stack is active. A stop stops the containers without removing them and sets the mark "stopped": new commits of the stacks repository start no run (the stack shows the finding stopped and its pending commit), the maintenance window skips it, and qdeploy status and qdeploy stack list show "stopped since <time>". Only qdeploy stack start clears the mark; it starts the existing containers, never creates any (a stack without containers fails; deploy it with qdeploy stack deploy), clears the mark once Compose has started them and then runs the stack's check. qdeploy stack restart restarts the containers and runs the check; on a stack stopped through qdeploy it is refused with the hint to use start. Stopping a single container with qdeploy container stop sets no mark. A stopped stack is refused by every command that would run it (qdeploy stack deploy, qdeploy stack update, and likewise the maintenance window, which skips it); start it first.
 
 Metrics: --metrics adds CPU (100 per fully used CPU) and memory of the running containers. Reading them takes about two seconds per running container, in parallel and within a time limit, so the command may wait up to two minutes. If a reading fails or the time runs out, the list says that the metrics are incomplete and the container shows none.
 

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -35,13 +36,17 @@ func newStacksCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 					}
 					versions = append(versions, img.Var+"="+v)
 				}
+				state := ""
+				if s.Stopped != nil {
+					state = "stopped since " + s.Stopped.Since.UTC().Format(time.RFC3339)
+				}
 				rows = append(rows, output.Row{
-					"stack": s.Name, "update": s.Update, "versions": strings.Join(versions, ", "),
+					"stack": s.Name, "state": state, "update": s.Update, "versions": strings.Join(versions, ", "),
 					"findings": int64(s.Findings), "error": s.Error,
 				})
 			}
 			return output.Encode(c.OutOrStdout(), program.Format(),
-				output.Collection{Columns: []string{"stack", "update", "versions", "findings", "error"}, Rows: rows})
+				output.Collection{Columns: []string{"stack", "state", "update", "versions", "findings", "error"}, Rows: rows})
 		},
 	}
 }

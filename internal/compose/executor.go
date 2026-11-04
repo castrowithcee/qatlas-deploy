@@ -35,7 +35,10 @@ const (
 	DefaultPullTimeout = 10 * time.Minute
 	DefaultUpTimeout   = 5 * time.Minute
 	DefaultStopTimeout = 2 * time.Minute
-	DefaultPSTimeout   = 30 * time.Second
+	// DefaultStartTimeout and DefaultRestartTimeout bound a start and a restart in place.
+	DefaultStartTimeout   = 2 * time.Minute
+	DefaultRestartTimeout = 3 * time.Minute
+	DefaultPSTimeout      = 30 * time.Second
 )
 
 // projectName is what Compose accepts as a project name.
@@ -60,7 +63,7 @@ type Executor struct {
 	// Env is the complete environment of every call.
 	Env []string
 	// Time limits per call; zero means the Default constant.
-	PullTimeout, UpTimeout, StopTimeout, PSTimeout time.Duration
+	PullTimeout, UpTimeout, StopTimeout, StartTimeout, RestartTimeout, PSTimeout time.Duration
 }
 
 func orDefault(d, def time.Duration) time.Duration {
@@ -83,6 +86,16 @@ func (x *Executor) Up(ctx context.Context, st stacks.Stack, log Logger) error {
 // Stop stops the containers of the stack without removing them.
 func (x *Executor) Stop(ctx context.Context, st stacks.Stack, log Logger) error {
 	return x.step(ctx, st, log, orDefault(x.StopTimeout, DefaultStopTimeout), "stop", "stop")
+}
+
+// Start starts the existing, stopped containers of the stack; it creates none.
+func (x *Executor) Start(ctx context.Context, st stacks.Stack, log Logger) error {
+	return x.step(ctx, st, log, orDefault(x.StartTimeout, DefaultStartTimeout), "start", "start")
+}
+
+// Restart restarts the containers of the stack without recreating them.
+func (x *Executor) Restart(ctx context.Context, st stacks.Stack, log Logger) error {
+	return x.step(ctx, st, log, orDefault(x.RestartTimeout, DefaultRestartTimeout), "restart", "restart")
 }
 
 func (x *Executor) step(ctx context.Context, st stacks.Stack, log Logger, timeout time.Duration, label string, words ...string) error {

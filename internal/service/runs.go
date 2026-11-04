@@ -36,6 +36,8 @@ func runsAnswer(err error) error {
 		return control.NewError(control.CodeNotPaused, "the stack is not paused")
 	case errors.Is(err, engine.ErrPinned):
 		return control.NewError(control.CodePinned, "the stack is pinned; unpin it first")
+	case errors.Is(err, engine.ErrStackStopped):
+		return control.NewError(control.CodeStackStopped, "the stack was stopped through qdeploy; start it with start first")
 	case errors.Is(err, engine.ErrNoSuchRun):
 		return control.NewError(control.CodeNoSuchRun, "no such run")
 	}
@@ -176,6 +178,9 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 		}
 		if s.Pin != nil {
 			item.Pinned = &control.HoldInfo{Since: s.Pin.Since}
+		}
+		if s.Stopped != nil {
+			item.Stopped = &control.HoldInfo{Since: s.Stopped.Since}
 		}
 		for _, f := range s.Findings {
 			item.Findings = append(item.Findings, control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)})

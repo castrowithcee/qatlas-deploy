@@ -96,6 +96,10 @@ type Deployer interface {
 	Pull(ctx context.Context, stack stacks.Stack, log *Log) error
 	// Up starts the stack.
 	Up(ctx context.Context, stack stacks.Stack, log *Log) error
+	// Start starts the existing, stopped containers of the stack without recreating them.
+	Start(ctx context.Context, stack stacks.Stack, log *Log) error
+	// Restart restarts the containers of the stack without recreating them.
+	Restart(ctx context.Context, stack stacks.Stack, log *Log) error
 	// Check tells whether the started stack works.
 	Check(ctx context.Context, stack stacks.Stack, log *Log) error
 	// Restore puts the data of backup id back into the stopped stack and leaves it stopped.
@@ -359,6 +363,11 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 			v.start = false
 			v.findings = append([]Finding{{FindingPaused, e.pauseDetail(old.Paused)}}, v.findings...)
 		}
+		if old.Stopped != nil {
+			v.start = false
+			v.findings = append([]Finding{{FindingStopped, "stopped by the operator since " +
+				old.Stopped.Since.UTC().Format(time.RFC3339) + "; no run starts until 'qdeploy stack start'"}}, v.findings...)
+		}
 		verdicts[st.Name] = v
 	}
 
@@ -412,7 +421,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 				res.Started = append(res.Started, name)
 			case errors.Is(err, ErrRunActive):
 				res.Dropped = append(res.Dropped, name)
-			case errors.Is(err, ErrPaused):
+			case errors.Is(err, ErrPaused), errors.Is(err, ErrStackStopped):
 				// Paused by a run that ended after the state above was read; the next poll reports it.
 			default:
 				e.cfg.Logger.Warn("run not started", "stack", name, "error", err)
@@ -539,7 +548,7 @@ type RunInfo struct {
 // Trigger starts a manual run of the stack at the commit the working copy has; it does not fetch. It returns
 // as soon as the run is started. A second trigger while a run of the stack is active is dropped with
 // ErrRunActive and noted in the state. A stack with local changes is refused with ErrLocalChanges, a paused
-// stack with ErrPaused.
+// stack with ErrPaused, a stack stopped through qdeploy with ErrStackStopped.
 func (e *Engine) Trigger(ctx context.Context, name string) (RunInfo, error) {
 	if e.cfg.Deployer == nil {
 		return RunInfo{}, ErrNoDeployer
@@ -599,6 +608,11 @@ func (e *Engine) start(b Binding, st stacks.Stack, commit, trigger string) (RunI
 	if cur.Paused != nil {
 		e.mu.Unlock()
 		return RunInfo{}, ErrPaused
+	}
+	// Every run ends in up, which would start a stack the operator stopped; only a start clears the mark.
+	if cur.Stopped != nil {
+		e.mu.Unlock()
+		return RunInfo{}, ErrStackStopped
 	}
 	now := e.cfg.Clock.Now().UTC()
 	id, w, err := e.newLog(now)
