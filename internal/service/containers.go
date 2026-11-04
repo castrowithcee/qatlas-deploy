@@ -16,6 +16,7 @@ import (
 	"github.com/castrowithcee/qatlas-kit/output"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
+	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -36,6 +37,10 @@ type Docker interface {
 	List(ctx context.Context) ([]docker.Container, error)
 	Inspect(ctx context.Context, ref string) (docker.Details, error)
 	Stats(ctx context.Context, ref string) (docker.Stats, error)
+	Start(ctx context.Context, ref string) error
+	Stop(ctx context.Context, ref string, grace time.Duration) error
+	Restart(ctx context.Context, ref string, grace time.Duration) error
+	WaitHealthy(ctx context.Context, refs []string, opts docker.WaitOptions) ([]docker.WaitResult, error)
 }
 
 type containerService struct {
@@ -44,14 +49,23 @@ type containerService struct {
 	stackDirs func() map[string]string
 	now       func() time.Time
 	log       *slog.Logger
+	eng       *engine.Engine
+	// wait bounds how long a start or restart waits for the container to be ready.
+	wait time.Duration
 }
 
-func registerContainerCommands(r *control.Registry, repo *repoService, d Docker, log *slog.Logger) error {
-	s := &containerService{docker: d, now: time.Now, log: log, stackDirs: func() map[string]string {
+func registerContainerCommands(r *control.Registry, repo *repoService, eng *engine.Engine, d Docker, wait time.Duration, log *slog.Logger) error {
+	if wait <= 0 {
+		wait = containerReadyWait
+	}
+	s := &containerService{docker: d, now: time.Now, log: log, eng: eng, wait: wait, stackDirs: func() map[string]string {
 		return repo.stackDirs(log)
 	}}
 	for name, h := range map[string]control.Handler{
 		control.ContainerListCommand: s.handleList, control.ContainerGetCommand: s.handleGet,
+		control.ContainerStartCommand:   s.action("start"),
+		control.ContainerStopCommand:    s.action("stop"),
+		control.ContainerRestartCommand: s.action("restart"),
 	} {
 		if err := r.Register(name, h); err != nil {
 			return err
