@@ -1,10 +1,11 @@
 #!/bin/sh
 # Scenario: from the simulated host, clone the demo stacks repository over SSH and push a commit; then check
-# the demo image tags and that a demo container turns unhealthy on purpose. Then run qdeploy on the host as a
-# service, bind the stacks repository with its own deploy key, list the stacks, deploy a new commit, show the
-# available image versions per update ceiling without changing anything, roll back a
-# commit with a failing healthcheck (data restored from the run's backup, revert commit on the remote), leave a
-# stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
+# the demo image tags and that a demo container turns unhealthy on purpose. Then install qdeploy on the host
+# from a signed test release with the release installer, which sets up the service, and check its user, group
+# and directories and that status needs root. Then bind the stacks repository with its own deploy key, list the
+# stacks, deploy a new commit, show the available image versions per update ceiling without changing anything,
+# roll back a commit with a failing healthcheck (data restored from the run's backup, revert commit on the
+# remote), leave a stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
 # Version updates with qdeploy stack update follow: one direct step, a stepwise major jump and a jump whose middle step
 # fails. The maintenance window follows on a real, short window: a stack in automatic mode is updated without a
 # human, a stack in manual mode is only reported, a paused and a pinned stack stay as they are, and a change with
@@ -16,7 +17,8 @@
 # before all that. The last section resets the service to a fresh state and does the first setup only through
 # the terminal interface: deploy key, registry credential, maintenance window, notification channel with its
 # test, repository with a confirmed host key, a stack secret and the first deploy; then it restores an older
-# backup through the interface and proves that no masked value shows anywhere. Sourced by run.sh scenario.
+# backup through the interface and proves that no masked value shows anywhere. At the very end the installed
+# program updates itself to a newer signed test release and refuses tampered ones. Sourced by run.sh scenario.
 
 as_admin() {
 	docker exec -i -u "$admin" "$host" sh -ec "$*"
@@ -73,6 +75,8 @@ run_scenario() {
 
 	scenario_stacks_repo
 
+	scenario_selfupdate
+
 	log 'scenario: passed'
 }
 
@@ -103,20 +107,77 @@ scanned_git_key() {
 	docker exec -u "$admin" "$host" ssh-keyscan -t ed25519 "git.$domain" 2>/dev/null | grep -v "^#" | cut -d ' ' -f 2,3
 }
 
+# release_build builds the fake release $1 (a tag) for the architecture of the host into $work/releases/$1 and
+# signs its checksums with the test key. The binary trusts that key through a source overlay of the key list, so
+# release.json and the sources stay as they are.
+release_build() {
+	tag=$1
+	arch=$(docker exec "$host" dpkg --print-architecture)
+	dir=$work/releasebuild
+	if [ ! -f "$dir/overlay.json" ]; then
+		mkdir -p "$dir"
+		ssh-keygen -q -t ed25519 -N '' -C "$prefix-release-test-key" -f "$work/keys/release"
+		printf 'qdeploy-release %s\n' "$(cut -d ' ' -f 1,2 "$work/keys/release.pub")" >"$dir/allowed-signers"
+		sed "s|^var extraKeyLines string\$|var extraKeyLines = \"$(cut -d ' ' -f 1,2 "$work/keys/release.pub")\"|" \
+			"$root/internal/release/release.go" >"$dir/release.go"
+		grep -q '^var extraKeyLines = "ssh-ed25519 ' "$dir/release.go" || fail 'cannot add the test key to the release key list'
+		printf '{"Replace":{"%s":"%s"}}' "$root/internal/release/release.go" "$dir/release.go" >"$dir/overlay.json"
+		sed "s|\"targets\": .*|\"targets\": [\"linux/$arch\"],|" "$root/release.json" >"$dir/release.json"
+	fi
+	rel_signers=$(realpath --relative-to="$root" "$dir/allowed-signers")
+	(cd "$root" && SOURCE_DATE_EPOCH=1700000000 GOFLAGS="${GOFLAGS:+$GOFLAGS }-overlay=$dir/overlay.json" \
+		go run github.com/castrowithcee/qatlas-kit/cmd/releasebuild -config "$dir/release.json" -program qdeploy \
+		-namespace qdeploy-release -allowed-signers "$rel_signers" \
+		-releases-url https://github.com/castrowithcee/qatlas-deploy/releases -version "$tag" -out "$work/releases/$tag" >/dev/null) ||
+		fail "cannot build the test release $tag"
+	(cd "$work/releases/$tag" && ssh-keygen -q -Y sign -f "$work/keys/release" -n qdeploy-release checksums.txt) ||
+		fail "cannot sign the test release $tag"
+}
+
+# release_publish makes the directory $work/releases/$1 (or the directory $2) the release $1 of the releases fake.
+release_publish() {
+	docker exec "$prefix-releases" rm -rf "/srv/releases/$1"
+	docker cp "${2:-$work/releases/$1}" "$prefix-releases:/srv/releases/$1" || fail "cannot publish the test release $1"
+}
+
 setup_service() {
-	step 'install qdeploy as a test-only service on the host'
-	(cd "$root" && GOOS=linux GOARCH="$(docker exec "$host" dpkg --print-architecture)" CGO_ENABLED=0 \
-		go build -trimpath -o "$work/qdeploy" .) || fail 'cannot build qdeploy'
-	docker cp "$work/qdeploy" "$host:/usr/local/bin/qdeploy"
+	step 'install qdeploy from a signed test release with the published installer'
+	release_build v0.1.0
+	release_build v0.2.0
+	release_publish v0.1.0
+	as_admin 'curl -fsSL -o /tmp/install.sh https://github.com/castrowithcee/qatlas-deploy/releases/latest/download/install.sh &&
+		sudo sh /tmp/install.sh && rm -f /tmp/install.sh' || fail 'the installer failed'
+	# The unit lets the service write /opt/stacks only if it exists at start. The backup helper image is a local
+	# one, so a drop-in (which an update keeps) names it.
 	docker exec "$host" sh -ec '
-		useradd --system --home-dir /var/lib/qdeploy --no-create-home --shell /usr/sbin/nologin --groups docker qdeploy
 		install -d -o qdeploy -g qdeploy -m 0755 /opt/stacks
-		systemd-run --quiet --unit=qdeploy-e2e --property=Type=exec --property=User=qdeploy --property=Group=qdeploy \
-			--property=StateDirectory=qdeploy --property=StateDirectoryMode=0700 \
-			--property=RuntimeDirectory=qdeploy --property=RuntimeDirectoryMode=0750 /usr/local/bin/qdeploy run --backup-image '"$backup_image"'' ||
-		fail 'cannot start the qdeploy service'
+		install -d /etc/systemd/system/qdeploy.service.d
+		printf "[Service]\nExecStart=\nExecStart=/usr/local/bin/qdeploy run --backup-image '"$backup_image"'\n" >/etc/systemd/system/qdeploy.service.d/e2e.conf
+		systemctl daemon-reload
+		systemctl restart qdeploy' || fail 'cannot restart the qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
 	log 'scenario: qdeploy service running'
+
+	step 'the service runs as qdeploy without root, with the group docker, and keeps its directories closed'
+	[ "$(docker exec "$host" systemctl is-active qdeploy)" = active ] || fail 'the qdeploy service is not active'
+	pid=$(docker exec "$host" systemctl show -p MainPID --value qdeploy)
+	[ -n "$pid" ] && [ "$pid" != 0 ] || fail 'the qdeploy service has no process'
+	[ "$(docker exec "$host" stat -c %U "/proc/$pid")" = qdeploy ] || fail "the service does not run as qdeploy: $(docker exec "$host" stat -c %U "/proc/$pid")"
+	if docker exec "$host" grep '^Uid:' "/proc/$pid/status" | grep -qw 0; then fail 'the service has a root user ID'; fi
+	docker exec "$host" id -nG qdeploy | tr ' ' '\n' | grep -qx docker || fail 'the user qdeploy is not in the group docker'
+	docker exec "$host" grep '^Groups:' "/proc/$pid/status" | grep -qw "$(docker exec "$host" getent group docker | cut -d : -f 3)" ||
+		fail 'the service process does not hold the group docker'
+	[ "$(docker exec "$host" stat -c %U:%G:%a /run/qdeploy)" = qdeploy:qdeploy:750 ] ||
+		fail "/run/qdeploy is $(docker exec "$host" stat -c %U:%G:%a /run/qdeploy), want qdeploy:qdeploy:750"
+	[ "$(docker exec "$host" stat -c %a /var/lib/qdeploy)" = 700 ] || fail "/var/lib/qdeploy has the mode $(docker exec "$host" stat -c %a /var/lib/qdeploy), want 700"
+	if as_admin 'ls /run/qdeploy' >/dev/null 2>&1; then fail 'another user can list /run/qdeploy'; fi
+	log "scenario: qdeploy runs as pid $pid, user qdeploy, group docker; /run/qdeploy qdeploy:qdeploy 750, /var/lib/qdeploy 700"
+
+	step 'status needs root'
+	out=$(as_admin 'sudo qdeploy status 2>&1') || fail "sudo qdeploy status failed: $out"
+	printf '%s' "$out" | grep -qi 'running\|started\|uptime\|version' || fail "sudo qdeploy status does not show the service: $out"
+	if out_plain=$(as_admin 'qdeploy status 2>&1'); then fail "qdeploy status without root succeeded: $out_plain"; fi
+	log "scenario: sudo qdeploy status answers; without root: $out_plain"
 }
 
 # scenario_compose_integration runs the Docker integration tests of the deployer inside the host. The test
@@ -166,7 +227,7 @@ has_failed_commit_finding() {
 
 # restart_service restarts the qdeploy unit, which makes the engine poll at once.
 restart_service() {
-	docker exec "$host" systemctl restart qdeploy-e2e || fail 'cannot restart the qdeploy service'
+	docker exec "$host" systemctl restart qdeploy || fail 'cannot restart the qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
 	wait_for 'the qdeploy service to answer' 20 qd status
 }
@@ -250,7 +311,7 @@ hook_seen() {
 
 # journal prints the log of the qdeploy service.
 journal() {
-	docker exec "$host" journalctl -u qdeploy-e2e --no-pager -o cat
+	docker exec "$host" journalctl -u qdeploy --no-pager -o cat
 }
 
 # mail_seen succeeds when the mail server recorded a message containing the fixed string $1.
@@ -913,9 +974,15 @@ scenario_stacks_repo() {
 	window_far_away >/dev/null || fail 'cannot move the maintenance window out of the way'
 
 	step 'deploy key'
-	out=$(qd --output json key generate) || fail "key generate failed: $out"
+	out=$(as_admin 'sudo qdeploy --output json key generate 2>&1') || fail "key generate failed: $out"
 	pub=$(printf '%s\n' "$out" | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')
 	case $pub in ssh-ed25519\ *) ;; *) fail "no public key in: $out" ;; esac
+	shown=$(as_admin 'sudo qdeploy --output json key show 2>&1' | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')
+	[ "$shown" = "$pub" ] || fail "key show differs from key generate: $shown"
+	fingerprint=$(printf '%s\n' "$pub" | docker exec -i "$host" sh -c 'cat >/tmp/deploy-key.pub && ssh-keygen -lf /tmp/deploy-key.pub; rm -f /tmp/deploy-key.pub') ||
+		fail "ssh-keygen cannot parse the deploy key: $fingerprint"
+	case $fingerprint in *SHA256:*ED25519*) ;; *) fail "unexpected fingerprint: $fingerprint" ;; esac
+	log "scenario: deploy key shown and parsed: $fingerprint"
 	printf '%s\n' "$pub" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
 	log 'scenario: deploy key registered on the git server'
 
@@ -1012,8 +1079,102 @@ scenario_stacks_repo() {
 	qd repo fetch >/dev/null || fail 'repo fetch fails after the host keys were restored'
 
 	scenario_tui_setup
+}
 
-	docker exec "$host" systemctl stop qdeploy-e2e
+# selfupdate_field prints one top-level field of qdeploy update status, run without root.
+selfupdate_field() {
+	as_admin "qdeploy --output json update status 2>&1" | sed -n "s/.*\"$1\": *\"\{0,1\}\([^\",}]*\).*/\1/p"
+}
+
+# service_pid prints the main process ID of the qdeploy service.
+service_pid() {
+	docker exec "$host" systemctl show -p MainPID --value qdeploy
+}
+
+# service_entered prints when the service last became active.
+service_entered() {
+	docker exec "$host" systemctl show -p ActiveEnterTimestampMonotonic --value qdeploy
+}
+
+# installed_sum identifies the installed program and the unit systemd uses.
+installed_sum() {
+	docker exec "$host" sh -c 'sha256sum /usr/local/bin/qdeploy; systemctl cat qdeploy | sha256sum'
+}
+
+service_serving() {
+	[ "$(docker exec "$host" systemctl is-active qdeploy)" = active ] && qd status >/dev/null
+}
+
+# scenario_selfupdate updates the installed service to a newer signed test release and refuses tampered ones.
+scenario_selfupdate() {
+	docker exec "$host" systemctl start qdeploy || fail 'cannot start the qdeploy service'
+	wait_for 'the qdeploy service to answer' 30 service_serving
+
+	step 'update status reports the newer test release without root'
+	release_publish v0.2.0
+	[ "$(docker exec "$host" qdeploy version 2>&1 | grep -c v0.1.0)" -ge 1 ] || fail "the installed version is not v0.1.0: $(docker exec "$host" qdeploy version 2>&1)"
+	[ "$(selfupdate_field installed)" = v0.1.0 ] || fail "update status: $(as_admin 'qdeploy --output json update status 2>&1')"
+	[ "$(selfupdate_field latest)" = v0.2.0 ] || fail "update status latest: $(as_admin 'qdeploy --output json update status 2>&1')"
+	[ "$(selfupdate_field update_available)" = true ] || fail "update status: $(as_admin 'qdeploy --output json update status 2>&1')"
+	log "scenario: update status: $(as_admin 'qdeploy --output json update status 2>&1' | tr -d '\n ')"
+
+	step 'update without root and without --confirm changes nothing'
+	before=$(installed_sum)
+	if out=$(as_admin 'qdeploy update --yes --confirm 2>&1'); then fail "update without root succeeded: $out"; fi
+	if out=$(as_admin 'sudo qdeploy update --yes 2>&1'); then fail "update without --confirm succeeded: $out"; fi
+	[ "$(installed_sum)" = "$before" ] || fail 'a refused update changed the installation'
+
+	step 'sudo qdeploy update installs the newer release and restarts the service'
+	pid=$(service_pid) entered=$(service_entered)
+	out=$(as_admin 'sudo qdeploy update --yes --confirm 2>&1') || fail "update failed: $out"
+	wait_for 'the updated service' 60 service_serving
+	[ "$(service_pid)" != "$pid" ] && [ "$(service_entered)" != "$entered" ] || fail 'the service was not restarted by the update'
+	docker exec "$host" qdeploy version 2>&1 | grep -q v0.2.0 || fail "the installed version is not v0.2.0: $(docker exec "$host" qdeploy version 2>&1)"
+	[ "$(selfupdate_field installed)" = v0.2.0 ] && [ "$(selfupdate_field update_available)" = false ] ||
+		fail "update status after the update: $(as_admin 'qdeploy --output json update status 2>&1')"
+	[ "$(docker exec "$host" cat /etc/systemd/system/qdeploy.service.d/e2e.conf | grep -c backup-image)" = 1 ] || fail 'the update removed the drop-in'
+	log "scenario: updated to v0.2.0, pid $pid -> $(service_pid), service answering: $out"
+
+	step 'a release with a tampered checksums.txt is refused and changes nothing'
+	release_build v0.3.0
+	good=$work/releases/v0.3.0
+	bad=$work/releases/v0.3.0-tampered
+	rm -rf "$bad"
+	cp -r "$good" "$bad"
+	printf '# tampered\n' >>"$bad/checksums.txt"
+	cmp -s "$good/checksums.txt" "$bad/checksums.txt" && fail 'the test did not tamper with checksums.txt'
+	release_publish v0.3.0 "$bad"
+	refuse_update v0.3.0
+
+	step 'a release with a tampered archive is refused and changes nothing'
+	rm -rf "$bad"
+	cp -r "$good" "$bad"
+	printf 'x' >>"$bad/qdeploy_v0.3.0_linux_$(docker exec "$host" dpkg --print-architecture).tar.gz"
+	release_publish v0.3.0 "$bad"
+	refuse_update v0.3.0
+
+	step 'a release signed by an unknown key is refused and changes nothing'
+	rm -rf "$bad"
+	cp -r "$good" "$bad"
+	ssh-keygen -q -t ed25519 -N '' -C "$prefix-unknown-key" -f "$work/keys/unknown"
+	rm -f "$bad/checksums.txt.sig"
+	(cd "$bad" && ssh-keygen -q -Y sign -f "$work/keys/unknown" -n qdeploy-release checksums.txt)
+	release_publish v0.3.0 "$bad"
+	refuse_update v0.3.0
+
+	docker exec "$host" systemctl stop qdeploy
+}
+
+# refuse_update requires that sudo qdeploy update fails for the release $1 and that program, unit, version and
+# service process stay as they were.
+refuse_update() {
+	before=$(installed_sum) pid=$(service_pid) entered=$(service_entered)
+	if out=$(as_admin 'sudo qdeploy update --yes --confirm 2>&1'); then fail "update accepted a tampered release: $out"; fi
+	[ "$(installed_sum)" = "$before" ] || fail 'a refused update changed the installation'
+	[ "$(service_pid)" = "$pid" ] && [ "$(service_entered)" = "$entered" ] || fail 'a refused update restarted the service'
+	docker exec "$host" qdeploy version 2>&1 | grep -q v0.2.0 || fail 'a refused update changed the version'
+	service_serving || fail 'the service does not answer after a refused update'
+	log "scenario: tampered release $1 refused, installation unchanged: $out"
 }
 
 # window_field prints one field of qdeploy window show (empty when it is absent).
@@ -1028,7 +1189,7 @@ window_far_away() {
 
 # window_log prints what the service logged about the window and the stacks since it started.
 window_log() {
-	docker exec "$host" journalctl -u qdeploy-e2e --no-pager -o cat
+	docker exec "$host" journalctl -u qdeploy --no-pager -o cat
 }
 
 # stack_run_count prints the number of recorded runs of a stack.
@@ -1402,14 +1563,12 @@ tui_pick_to() {
 # first_setup_reset gives the service a fresh state: no key, credentials, channels, repository or runs, and
 # no containers of the earlier sections.
 first_setup_reset() {
-	docker exec "$host" systemctl stop qdeploy-e2e || fail 'cannot stop the qdeploy service'
+	docker exec "$host" systemctl stop qdeploy || fail 'cannot stop the qdeploy service'
 	docker exec "$host" sh -ec '
 		for c in $(docker ps -aq --filter label=com.docker.compose.project); do docker rm -f -v "$c" >/dev/null; done
 		for v in $(docker volume ls -q --filter label=com.docker.compose.project); do docker volume rm "$v" >/dev/null; done
 		find /opt/stacks /var/lib/qdeploy -mindepth 1 -delete' || fail 'cannot reset the state of the service'
-	docker exec "$host" systemd-run --quiet --unit=qdeploy-e2e --property=Type=exec --property=User=qdeploy --property=Group=qdeploy \
-		--property=StateDirectory=qdeploy --property=StateDirectoryMode=0700 \
-		--property=RuntimeDirectory=qdeploy --property=RuntimeDirectoryMode=0750 /usr/local/bin/qdeploy run --backup-image "$backup_image" ||
+	docker exec "$host" systemctl start qdeploy ||
 		fail 'cannot start the fresh qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
 	wait_for 'the fresh qdeploy service to answer' 20 qd status

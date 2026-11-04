@@ -92,7 +92,7 @@ func TestCommandTree(t *testing.T) {
 		}
 	}
 	slices.Sort(top)
-	want := []string{"credential", "key", "manpage", "notify", "repo", "run", "stack", "status", "tui", "version", "window"}
+	want := []string{"credential", "key", "manpage", "notify", "repo", "run", "stack", "status", "tui", "update", "version", "window"}
 	// Cobra adds help and completion itself; they are not part of the qdeploy surface.
 	var got []string
 	for _, n := range top {
