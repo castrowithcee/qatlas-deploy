@@ -6,7 +6,7 @@
   "files": [],
   "installer": {
     "displayName": "Qatlas Deploy",
-    "nextStep": "Next: create the stacks directory, then run sudo qdeploy tui. See the README for the steps."
+    "nextStep": "Next: create the stacks directory, then run sudo qdeploy tui."
   },
   "service": {
     "unit": "packaging/qdeploy.service",
