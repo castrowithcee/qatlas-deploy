@@ -52,12 +52,32 @@ func startBound(t *testing.T, dep engine.Deployer) *repoEnv {
 	return e
 }
 
+// settled reports whether both readable stacks show a deployed commit and no run is active.
+// Status lists never-deployed stacks with an empty value, so presence of the key proves nothing.
+func settled(stdout string) bool {
+	var f map[string]any
+	if json.Unmarshal([]byte(stdout), &f) != nil {
+		return false
+	}
+	for _, name := range []string{"demo-stack", "plain-stack"} {
+		if v, ok := f["stack."+name+".deployed"].(string); !ok || v == "" {
+			return false
+		}
+	}
+	for k := range f {
+		if strings.HasSuffix(k, ".active_run") {
+			return false
+		}
+	}
+	return true
+}
+
 // settle waits until the poll that follows the binding has deployed both readable stacks.
 func settle(t *testing.T) {
 	t.Helper()
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
 		_, stdout, _ := run(t, "status", "--output", "json")
-		if strings.Count(stdout, ".deployed\":\"") >= 2 && !strings.Contains(stdout, "active_run") {
+		if settled(stdout) {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -224,5 +244,22 @@ func TestUpdateOfAPinnedStackSaysToUnpin(t *testing.T) {
 	}
 	if code, _, stderr := run(t, "stack", "update", "demo-stack"); code != 1 || !strings.Contains(stderr, "pinned") || !strings.Contains(stderr, "qdeploy stack unpin") {
 		t.Fatalf("update of a pinned stack: %d %q", code, stderr)
+	}
+}
+
+func TestSettled(t *testing.T) {
+	for _, tc := range []struct {
+		name, in string
+		want     bool
+	}{
+		{"deployed", `{"stack.demo-stack.deployed":"abc123","stack.plain-stack.deployed":"abc123"}`, true},
+		{"empty value", `{"stack.demo-stack.deployed":"","stack.plain-stack.deployed":"abc123"}`, false},
+		{"missing stack", `{"stack.demo-stack.deployed":"abc123"}`, false},
+		{"active run", `{"stack.demo-stack.deployed":"abc123","stack.plain-stack.deployed":"abc123","stack.plain-stack.active_run":"r1"}`, false},
+		{"invalid json", `not json`, false},
+	} {
+		if got := settled(tc.in); got != tc.want {
+			t.Errorf("%s: settled = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
