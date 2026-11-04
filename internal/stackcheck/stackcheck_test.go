@@ -106,7 +106,7 @@ func TestConformantStackHasNoFinding(t *testing.T) {
 }
 
 func TestRules(t *testing.T) {
-	semverFix := "SemVer"
+	semverFix := "MAJOR.MINOR.PATCH"
 	cases := []struct {
 		name     string
 		files    map[string]string
@@ -127,7 +127,7 @@ func TestRules(t *testing.T) {
 		{"no tag", with(demoFiles(), map[string]string{"compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app\n"}),
 			fakeGit{}, RuleFloatingImageTag, SeverityError, "no tag", semverFix},
 		{"no semver core", with(demoFiles(), map[string]string{".env": "DEMO_VERSION=1.2\n"}),
-			fakeGit{}, RuleFloatingImageTag, SeverityError, "no SemVer core", semverFix},
+			fakeGit{}, RuleFloatingImageTag, SeverityError, "no MAJOR.MINOR.PATCH core", semverFix},
 		{"unset variable", with(demoFiles(), map[string]string{".env": "OTHER=1\n"}),
 			fakeGit{}, RuleUnsetImageVariable, SeverityError, "DEMO_VERSION", ".env"},
 		{"duplicate key", with(demoFiles(), map[string]string{".env": goodEnv + "DEMO_PASSWORD=x\n"}),

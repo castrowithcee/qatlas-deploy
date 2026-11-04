@@ -90,7 +90,7 @@ const stackRulesTopic = `Each stack folder of the stacks repository may hold a q
 Fields (all optional except version):
 - version: 1
 - update.mode: manual (default) or automatic
-- update.ceiling: patch, minor (default) or major; the largest version step taken
+- update.ceiling: patch, minor (default) or major; the largest version step taken; versions are MAJOR.MINOR.PATCH (SemVer or CalVer), and with CalVer the first part, for example the year, counts as major
 - update.major: stepwise (default, one major version at a time) or direct
 - update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
 - update.changelog.<VARIABLE>: GitHub repository (owner/name or a github.com address) whose releases are shown as changelog; it takes precedence over the image label org.opencontainers.image.source
@@ -158,7 +158,7 @@ Layout of a stack folder:
 Rules (rule ID, severity):
 - fixed-image-tag (error): an image version is written into a compose file; use a variable from .env
 - image-version-default (warning): the version only comes from a default in the compose file; set it in .env
-- floating-image-tag (error): a tag such as latest, no tag, or a tag without a SemVer core (x.y.z)
+- floating-image-tag (error): a tag such as latest, no tag, or a tag without a MAJOR.MINOR.PATCH core (SemVer or CalVer, x.y.z)
 - unset-image-variable (error): the version variable has no value
 - duplicate-key (error): a key stands in both .env and secrets.env; keep it in one file
 - missing-secrets-env (error): secrets.env does not exist; Compose runs with --env-file .env --env-file secrets.env
