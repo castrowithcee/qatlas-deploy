@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
@@ -39,6 +40,9 @@ type run struct {
 	// change is set for a step of an update; pushed says its commit is on the branch.
 	change *VersionStep
 	pushed bool
+	// tracked caches the files git tracks in the stack folder for the data directory check.
+	tracked   []string
+	trackedOK bool
 }
 
 // outcome is what a run ended with. cause is why the run failed, rollbackErr why its rollback failed and
@@ -49,6 +53,8 @@ type outcome struct {
 	rollbackErr error
 	at          string
 	backup      string
+	// dirs are the missing data directories that stopped the run before it touched the stack.
+	dirs []MissingDir
 }
 
 func (r *run) execute() {
@@ -105,11 +111,18 @@ func (r *run) record(out outcome) RunRecord {
 		cur := s.Stacks[rec.Stack]
 		x := rec
 		cur.LastRun = &x
+		cur.DataDirs = nil
+		cur.Findings = slices.DeleteFunc(cur.Findings, func(f Finding) bool { return f.Kind == FindingDataDirMissing })
+		if len(out.dirs) > 0 {
+			cur.DataDirs = &DataDirWait{Commit: rec.Commit, Dirs: out.dirs}
+			cur.Findings = append([]Finding{dataDirFinding(out.dirs)}, cur.Findings...)
+		}
 		switch rec.Result {
 		case ResultSucceeded:
 			cur.Deployed, cur.FailedCommit = out.at, ""
 		case ResultFailed:
-			if marks {
+			// Waiting for a human is not a failed commit: the same commit runs once the directories exist.
+			if marks && len(out.dirs) == 0 {
 				cur.FailedCommit = rec.Commit
 			}
 		case ResultRolledBack:
@@ -124,7 +137,7 @@ func (r *run) record(out outcome) RunRecord {
 				cur.FailedCommit = rec.Commit
 			}
 			cur.Paused = &Pause{Time: now, Run: rec.ID, Reason: e.text(out.rollbackErr.Error())}
-			cur.Findings = append([]Finding{{FindingPaused, e.pauseDetail(cur.Paused)}}, cur.Findings...)
+			cur.Findings = append([]Finding{{Kind: FindingPaused, Detail: e.pauseDetail(cur.Paused)}}, cur.Findings...)
 		}
 		if cur.Pending != "" && (cur.Pending == rec.Commit || cur.Pending == out.at) {
 			cur.Pending = ""
@@ -171,6 +184,9 @@ func (r *run) step(name string, fn func() error) (err error) {
 // An update step commits and pushes its version change after the backup; see advance.
 func (r *run) secured(ctx context.Context) outcome {
 	d, st, log := r.e.cfg.Deployer, r.st, r.log
+	if out, stop := r.checkDataDirs(ctx); stop {
+		return out
+	}
 	if err := r.step("stop", func() error { return d.Stop(ctx, st, log) }); err != nil {
 		return outcome{result: ResultFailed, cause: fmt.Errorf("stop: %w", err)}
 	}
@@ -262,6 +278,57 @@ func (r *run) secured(ctx context.Context) outcome {
 	}
 	out.result, out.at = ResultRolledBack, at
 	return out
+}
+
+// checkDataDirs stops the run before the stack is touched when bind-mount source directories are missing that
+// Docker would create as root for an image that does not run as root. Nothing is created here.
+func (r *run) checkDataDirs(ctx context.Context) (outcome, bool) {
+	c, ok := r.e.cfg.Deployer.(DataDirChecker)
+	if !ok {
+		return outcome{}, false
+	}
+	var dirs []MissingDir
+	err := r.step("data-dirs", func() error {
+		var err error
+		dirs, err = c.MissingDataDirs(ctx, r.st, r.versioned, r.log)
+		return err
+	})
+	switch {
+	case err != nil:
+		return outcome{result: ResultFailed, cause: fmt.Errorf("data-dirs: %w", err)}, true
+	case len(dirs) == 0:
+		r.log.Printf("none missing")
+		return outcome{}, false
+	}
+	if len(dirs) > maxDataDirs {
+		dirs = dirs[:maxDataDirs]
+	}
+	r.log.Printf("missing: %d", len(dirs))
+	return outcome{result: ResultFailed, dirs: dirs, cause: errors.New(dataDirDetail(dirs))}, true
+}
+
+// versioned reports whether git tracks rel, a path below the stack folder, or something below it.
+func (r *run) versioned(ctx context.Context, rel string) (bool, error) {
+	l, ok := r.b.Copy.(interface {
+		TrackedFiles(ctx context.Context, dir string) ([]string, error)
+	})
+	if !ok {
+		return false, nil
+	}
+	if !r.trackedOK {
+		files, err := l.TrackedFiles(ctx, r.st.Name)
+		if err != nil {
+			return false, err
+		}
+		r.tracked, r.trackedOK = files, true
+	}
+	p := r.st.Name + "/" + rel
+	for _, f := range r.tracked {
+		if f == p || strings.HasPrefix(f, p+"/") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // rollback brings the stack back to its deployed state: stop, restore the run's backup unless skip says why

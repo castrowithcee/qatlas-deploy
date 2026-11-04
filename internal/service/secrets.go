@@ -53,6 +53,17 @@ func (d redactingDeployer) Up(ctx context.Context, st stacks.Stack, log *engine.
 	return d.next.Up(ctx, st, log)
 }
 
+// MissingDataDirs implements engine.DataDirChecker; a deployer without the check finds nothing.
+func (d redactingDeployer) MissingDataDirs(ctx context.Context, st stacks.Stack,
+	versioned func(context.Context, string) (bool, error), log *engine.Log) ([]engine.MissingDir, error) {
+	c, ok := d.next.(engine.DataDirChecker)
+	if !ok {
+		return nil, nil
+	}
+	registerStackSecrets(d.r, st)
+	return c.MissingDataDirs(ctx, st, versioned, log)
+}
+
 func (d redactingDeployer) Start(ctx context.Context, st stacks.Stack, log *engine.Log) error {
 	registerStackSecrets(d.r, st)
 	return d.next.Start(ctx, st, log)

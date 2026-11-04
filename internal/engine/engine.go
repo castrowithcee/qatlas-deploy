@@ -17,7 +17,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -104,6 +106,16 @@ type Deployer interface {
 	Check(ctx context.Context, stack stacks.Stack, log *Log) error
 	// Restore puts the data of backup id back into the stopped stack and leaves it stopped.
 	Restore(ctx context.Context, stack stacks.Stack, id string, log *Log) error
+}
+
+// DataDirChecker is implemented by a Deployer that can tell, before a run touches the stack, which bind-mount
+// source directories below the stack folder are missing although the image runs as a non-root user. A
+// Deployer without it makes the run skip that check.
+type DataDirChecker interface {
+	// MissingDataDirs returns the directories Docker would create as root. versioned reports whether a path
+	// relative to the stack folder is tracked in the working copy; such a path is never a candidate. It
+	// creates nothing.
+	MissingDataDirs(ctx context.Context, stack stacks.Stack, versioned func(ctx context.Context, rel string) (bool, error), log *Log) ([]MissingDir, error)
 }
 
 // Clock is the time source of the poll loop.
@@ -328,6 +340,8 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		findings []Finding
 		pending  string
 		start    bool
+		// clearWait says the stack no longer waits for data directories.
+		clearWait bool
 	}
 	verdicts := map[string]verdict{}
 	present := map[string]bool{}
@@ -348,24 +362,31 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		// A local edit can itself make a stack unreadable, so it is reported first.
 		switch paths := local[st.Name]; {
 		case len(paths) > 0:
-			v.findings = append(v.findings, Finding{FindingLocalChanges, e.localDetail(paths)})
+			v.findings = append(v.findings, Finding{Kind: FindingLocalChanges, Detail: e.localDetail(paths)})
 		case st.Err != nil:
-			v.findings = append(v.findings, Finding{FindingUnreadable, e.text(st.Err.Error())})
+			v.findings = append(v.findings, Finding{Kind: FindingUnreadable, Detail: e.text(st.Err.Error())})
 		case diffErr != nil:
-			v.findings = append(v.findings, Finding{FindingDiff, e.text(diffErr.Error())})
+			v.findings = append(v.findings, Finding{Kind: FindingDiff, Detail: e.text(diffErr.Error())})
 		case changedAtHead && old.FailedCommit == head:
-			v.findings = append(v.findings, Finding{FindingFailedCommit,
-				"the last run of this commit failed; a new commit or a manual run retries"})
+			v.findings = append(v.findings, Finding{Kind: FindingFailedCommit, Detail: "the last run of this commit failed; a new commit or a manual run retries"})
 		case changedAtHead:
 			v.start = true
 		}
+		if w := old.DataDirs; w != nil {
+			if w.Commit == head && dirsMissing(st.Dir, w.Dirs) {
+				v.start = false
+				v.findings = append([]Finding{dataDirFinding(w.Dirs)}, v.findings...)
+			} else {
+				v.clearWait = true
+			}
+		}
 		if old.Paused != nil {
 			v.start = false
-			v.findings = append([]Finding{{FindingPaused, e.pauseDetail(old.Paused)}}, v.findings...)
+			v.findings = append([]Finding{{Kind: FindingPaused, Detail: e.pauseDetail(old.Paused)}}, v.findings...)
 		}
 		if old.Stopped != nil {
 			v.start = false
-			v.findings = append([]Finding{{FindingStopped, "stopped by the operator since " +
+			v.findings = append([]Finding{{Kind: FindingStopped, Detail: "stopped by the operator since " +
 				old.Stopped.Since.UTC().Format(time.RFC3339) + "; no run starts until 'qdeploy stack start'"}}, v.findings...)
 		}
 		verdicts[st.Name] = v
@@ -378,6 +399,9 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		for name, v := range verdicts {
 			cur := s.Stacks[name]
 			cur.Findings, cur.Pending, cur.Removed = v.findings, v.pending, false
+			if v.clearWait {
+				cur.DataDirs = nil
+			}
 			s.Stacks[name] = cur
 		}
 		for name, cur := range s.Stacks {
@@ -389,7 +413,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 				continue
 			}
 			cur.Removed, cur.Pending = true, ""
-			cur.Findings = []Finding{{FindingRemoved, "the folder is gone from the repository; nothing is stopped or removed"}}
+			cur.Findings = []Finding{{Kind: FindingRemoved, Detail: "the folder is gone from the repository; nothing is stopped or removed"}}
 			s.Stacks[name] = cur
 		}
 		s.LastPoll, s.Head, s.RemoteHead, s.Note, s.PollError = now, head, remote, note, ""
@@ -470,6 +494,36 @@ func (e *Engine) localDetail(paths []string) string {
 		detail += ", ..."
 	}
 	return detail
+}
+
+// dataDirFinding is the finding for a stack that waits for its data directories.
+func dataDirFinding(dirs []MissingDir) Finding {
+	return Finding{Kind: FindingDataDirMissing, Detail: dataDirDetail(dirs), Dirs: slices.Clone(dirs)}
+}
+
+func dataDirDetail(dirs []MissingDir) string {
+	parts := make([]string, len(dirs))
+	for i, d := range dirs {
+		parts[i] = d.Path
+		if d.Owner != "" {
+			parts[i] += " (owner " + d.Owner + ")"
+		}
+	}
+	return "data directories are missing and the image does not run as root: " + strings.Join(parts, ", ") +
+		"; the stack starts once they exist"
+}
+
+// dirsMissing reports whether any of the directories, relative to the stack folder, is still absent.
+func dirsMissing(stackDir string, dirs []MissingDir) bool {
+	for _, d := range dirs {
+		if !ValidDirPath(d.Path) {
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(stackDir, filepath.FromSlash(d.Path))); errors.Is(err, fs.ErrNotExist) {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Engine) pauseDetail(p *Pause) string {

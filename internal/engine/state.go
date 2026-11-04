@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -44,13 +46,20 @@ const (
 	FindingRemoved      = "removed"       // the folder is gone from the repository; nothing is stopped
 	FindingPaused       = "paused"        // a rollback failed; no run starts until the stack is resumed
 	FindingStopped      = "stopped"       // the operator stopped the stack; no run starts until it is started
+	// FindingDataDirMissing means bind-mount source directories are missing and the image runs as a non-root
+	// user, so Docker would create them owned by root; no run starts until they exist.
+	FindingDataDirMissing = "data-dir-missing"
 )
 
 var (
 	runIDRe    = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$`)
 	commitRe   = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 	maxNameLen = 255
+	ownerRe    = regexp.MustCompile(`^(?:[0-9]{1,10}:[0-9]{1,10})?$`)
 )
+
+// maxDataDirs bounds the directories one run reports.
+const maxDataDirs = 64
 
 // State is everything the engine remembers. It holds commit ids, names and redacted texts, never a secret.
 type State struct {
@@ -90,6 +99,8 @@ type StackState struct {
 	// Stopped is set by a stop through qdeploy and cleared only by a start: polls, the window and manual
 	// restarts leave the stack as it is.
 	Stopped *Hold `json:"stopped,omitempty"`
+	// DataDirs is set while the stack waits for missing data directories.
+	DataDirs *DataDirWait `json:"data_dirs,omitempty"`
 	// Updates is the result of the last update detection; nil for a stack that was never checked.
 	Updates *UpdateCheck `json:"updates,omitempty"`
 }
@@ -145,6 +156,23 @@ type Hold struct {
 type Finding struct {
 	Kind   string `json:"kind"`
 	Detail string `json:"detail,omitempty"`
+	// Dirs is set for FindingDataDirMissing.
+	Dirs []MissingDir `json:"dirs,omitempty"`
+}
+
+// MissingDir is a bind-mount source directory below the stack folder that does not exist. Path is clean,
+// slash-separated and relative to the stack folder. Owner is the proposed "UID:GID" the image's user needs,
+// empty when it could not be determined.
+type MissingDir struct {
+	Path  string `json:"path"`
+	Owner string `json:"owner,omitempty"`
+}
+
+// DataDirWait records the commit a run found missing data directories at and which ones. The stack gets no
+// run for that commit until they all exist; a different commit runs and checks again.
+type DataDirWait struct {
+	Commit string       `json:"commit"`
+	Dirs   []MissingDir `json:"dirs"`
 }
 
 // DroppedTrig records the latest trigger that found a run of the stack active and was dropped.
@@ -191,6 +219,11 @@ func validateState(s State) error {
 				return errors.New("invalid hold")
 			}
 		}
+		if w := st.DataDirs; w != nil {
+			if err := validateDataDirs(*w); err != nil {
+				return err
+			}
+		}
 		if st.Updates != nil {
 			if err := validateUpdates(*st.Updates); err != nil {
 				return err
@@ -206,6 +239,24 @@ func validateState(s State) error {
 		}
 	}
 	return nil
+}
+
+func validateDataDirs(w DataDirWait) error {
+	if !commitRe.MatchString(w.Commit) || len(w.Dirs) == 0 || len(w.Dirs) > maxDataDirs {
+		return errors.New("invalid data directory wait")
+	}
+	for _, d := range w.Dirs {
+		if !ValidDirPath(d.Path) || !ownerRe.MatchString(d.Owner) {
+			return errors.New("invalid data directory")
+		}
+	}
+	return nil
+}
+
+// ValidDirPath accepts only a clean, slash-separated path below the stack folder.
+func ValidDirPath(p string) bool {
+	return p != "" && p != "." && len(p) <= 1024 && !strings.ContainsAny(p, "\\\x00\n") && path.Clean(p) == p &&
+		!path.IsAbs(p) && p != ".." && !strings.HasPrefix(p, "../")
 }
 
 func validateUpdates(u UpdateCheck) error {
@@ -257,6 +308,11 @@ func (s State) clone() State {
 		if v.Paused != nil {
 			p := *v.Paused
 			v.Paused = &p
+		}
+		if v.DataDirs != nil {
+			w := *v.DataDirs
+			w.Dirs = append([]MissingDir(nil), w.Dirs...)
+			v.DataDirs = &w
 		}
 		if v.OperatorPause != nil {
 			h := *v.OperatorPause
