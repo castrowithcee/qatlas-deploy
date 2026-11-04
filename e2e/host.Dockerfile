@@ -15,6 +15,11 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& systemctl enable docker containerd ssh
 
+# The test registry mirrors Docker Hub for the images the stacks and qdeploy pull by their Hub names (the backup
+# helper busybox by digest); the host has no other way to reach Docker Hub.
+RUN mkdir -p /etc/docker \
+	&& echo '{"registry-mirrors": ["https://registry.qdeploye2e.test"]}' >/etc/docker/daemon.json
+
 # An administrator account the way a real host has one.
 RUN useradd --create-home --shell /bin/bash --groups sudo e2e-admin \
 	&& echo 'e2e-admin ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/e2e-admin \

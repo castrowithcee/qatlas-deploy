@@ -1,0 +1,28 @@
+version: 1
+update:
+  ceiling: minor
+  tags:
+    BOOKSTACK_VERSION: '^[0-9]+\.[0-9]+\.[0-9]+$'
+    MARIADB_VERSION: '^[0-9]+\.[0-9]+\.[0-9]+$'
+backup:
+  paths:
+    - data/config
+    - data/db
+  # The stack is stopped while a backup runs, so the command starts the database alone for the dump and stops
+  # it again. The root password comes from the container's own environment, never from the command line.
+  command:
+    - sh
+    - -c
+    - |
+      c="docker compose --env-file .env --env-file secrets.env"
+      $c up -d --wait db >&2 || exit 1
+      $c exec -T db sh -c 'exec mariadb-dump --single-transaction --all-databases -uroot -p"$MARIADB_ROOT_PASSWORD"'
+      rc=$?
+      $c stop db >&2
+      exit $rc
+  retention:
+    keep: 3
+check:
+  http:
+    url: http://127.0.0.1:6875/status
+    timeout: 120s
