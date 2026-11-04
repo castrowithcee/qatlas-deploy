@@ -1,0 +1,15 @@
+services:
+  n8n:
+    image: registry.qdeploye2e.test/n8nio/n8n:${N8N_VERSION}
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Berlin
+      GENERIC_TIMEZONE: Europe/Berlin
+      DB_TYPE: sqlite
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_SECURE_COOKIE: "false"
+    volumes:
+      - ./data:/home/node/.n8n
+    ports:
+      # Published on the simulated host only, for the HTTP check of the stack.
+      - 127.0.0.1:5678:5678

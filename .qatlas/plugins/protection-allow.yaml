@@ -42,3 +42,6 @@ allow:
   - file: internal/gitrepo/url_test.go
     rule: email
     hash: 444422aa48efaedc
+  - file: e2e/acceptance.sh
+    rule: email
+    hash: 805accc39f1796ef

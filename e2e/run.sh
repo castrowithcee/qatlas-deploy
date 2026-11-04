@@ -10,10 +10,17 @@
 #   e2e/run.sh requests           print the requests the webhook receiver recorded (JSON lines)
 #   e2e/run.sh messages           print the e-mails the mail server recorded (JSON lines)
 #   e2e/run.sh scenario           run the scenario once after up (see e2e/scenario.sh)
+#   e2e/run.sh acceptance         run the acceptance scenario once after up, on a fresh host (see e2e/acceptance.sh)
 #
 # On the host, e2e-admin reaches the stacks repo with: git clone git.qdeploye2e.test:stacks.git
 # The registry is registry.qdeploye2e.test (image demo/app, tags 1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0
 # 5.0.0); a demo container turns unhealthy with DEMO_HEALTH=fail, and the image 4.0.0 is always unhealthy.
+# It also holds two versions each of the real images of the stacks n8n and bookstack (n8nio/n8n,
+# linuxserver/bookstack, library/mariadb), copied from the internet by skopeo. The newer test tags
+# n8nio/n8n:2.48.0 and linuxserver/bookstack:26.10.0, derived images whose healthcheck always fails, are pushed
+# only by the acceptance scenario, after its successful update, so the update ceiling cannot reach them earlier.
+# The registry is also the Docker Hub mirror of the host's Docker daemon, and holds busybox by the digest of
+# the default backup helper image, so qdeploy runs a backup there without --backup-image.
 #
 # Everything is named qdeploye2e-* and labelled qdeploy.e2e=1; down touches only what carries both. Nothing
 # is published on the machine's ports. Set E2E_KEEP_ON_FAIL=1 to keep a failed environment for inspection.
@@ -30,6 +37,16 @@ host=$prefix-host
 tags='1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0 5.0.0'
 unhealthy_tags='4.0.0'
 backup_image=$prefix-backup-helper:1
+# Real images copied into the registry as "<source>|<path in the registry>:<tag>", and test images derived from
+# one of them as "<registry path>:<base tag>|<new tag>".
+real_images='n8nio/n8n:2.46.4|n8nio/n8n:2.46.4
+n8nio/n8n:2.47.0|n8nio/n8n:2.47.0
+lscr.io/linuxserver/bookstack:26.05.5|linuxserver/bookstack:26.05.5
+lscr.io/linuxserver/bookstack:26.09.1|linuxserver/bookstack:26.09.1
+mariadb:11.8.8|library/mariadb:11.8.8
+mariadb:11.8.9|library/mariadb:11.8.9'
+broken_images='n8nio/n8n:2.47.0|2.48.0
+linuxserver/bookstack:26.09.1|26.10.0'
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
@@ -147,6 +164,9 @@ E2E_GITHUB_API=https://api.github.com
 E2E_WEBHOOK_URL=https://hooks.$domain/hook
 E2E_CHANGELOG_IMAGE_REPO=qdeploye2e-org/demo-image
 E2E_CHANGELOG_GIT_REPO=qdeploye2e-org/demo-stacks
+E2E_N8N_IMAGE=registry.$domain/n8nio/n8n
+E2E_BOOKSTACK_IMAGE=registry.$domain/linuxserver/bookstack
+E2E_MARIADB_IMAGE=registry.$domain/library/mariadb
 ENV
 }
 
@@ -159,6 +179,7 @@ build_images() {
 	docker build -q --label "$label" -t "$prefix-fakes:latest" -f "$here/fakes.Dockerfile" "$work/ctx" >/dev/null
 	docker build -q --label "$label" -t "$prefix-registry:latest" -f "$here/registry.Dockerfile" "$work/ctx" >/dev/null
 	docker build -q --label "$label" -t "$prefix-git:latest" -f "$here/git.Dockerfile" "$work/ctx" >/dev/null
+	docker build -q --label "$label" -t "$prefix-skopeo:latest" -f "$here/skopeo.Dockerfile" "$work/ctx" >/dev/null
 	docker build -q --label "$label" -t "$prefix-host:latest" - <"$here/host.Dockerfile" >/dev/null
 }
 
@@ -244,6 +265,61 @@ push_images() {
 	docker exec "$host" rm -rf /tmp/demo-image
 }
 
+# backup_helper_ref prints the default helper image of the backup package, name and digest.
+backup_helper_ref() {
+	ref=$(sed -n 's/^const DefaultImage = "\(busybox@sha256:[0-9a-f]*\)"$/\1/p' "$root/internal/backup/backup.go")
+	[ -n "$ref" ] || fail 'the default backup image is not found in internal/backup/backup.go'
+	printf '%s\n' "$ref"
+}
+
+# copy_image copies one image between registries with skopeo in a short-lived container on the simulated
+# network; further arguments go to skopeo copy.
+copy_image() {
+	from=$1 to=$2
+	shift 2
+	docker run --rm --label "$label" --name "$prefix-skopeo" --network "$net" "$prefix-skopeo:latest" \
+		skopeo copy "$@" "docker://$from" "docker://registry.$domain/$to" >/dev/null ||
+		fail "copying $from failed"
+}
+
+# push_real_images fills the registry with the real images of the stacks n8n and bookstack and with the
+# busybox of the default backup helper, which Docker Hub names resolve to through the host's registry mirror.
+push_real_images() {
+	log 'copying the real images of n8n, bookstack and mariadb into the registry (needs the internet)'
+	printf '%s\n' "$real_images" | while IFS='|' read -r from to; do
+		log "copying $from"
+		copy_image "$from" "$to"
+	done
+	ref=$(backup_helper_ref)
+	log "copying the backup helper $ref"
+	# --all keeps the multi-platform index, so the digest stays the one the reference names.
+	copy_image "$ref" library/busybox:1.37.0 --all --preserve-digests
+}
+
+# push_broken_images derives the test images whose healthcheck fails from a real image in the registry.
+push_broken_images() {
+	log 'building the test images with a failing healthcheck'
+	docker exec "$host" mkdir -p /tmp/broken-image
+	docker cp "$here/broken-image.Dockerfile" "$host:/tmp/broken-image/Dockerfile"
+	printf '%s\n' "$broken_images" | while IFS='|' read -r base tag; do
+		repo=${base%:*}
+		docker exec -w /tmp/broken-image "$host" sh -ec "
+			docker build -q --build-arg BASE=registry.$domain/$base -t registry.$domain/$repo:$tag . >/dev/null
+			docker push -q registry.$domain/$repo:$tag >/dev/null
+			docker rmi registry.$domain/$repo:$tag >/dev/null
+			# The base image may be in use by a running stack and then stays.
+			docker rmi registry.$domain/$base >/dev/null 2>&1 || true"
+	done
+	docker exec "$host" rm -rf /tmp/broken-image
+}
+
+# registry_entries lists "<path>:<tag>" of every real image in the registry after up.
+registry_entries() {
+	printf '%s\n' "$real_images" | while IFS='|' read -r _ to; do
+		printf '%s\n' "$to"
+	done
+}
+
 # load_backup_helper gives the host the image of the backup helper containers. The host has no internet, so the
 # Debian base of the host image (GNU tar, find, rm, sh) is copied in from the machine's Docker.
 load_backup_helper() {
@@ -268,6 +344,15 @@ check_services() {
 	for tag in $tags; do
 		printf '%s' "$got" | grep -q "\"$tag\"" || fail "the registry does not list the tag $tag"
 	done
+	for entry in $(registry_entries); do
+		got=$(docker exec "$host" curl -fsS "https://registry.$domain/v2/${entry%:*}/tags/list") ||
+			fail "the registry does not list ${entry%:*}"
+		printf '%s' "$got" | grep -q "\"${entry#*:}\"" || fail "the registry does not list the tag $entry"
+	done
+	# The Docker Hub name of the backup helper resolves through the mirror, by digest, without the internet.
+	ref=$(backup_helper_ref)
+	docker exec "$host" docker pull -q "$ref" >/dev/null || fail "the host cannot pull $ref through the registry mirror"
+	docker exec "$host" docker rmi "$ref" >/dev/null
 	[ "$(http_code -X POST -d '{"check":true}' "https://hooks.$domain/hook")" = 204 ] ||
 		fail 'the webhook receiver does not accept a request'
 	docker exec "$host" curl -fsS "https://hooks.$domain/_e2e/requests" | grep -q '"check\\":true' ||
@@ -298,6 +383,7 @@ up() {
 	start_services
 	prepare_host
 	push_images
+	push_real_images
 	load_backup_helper
 	check_services
 	done_=1
@@ -310,6 +396,9 @@ status() {
 		printf '%s %s\n' "$name" "$(docker inspect -f '{{.State.Status}}' "$name")"
 	done
 	printf 'registry tags: %s\n' "$(docker exec "$host" curl -fsS "https://registry.$domain/v2/demo/app/tags/list" 2>/dev/null || true)"
+	for repo in n8nio/n8n linuxserver/bookstack library/mariadb library/busybox; do
+		printf 'registry tags %s: %s\n' "$repo" "$(docker exec "$host" curl -fsS "https://registry.$domain/v2/$repo/tags/list" 2>/dev/null || true)"
+	done
 	printf 'test values: %s\n' "$work/testenv"
 }
 
@@ -337,6 +426,12 @@ main() {
 		. "$here/scenario.sh"
 		run_scenario
 		;;
+	acceptance)
+		require_up
+		. "$here/scenario.sh"
+		. "$here/acceptance.sh"
+		run_acceptance
+		;;
 	exec)
 		require_up
 		user=$admin
@@ -352,7 +447,7 @@ main() {
 		exec docker exec -i -u "$user" "$host" "$@"
 		;;
 	*)
-		sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
 		[ -z "$cmd" ] || exit 2
 		;;
 	esac

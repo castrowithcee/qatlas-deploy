@@ -1,0 +1,14 @@
+version: 1
+update:
+  ceiling: minor
+  tags:
+    N8N_VERSION: '^[0-9]+\.[0-9]+\.[0-9]+$'
+backup:
+  paths:
+    - data
+  retention:
+    keep: 3
+check:
+  http:
+    url: http://127.0.0.1:5678/healthz
+    timeout: 90s

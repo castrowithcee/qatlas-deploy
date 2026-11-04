@@ -1,0 +1,40 @@
+services:
+  bookstack:
+    image: registry.qdeploye2e.test/linuxserver/bookstack:${BOOKSTACK_VERSION}
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Berlin
+      APP_URL: ${APP_URL}
+      APP_KEY: ${APP_KEY}
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_DATABASE: bookstack
+      DB_USERNAME: bookstack
+      DB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./data/config:/config
+    ports:
+      # Published on the simulated host only, for the HTTP check of the stack.
+      - 127.0.0.1:6875:80
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: registry.qdeploye2e.test/library/mariadb:${MARIADB_VERSION}
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: bookstack
+      MARIADB_USER: bookstack
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - ./data/db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

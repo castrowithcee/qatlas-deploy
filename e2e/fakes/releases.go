@@ -45,6 +45,23 @@ var inventedReleases = map[string][]apiRelease{
 		{TagName: "v1.1.0", Name: "Demo image 1.1.0", Body: "Fixes an invented crash on empty input.", PublishedAt: "2026-02-01T10:00:00Z"},
 		{TagName: "v1.0.0", Name: "Demo image 1.0.0", Body: "First invented release.", PublishedAt: "2026-01-01T10:00:00Z"},
 	},
+	// The source labels of the real images n8n, BookStack and MariaDB name these repositories. The notes are
+	// invented, and the tags are plain versions (the real repositories tag n8n@x.y.z and vX.Y.Z-lsN, which the
+	// client does not read as versions).
+	"n8n-io/n8n": {
+		{TagName: "v2.48.0", Name: "n8n 2.48.0", Body: "Invented test release: the build with the failing healthcheck.", PublishedAt: "2026-10-28T10:00:00Z"},
+		{TagName: "v2.47.0", Name: "n8n 2.47.0", Body: "Invented notes for n8n 2.47.0.\n\n- adds an invented workflow badge\n- fixes an invented webhook timeout", PublishedAt: "2026-10-21T10:00:00Z"},
+		{TagName: "v2.46.4", Name: "n8n 2.46.4", Body: "Invented fix release.", PublishedAt: "2026-10-14T10:00:00Z"},
+	},
+	"linuxserver/docker-bookstack": {
+		{TagName: "v26.10.0", Name: "BookStack 26.10.0", Body: "Invented test release: the build with the failing healthcheck.", PublishedAt: "2026-10-28T10:00:00Z"},
+		{TagName: "v26.09.1", Name: "BookStack 26.09.1", Body: "Invented notes for BookStack 26.09.1.\n\n- adds an invented page template\n- fixes an invented search ranking", PublishedAt: "2026-10-20T10:00:00Z"},
+		{TagName: "v26.05.5", Name: "BookStack 26.05.5", Body: "Invented fix release.", PublishedAt: "2026-06-08T10:00:00Z"},
+	},
+	"MariaDB/mariadb-docker": {
+		{TagName: "11.8.9", Name: "MariaDB 11.8.9", Body: "Invented notes for MariaDB 11.8.9: a fix for an invented replication stall.", PublishedAt: "2026-10-15T10:00:00Z"},
+		{TagName: "11.8.8", Name: "MariaDB 11.8.8", Body: "Invented fix release.", PublishedAt: "2026-09-15T10:00:00Z"},
+	},
 	"qdeploye2e-org/demo-stacks": {
 		{TagName: "v2.1.0", Name: "Demo stacks 2.1.0", Body: "Adds an invented cache service to the web stack.", PublishedAt: "2026-03-05T10:00:00Z"},
 		{TagName: "v2.0.0", Name: "Demo stacks 2.0.0", Body: "Breaking: the web stack moves to port 8081 (invented).", PublishedAt: "2026-02-05T10:00:00Z"},
