@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-kit/ptytest"
 
@@ -113,7 +114,15 @@ func TestSecretSetAtATerminalLeavesTheValueOnlyInTheSecretsFile(t *testing.T) {
 	step("photo-album", "\r")
 	step("API_SIGNING_KEY", "a")
 	step("Set a secret", "PTY_SECRET\t"+ptyValue)
-	step("••••••••", "\x1bOQ") // F2
+	// The TUI redraws only changed cells, so the mask dots are not contiguous in
+	// the raw stream; count them after the form appeared instead.
+	if err := term.WaitFor(10*time.Second, func(output string) bool {
+		i := strings.LastIndex(output, "Set a secret")
+		return i >= 0 && strings.Count(output[i:], "•") >= utf8.RuneCountInString(ptyValue)
+	}); err != nil {
+		t.Fatalf("%v\n%q", err, term.Output())
+	}
+	step("", "\x1bOQ") // F2
 	step("Set the secret PTY_SECRET", "y")
 	step("The change applies at the next deployment", "\r")
 	step("PTY_SECRET", "")
