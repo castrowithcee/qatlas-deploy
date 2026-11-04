@@ -185,6 +185,13 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 		for _, f := range s.Findings {
 			item.Findings = append(item.Findings, control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)})
 		}
+		if f := s.Failure; f != nil {
+			detail := "since " + f.Since.UTC().Format(time.RFC3339) + ": " + f.Kind
+			if f.Container != "" {
+				detail += " " + f.Container
+			}
+			item.Findings = append(item.Findings, control.FindingInfo{Kind: engine.FindingContainerFailed, Detail: printable(detail)})
+		}
 		res.Stacks = append(res.Stacks, item)
 	}
 	return res

@@ -1039,6 +1039,8 @@ scenario_stacks_repo() {
 
 	scenario_stack_actions
 
+	scenario_container_monitor
+
 	scenario_backup
 
 	scenario_updates
@@ -1247,6 +1249,50 @@ scenario_stack_actions() {
 	out=$(qd stack stop nope --yes) && fail "stack stop of an unknown stack succeeded: $out"
 	printf '%s' "$out" | grep -q 'no such stack' || fail "the refusal of an unknown stack is unclear: $out"
 	log 'scenario: stack stop, start and restart passed'
+}
+
+# has_finding succeeds when the stack shows the finding $2 in qdeploy status.
+has_finding() {
+	stack_field "$1" findings | grep -q "$2"
+}
+
+# no_finding succeeds when the stack does not show the finding $2.
+no_finding() {
+	! has_finding "$1" "$2"
+}
+
+# scenario_container_monitor proves that the failure monitor reports a container of demo-stack that dies outside
+# qdeploy: the webhook hears container-failed and qdeploy status shows the finding; after the container runs
+# again the webhook hears recovered and the finding is gone. The restart policy is switched off for the kill
+# and back on afterwards; the monitor reads every 30 seconds and ends a failure after two clean readings.
+scenario_container_monitor() {
+	step 'a channel for the failure monitor events is added'
+	out=$(qd_in "$hook_url
+$hook_signing_value
+" notify add mon --type webhook --events container-failed,recovered) || fail "notify add failed: $out"
+	qd notify list | grep -q 'mon *webhook *container-failed,recovered' || fail "notify list does not show the channel: $(qd notify list)"
+
+	step 'a container killed outside qdeploy is reported and shown in status'
+	wait_for 'demo-stack idle' 120 stack_idle demo-stack
+	stack_healthy demo-stack || fail 'demo-stack is not healthy before the kill'
+	no_finding demo-stack container-failed || fail "demo-stack shows a failure before the kill: $(qd --output json status)"
+	victim=$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=demo-stack | head -n 1)
+	[ -n "$victim" ] || fail 'demo-stack has no container to kill'
+	docker exec "$host" docker update --restart=no "$victim" >/dev/null || fail 'cannot switch off the restart policy'
+	docker exec "$host" docker kill "$victim" >/dev/null || fail 'cannot kill the container'
+	wait_for 'the webhook for the failed container' 120 hook_seen /notify container-failed demo-stack
+	wait_for 'the finding container-failed in status' 60 has_finding demo-stack container-failed
+	stack_field demo-stack findings | grep -q 'exited' || fail "the finding does not name the kind exited: $(qd --output json status)"
+	log 'scenario: the killed container was reported and shown as a finding'
+
+	step 'the container runs again: recovered is reported and the finding ends'
+	docker exec "$host" docker update --restart=unless-stopped "$victim" >/dev/null || fail 'cannot restore the restart policy'
+	docker exec "$host" docker start "$victim" >/dev/null || fail 'cannot start the container again'
+	wait_for 'demo-stack healthy again' 90 stack_healthy demo-stack
+	wait_for 'the webhook for the recovered container' 150 hook_seen /notify recovered demo-stack
+	wait_for 'the finding to end' 60 no_finding demo-stack container-failed
+	out=$(qd notify remove mon) || fail "notify remove failed: $out"
+	log 'scenario: the container recovered and the finding ended'
 }
 
 # selfupdate_field prints one top-level field of qdeploy update status, run without root.

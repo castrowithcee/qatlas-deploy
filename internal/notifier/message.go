@@ -3,6 +3,7 @@ package notifier
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	kitnotify "github.com/castrowithcee/qatlas-kit/notify"
 )
@@ -16,6 +17,10 @@ type Event struct {
 	Error  string
 	// Items are the variables with a new version, for EventUpdateAvailable.
 	Items []Item
+	// Kind, Container and Since describe a container failure, for EventContainerFailed and EventRecovered; on
+	// a recovery Kind is the kind of the ended failure. Time is when the transition was found.
+	Kind, Container string
+	Since, Time     time.Time
 }
 
 // Item is one image variable with an available version.
@@ -33,6 +38,11 @@ type body struct {
 	Commit string `json:"commit,omitempty"`
 	Error  string `json:"error,omitempty"`
 	Items  []Item `json:"items,omitempty"`
+	// The fields of a container failure; since and at are RFC 3339 times in UTC.
+	Kind      string `json:"kind,omitempty"`
+	Container string `json:"container,omitempty"`
+	Since     string `json:"since,omitempty"`
+	At        string `json:"at,omitempty"`
 }
 
 const shortCommit = 12
@@ -42,6 +52,37 @@ func short(commit string) string {
 		return commit[:shortCommit]
 	}
 	return commit
+}
+
+func utc(t time.Time) string { return t.UTC().Format(time.RFC3339) }
+
+// noun names what failed: a missing one is a Compose service, the others are containers.
+func noun(kind string) string {
+	if kind == "missing" {
+		return "Service"
+	}
+	return "Container"
+}
+
+func nameSuffix(name string) string {
+	if name == "" {
+		return ""
+	}
+	return " " + name
+}
+
+func failurePhrase(kind string) string {
+	switch kind {
+	case "exited":
+		return "has exited"
+	case "unhealthy":
+		return "is unhealthy"
+	case "restart-loop":
+		return "is restarting in a loop"
+	case "missing":
+		return "is missing"
+	}
+	return "failed (" + kind + ")"
 }
 
 // Message writes the notification of an event: a subject, a short text and the JSON body of a webhook.
@@ -62,6 +103,14 @@ func Message(ev Event) kitnotify.Message {
 		subject = "Stack " + ev.Stack + ": rollback failed"
 		text = append(text, "Run "+ev.Run+" failed at commit "+short(ev.Commit)+" and the rollback failed too.",
 			"The stack is stopped and gets no further runs until an operator acts.")
+	case EventContainerFailed:
+		subject = "Stack " + ev.Stack + ": " + noun(ev.Kind) + nameSuffix(ev.Container) + " failed (" + ev.Kind + ")"
+		text = append(text, noun(ev.Kind)+nameSuffix(ev.Container)+" of stack "+ev.Stack+" "+failurePhrase(ev.Kind)+".",
+			"Since: "+utc(ev.Since))
+	case EventRecovered:
+		subject = "Stack " + ev.Stack + ": " + noun(ev.Kind) + nameSuffix(ev.Container) + " recovered"
+		text = append(text, noun(ev.Kind)+nameSuffix(ev.Container)+" of stack "+ev.Stack+" is fine again; it had failed ("+ev.Kind+").",
+			"Failed since: "+utc(ev.Since)+" (down for "+ev.Time.Sub(ev.Since).Round(time.Second).String()+")")
 	case EventUpdateAvailable:
 		subject = "Update available for stack " + ev.Stack
 		for _, it := range ev.Items {
@@ -77,7 +126,14 @@ func Message(ev Event) kitnotify.Message {
 	if ev.Error != "" {
 		text = append(text, "Error: "+ev.Error)
 	}
-	raw, _ := json.Marshal(body{Event: ev.Type, Stack: ev.Stack, Run: ev.Run, Commit: ev.Commit, Error: ev.Error, Items: ev.Items})
+	b := body{Event: ev.Type, Stack: ev.Stack, Run: ev.Run, Commit: ev.Commit, Error: ev.Error, Items: ev.Items}
+	if ev.Type == EventContainerFailed || ev.Type == EventRecovered {
+		b.Kind, b.Container, b.Since = ev.Kind, ev.Container, utc(ev.Since)
+		if ev.Type == EventRecovered {
+			b.At = utc(ev.Time)
+		}
+	}
+	raw, _ := json.Marshal(b)
 	return kitnotify.Message{Event: ev.Type, Subject: subject, Text: strings.Join(text, "\n"), JSON: raw}
 }
 

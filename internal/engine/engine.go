@@ -692,6 +692,57 @@ func (e *Engine) RecordUpdates(stack string, check UpdateCheck) error {
 	return err
 }
 
+// RecordMonitor stores what the container monitor knows about a stack: its open failure (nil for none) and the
+// services seen healthy. It touches nothing else of the stack's state. A stack the engine has no state for is
+// ignored, so the monitor never creates one.
+func (e *Engine) RecordMonitor(stack string, failure *Failure, services []string) error {
+	var f *Failure
+	if failure != nil {
+		c := *failure
+		c.Since = c.Since.UTC()
+		f = &c
+	}
+	services = append([]string(nil), services...)
+	if err := validateMonitor(StackState{Failure: f, Services: services}); err != nil {
+		return err
+	}
+	_, err := e.store.Update(func(s State) (State, error) {
+		s = normalize(s)
+		cur, ok := s.Stacks[stack]
+		if !ok {
+			return s, nil
+		}
+		cur.Failure, cur.Services = f, services
+		s.Stacks[stack] = cur
+		return s, nil
+	})
+	return err
+}
+
+// UpdateStoppedContainers adds and removes container IDs of the stack's stop marker in one step, so a stop
+// through qdeploy and the monitor's cleanup never overwrite each other. A stack the engine has no state for is
+// ignored.
+func (e *Engine) UpdateStoppedContainers(stack string, add, remove []string) error {
+	_, err := e.store.Update(func(s State) (State, error) {
+		s = normalize(s)
+		cur, ok := s.Stacks[stack]
+		if !ok {
+			return s, nil
+		}
+		ids := slices.DeleteFunc(slices.Clone(cur.StoppedContainers), func(id string) bool {
+			return slices.Contains(remove, id) || slices.Contains(add, id)
+		})
+		ids = append(ids, add...)
+		if err := validateMonitor(StackState{StoppedContainers: ids}); err != nil {
+			return s, err
+		}
+		cur.StoppedContainers = ids
+		s.Stacks[stack] = cur
+		return s, nil
+	})
+	return err
+}
+
 // Snapshot is the state plus the runs active right now (stack to run id).
 type Snapshot struct {
 	State  State
