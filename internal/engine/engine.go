@@ -335,18 +335,18 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		present[st.Name] = true
 		old := snap.Stacks[st.Name]
 		v := verdict{}
-		changedAtHead, errHead := folders.changed(old.Deployed, head, st.Name)
+		changedAtHead, errHead := folders.changed(old.Deployed, head, st.Folder)
 		changedAtRemote := changedAtHead
 		var errRemote error
 		if remote != head {
-			changedAtRemote, errRemote = folders.changed(old.Deployed, remote, st.Name)
+			changedAtRemote, errRemote = folders.changed(old.Deployed, remote, st.Folder)
 		}
 		diffErr := errors.Join(errHead, errRemote)
 		if diffErr == nil && changedAtRemote {
 			v.pending = remote
 		}
 		// A local edit can itself make a stack unreadable, so it is reported first.
-		switch paths := local[st.Name]; {
+		switch paths := local[st.Folder]; {
 		case len(paths) > 0:
 			v.findings = append(v.findings, Finding{FindingLocalChanges, e.localDetail(paths)})
 		case st.Err != nil:
@@ -506,6 +506,14 @@ func classify(changes []gitrepo.Change) (byStack map[string][]string, dirty bool
 	return byStack, dirty
 }
 
+// folderOf returns the folder of the stack called name; an unknown name is taken as a folder.
+func folderOf(list []stacks.Stack, name string) string {
+	if i := slices.IndexFunc(list, func(s stacks.Stack) bool { return s.Name == name }); i >= 0 {
+		return list[i].Folder
+	}
+	return name
+}
+
 // diffCache asks git once per pair of commits.
 type diffCache struct {
 	ctx  context.Context
@@ -563,16 +571,16 @@ func (e *Engine) Trigger(ctx context.Context, name string) (RunInfo, error) {
 	if err != nil {
 		return RunInfo{}, err
 	}
-	if local, _ := classify(changes); len(local[name]) > 0 {
-		return RunInfo{}, fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[name]))
+	list, loadErr := stacks.Load(b.Dir)
+	if local, _ := classify(changes); len(local[folderOf(list, name)]) > 0 {
+		return RunInfo{}, fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[folderOf(list, name)]))
 	}
 	head, err := b.Copy.Head(ctx)
 	if err != nil {
 		return RunInfo{}, err
 	}
-	list, err := stacks.Load(b.Dir)
-	if err != nil {
-		return RunInfo{}, fmt.Errorf("read stacks: %w", err)
+	if loadErr != nil {
+		return RunInfo{}, fmt.Errorf("read stacks: %w", loadErr)
 	}
 	for _, st := range list {
 		if st.Name != name {
@@ -831,10 +839,10 @@ func (e *Engine) WithStack(ctx context.Context, name, label string,
 		if err != nil {
 			return err
 		}
-		if local, _ := classify(changes); len(local[name]) > 0 {
-			return fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[name]))
-		}
 		list, err := stacks.Load(b.Dir)
+		if local, _ := classify(changes); len(local[folderOf(list, name)]) > 0 {
+			return fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[folderOf(list, name)]))
+		}
 		if err != nil {
 			return fmt.Errorf("read stacks: %w", err)
 		}

@@ -31,7 +31,10 @@ const (
 
 // Stack is one top-level folder of the working copy that holds a compose file.
 type Stack struct {
+	// Name identifies the stack in state, backups, runs and the command line.
 	Name string
+	// Folder is the directory name below the stacks repository root; every path and git pathspec uses it.
+	Folder string
 	// Dir is the stack folder inside the working copy.
 	Dir string
 	// ComposeFiles are the compose files in merge order, relative to Dir.
@@ -115,7 +118,7 @@ func Load(dir string) ([]Stack, error) {
 var defaultComposeNames = []string{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"}
 
 func loadStack(dir, name string) (Stack, bool) {
-	s := Stack{Name: name, Dir: dir, Env: map[string]string{}}
+	s := Stack{Name: name, Folder: name, Dir: dir, Env: map[string]string{}}
 	fail := func(err error) (Stack, bool) {
 		s.Err = fmt.Errorf("stack %s: %w", name, err)
 		return s, true

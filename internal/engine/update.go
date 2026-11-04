@@ -60,7 +60,7 @@ func (e *Engine) CheckUpdate(ctx context.Context, name string) (stacks.Stack, er
 	case busy:
 		return stacks.Stack{}, ErrRunActive
 	}
-	if _, err := e.updateBase(ctx, b, name, head); err != nil {
+	if _, err := e.updateBase(ctx, b, name, st.Folder, head); err != nil {
 		return stacks.Stack{}, err
 	}
 	return st, nil
@@ -107,7 +107,7 @@ func (e *Engine) UpdateWhile(ctx context.Context, name string, steps []VersionSt
 		if err := e.take(name, "update"); err != nil {
 			return err
 		}
-		if deployed, err = e.updateBase(ctx, b, name, head); err == nil {
+		if deployed, err = e.updateBase(ctx, b, name, st.Folder, head); err == nil {
 			err = checkPlan(st, steps)
 		}
 		if err != nil {
@@ -157,9 +157,11 @@ func (e *Engine) updatable(ctx context.Context, b Binding, name string) (stacks.
 		return stacks.Stack{}, "", err
 	}
 	local, dirty := classify(changes)
+	list, loadErr := stacks.Load(b.Dir)
+	folder := folderOf(list, name)
 	switch {
-	case len(local[name]) > 0:
-		return stacks.Stack{}, "", fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[name]))
+	case len(local[folder]) > 0:
+		return stacks.Stack{}, "", fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[folder]))
 	case dirty:
 		return stacks.Stack{}, "", ErrCopyChanges
 	}
@@ -167,9 +169,8 @@ func (e *Engine) updatable(ctx context.Context, b Binding, name string) (stacks.
 	if err != nil {
 		return stacks.Stack{}, "", err
 	}
-	list, err := stacks.Load(b.Dir)
-	if err != nil {
-		return stacks.Stack{}, "", fmt.Errorf("read stacks: %w", err)
+	if loadErr != nil {
+		return stacks.Stack{}, "", fmt.Errorf("read stacks: %w", loadErr)
 	}
 	i := slices.IndexFunc(list, func(s stacks.Stack) bool { return s.Name == name })
 	switch {
@@ -183,7 +184,7 @@ func (e *Engine) updatable(ctx context.Context, b Binding, name string) (stacks.
 
 // updateBase returns the deployed commit of the stack, refusing a paused or pinned stack, one never deployed
 // and one whose folder at head differs from the deployed one. The caller holds the working-copy lock.
-func (e *Engine) updateBase(ctx context.Context, b Binding, name, head string) (string, error) {
+func (e *Engine) updateBase(ctx context.Context, b Binding, name, folder, head string) (string, error) {
 	cur, _, err := e.Stack(name)
 	switch {
 	case err != nil:
@@ -203,7 +204,7 @@ func (e *Engine) updateBase(ctx context.Context, b Binding, name, head string) (
 	if err != nil {
 		return "", err
 	}
-	if slices.Contains(folders, name) {
+	if slices.Contains(folders, folder) {
 		return "", ErrUndeployed
 	}
 	return cur.Deployed, nil
@@ -270,7 +271,7 @@ func (r *run) advance(ctx context.Context) error {
 		if err := r.unchangedOnBranch(ctx); err != nil {
 			return err
 		}
-		c, err := wc.CommitFile(ctx, name+"/"+envName, edit, message)
+		c, err := wc.CommitFile(ctx, r.st.Folder+"/"+envName, edit, message)
 		if err != nil {
 			return fmt.Errorf("commit: %w", err)
 		}
@@ -335,7 +336,7 @@ func (r *run) unchangedOnBranch(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if slices.Contains(folders, r.st.Name) {
+	if slices.Contains(folders, r.st.Folder) {
 		return errors.New("the stack changed on the branch since its deployed commit; nothing was pushed")
 	}
 	return nil

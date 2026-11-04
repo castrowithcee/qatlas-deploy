@@ -343,7 +343,7 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 	reason := fmt.Sprintf("run %s failed at the %s step", r.rec.ID, failedAt)
 	var at string
 	for attempt := 1; at == ""; attempt++ {
-		c, err := wc.RevertStack(ctx, r.st.Name, r.deployed, r.rec.Commit, reason)
+		c, err := wc.RevertStack(ctx, r.st.Folder, r.deployed, r.rec.Commit, reason)
 		if errors.Is(err, gitrepo.ErrNothingToRevert) {
 			log.Printf("nothing to revert: the branch already has the deployed state of the stack")
 			if at, err = wc.RemoteHead(ctx); err != nil {

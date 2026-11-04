@@ -112,11 +112,11 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git) ([]Finding, error)
 		}
 	}
 
-	tracked, err := git.TrackedFiles(ctx, s.Name)
+	tracked, err := git.TrackedFiles(ctx, s.Folder)
 	if err != nil {
 		return nil, err
 	}
-	secretsPath, dataPrefix := s.Name+"/"+stacks.SecretsFile, s.Name+"/data/"
+	secretsPath, dataPrefix := s.Folder+"/"+stacks.SecretsFile, s.Folder+"/data/"
 	var data []string
 	for _, p := range tracked {
 		switch {
@@ -124,7 +124,7 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git) ([]Finding, error)
 			add(RuleTrackedSecretsEnv, SeverityError, "secrets.env is tracked by git, so its secrets are in the history",
 				"Run 'git rm --cached "+stacks.SecretsFile+"' in the stack folder, commit, add secrets.env to .gitignore, and rotate every secret that was committed.")
 		case strings.HasPrefix(p, dataPrefix):
-			data = append(data, strings.TrimPrefix(p, s.Name+"/"))
+			data = append(data, strings.TrimPrefix(p, s.Folder+"/"))
 		}
 	}
 	if len(data) > 0 {

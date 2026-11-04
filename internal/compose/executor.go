@@ -99,7 +99,7 @@ func (x *Executor) Restart(ctx context.Context, st stacks.Stack, log Logger) err
 }
 
 func (x *Executor) step(ctx context.Context, st stacks.Stack, log Logger, timeout time.Duration, label string, words ...string) error {
-	c, err := x.command(st, 0, words...)
+	c, err := x.command(st, st.Name, 0, words...)
 	if err != nil {
 		return err
 	}
@@ -153,12 +153,12 @@ func logOutput(log Logger, res Result) {
 // Every compose file is passed with -f in merge order, so COMPOSE_FILE from .env is never consulted and the
 // files are exactly those qdeploy read and validated. It fails, before anything runs, when secrets.env is
 // missing or a name is unusable.
-func (x *Executor) command(st stacks.Stack, maxOutput int, words ...string) (Command, error) {
+func (x *Executor) command(st stacks.Stack, project string, maxOutput int, words ...string) (Command, error) {
 	if st.Err != nil {
 		return Command{}, fmt.Errorf("stack %s cannot be deployed: %w", st.Name, st.Err)
 	}
-	if !projectName.MatchString(st.Name) {
-		return Command{}, fmt.Errorf("stack name %q is not a valid Compose project name (lowercase letters, digits, - and _)", st.Name)
+	if !projectName.MatchString(project) {
+		return Command{}, fmt.Errorf("stack name %q is not a valid Compose project name (lowercase letters, digits, - and _)", project)
 	}
 	if st.Dir == "" {
 		return Command{}, errors.New("stack has no directory")
@@ -173,7 +173,7 @@ func (x *Executor) command(st stacks.Stack, maxOutput int, words ...string) (Com
 	if err := requireEnvFiles(dir); err != nil {
 		return Command{}, err
 	}
-	args := []string{"compose", "--project-name", st.Name, "--project-directory", dir,
+	args := []string{"compose", "--project-name", project, "--project-directory", dir,
 		"--env-file", envFile, "--env-file", stacks.SecretsFile}
 	for _, f := range st.ComposeFiles {
 		if err := composeFileName(f); err != nil {

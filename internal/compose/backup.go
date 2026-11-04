@@ -39,7 +39,7 @@ func (x *Executor) Running(ctx context.Context, st stacks.Stack, log Logger) (bo
 // The rendered configuration contains interpolated values of .env and secrets.env. It is read into memory,
 // reduced to the volume names and never logged.
 func (x *Executor) VolumeNames(ctx context.Context, st stacks.Stack, log Logger) (map[string]string, error) {
-	c, err := x.command(st, 0, "config", "--format", "json")
+	c, err := x.command(st, st.Name, 0, "config", "--format", "json")
 	if err != nil {
 		return nil, err
 	}
