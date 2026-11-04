@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-kit/localipc"
@@ -439,9 +441,27 @@ type StacksResult struct {
 	Stacks []StackInfo `json:"stacks"`
 }
 
+// StackDir returns the folder of the listed stack name as a path below Dir; false when the list does not hold
+// the stack or its folder is not a single plain name.
+func (r StacksResult) StackDir(name string) (string, bool) {
+	for _, s := range r.Stacks {
+		if s.Name != name {
+			continue
+		}
+		f := s.Folder
+		if r.Dir == "" || f == "" || f == "." || f == ".." || strings.ContainsAny(f, "/\\\x00") {
+			return "", false
+		}
+		return filepath.Join(r.Dir, f), true
+	}
+	return "", false
+}
+
 // StackInfo describes one stack of the working copy. Error is set when the stack cannot be read.
 type StackInfo struct {
-	Name     string      `json:"name"`
+	Name string `json:"name"`
+	// Folder is the directory of the stack below Dir; it differs from Name when the Compose file names the project.
+	Folder   string      `json:"folder"`
 	Update   string      `json:"update"`
 	Images   []ImageInfo `json:"images"`
 	Findings int         `json:"findings"`

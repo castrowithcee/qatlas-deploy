@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -111,7 +110,8 @@ func (m *Model) openDataDirForm() tea.Cmd {
 		m.warn(m.text.Lookup(textDataDirsNeedRoot))
 		return nil
 	}
-	if m.snap.stacks.Dir == "" {
+	dir, ok := m.snap.stacks.StackDir(stack)
+	if !ok {
 		m.warn(m.text.Lookup(textDataDirsNoFolder))
 		return nil
 	}
@@ -120,7 +120,7 @@ func (m *Model) openDataDirForm() tea.Cmd {
 		textField("mode", textFieldDataMode, textHintDataMode, fmt.Sprintf("%04o", datadir.DefaultMode)),
 	})
 	if f != nil {
-		f.stack, f.dirs, f.stackDir = stack, finding.Dirs, filepath.Join(m.snap.stacks.Dir, stack)
+		f.stack, f.dirs, f.stackDir = stack, finding.Dirs, dir
 	}
 	return m.openForm(f)
 }

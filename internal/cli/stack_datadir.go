@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -62,7 +61,11 @@ func (s serviceDatadir) StackDir(_ context.Context, stack string) (string, error
 	if err := credentialCall(s.c, s.state, control.StacksListCommand, nil, &res); err != nil {
 		return "", err
 	}
-	return filepath.Join(res.Dir, stack), nil
+	dir, ok := res.StackDir(stack)
+	if !ok {
+		return "", fmt.Errorf("stack %s is not in the stack list of the service", stack)
+	}
+	return dir, nil
 }
 
 func (s serviceDatadir) Deploy(_ context.Context, stack string) (control.DeployResult, error) {

@@ -12,6 +12,9 @@ import (
 func dataDirBackend() *fakeBackend {
 	b := settingsBackend()
 	b.stacks.Dir = "/srv/stacks"
+	for i := range b.stacks.Stacks {
+		b.stacks.Stacks[i].Folder = b.stacks.Stacks[i].Name
+	}
 	b.status.Engine.Stacks[0].Findings = []control.FindingInfo{{Kind: "data-dir-missing", Detail: "data/db, data/files",
 		Dirs: []control.DirInfo{{Path: "data/db", Owner: "1000:1000"}, {Path: "data/files", Owner: "1000:1000"}}}}
 	return b
