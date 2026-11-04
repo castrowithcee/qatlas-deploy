@@ -368,7 +368,7 @@ func (f *fakeBackend) RepoFetch(context.Context) (control.RepoFetchResult, error
 	if err := f.act("fetch", ""); err != nil {
 		return control.RepoFetchResult{}, err
 	}
-	return control.RepoFetchResult{Dir: "/opt/stacks", Head: commitA, RemoteHead: commitB, UpdatesAvailable: true}, nil
+	return control.RepoFetchResult{Dir: stackDir, Head: commitA, RemoteHead: commitB, UpdatesAvailable: true}, nil
 }
 
 func (f *fakeBackend) KeyShow(context.Context) (control.KeyResult, error) {

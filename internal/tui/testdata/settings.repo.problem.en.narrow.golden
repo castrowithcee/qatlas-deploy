@@ -11,10 +11,10 @@ qdeploy  maintenance window closed            [esc] back
             [!] The SSH address is required and holds no
             blanks. - Correct the field.                
             +------------------------------------------+
-  Directory | /opt/stacks                              |
+  Directory | empty                                    |
             +------------------------------------------+
-                                                        
-                                                        
+            [!] The stack folder is required: enter an  
+            absolute path. - Correct the field.         
                                                         
                                                         
                                                         

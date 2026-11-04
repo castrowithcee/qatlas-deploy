@@ -20,9 +20,6 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
 )
 
-// DefaultStacksDir is where the working copy of the stacks repository lives unless --dir says otherwise.
-const DefaultStacksDir = "/opt/stacks"
-
 // remoteCallLimit bounds the commands that wait on the git server (a clone or a fetch).
 const remoteCallLimit = 3 * time.Minute
 
@@ -35,28 +32,35 @@ func newRepoCommand(program *cobracli.Program, state *notRunning) *cobra.Command
 			"with sudo.",
 	}
 	var dir, fingerprint string
+	var create bool
 	set := &cobra.Command{
 		Use:   "set <ssh-url>",
 		Short: "Bind the stacks repository, confirm its host key and clone it",
 		Long: "set shows the SSH host key of the server with its SHA256 fingerprint the first time and stores it\n" +
 			"only after you confirm it: at a terminal by answering the question, without a terminal by passing\n" +
-			"the expected fingerprint with --fingerprint. Then the service clones the repository into --dir\n" +
-			"(default " + DefaultStacksDir + ") with its deploy key. The URL is user@host:path or\n" +
-			"ssh://[user@]host[:port]/path. The directory must be an absolute path that does not exist, is empty,\n" +
-			"or already is a clone of this URL. A host that is pinned with another key is refused and the pinned\n" +
-			"key is never replaced; a repository bound earlier is not replaced either.",
+			"the expected fingerprint with --fingerprint. Then the service clones the repository into the stack\n" +
+			"folder --dir, which is required and can be any absolute path, also under /mnt or /srv. The URL is\n" +
+			"user@host:path or ssh://[user@]host[:port]/path. The folder must be empty or already a clone of this\n" +
+			"URL. A folder that does not exist is created only after you confirmed its exact path: by answering\n" +
+			"the question at a terminal or by passing --create; it gets the owner qdeploy:qdeploy and mode 0755.\n" +
+			"The service runs sandboxed, so the folder is added to the systemd drop-in\n" +
+			"/etc/systemd/system/qdeploy.service.d/10-stack-folders.conf (entries are only ever added) and the\n" +
+			"service restarts once. A host that is pinned with another key is refused and the pinned key is never\n" +
+			"replaced; a repository bound earlier is not replaced either.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return usageFailure("repo set takes exactly one argument, the SSH URL of the stacks repository",
-					"Run 'qdeploy repo set <ssh-url> [--dir <path>]'.")
+					"Run 'qdeploy repo set <ssh-url> --dir <path>'.")
 			}
 			return nil
 		},
 		RunE: func(c *cobra.Command, args []string) error {
-			return runRepoSet(c, program, state, args[0], dir, fingerprint)
+			return runRepoSet(c, program, state, args[0], dir, fingerprint, create)
 		},
 	}
-	set.Flags().StringVar(&dir, "dir", DefaultStacksDir, "directory of the working copy (absolute path)")
+	set.Flags().StringVar(&dir, "dir", "", "stack folder, the directory of the working copy (absolute path; required)")
+	set.Flags().BoolVar(&create, "create", false,
+		"create the stack folder if it does not exist, confirming exactly the path given with --dir")
 	set.Flags().StringVar(&fingerprint, "fingerprint", "",
 		"expected SHA256 fingerprint of the server's host key; required without a terminal")
 	fetch := &cobra.Command{
@@ -83,12 +87,15 @@ func newRepoCommand(program *cobracli.Program, state *notRunning) *cobra.Command
 	return group
 }
 
-func runRepoSet(c *cobra.Command, program *cobracli.Program, state *notRunning, url, dir, fingerprint string) error {
+func runRepoSet(c *cobra.Command, program *cobracli.Program, state *notRunning, url, dir, fingerprint string, create bool) error {
 	if err := gitrepo.ValidateURL(url); err != nil {
 		return usageFailure(err.Error(), "Pass the SSH URL of the stacks repository.")
 	}
+	if dir == "" {
+		return usageFailure("--dir is required: name the stack folder", "Run 'qdeploy repo set <ssh-url> --dir <absolute-path>'.")
+	}
 	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir {
-		return usageFailure("--dir must be an absolute, clean path", "Pass an absolute directory such as "+DefaultStacksDir+".")
+		return usageFailure("--dir must be an absolute, clean path", "Pass the absolute path of the stack folder.")
 	}
 	if fingerprint != "" && !strings.HasPrefix(fingerprint, "SHA256:") {
 		return usageFailure("--fingerprint must look like SHA256:..., as ssh-keygen -l prints it",
@@ -117,6 +124,11 @@ func runRepoSet(c *cobra.Command, program *cobracli.Program, state *notRunning, 
 		if err := confirmHostKey(c, target, probe); err != nil {
 			return err
 		}
+	}
+
+	// After the host key is confirmed, so a refused key creates nothing; before the clone, which needs the grant.
+	if err := prepareFolder(c, dir, create); err != nil {
+		return err
 	}
 
 	var res control.RepoSetResult

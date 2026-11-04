@@ -46,6 +46,8 @@ func newRoot() (*cobra.Command, *cobracli.Program, *notRunning, error) {
 			"up to date from its stacks repository.",
 		// At a terminal Run starts the interface instead, so the help shows only where no terminal is.
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
+		// The one place where a root client repairs a bound stack folder that lacks its grant.
+		PersistentPreRun: func(c *cobra.Command, _ []string) { repairBoundFolder(c) },
 	}
 	secrets := &redact.Redactor{}
 	program, err := cobracli.New(root, cobracli.Options{Version: version, Topics: helptopics.All(), Redactor: secrets})

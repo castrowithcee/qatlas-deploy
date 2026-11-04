@@ -267,3 +267,12 @@ func (b *ChannelBackend) BackupRestore(ctx context.Context, stack, id string) (r
 		control.BackupRestoreArgs{Stack: stack, ID: id, Confirm: true}, &res)
 	return res, err
 }
+
+// Folders is the host side of binding a stack folder. It acts on the host, not through the service, because the
+// service runs sandboxed and never creates a folder itself.
+type Folders interface {
+	// Missing reports whether the folder does not exist yet.
+	Missing(dir string) (bool, error)
+	// Grant creates the folder when create is set, which the person confirmed, and lets the service write to it.
+	Grant(ctx context.Context, dir string, create bool) error
+}

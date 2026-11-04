@@ -9,9 +9,9 @@ qdeploy  Wartungsfenster zu                                                     
               user@host:pfad oder ssh://[user@]host[:port]/pfad                                                         
               [!] Die SSH-Adresse ist nötig und enthält keine Leerzeichen. - Korrigiere das Feld.                       
               +--------------------------------------------------------------------------------------------------------+
-  Verzeichnis | /opt/stacks                                                                                            |
+  Verzeichnis | leer                                                                                                   |
               +--------------------------------------------------------------------------------------------------------+
-                                                                                                                        
+              [!] Der Stack-Ordner ist erforderlich: Gib einen absoluten Pfad ein. - Korrigiere das Feld.               
                                                                                                                         
                                                                                                                         
                                                                                                                         

@@ -3,14 +3,14 @@ qdeploy  maintenance window closed            [esc] back
 --------------------------------------------------------
   Bind the stacks repository                            
                                                         
-            #==========================================#
-> SSH URL   | git@example.test:ops/stacks.git_         |
-            #==========================================#
-            user@host:path or                           
-            ssh://[user@]host[:port]/path               
             +------------------------------------------+
-  Directory | /opt/stacks                              |
+  SSH URL   | git@example.test:ops/stacks.git          |
             +------------------------------------------+
+            #==========================================#
+> Directory | /srv/stacks-example_                     |
+            #==========================================#
+            absolute path of the working copy           
+                                                        
                                                         
                                                         
                                                         

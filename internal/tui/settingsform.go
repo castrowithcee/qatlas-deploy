@@ -15,9 +15,6 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 )
 
-// defaultStacksDir is the working copy the command line proposes too.
-const defaultStacksDir = "/opt/stacks"
-
 type formKind int
 
 const (
@@ -79,7 +76,7 @@ func maskedField(id string, label, hint kittui.TextID) kittui.FormField {
 func (m *Model) repoForm() *settingsForm {
 	return m.newSettingsForm(formRepo, textTitleBind, []kittui.FormField{
 		textField("url", textFieldURL, textHintURL, ""),
-		textField("dir", textFieldDir, textHintDir, defaultStacksDir),
+		textField("dir", textFieldDir, textHintDir, ""),
 	})
 }
 
@@ -188,7 +185,10 @@ func (m *Model) submitRepo(f *settingsForm, url, dir string) tea.Cmd {
 	if url == "" || strings.ContainsFunc(url, unicode.IsSpace) {
 		ps = append(ps, m.bad("url", textProblemURL))
 	}
-	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir {
+	switch {
+	case dir == "":
+		ps = append(ps, m.bad("dir", textProblemDirRequired))
+	case !filepath.IsAbs(dir) || filepath.Clean(dir) != dir:
 		ps = append(ps, m.bad("dir", textProblemDir))
 	}
 	if len(ps) > 0 {
@@ -196,6 +196,34 @@ func (m *Model) submitRepo(f *settingsForm, url, dir string) tea.Cmd {
 		return nil
 	}
 	m.set.pending = bind{url: url, dir: dir}
+	if m.folders == nil {
+		return m.probeRepo()
+	}
+	absent, err := m.folders.Missing(dir)
+	if err != nil {
+		f.problem(m.serviceText(err), m.text.Lookup(textFormFix))
+		return nil
+	}
+	if absent {
+		// Nothing is created before the person has seen the exact path and said yes.
+		m.ask(textPageRepo, m.text.Lookup(textAskFolderCreate, dir), m.text.Lookup(textWhatFolderCreate), nil, false,
+			func() tea.Cmd { return m.grantFolder(true) })
+		return nil
+	}
+	return m.grantFolder(false)
+}
+
+// grantFolder prepares the stack folder; the probe of the repository follows when it is done.
+func (m *Model) grantFolder(create bool) tea.Cmd {
+	dir := m.set.pending.dir
+	return m.writeCall(opFolder, dir, func(Backend) (any, error) { return folderReady{}, m.folders.Grant(m.ctx, dir, create) })
+}
+
+// folderReady is the answer of a prepared stack folder.
+type folderReady struct{}
+
+func (m *Model) probeRepo() tea.Cmd {
+	url := m.set.pending.url
 	return m.writeCall(opProbe, "", func(b Backend) (any, error) { return b.RepoProbe(m.ctx, url) })
 }
 

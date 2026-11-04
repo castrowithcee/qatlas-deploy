@@ -26,6 +26,10 @@ func startSecretService(t *testing.T, log *syncBuffer) *repoEnv {
 	t.Cleanup(func() { testGit = old })
 	startServiceLogged(t, func(net.Conn) error { return nil }, log)
 	e := &repoEnv{state: stateDir(), git: g, srv: hostkeytest.Start(t), dir: filepath.Join(t.TempDir(), "stacks")}
+	if err := os.Mkdir(e.dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e.host = useFolderHost(t)
 	if code, _, stderr := run(t, "key", "generate"); code != 0 {
 		t.Fatalf("key generate: %d %s", code, stderr)
 	}
