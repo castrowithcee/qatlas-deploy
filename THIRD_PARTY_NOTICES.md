@@ -15,6 +15,7 @@ Parts of this repository are copied from or derived from qatlas-sysmin
 - the OCI registry client with its reference parsing and fake registry in `internal/registry`, and the version selection of `internal/version`, rebuilt on the shared HTTP and rate-limit packages with redirects refused, and reshaped to a per-variable ceiling, filter and major hint
 - the line-based value editing and quoting rules of `internal/envfile`, rebuilt to work on bytes in memory and to follow the `.env` parsing of `internal/stacks`
 - the GitHub release notes reader in `internal/changelog` (release list cache, text sanitizing and source address parsing), rebuilt on the shared HTTP and rate-limit packages with redirects refused, and reshaped to a result that always carries the releases page link
+- the self-update command in `internal/cli/selfupdate.go` and the trusted release key package `internal/release`, adapted from the update command and release package of qsysmin
 - `.github/workflows/ci.yml`
 - the service unit `packaging/qdeploy.service` and its unit test in `packaging`, adapted to the unit and test of qsysmin
 - the end-to-end environment in `e2e/`: `run.sh`, `host.Dockerfile`, `registry.Dockerfile`, `fakes.Dockerfile` and the helper services in `e2e/fakes` (releases fake, webhook receiver, demo application)

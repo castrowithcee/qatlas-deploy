@@ -32,6 +32,17 @@ the commands that remove them):
 curl -fsSL https://github.com/castrowithcee/qatlas-deploy/releases/latest/download/install.sh | sudo sh -s -- --uninstall
 ```
 
+## Self-update
+
+```sh
+qdeploy update status
+sudo qdeploy update --confirm
+```
+
+`update` installs the latest stable release (or a given newer `vX.Y.Z`) after verifying its signature against the
+release key built into the program, then restarts the service. `status` only reports; it needs no root. The image
+versions of stacks are updated with `qdeploy stack update`.
+
 ## Building
 
 Go 1.26 or newer is required.

@@ -43,6 +43,7 @@ Commands:
 - qdeploy stack secret set <stack> <KEY>, qdeploy stack secret list <stack>, qdeploy stack secret delete <stack> <KEY>: write, list by key and remove the secrets in a stack's secrets.env; the value is read without echo at a terminal or from standard input, never from an argument, and nothing is redeployed (run with sudo)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy notify list|add|remove|test: manage the notification channels (webhook, Slack, Telegram, e-mail) and send a test message through one (run with sudo; see qdeploy help notifications)
+- qdeploy update [version], qdeploy update status: update qdeploy itself to the latest stable release or to a given newer one from its signed GitHub releases and restart the service; status shows the installed version and the latest release and changes nothing (update runs with sudo and needs --confirm; stack updates are qdeploy stack update)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`
 

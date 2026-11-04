@@ -56,7 +56,7 @@ func newRoot() (*cobra.Command, *cobracli.Program, *notRunning, error) {
 	root.AddCommand(newVersionCommand(program), newRunCommand(), newStatusCommand(program, state),
 		newKeyCommand(program, state), newRepoCommand(program, state), newStackCommand(program, state, secrets),
 		newWindowCommand(program, state), newCredentialCommand(program, state, secrets), newNotifyCommand(program, state, secrets),
-		newTUICommand(state),
+		newTUICommand(state), newSelfUpdateCommand(program),
 		newManpageCommand(program))
 	return root, program, state, nil
 }
