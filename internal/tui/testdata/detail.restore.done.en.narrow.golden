@@ -21,4 +21,4 @@ qdeploy  maintenance window closed  [esc] back  [?] help
 Backup 20261023T031000Z-4567cdef restored for the stack 
 demo-stack.                                             
 a set secret  x delete secret  R restore backup         
-r reload  1-4 area  q quit         up/down scroll  17/40
+r reload  1-4 area  q quit         up/down scroll  17/59

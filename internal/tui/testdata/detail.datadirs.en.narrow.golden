@@ -21,4 +21,4 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   Changelog                                             
     APP_VERSION  1.4.2 -> 1.5.0                         
 m create data directories  a set secret  x delete secret
-R restore backup  r reload  1-4 area  q quit       19/47
+R restore backup  r reload  1-4 area  q quit       19/66

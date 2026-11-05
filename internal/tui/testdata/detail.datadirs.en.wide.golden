@@ -21,4 +21,4 @@ qdeploy  maintenance window closed                                              
     APP_VERSION  1.4.2 -> 1.5.0                                                                                         
       source example/app                                                                                                
 m create data directories  a set secret  x delete secret  R restore backup  r reload  1-4 area  q quit                  
-                                                                                                   up/down scroll  20/46
+                                                                                                   up/down scroll  20/61

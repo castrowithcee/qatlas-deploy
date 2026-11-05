@@ -40,5 +40,5 @@ qdeploy  Wartungsfenster zu                                                     
       20261030T140200Z-0000000c                                                                                         
     fehlgeschlagen  10-29 02:00  poll  850ms                                                                            
       20261029T020000Z-00000010                                                                                         
-      compose pull failed: registry unreachable                                                                         
-a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden       up/down Scrollen
+a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden                       
+                                                                                                 up/down Scrollen  40/55

@@ -181,8 +181,8 @@ func (m *Model) scrollDetail(id kittui.ActionID) {
 	d.top = max(min(d.top, d.total-d.rows), 0)
 }
 
-// detailView is the stack chosen in Stacks: its versions, changelogs, backups and last runs, scrolled to the
-// first shown line.
+// detailView is the stack chosen in Stacks: its versions, changelogs, backups, last runs and functions,
+// scrolled to the first shown line.
 func (m *Model) detailView(width, height int) string {
 	r, ok := m.rows[m.chosen]
 	if !ok {
@@ -233,6 +233,7 @@ func (m *Model) detailLines(r stackRow, width int) []string {
 	section(textDetailSecrets, m.secretLines(width))
 	section(textDetailBackups, m.backupLines(width))
 	section(textDetailRuns, m.runLines(r.name, width))
+	section(textDetailCapabilities, m.capabilityLines(r.name, width))
 	return lines
 }
 

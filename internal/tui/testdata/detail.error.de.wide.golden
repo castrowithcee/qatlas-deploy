@@ -37,8 +37,8 @@ qdeploy  Wartungsfenster zu                                                     
       20261029T020000Z-00000010                                                                                         
       compose pull failed: registry unreachable                                                                         
                                                                                                                         
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden       up/down Scrollen
+  Funktionen                                                                                                            
+    Deploy  geht                                                                                                        
+      Compose starts the stack from compose.yaml                                                                        
+a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden                       
+                                                                                                 up/down Scrollen  40/50

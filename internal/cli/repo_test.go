@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/channeltest"
+	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/hostkey/hostkeytest"
 	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
 )
@@ -220,7 +221,11 @@ func TestCheckCleanStackExitsZero(t *testing.T) {
 	})
 	for _, args := range [][]string{{"stack", "check"}, {"stack", "check", "demo-stack"}, {"stack", "check", "--output", "json"}} {
 		code, stdout, stderr := run(t, args...)
-		if code != 0 || stderr != "" || strings.Contains(stdout, cliSecret) || strings.Contains(stdout, "error") {
+		clean := !strings.Contains(stdout, "error")
+		if args[len(args)-1] == "json" {
+			clean = strings.Contains(stdout, `"errors":0`) && strings.Contains(stdout, `"findings":[]`)
+		}
+		if code != 0 || stderr != "" || strings.Contains(stdout, cliSecret) || !clean {
 			t.Fatalf("%v: code %d, stdout %q, stderr %q", args, code, stdout, stderr)
 		}
 	}
@@ -237,7 +242,8 @@ func TestCheckErrorsExitNonZeroInTextAndJSON(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "error(s)") {
 		t.Fatalf("text: code %d, stderr %q", code, stderr)
 	}
-	for _, want := range []string{"demo-stack", "floating-image-tag", "duplicate-key", "tracked-secrets-env", "error"} {
+	for _, want := range []string{"demo-stack", "deploy", "update", "rollback", "backup", "redact", "no, none", "latest",
+		"duplicate-key", "warning", "tracked-secrets-env", "error"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("text output lacks %q:\n%s", want, stdout)
 		}
@@ -247,23 +253,20 @@ func TestCheckErrorsExitNonZeroInTextAndJSON(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("json: code %d", code)
 	}
-	var rows []map[string]any
-	if err := json.Unmarshal([]byte(stdout), &rows); err != nil {
-		var wrapped struct{ Rows []map[string]any }
-		if err2 := json.Unmarshal([]byte(stdout), &wrapped); err2 != nil {
-			t.Fatalf("invalid JSON %q: %v", stdout, err)
-		}
-		rows = wrapped.Rows
+	var res control.StacksCheckResult
+	if err := json.Unmarshal([]byte(stdout), &res); err != nil {
+		t.Fatalf("invalid JSON %q: %v", stdout, err)
 	}
-	if len(rows) != 3 {
-		t.Fatalf("rows = %v", rows)
+	if res.Errors != 1 || res.Warnings != 1 || len(res.Stacks) != 1 || len(res.Stacks[0].Functions) != 5 || len(res.Stacks[0].Findings) != 2 {
+		t.Fatalf("result = %+v", res)
 	}
-	for _, r := range rows {
-		for _, k := range []string{"stack", "rule", "severity", "cause", "fix"} {
-			if s, _ := r[k].(string); s == "" {
-				t.Errorf("row lacks %s: %v", k, r)
-			}
+	for _, f := range res.Stacks[0].Findings {
+		if f.Stack == "" || f.Rule == "" || f.Severity == "" || f.Cause == "" || f.Fix == "" {
+			t.Errorf("incomplete finding: %+v", f)
 		}
+	}
+	if up := res.Stacks[0].Functions[1]; up.Function != "update" || up.Works || up.Mode != "none" || up.Reason == "" || up.Action == "" {
+		t.Errorf("update = %+v", up)
 	}
 	for _, args := range [][]string{{"stack", "check"}, {"stack", "check", "--output", "json"}} {
 		_, out, errOut := run(t, args...)

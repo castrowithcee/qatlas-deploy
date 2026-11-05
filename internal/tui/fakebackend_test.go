@@ -271,11 +271,25 @@ func demoBackend() *fakeBackend {
 				{Service: "db", Image: "example/db", Var: "DB_VERSION", Version: "16.4"}}},
 			{Name: "wiki", Update: "none", Images: []control.ImageInfo{{Service: "wiki", Image: "example/wiki", Var: "WIKI_VERSION", Version: "1.41.0"}}},
 		}},
-		check: control.StacksCheckResult{Findings: []control.CheckFinding{
-			{Stack: "demo-stack", Rule: "env-example", Severity: "warning"},
-			{Stack: "photo-album", Rule: "healthcheck", Severity: "error"},
-			{Stack: "wiki", Rule: "env-example", Severity: "warning"},
-			{Stack: "wiki", Rule: "fixed-tag", Severity: "warning"},
+		check: control.StacksCheckResult{Stacks: []control.StackReport{
+			{Stack: "demo-stack", Functions: []control.StackFunction{
+				{Function: "deploy", Works: true, Reason: "Compose starts the stack from compose.yaml"},
+				{Function: "update", Works: true, Mode: "automatic", Reason: "the maintenance window updates APP_VERSION by itself"},
+				{Function: "rollback", Works: true, Reason: "a failed run goes back to the previous commit and restores the backup it made before the change"},
+				{Function: "backup", Works: true, Reason: "a backup saves the data directories data/db"},
+				{Function: "redact", Works: true, Reason: "the values of secrets.env (2 key(s)) are redacted in logs and messages"},
+			}, Findings: []control.CheckFinding{
+				{Stack: "demo-stack", Rule: "secrets-env-not-ignored", Severity: "warning", Cause: "secrets.env is not listed in .gitignore", Fix: "Add the line 'secrets.env' to the .gitignore."},
+			}},
+			{Stack: "photo-album", Findings: []control.CheckFinding{{Stack: "photo-album", Rule: "unset-image-variable", Severity: "error"}}},
+			{Stack: "wiki", Functions: []control.StackFunction{
+				{Function: "deploy", Works: true, Reason: "Compose starts the stack from compose.yaml"},
+				{Function: "update", Mode: "none", Reason: "the image versions (WIKI_VERSION) can be updated, but updates are not switched on",
+					Action: "Switch on updates in the stack's settings in the qdeploy TUI."},
+			}, Findings: []control.CheckFinding{
+				{Stack: "wiki", Rule: "duplicate-key", Severity: "warning"},
+				{Stack: "wiki", Rule: "tracked-data", Severity: "warning"},
+			}},
 		}, Errors: 1, Warnings: 3},
 		updates: control.UpdatesResult{Stacks: []control.StackUpdates{
 			{Name: "demo-stack", Update: "automatic", Checked: at(30, 3, 5), Items: []control.UpdateInfo{
