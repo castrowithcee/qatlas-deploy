@@ -399,7 +399,7 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 		return "", fmt.Errorf("status: %w", err)
 	}
 	// Checked before anything is pushed: a working copy that cannot follow the revert must not get one.
-	if local, dirty := classify(changes); dirty {
+	if local, dirty := classify(changes, r.stackList()); dirty {
 		var paths []string
 		for _, p := range local {
 			paths = append(paths, p...)
@@ -473,6 +473,13 @@ func (r *run) follow(ctx context.Context, at, what string) error {
 	r.st = list[i]
 	log.Printf("the working copy is at %s", at)
 	return nil
+}
+
+// stackList reads the stacks of the working copy for classify; a list that cannot be read is empty, which
+// leaves every change counting.
+func (r *run) stackList() []stacks.Stack {
+	list, _ := stacks.Load(r.b.Dir)
+	return list
 }
 
 // stopAfterFailure leaves the stack stopped once it can be neither deployed nor rolled back.

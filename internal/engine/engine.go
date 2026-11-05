@@ -6,8 +6,10 @@
 // The working copy is shared with the repository commands of the service and belongs to the operator: the
 // engine fetches, fast-forwards only a copy without local changes, and otherwise only reads. Its only own
 // changes are a rollback's revert commit and an update's version commit, each built outside the working copy,
-// pushed as a plain fast-forward and then followed by a fast-forward. It never resets, stashes, checks out or
-// writes into the working copy. Its content is data; stack names from it never become file names.
+// pushed as a plain fast-forward and then followed by a fast-forward. A working copy without a remote (local
+// mode of gitrepo) fetches nothing and lands such a commit on its branch in place of the push. It never
+// resets, stashes, checks out or writes into the working copy. Its content is data; stack names from it never
+// become file names.
 package engine
 
 import (
@@ -72,7 +74,8 @@ var (
 )
 
 // WorkingCopy is the git layer the engine needs; *gitrepo.Repo implements it. RevertStack, CommitFile and
-// Push follow the contract and the errors of gitrepo.
+// Push follow the contract and the errors of gitrepo, also of its local mode, in which Fetch does nothing,
+// RemoteHead is the branch itself and Push moves the working copy to the commit.
 type WorkingCopy interface {
 	Fetch(ctx context.Context) error
 	Head(ctx context.Context) (string, error)
@@ -292,10 +295,10 @@ type PollResult struct {
 // holds only the ref lock and ends before the working-copy lock is taken, so a slow remote keeps no command
 // waiting.
 //
-// When the working copy has local changes outside secrets.env and data/ (anywhere in it, also in files
-// outside the stacks), the fast-forward is not attempted at all: git would either refuse or merge around the
-// changes. The stacks with local changes are skipped with a finding; the other stacks are still reported as
-// pending at the fetched commit and run only up to the commit the working copy has.
+// When the working copy has local changes other than the host's own (see classify), anywhere in it, also in
+// files outside the stacks, the fast-forward is not attempted at all: git would either refuse or merge around
+// the changes. The stacks with local changes are skipped with a finding; the other stacks are still reported
+// as pending at the fetched commit and run only up to the commit the working copy has.
 func (e *Engine) Poll(ctx context.Context) (PollResult, error) {
 	e.pollMu.Lock()
 	defer e.pollMu.Unlock()
@@ -340,7 +343,9 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 	if err != nil {
 		return res, err
 	}
-	local, dirty := classify(changes)
+	// A list that cannot be read here is read again below, where its error counts.
+	list, _ := stacks.Load(b.Dir)
+	local, dirty := classify(changes, list)
 
 	var note string
 	var ffErr error
@@ -361,7 +366,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 	}
 	res.Head, res.RemoteHead = head, remote
 
-	list, err := stacks.Load(b.Dir)
+	list, err = stacks.Load(b.Dir)
 	if err != nil {
 		return res, fmt.Errorf("read stacks: %w", err)
 	}
@@ -613,13 +618,23 @@ func normalize(s State) State {
 }
 
 // classify maps the local changes to the stack folders they lie in. Changes to <stack>/secrets.env and below
-// <stack>/data/ are the host's own and count as neither. dirty is true when any other change exists, also
-// outside every stack.
-func classify(changes []gitrepo.Change) (byStack map[string][]string, dirty bool) {
+// <stack>/data/ are the host's own and count as neither, and so are untracked files below a bind mount of the
+// stack in list (Stack.BindMounts); a changed tracked file there still counts. dirty is true when any other
+// change exists, also outside every stack.
+func classify(changes []gitrepo.Change, list []stacks.Stack) (byStack map[string][]string, dirty bool) {
+	mounts := map[string][]string{}
+	for _, st := range list {
+		mounts[st.Folder] = st.BindMounts
+	}
 	byStack = map[string][]string{}
 	for _, c := range changes {
 		top, rel, nested := strings.Cut(c.Path, "/")
 		if nested && (rel == "secrets.env" || strings.HasPrefix(rel, "data/")) {
+			continue
+		}
+		if nested && c.Code == "??" && slices.ContainsFunc(mounts[top], func(m string) bool {
+			return rel == m || strings.HasPrefix(rel, m+"/")
+		}) {
 			continue
 		}
 		dirty = true
@@ -698,7 +713,7 @@ func (e *Engine) Trigger(ctx context.Context, name string) (RunInfo, error) {
 		return RunInfo{}, err
 	}
 	list, loadErr := stacks.Load(b.Dir)
-	if local, _ := classify(changes); len(local[folderOf(list, name)]) > 0 {
+	if local, _ := classify(changes, list); len(local[folderOf(list, name)]) > 0 {
 		return RunInfo{}, fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[folderOf(list, name)]))
 	}
 	head, err := b.Copy.Head(ctx)
@@ -977,7 +992,7 @@ func (e *Engine) WithStack(ctx context.Context, name, label string,
 			return err
 		}
 		list, err := stacks.Load(b.Dir)
-		if local, _ := classify(changes); len(local[folderOf(list, name)]) > 0 {
+		if local, _ := classify(changes, list); len(local[folderOf(list, name)]) > 0 {
 			return fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[folderOf(list, name)]))
 		}
 		if err != nil {

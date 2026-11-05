@@ -15,8 +15,8 @@ var ErrUnchanged = errors.New("the edit does not change the file")
 
 const maxMessageRunes = 200
 
-// CommitFile creates, without touching the working copy or its index, a commit on top of the remote-tracking
-// ref of the checked-out branch (as of the last Fetch) that differs from it only in the file path: its
+// CommitFile creates, without touching the working copy or its index, a commit on top of the base ref (see
+// RemoteHead) that differs from it only in the file path: its
 // content becomes what edit returns for the content the file has there. The file must exist there as a
 // regular file; its mode is kept. message is one line, sanitized and bounded here. It returns the new commit
 // id and does not move any ref.
