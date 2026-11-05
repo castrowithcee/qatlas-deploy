@@ -1,0 +1,20 @@
+qdeploy  maintenance window closed                                                                              [?] help
+  [1 Stacks]  2 Stack detail   3 Runs   4 Settings   5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+      STACK        CURRENT      AVAILABLE      MODE       STATE                  LAST RUN                     FINDINGS  
+  [ ] demo-stack   1.4.2        1.5.0          automatic  deployed               succeeded 10-30 14:02        1 warning 
+> [ ] mail-relay   3.1          up to date     manual     stopped                succeeded 10-28 03:10        none      
+  [ ] old-tool     -        #= start ======================================================#                  none      
+  [ ] photo-album  2.0.1    | ! Start mail-relay?                                          |iled 10-29 03:10  1 error   
+  [ ] web-shop     5.2.0, 16|                                                              | 10-30 12:00      none      
+  [ ] wiki         1.41.0   | Starts the existing containers of the stack, removes the     |0-27 03:10        2 warnings
+                            | stopped mark and checks the stack. It creates no containers; |                            
+                            | a stack that was never deployed needs a deploy.              |                            
+                            |                                                              |                            
+                            | [ yes, do it ]  > cancel <                                   |                            
+                            | y yes, do it  n/esc/enter cancel                             |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                     2/6

@@ -73,6 +73,7 @@ const (
 	stateNeedsDirs
 	statePinned
 	statePaused
+	stateStopped
 	stateRemoved
 	stateUnreadable
 	stateRollbackPause
@@ -201,6 +202,8 @@ func stateOf(st control.StackStatus) stackState {
 		return stateRollbackPause
 	case st.Removed:
 		return stateRemoved
+	case st.Stopped != nil:
+		return stateStopped
 	case st.OperatorPause != nil:
 		return statePaused
 	case st.Pinned != nil:
@@ -297,14 +300,14 @@ func stackColumns(t kittui.Translator, tones map[string]kittui.TextStyle) []kitt
 
 var stateTexts = map[stackState]kittui.TextID{
 	stateRunning: textStateRunning, stateRollbackPause: textStateRollbackPause, stateUnreadable: textStateUnreadable,
-	stateRemoved: textStateRemoved, statePaused: textStatePaused, statePinned: textStatePinned,
+	stateRemoved: textStateRemoved, stateStopped: textStateStopped, statePaused: textStatePaused, statePinned: textStatePinned,
 	stateFailed: textStateFailed, statePending: textStatePending, stateDeployed: textStateDeployed,
 	stateNotDeployed: textStateNotDeployed, stateNeedsDirs: textStateNeedsDirs,
 }
 
 var stateTones = map[stackState]kittui.TextStyle{
 	stateRunning: kittui.StyleActive, stateRollbackPause: kittui.StyleFail, stateUnreadable: kittui.StyleFail,
-	stateRemoved: kittui.StyleHint, statePaused: kittui.StyleWarn, statePinned: kittui.StyleWarn,
+	stateRemoved: kittui.StyleHint, stateStopped: kittui.StyleWarn, statePaused: kittui.StyleWarn, statePinned: kittui.StyleWarn,
 	stateFailed: kittui.StyleFail, statePending: kittui.StyleWarn, stateDeployed: kittui.StyleOK,
 	stateNotDeployed: kittui.StyleHint, stateNeedsDirs: kittui.StyleWarn,
 }

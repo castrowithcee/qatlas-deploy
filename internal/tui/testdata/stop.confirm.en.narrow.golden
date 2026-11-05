@@ -1,0 +1,20 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+      STACK        CURRENT  AVAILABLE  STATE  FINDINGS  
+> [ ] demo-stack   1.4.2    1.5.0      depl~  1 warning 
+  #= stop ===========================================#  
+  | ! Stop demo-stack and keep it stopped until it   |  
+  |   is started?                                    |  
+  |                                                  |  
+  | Stops the containers of the stack without        |gs
+  | removing them. The stack stays stopped until it  |  
+  | is started: commits, the maintenance window and  |  
+  | updates leave it out.                            |  
+  |                                                  |  
+  | [ yes, do it ]  > cancel <                       |  
+  | y yes, do it  n/esc/enter cancel                 |  
+  #==================================================#  
+                                                        
+                                                        
+                                                     1/6

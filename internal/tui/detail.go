@@ -228,6 +228,7 @@ func (m *Model) heading(key kittui.TextID, width int) string {
 func (m *Model) detailLines(r stackRow, width int) []string {
 	lines := []string{"  " + m.styles.TitleLine(r.name, "", max(width-2, 1)), ""}
 	lines = append(lines, m.summaryLines(r, width)...)
+	lines = append(lines, m.stoppedSection(r, width)...)
 	lines = append(lines, m.dataDirSection(r.name, width)...)
 	section := func(key kittui.TextID, body []string) {
 		lines = append(lines, "", m.heading(key, width))
@@ -241,6 +242,25 @@ func (m *Model) detailLines(r stackRow, width int) []string {
 	section(textDetailRuns, m.runLines(r.name, width))
 	section(textDetailCapabilities, m.capabilityLines(r.name, width))
 	return lines
+}
+
+// stoppedSection is the mark of a stack stopped through qdeploy, since when, and how to lift it.
+func (m *Model) stoppedSection(r stackRow, width int) []string {
+	if r.state != stateStopped {
+		return nil
+	}
+	t := m.text
+	var since time.Time
+	for _, st := range m.snap.status.Engine.Stacks {
+		if st.Name == r.name && st.Stopped != nil {
+			since = st.Stopped.Since
+		}
+	}
+	lines := []string{"", m.heading(textDetailStopped, width)}
+	if !since.IsZero() {
+		lines = append(lines, m.line(detailIndent, kittui.StyleWarn, t.Lookup(textStoppedSince, since.In(m.loc).Format(lastRunLayout)), width))
+	}
+	return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textStoppedHint), width)...)
 }
 
 // summaryLines are the update mode, the state and the findings of the stack as the Stacks area has them.

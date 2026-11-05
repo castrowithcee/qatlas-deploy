@@ -475,7 +475,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 					return cmd
 				}
 			}
-		case actUpdate, actDeploy, actPause, actUnpause, actPin, actUnpin, actResume, actCheck:
+		case actUpdate, actDeploy, actPause, actUnpause, actPin, actUnpin, actResume, actCheck,
+			actStackStart, actStackStop, actStackRestart:
 			if m.area == areaStacks {
 				return m.beginAction(actionKinds[id])
 			}

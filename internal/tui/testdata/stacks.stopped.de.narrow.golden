@@ -1,0 +1,14 @@
+qdeploy  Wartungsfenster zu                    [?] Hilfe
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+      STACK        VERSION  VERFÜGBAR  ZUSTAND  BEFUNDE 
+> [ ] demo-stack   1.4.2    1.5.0      deployt  1 Warnu~
+  [ ] mail-relay   3.1      aktuell    gestop~  keine   
+  [ ] old-tool     -        ungeprüft  entfer~  keine   
+  [ ] photo-album  2.0.1    Fehler     Rollba~  1 Fehler
+  [ ] web-shop     5.2.0,~  6.0.0 (M~  läuft    keine   
+  [ ] wiki         1.41.0   ungeprüft  gepinnt  2 Warnu~
+                                                        
+                                                        
+enter Details  / Suchen  space markieren  u update      
+d deploy  r Neu laden  1-5 Bereich  q Beenden        1/6

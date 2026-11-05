@@ -1,0 +1,20 @@
+qdeploy  Wartungsfenster zu                    [?] Hilfe
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+      STACK        VERSION  VERFÜGBAR  ZUSTAND  BEFUNDE 
+  [ ] demo-stack   1.4.2    1.5.0      deployt  1 Warnu~
+> #= start ==========================================#  
+  | ! mail-relay starten (start)?                    |  
+  |                                                  |er
+  | Startet die vorhandenen Container des Stacks,    |  
+  | hebt die Markierung „gestoppt“ auf und prüft den |u~
+  | Stack. Es entstehen keine neuen Container; ein   |  
+  | nie ausgerollter Stack braucht ein deploy.       |  
+  |                                                  |  
+  | [ ja, ausführen ]  > abbrechen <                 |  
+  | y ja, ausführen  n/esc/enter abbrechen           |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        
+                                                     2/6

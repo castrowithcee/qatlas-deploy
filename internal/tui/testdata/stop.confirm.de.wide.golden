@@ -1,0 +1,20 @@
+qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
+------------------------------------------------------------------------------------------------------------------------
+      STACK        VERSION      VERFÜGBAR      MODUS        ZUSTAND   LETZTER LAUF                         BEFUNDE      
+> [ ] demo-stack   1.4.2        1.5.0          automatisch  deployt   erfolgreich 10-30 14:02              1 Warnung    
+  [ ] mail-relay   3.1      #= stop =======================================================#0              keine        
+  [ ] old-tool     -        | ! demo-stack stoppen (stop) und gestoppt lassen, bis er      |               keine        
+  [ ] photo-album  2.0.1    |   gestartet wird?                                            |n 10-29 03:10  1 Fehler     
+  [ ] web-shop     5.2.0, 16|                                                              |:00            keine        
+  [ ] wiki         1.41.0   | Stoppt die Container des Stacks, ohne sie zu entfernen. Der  |0              2 Warnungen  
+                            | Stack bleibt gestoppt, bis er gestartet wird: Commits, das   |                            
+                            | Wartungsfenster und Updates lassen ihn aus.                  |                            
+                            |                                                              |                            
+                            | [ ja, ausführen ]  > abbrechen <                             |                            
+                            | y ja, ausführen  n/esc/enter abbrechen                       |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                     1/6

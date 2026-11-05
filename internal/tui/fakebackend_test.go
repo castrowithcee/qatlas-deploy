@@ -230,6 +230,25 @@ func (f *fakeBackend) Resume(_ context.Context, stack string) (control.ResumeRes
 	return control.ResumeResult{Stack: stack, Pause: control.PauseInfo{Since: at(29, 3, 12), Run: "20261029T031000Z-0000000a"}}, nil
 }
 
+func (f *fakeBackend) stackAction(call, stack string, stopped bool) (control.StackActionResult, error) {
+	if err := f.act(call, stack); err != nil {
+		return control.StackActionResult{}, err
+	}
+	return control.StackActionResult{Stack: stack, Action: call, Stopped: stopped}, nil
+}
+
+func (f *fakeBackend) StackStart(_ context.Context, stack string) (control.StackActionResult, error) {
+	return f.stackAction("start", stack, false)
+}
+
+func (f *fakeBackend) StackStop(_ context.Context, stack string) (control.StackActionResult, error) {
+	return f.stackAction("stop", stack, true)
+}
+
+func (f *fakeBackend) StackRestart(_ context.Context, stack string) (control.StackActionResult, error) {
+	return f.stackAction("restart", stack, false)
+}
+
 func (f *fakeBackend) Window(context.Context) (control.WindowResult, error) {
 	f.count("window")
 	if err := f.fail("window", ""); err != nil {

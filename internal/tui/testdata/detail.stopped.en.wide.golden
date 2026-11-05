@@ -1,0 +1,47 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings   5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  mail-relay                                                                                                            
+                                                                                                                        
+  mode      manual                                                                                                      
+  state     stopped                                                                                                     
+  findings  none                                                                                                        
+                                                                                                                        
+  Stopped                                                                                                               
+    Stopped since 10-29 16:40                                                                                           
+    The stack stays stopped: commits, the maintenance window and updates leave it out. S starts it and lifts the mark.  
+                                                                                                                        
+  Image versions                                                                                                        
+    RELAY_VERSION  example/relay                                                                                        
+      3.1  up to date                                                                                                   
+                                                                                                                        
+  Containers                                                                                                            
+    No containers of this stack.                                                                                        
+                                                                                                                        
+  Changelog                                                                                                             
+    Never checked for updates, so there are no release notes.                                                           
+                                                                                                                        
+  Secrets                                                                                                               
+    No secrets.                                                                                                         
+                                                                                                                        
+  Backups                                                                                                               
+    No backups.                                                                                                         
+                                                                                                                        
+  Last runs                                                                                                             
+    succeeded  10-28 03:10  poll  31s                                                                                   
+      20261028T031000Z-0000000e                                                                                         
+                                                                                                                        
+  Functions                                                                                                             
+    Not checked.                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                               up/down scroll

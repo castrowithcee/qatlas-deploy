@@ -1776,13 +1776,79 @@ scenario_tui() {
 		fail "the second run started before the first ended: $first_end, $second_start"
 	log "scenario: two stacks updated one after another: $first_commit, $second_commit"
 
+	step 'X asks first and stops demo-cache; status, stack list and the interface show it as stopped'
+	# The summary of the update above is still open and takes every key.
+	tui_send Escape
+	tui_send 1
+	tui_wait '[ ] demo-cache' 10
+	tui_send Home
+	tui_cursor_to demo-cache
+	tui_send X
+	tui_wait 'Stop demo-cache and keep it stopped until it is started?' 15
+	log 'scenario: stop question of demo-cache:'
+	tui_excerpt 'Stop demo-cache' 12
+	[ "$(running_containers demo-cache)" -gt 0 ] || fail 'the question already stopped demo-cache'
+	[ -z "$(stack_field demo-cache stopped)" ] || fail 'the question already marked demo-cache as stopped'
+	tui_send y
+	tui_wait 'stop finished: 1 ok, 0 failed' 120
+	[ "$(running_containers demo-cache)" -eq 0 ] || fail 'demo-cache still runs after the stop in the interface'
+	[ -n "$(stack_field demo-cache stopped)" ] || fail "status does not show demo-cache as stopped: $(qd --output json status)"
+	qd stack list | grep demo-cache | grep -q 'stopped since' || fail "stack list does not show demo-cache as stopped: $(qd stack list)"
+	tui_send Escape
+	i=0
+	until tui_screen | grep -qE 'demo-cache .* stopped '; do
+		i=$((i + 1))
+		[ "$i" -lt 30 ] || fail "the Stacks area does not show demo-cache as stopped: $(tui_screen)"
+		tui_send r
+		sleep 0.3
+	done
+	log 'scenario: the Stacks area shows demo-cache as stopped:'
+	tui_excerpt 'STACK' 8
+
+	step 'a new commit leaves the stopped demo-cache stopped'
+	count=$(stack_run_count demo-cache)
+	as_admin 'cd ~/stacks && git pull -q --ff-only &&
+		printf "# stopped-stack marker\n" >>demo-cache/.env &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -am "Touch demo-cache while it is stopped in the interface" &&
+		git push -q origin main'
+	pushed=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	restart_service
+	wait_for 'the poll after the restart' 60 poll_done
+	wait_for 'the pending commit of demo-cache' 60 field_is demo-cache pending "$pushed"
+	[ "$(stack_run_count demo-cache)" = "$count" ] || fail 'a run of the stopped demo-cache was started by the poll'
+	[ "$(running_containers demo-cache)" -eq 0 ] || fail 'demo-cache runs again after a new commit'
+	[ -n "$(stack_field demo-cache stopped)" ] || fail 'the stopped mark did not survive the service restart'
+	tui_send r
+	tui_send Home
+	tui_cursor_to demo-cache
+	tui_screen | grep -qE 'demo-cache .* stopped ' || fail "the Stacks area does not show demo-cache as stopped after the commit: $(tui_screen)"
+
+	step 'S asks first and starts demo-cache; the mark is gone and the interface no longer shows it as stopped'
+	tui_send S
+	tui_wait 'Start demo-cache?' 15
+	[ -n "$(stack_field demo-cache stopped)" ] || fail 'the question already lifted the stopped mark'
+	tui_send y
+	tui_wait 'start finished: 1 ok, 0 failed' 120
+	[ -z "$(stack_field demo-cache stopped)" ] || fail "status still shows demo-cache as stopped: $(qd --output json status)"
+	[ "$(running_containers demo-cache)" -gt 0 ] || fail 'demo-cache does not run after the start in the interface'
+	stack_healthy demo-cache || fail 'demo-cache is not healthy after the start'
+	tui_send Escape
+	tui_send r
+	i=0
+	while tui_screen | grep -qE 'demo-cache .* stopped '; do
+		i=$((i + 1))
+		[ "$i" -lt 30 ] || fail "the Stacks area still shows demo-cache as stopped: $(tui_screen)"
+		tui_send r
+		sleep 0.3
+	done
+	log "scenario: demo-cache stayed stopped against commit $pushed until S started it"
+
 	step 'the Containers area shows a container that is stopped in the background without a key press'
 	single=$prefix-single-tui
 	docker exec "$host" docker rm -f "$single" >/dev/null 2>&1 || true
 	docker exec "$host" docker run -d --name "$single" --label "$label" "$image:1.0.0" >/dev/null ||
 		fail 'cannot start the single container for the Containers area'
 	wait_for 'the single container' 30 health_is "$single" healthy
-	# The summary of the update above is still open and takes every key.
 	tui_send Escape
 	tui_send 5
 	tui_wait '5 Containers' 10
