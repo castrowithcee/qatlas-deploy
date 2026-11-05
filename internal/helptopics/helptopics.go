@@ -49,6 +49,7 @@ Commands:
 - qdeploy notify list|add|remove|test: manage the notification channels (webhook, Slack, Telegram, e-mail) and send a test message through one (run with sudo; see qdeploy help notifications)
 - qdeploy update [version], qdeploy update status: update qdeploy itself to the latest stable release or to a given newer one from its signed GitHub releases and restart the service; status shows the installed version and the latest release and changes nothing (update runs with sudo and needs --confirm; stack updates are qdeploy stack update)
 - qdeploy container list [--metrics], qdeploy container show <name>: show every container of the host, own stacks, foreign Compose projects and single containers, with state; changes nothing (run with sudo; see qdeploy help containers)
+- qdeploy container logs <name>|--stack <stack> [--since T] [--until T] [--tail N] [--follow]: show the output of a container or of a whole stack (run with sudo; see qdeploy help containers)
 - qdeploy container start|stop|restart <name> [--yes]: start, stop or restart one container of the host after a question (run with sudo; see qdeploy help containers)
 - qdeploy version: print the version
 - qdeploy help <topic>: show a help topic`
@@ -230,6 +231,7 @@ const containersTopic = `qdeploy container list and qdeploy container show read 
 Commands:
 - qdeploy container list [--metrics]: every container, grouped; add --output json for the service's result as it is
 - qdeploy container show <name>: one container by name or ID, with its group, state, ports, mounts, networks, labels and the names of its environment variables
+- qdeploy container logs <name>: the output (stdout and stderr) of one container by name or ID; with --stack <stack> the merged output of all containers of an own stack, each line with its container. Not the protocol of a run: that is qdeploy stack log <run>
 - qdeploy container start|stop|restart <name> [--yes]: act on one container by name or ID, also a foreign or single one
 
 Kinds of a group:
@@ -237,6 +239,8 @@ Kinds of a group:
 - foreign: any other Compose project; it shows its working directory and compose files
 - single: a container that belongs to no Compose project
 - conflict: a foreign project that has the name of a stack of this host but was started from another folder; it is not the stack and is marked in the list
+
+Logs: --since and --until take a duration back from now (90s, 15m, 2h) or an RFC 3339 time; --tail shows the last n lines (default 100, at most 5000, 0 for all); --follow asks about once a second for new lines until Ctrl-C (exit code 0). Secret values of the stacks are masked and control characters replaced; --output json prints one object per line. The service answers in pages and the command continues at the time of the last line, so no line is repeated or missed; lines with the same time are never split between pages.
 
 State of a group is the worst state of its containers, in this order: unhealthy, restarting, stopped, starting, ok. The uptime of a group is that of its youngest running container; restarts are summed.
 

@@ -42,6 +42,7 @@ type Docker interface {
 	Stop(ctx context.Context, ref string, grace time.Duration) error
 	Restart(ctx context.Context, ref string, grace time.Duration) error
 	WaitHealthy(ctx context.Context, refs []string, opts docker.WaitOptions) ([]docker.WaitResult, error)
+	Logs(ctx context.Context, ref string, opts docker.LogOptions) (LogReader, error)
 }
 
 type containerService struct {
@@ -70,6 +71,7 @@ func registerContainerCommands(r *control.Registry, repo *repoService, eng *engi
 	}, secrets: secrets}
 	for name, h := range map[string]control.Handler{
 		control.ContainerListCommand: s.handleList, control.ContainerGetCommand: s.handleGet,
+		control.ContainerLogsCommand:    s.handleLogs,
 		control.ContainerStartCommand:   s.action("start"),
 		control.ContainerStopCommand:    s.action("stop"),
 		control.ContainerRestartCommand: s.action("restart"),

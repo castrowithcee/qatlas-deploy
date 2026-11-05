@@ -1115,6 +1115,8 @@ scenario_stacks_repo() {
 
 	scenario_containers
 
+	scenario_container_logs
+
 	scenario_container_actions
 
 	scenario_stack_actions
@@ -1218,6 +1220,42 @@ scenario_containers() {
 		if printf '%s' "$text" | grep -qF -- "$planted"; then fail 'an environment value shows in the container output'; fi
 	done
 	log 'scenario: container list showed own, foreign and single; the planted value stayed hidden'
+}
+
+# scenario_container_logs proves that qdeploy container logs reads one container and a whole stack, follows until
+# interrupted with exit code 0, and shows the stack's secret only masked although the demo app prints it.
+scenario_container_logs() {
+	step 'container logs show a container and a stack, follow ends cleanly, secrets stay masked'
+	secret=not-a-real-secret-e2e
+	name=$(docker exec "$host" docker ps --filter label=com.docker.compose.project=demo-stack --format '{{.Names}}' | head -n 1)
+	[ -n "$name" ] || fail 'no container of demo-stack runs'
+	docker exec "$host" docker logs "$name" 2>&1 | grep -qF -- "$secret" || fail 'the demo app does not print its secret, so the mask cannot be checked'
+
+	tail_rc=0 one_rc=0 stack_rc=0 follow_rc=0 json_rc=0 missing_rc=0
+	tail_out=$(qd container logs "$name" --tail 20) || tail_rc=$?
+	one_out=$(qd container logs "$name" --tail 0) || one_rc=$?
+	stack_out=$(qd container logs --stack demo-stack --tail 0) || stack_rc=$?
+	json_out=$(qd --output json container logs "$name" --tail 5) || json_rc=$?
+	follow_out=$(docker exec "$host" timeout --preserve-status -s INT 6 qdeploy container logs "$name" --tail 1 --follow 2>&1 </dev/null) || follow_rc=$?
+	missing_out=$(qd container logs --stack "$prefix-no-such-stack") || missing_rc=$?
+
+	[ "$tail_rc" -eq 0 ] || fail "container logs --tail 20 failed: $tail_out"
+	[ "$(printf '%s\n' "$tail_out" | grep -c .)" -ge 1 ] || fail "container logs --tail 20 shows no line: $tail_out"
+	[ "$one_rc" -eq 0 ] || fail "container logs failed: $one_out"
+	[ "$stack_rc" -eq 0 ] || fail "container logs --stack failed: $stack_out"
+	[ "$json_rc" -eq 0 ] || fail "container logs (json) failed: $json_out"
+	[ "$follow_rc" -eq 0 ] || fail "container logs --follow did not end with exit code 0 after the interrupt ($follow_rc): $follow_out"
+	[ "$missing_rc" -ne 0 ] || fail "container logs of a missing stack succeeded: $missing_out"
+	printf '%s' "$one_out" | grep -q 'demo started' || fail "container logs lacks the start line: $one_out"
+	printf '%s' "$one_out" | grep -q '\[stderr\] demo warning on stderr' || fail "container logs does not mark stderr: $one_out"
+	printf '%s' "$stack_out" | grep -q "$name .*demo started" || fail "the stack log does not name the container: $stack_out"
+	printf '%s' "$json_out" | grep -q '"stream": *"stdout"' || fail "the json log does not name the stream: $json_out"
+	[ "$(printf '%s\n' "$follow_out" | grep -c .)" -ge 2 ] || fail "--follow showed no new line within six seconds: $follow_out"
+	printf '%s' "$missing_out" | grep -q 'no such stack' || fail "the refusal of a missing stack is unclear: $missing_out"
+	for text in "$tail_out" "$one_out" "$stack_out" "$json_out" "$follow_out"; do
+		if printf '%s' "$text" | grep -qF -- "$secret"; then fail 'a secret value shows in the container logs'; fi
+	done
+	log 'scenario: container logs read a container and a stack, followed until the interrupt; the secret stayed masked'
 }
 
 # scenario_container_actions proves that qdeploy container stop, start and restart act on a single container and

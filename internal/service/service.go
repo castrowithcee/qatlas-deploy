@@ -175,7 +175,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 			return fmt.Errorf("prepare the container engine client: %w", err)
 		}
 		defer client.Close()
-		dock = client
+		dock = engineClient{client}
 	}
 	if err := registerContainerCommands(registry, repo, eng, secrets, dock, cfg.ContainerWait, log); err != nil {
 		return err
