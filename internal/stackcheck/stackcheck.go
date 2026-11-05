@@ -35,6 +35,7 @@ const (
 	RuleInvalidComposeFile  = "invalid-compose-file"
 	RuleInvalidRules        = "invalid-rules-file"
 	RuleUnknownRulesVar     = "unknown-rules-variable"
+	RuleOldRulesFile        = "old-rules-file"
 	RuleUnreadableStack     = "unreadable-stack"
 )
 
@@ -93,6 +94,12 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git) ([]Finding, error)
 	}
 	out = append(out, imageFindings(s)...)
 	out = append(out, errFindings(s)...)
+	if s.OldRulesFile {
+		add(RuleOldRulesFile, SeverityWarning,
+			stacks.OldRulesFile+" in the stack folder is no longer read; the stack has "+settingsState(s),
+			"Set the stack settings in the qdeploy TUI or with 'qdeploy stack settings set "+s.Name+" --file <file>', then delete "+
+				stacks.OldRulesFile+" from the stack folder.")
+	}
 
 	keys, _, err := stacks.SecretKeys(s.Dir)
 	switch {
@@ -182,6 +189,14 @@ func imageFindings(s stacks.Stack) []Finding {
 	return out
 }
 
+// settingsState says which settings the stack has instead of the old file.
+func settingsState(s stacks.Stack) string {
+	if s.Rules == nil {
+		return "no settings and is not updated"
+	}
+	return "settings of its own, update mode " + s.UpdateMode()
+}
+
 // errFindings turns the reason a stack could not be read into findings.
 func errFindings(s stacks.Stack) []Finding {
 	if s.Err == nil && s.EnvErr != nil {
@@ -201,7 +216,7 @@ func errFindings(s stacks.Stack) []Finding {
 	case errors.As(s.Err, &compose):
 		list, where := "COMPOSE_FILE", ".env"
 		if compose.FromRules {
-			list, where = "compose.files", "qdeploy.yaml"
+			list, where = "compose.files", "the stack settings"
 		}
 		var out []Finding
 		for _, p := range compose.Problems {
@@ -216,9 +231,9 @@ func errFindings(s stacks.Stack) []Finding {
 		return out
 	case errors.As(s.Err, &rules) && rules.Variable != "":
 		return []Finding{mk(RuleUnknownRulesVar, cause,
-			"Use an image version variable of this stack under update.tags in qdeploy.yaml, or add the variable to the image reference.")}
+			"Name an image version variable of this stack in the stack settings ('qdeploy stack settings set'), or add the variable to the image reference.")}
 	case errors.As(s.Err, &rules):
-		return []Finding{mk(RuleInvalidRules, cause, "Correct qdeploy.yaml; 'qdeploy help stack-rules' lists the fields.")}
+		return []Finding{mk(RuleInvalidRules, cause, "Correct the stack settings in the qdeploy TUI or with 'qdeploy stack settings set'; 'qdeploy help stack-settings' lists the fields.")}
 	}
 	return []Finding{mk(RuleUnreadableStack, cause, "Correct the file named in the cause; the other rules cannot run on this stack before.")}
 }

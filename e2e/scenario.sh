@@ -6,9 +6,10 @@
 # stacks, deploy a new commit, show the available image versions per update ceiling without changing anything,
 # roll back a commit with a failing healthcheck (data restored from the run's backup, revert commit on the
 # remote), leave a stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
-# Version updates with qdeploy stack update follow: one direct step, a stepwise major jump and a jump whose middle step
-# fails. The maintenance window follows on a real, short window: a stack in automatic mode is updated without a
-# human, a stack in manual mode is only reported, a paused and a pinned stack stay as they are, and a change with
+# Version updates with qdeploy stack update follow: qdeploy stack settings set commits and pushes the settings of a
+# stack without a run, and they act on the next update: one direct step, a stepwise major jump and a jump whose
+# middle step fails. The maintenance window follows on a real, short window: a stack in automatic mode is updated
+# without a human, a stack in manual mode is only reported, a paused and a pinned stack stay as they are, and a change with
 # window set takes effect in the running service. The terminal interface follows: sudo qdeploy opens it in a
 # tmux pane, an update shows its changelog before it is confirmed and then runs, and two ticked stacks are updated
 # one after another with one confirmation. Notification channels (webhook, Slack, Telegram, e-mail) are
@@ -632,7 +633,7 @@ scenario_backup() {
 	printf '%s' "$out" | grep -q -- "'..' is not allowed" || fail "check does not name the path error: $out"
 	log "scenario: check refused: $out"
 	out=$(qd_fails stack backup create demo-badpath) || fail "backup create accepted a path outside the stack: $out"
-	printf '%s' "$out" | grep -q -- 'config-invalid' || fail "backup create does not refuse the invalid rules: $out"
+	printf '%s' "$out" | grep -q -- 'config-invalid' || fail "backup create does not refuse the invalid settings: $out"
 	if docker exec "$host" test -e /var/lib/qdeploy/backups/demo-badpath; then fail 'a refused backup left a store directory'; fi
 	log "scenario: backup create refused: $out"
 }
@@ -652,18 +653,20 @@ updates_expect() {
 	case $out in *2.1.0-rc.1*) fail "a pre-release is offered: $out" ;; esac
 }
 
-# updates_commit changes the rules of demo-stack and waits for the run the new commit starts.
-updates_commit() {
-	prev=$(newest_run demo-stack)
-	admin_commit demo-stack/qdeploy.yaml "$1" "$2"
-	restart_service
-	run=$(next_run demo-stack "$prev") || fail "no run of demo-stack started for: $2"
-	wait_for "the run $run" 240 run_finished demo-stack "$run"
-	qd stack log "$run" | grep -q ' result succeeded' || fail "the run for '$2' did not succeed: $(qd stack log "$run")"
+# demo_stack_settings prints the settings of demo-stack: the backup section the repository starts with and,
+# if given, the update section $1, whose backslash escapes printf %b expands.
+demo_stack_settings() {
+	printf 'version: 1\n%bbackup:\n  paths:\n    - data\n  volumes:\n    - state\n  command: [/bin/echo, backup-command-output]\n  retention:\n    keep: 2\n' "${1:-}"
+}
+
+# settings_set replaces the settings of the stack $1 with the YAML $2 from standard input and keeps the JSON
+# answer in settings_out. The service commits and pushes them and moves its working copy; no run starts.
+settings_set() {
+	settings_out=$(qd_in "$2" --output json stack settings set "$1" --file -) || fail "settings set of $1 failed: $settings_out"
 }
 
 # scenario_updates shows the update detection against the registry: the stored result, the ceiling of the stack,
-# the major hint and a stack without rules. Detection changes nothing; only the admin's commits do.
+# the major hint and a stack without settings. Detection changes nothing; only commits do.
 scenario_updates() {
 	step 'updates says a stack was never checked'
 	out=$(qd --output json stack updates demo-stack) || fail "updates failed: $out"
@@ -677,20 +680,20 @@ scenario_updates() {
 	[ "$stored" = "$out" ] || fail "updates without --refresh does not show the stored result: $stored"
 	log "scenario: updates $out"
 
-	step 'a stack without rules is listed too'
+	step 'a stack without settings is listed too'
 	out=$(qd --output json stack updates demo-cache --refresh) || fail "updates demo-cache failed: $out"
 	updates_expect "$out" 1.1.0 1.1.0 5.0.0 current
 
 	step 'ceiling patch offers no minor step; ceiling major offers 5.0.0 without a hint'
-	updates_commit 's/^version: 1$/version: 1\nupdate:\n  ceiling: patch/' 'Set the demo-stack update ceiling to patch'
+	settings_set demo-stack "$(demo_stack_settings 'update:\n  ceiling: patch\n')"
 	out=$(qd --output json stack updates demo-stack --refresh) || fail "updates failed: $out"
 	updates_expect "$out" 1.0.1 1.0.1 5.0.0 current
-	updates_commit 's/ceiling: patch/ceiling: major/' 'Set the demo-stack update ceiling to major'
+	settings_set demo-stack "$(demo_stack_settings 'update:\n  ceiling: major\n')"
 	out=$(qd --output json stack updates demo-stack --refresh) || fail "updates failed: $out"
 	updates_expect "$out" 1.0.1 5.0.0 '' update
 
-	step 'the demo-stack rules are restored'
-	updates_commit '/^update:$/d; /^  ceiling: major$/d' 'Remove the demo-stack update rules'
+	step 'the demo-stack settings are restored'
+	settings_set demo-stack "$(demo_stack_settings)"
 	out=$(qd --output json stack updates demo-stack --refresh) || fail "updates failed: $out"
 	updates_expect "$out" 1.0.1 1.1.0 5.0.0 update
 	[ "$(stack_images demo-stack)" = "registry.$domain/demo/app:1.0.1" ] || fail "updates changed the running image: $(stack_images demo-stack)"
@@ -837,14 +840,11 @@ json_values() {
 	printf '%s' "$1" | grep -o "\"$2\": *\"[^\"]*\"" | cut -d '"' -f 4
 }
 
-# update_reset commits a version and a major strategy for demo-stack in one commit and waits for its run.
+# update_reset sets the major strategy $2 of demo-stack, commits the version $1 and waits for its run.
 update_reset() {
+	settings_set demo-stack "$(demo_stack_settings "update:\\n  major: $2\\n")"
 	prev=$(newest_run demo-stack)
-	as_admin "cd ~/stacks && git pull -q --ff-only &&
-		sed -i 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=$1/' demo-stack/.env &&
-		sed -i 's/^  major: .*/  major: $2/' demo-stack/qdeploy.yaml &&
-		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am 'Reset demo-stack to $1 with $2 major updates' &&
-		git push -q origin main"
+	admin_commit demo-stack/.env "s/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=$1/" "Reset demo-stack to $1"
 	restart_service
 	run=$(next_run demo-stack "$prev") || fail "no run of demo-stack started for the reset to $1"
 	wait_for "the run $run" 240 run_finished demo-stack "$run"
@@ -882,12 +882,41 @@ update_steps() {
 scenario_update() {
 	image=registry.$domain/demo/app
 
-	step 'a stack without qdeploy.yaml is not updated'
-	out=$(qd_fails stack update demo-cache) || fail "update accepted a stack without rules: $out"
-	printf '%s' "$out" | grep -q 'qdeploy.yaml' || fail "the refusal does not name qdeploy.yaml: $out"
+	step 'a stack without settings is not updated'
+	out=$(qd_fails stack update demo-cache) || fail "update accepted a stack without settings: $out"
+	printf '%s' "$out" | grep -q 'has no settings' || fail "the refusal does not say that the stack has no settings: $out"
 
-	step 'a direct update creates one commit that moves only the image variable, and the stack runs the new version'
-	updates_commit 's/^version: 1$/version: 1\nupdate:\n  major: direct/' 'Set the demo-stack major updates to direct'
+	step 'stack settings set commits and pushes the settings of demo-stack without a run; equal settings commit nothing'
+	direct=$(demo_stack_settings 'update:\n  major: direct\n')
+	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
+	deployed_before=$(stack_field demo-stack deployed)
+	runs_before=$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
+	settings_set demo-stack "$direct"
+	printf '%s' "$settings_out" | grep -q '"changed": *true' || fail "settings set reports no change: $settings_out"
+	commit=$(printf '%s\n' "$settings_out" | sed -n 's/.*"commit": *"\([0-9a-f]*\)".*/\1/p')
+	[ -n "$commit" ] || fail "settings set reports no commit: $settings_out"
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$commit" ] || fail "the settings commit $commit is not the head of the remote branch"
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	meta=$(as_admin "cd ~/stacks && git log -1 --format='%s|%P' $commit")
+	[ "$meta" = "qdeploy: settings of demo-stack|$head_before" ] || fail "the settings commit has the wrong subject or parent: $meta"
+	files=$(as_admin "cd ~/stacks && git show --format= --name-only $commit")
+	[ "$files" = .qatlas/qdeploy/demo-stack.yaml ] || fail "the settings commit touches more than the settings file: $files"
+	as_admin 'cd ~/stacks && grep -qx "  major: direct" .qatlas/qdeploy/demo-stack.yaml' ||
+		fail "the settings file does not hold major direct: $(as_admin 'cat ~/stacks/.qatlas/qdeploy/demo-stack.yaml')"
+	[ "$(docker exec -u qdeploy "$host" git -C /opt/stacks rev-parse HEAD)" = "$commit" ] || fail 'the working copy on the host did not follow the settings commit'
+	dirty=$(docker exec -u qdeploy "$host" git -C /opt/stacks status --porcelain 2>&1) || fail "git status failed: $dirty"
+	[ -z "$dirty" ] || fail "the settings left the working copy on the host dirty: $dirty"
+	out=$(qd --output json stack settings demo-stack) || fail "stack settings failed: $out"
+	printf '%s' "$out" | grep -q '"major": *"direct"' || fail "stack settings does not show major direct: $out"
+	settings_set demo-stack "$direct"
+	printf '%s' "$settings_out" | grep -q '"changed": *false' || fail "equal settings were committed again: $settings_out"
+	if printf '%s' "$settings_out" | grep -q '"commit"'; then fail "equal settings report a commit: $settings_out"; fi
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$commit" ] || fail 'equal settings moved the remote branch'
+	[ "$(stack_field demo-stack deployed)" = "$deployed_before" ] || fail 'the settings commit changed the deployed commit of demo-stack'
+	[ "$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')" = "$runs_before" ] || fail 'the settings started a run of demo-stack'
+	log "scenario: settings commit $commit pushed; the working copy on the host is clean; a second set changed nothing"
+
+	step 'with major direct, an update creates one commit that moves only the image variable, and the stack runs the new version'
 	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "demo-stack does not run 1.1.0 before the update: $(stack_images demo-stack)"
 	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
 	runs_before=$(qd stack runs demo-stack | grep -c '[0-9]\{8\}T[0-9]\{6\}Z-')
@@ -987,9 +1016,9 @@ scenario_update() {
 	[ -z "$deployed_before" ] || [ "$deployed_before" != "$revert" ] || fail 'no revert was made'
 	log "scenario: failing jump: run $bad_run rolled back, step commit $step_commit kept, revert $revert, 5.0.0 not attempted"
 
-	step 'the demo-stack rules and version are restored'
+	step 'the demo-stack settings and version are restored'
 	update_reset 1.1.0 stepwise
-	updates_commit '/^update:$/d; /^  major: stepwise$/d' 'Remove the demo-stack update rules'
+	settings_set demo-stack "$(demo_stack_settings)"
 	[ "$(stack_images demo-stack)" = "$image:1.1.0" ] || fail "demo-stack does not run 1.1.0 again: $(stack_images demo-stack)"
 }
 
@@ -1466,14 +1495,15 @@ scenario_window() {
 
 	step 'four stacks wait for 1.1.0: automatic, manual, paused and pinned'
 	prev_stack=$(newest_run demo-stack) prev_cache=$(newest_run demo-cache)
-	as_admin 'cd ~/stacks && git pull -q --ff-only &&
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	demo_stack_settings 'update:\n  mode: automatic\n' | as_admin 'cat >"$HOME"/stacks/.qatlas/qdeploy/demo-stack.yaml'
+	as_admin 'cd ~/stacks &&
 		for s in demo-paused demo-pinned; do
 			cp -r demo-cache $s && sed -i "s/demo-cache/$s/" $s/compose.yaml &&
 			sed -i "s/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=1.0.0/" $s/.env &&
-			printf "version: 1\nupdate:\n  mode: automatic\n" >$s/qdeploy.yaml
+			printf "version: 1\nupdate:\n  mode: automatic\n" >.qatlas/qdeploy/$s.yaml
 		done &&
-		printf "update:\n  mode: automatic\n" >>demo-stack/qdeploy.yaml &&
-		printf "version: 1\nupdate:\n  mode: manual\n" >demo-cache/qdeploy.yaml &&
+		printf "version: 1\nupdate:\n  mode: manual\n" >.qatlas/qdeploy/demo-cache.yaml &&
 		sed -i "s/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=1.0.1/" demo-stack/.env demo-cache/.env &&
 		git add -A && git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Prepare the maintenance window stacks" &&
 		git push -q origin main'
@@ -1629,12 +1659,8 @@ scenario_tui() {
 	image=registry.$domain/demo/app
 
 	step 'demo-cache gets a changelog source and a fresh update check'
-	prev=$(newest_run demo-cache)
-	admin_commit demo-cache/qdeploy.yaml 's|^  mode: manual$|  mode: manual\n  changelog:\n    DEMO_APP_VERSION: qdeploye2e-org/demo-image|' 'Add the demo-cache changelog source'
-	restart_service
-	run=$(next_run demo-cache "$prev") || fail 'no run of demo-cache started for the changelog source'
-	wait_for "the run $run" 240 run_finished demo-cache "$run"
-	qd stack log "$run" | grep -q ' result succeeded' || fail "the run for the changelog source did not succeed: $(qd stack log "$run")"
+	settings_set demo-cache "$(printf 'version: 1\nupdate:\n  mode: manual\n  changelog:\n    DEMO_APP_VERSION: qdeploye2e-org/demo-image\n')"
+	printf '%s' "$settings_out" | grep -q '"changed": *true' || fail "settings set did not add the changelog source: $settings_out"
 	qd stack updates --refresh >/dev/null || fail 'updates --refresh failed'
 	out=$(qd stack changelog demo-cache) || fail "changelog failed: $out"
 	printf '%s' "$out" | grep -q 'invented crash' || fail "the changelog of demo-cache has no release notes: $out"
@@ -1845,7 +1871,7 @@ services:
     volumes:
       - ./data:/data
 EOF
-	printf 'version: 1\nbackup:\n  paths:\n    - data\n  retention:\n    keep: 5\n' | as_admin 'cat >"$HOME"/stacks/demo-echo/qdeploy.yaml'
+	printf 'version: 1\nbackup:\n  paths:\n    - data\n  retention:\n    keep: 5\n' | as_admin 'cat >"$HOME"/stacks/.qatlas/qdeploy/demo-echo.yaml'
 	printf 'DEMO_APP_VERSION=1.0.1\nDEMO_HEALTH=ok\n' | as_admin 'cat >"$HOME"/stacks/demo-echo/.env'
 	as_admin 'cd ~/stacks && cp demo-cache/.gitignore demo-echo/.gitignore && git add -A &&
 		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Add the demo-echo stack" && git push -q origin main'

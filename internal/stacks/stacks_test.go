@@ -34,12 +34,25 @@ func load(t *testing.T, root string) map[string]Stack {
 
 const appCompose = "services:\n  app:\n    image: registry.example.test/demo/app:${DEMO_VERSION}\n"
 
+// settingsKey in the files of one or loadFolder stands for the settings file of the stack demo-stack.
+const settingsKey = "<settings>"
+
+// writeStack writes files into folder below root; settingsKey goes to the settings of demo-stack.
+func writeStack(t *testing.T, root, folder string, files map[string]string) {
+	t.Helper()
+	for k, v := range files {
+		if k == settingsKey {
+			write(t, root, SettingsPath("demo-stack"), v)
+			continue
+		}
+		write(t, root, folder+"/"+k, v)
+	}
+}
+
 func one(t *testing.T, files map[string]string) Stack {
 	t.Helper()
 	root := t.TempDir()
-	for k, v := range files {
-		write(t, root, "demo-stack/"+k, v)
-	}
+	writeStack(t, root, "demo-stack", files)
 	s, ok := load(t, root)["demo-stack"]
 	if !ok {
 		t.Fatal("stack not detected")
@@ -136,17 +149,24 @@ func TestSymlinksAreRejected(t *testing.T) {
 	write(t, outside, "evil.env", "DEMO_VERSION=1\n")
 	write(t, outside, "evil-rules.yaml", "version: 1\n")
 
-	for name, link := range map[string]string{"compose.yaml": "evil.yaml", ".env": "evil.env", "qdeploy.yaml": "evil-rules.yaml"} {
+	for name, link := range map[string]string{"demo-stack/compose.yaml": "evil.yaml", "demo-stack/.env": "evil.env",
+		SettingsPath("demo-stack"): "evil-rules.yaml", ".qatlas": "."} {
 		root := t.TempDir()
 		write(t, root, "demo-stack/compose.yaml", appCompose)
-		if name == "compose.yaml" {
+		if name == "demo-stack/compose.yaml" {
 			os.Remove(filepath.Join(root, "demo-stack/compose.yaml"))
 		}
-		if err := os.Symlink(filepath.Join(outside, link), filepath.Join(root, "demo-stack", name)); err != nil {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if name == ".qatlas" {
+			write(t, outside, "qdeploy/demo-stack.yaml", "version: 1\n")
+		}
+		if err := os.Symlink(filepath.Join(outside, link), filepath.Join(root, name)); err != nil {
 			t.Fatal(err)
 		}
 		s := load(t, root)["demo-stack"]
-		if name == "compose.yaml" {
+		if name == "demo-stack/compose.yaml" {
 			wantErr(t, s, "not a regular file")
 			continue
 		}
@@ -167,7 +187,7 @@ func TestSizeBound(t *testing.T) {
 	big := "# " + strings.Repeat("x", MaxFileSize) + "\n"
 	wantErr(t, one(t, map[string]string{"compose.yaml": appCompose, ".env": big}), "larger than")
 	wantErr(t, one(t, map[string]string{"compose.yaml": big + appCompose}), "larger than")
-	wantErr(t, one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": big}), "larger than")
+	wantErr(t, one(t, map[string]string{"compose.yaml": appCompose, settingsKey: big}), "larger than")
 }
 
 func TestStackCountBound(t *testing.T) {
@@ -277,7 +297,7 @@ func TestMissingRulesMeansNoUpdates(t *testing.T) {
 }
 
 func TestRulesDefaults(t *testing.T) {
-	s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": "version: 1\n"})
+	s := one(t, map[string]string{"compose.yaml": appCompose, settingsKey: "version: 1\n"})
 	if s.Err != nil {
 		t.Fatal(s.Err)
 	}
@@ -289,7 +309,7 @@ func TestRulesDefaults(t *testing.T) {
 }
 
 func TestRulesFull(t *testing.T) {
-	s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": `
+	s := one(t, map[string]string{"compose.yaml": appCompose, settingsKey: `
 version: 1
 update:
   mode: automatic
@@ -325,7 +345,7 @@ check:
 
 func TestRulesChangelogRepositories(t *testing.T) {
 	for _, value := range []string{"example-org/example-app", "https://github.com/example-org/example-app", "https://github.com/example-org/example-app.git"} {
-		s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": "version: 1\nupdate: {changelog: {DEMO_VERSION: '" + value + "'}}\n"})
+		s := one(t, map[string]string{"compose.yaml": appCompose, settingsKey: "version: 1\nupdate: {changelog: {DEMO_VERSION: '" + value + "'}}\n"})
 		if s.Err != nil || s.Rules.Update.Changelog["DEMO_VERSION"] != "example-org/example-app" {
 			t.Errorf("%s: err = %v, rules = %+v", value, s.Err, s.Rules)
 		}
@@ -333,7 +353,7 @@ func TestRulesChangelogRepositories(t *testing.T) {
 }
 
 func TestRulesBackupDefaultsAndHTTPDefaults(t *testing.T) {
-	s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": "version: 1\nbackup: {paths: [data]}\ncheck: {http: {url: 'https://demo.example.test/'}}\n"})
+	s := one(t, map[string]string{"compose.yaml": appCompose, settingsKey: "version: 1\nbackup: {paths: [data]}\ncheck: {http: {url: 'https://demo.example.test/'}}\n"})
 	if s.Err != nil || s.Rules.Backup.Keep != 7 || s.Rules.Check.HTTP.Status != 200 || s.Rules.Check.HTTP.Timeout != 10*time.Second {
 		t.Fatalf("stack = %+v", s)
 	}
@@ -344,7 +364,7 @@ func TestInvalidRules(t *testing.T) {
 		name, yaml string
 		want       []string
 	}{
-		{"empty", "", []string{"qdeploy.yaml", "empty"}},
+		{"empty", "", []string{"stack settings", "empty"}},
 		{"no version", "update: {mode: manual}\n", []string{"version: required"}},
 		{"bad version", "version: 2\n", []string{"version: unsupported"}},
 		{"unknown top", "version: 1\nfoo: 1\n", []string{"unknown field foo"}},
@@ -366,16 +386,16 @@ func TestInvalidRules(t *testing.T) {
 		{"bad volume", "version: 1\nbackup: {volumes: ['a/b']}\n", []string{"backup.volumes[0]"}},
 		{"keep zero", "version: 1\nbackup: {paths: [d], retention: {keep: 0}}\n", []string{"backup.retention.keep"}},
 		{"age zero", "version: 1\nbackup: {paths: [d], retention: {max_age_days: -1}}\n", []string{"backup.retention.max_age_days"}},
-		{"command string", "version: 1\nbackup: {command: 'rm -rf /'}\n", []string{"qdeploy.yaml"}},
+		{"command string", "version: 1\nbackup: {command: 'rm -rf /'}\n", []string{"stack settings"}},
 		{"bad url", "version: 1\ncheck: {http: {url: 'ftp://x'}}\n", []string{"check.http.url"}},
 		{"bad status", "version: 1\ncheck: {http: {url: 'http://x', status: 99}}\n", []string{"check.http.status"}},
 		{"bad timeout", "version: 1\ncheck: {http: {url: 'http://x', timeout: 1h}}\n", []string{"check.http.timeout"}},
 		{"two documents", "version: 1\n---\nversion: 1\n", []string{"one YAML document"}},
-		{"duplicate key", "version: 1\nversion: 1\n", []string{"qdeploy.yaml"}},
+		{"duplicate key", "version: 1\nversion: 1\n", []string{"stack settings"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": c.yaml})
+			s := one(t, map[string]string{"compose.yaml": appCompose, settingsKey: c.yaml})
 			wantErr(t, s, append([]string{"stack demo-stack"}, c.want...)...)
 		})
 	}

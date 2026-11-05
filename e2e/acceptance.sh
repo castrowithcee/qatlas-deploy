@@ -396,7 +396,7 @@ acc_update_window() {
 # its data once the new version has started, and requires the rollback to restore the data and revert the commit.
 acc_failed_update() {
 	stack=$1 var=$2 good=$3 bad=$4 image=$5 how=$6
-	# The marker goes where the backup rules of the stack save data: all of data/ for n8n, data/config for bookstack.
+	# The marker goes where the backup section of the stack settings saves data: all of data/ for n8n, data/config for bookstack.
 	marker=$acc_stacks/$stack/data/late-marker
 	[ "$stack" != bookstack ] || marker=$acc_stacks/$stack/data/config/late-marker
 	prev=$(newest_run "$stack")
@@ -549,11 +549,12 @@ run_acceptance() {
 
 	step 'the stacks repository holds only n8n and bookstack, both in automatic mode'
 	as_admin "rm -rf ~/stacks && git clone -q $repo ~/stacks &&
-		cd ~/stacks && git rm -rq demo-stack demo-cache demo-badpath demo-plain &&
-		sed -i 's/^update:\$/update:\n  mode: automatic/' n8n/qdeploy.yaml bookstack/qdeploy.yaml &&
+		cd ~/stacks && git rm -rq demo-stack demo-cache demo-badpath demo-plain .qatlas/qdeploy/demo-stack.yaml .qatlas/qdeploy/demo-badpath.yaml &&
+		sed -i 's/^update:\$/update:\n  mode: automatic/' .qatlas/qdeploy/n8n.yaml .qatlas/qdeploy/bookstack.yaml &&
 		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am 'Keep n8n and bookstack in automatic mode' &&
 		git push -q origin main" || fail 'cannot prepare the stacks repository'
 	[ "$(as_admin "ls ~/stacks | tr '\n' ' '")" = 'bookstack n8n ' ] || fail 'the stacks repository does not hold only n8n and bookstack'
+	[ "$(as_admin "ls ~/stacks/.qatlas/qdeploy | tr '\n' ' '")" = 'bookstack.yaml n8n.yaml ' ] || fail 'the stacks repository does not hold only the settings of n8n and bookstack'
 
 	setup_service default-backup-image
 	if docker exec "$host" test -e /etc/systemd/system/qdeploy.service.d; then fail 'the unit has a drop-in'; fi

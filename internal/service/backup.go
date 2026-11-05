@@ -42,7 +42,7 @@ func registerBackupCommands(r *control.Registry, eng *engine.Engine, backups Bac
 	answer := func(err error) error {
 		switch {
 		case errors.Is(err, backup.ErrNoRules):
-			return control.NewError(control.CodeNoBackupRules, "the stack has no backup rules in qdeploy.yaml")
+			return control.NewError(control.CodeNoBackupRules, "the stack settings have no backup section")
 		case errors.Is(err, backup.ErrNoSuchBackup):
 			return control.NewError(control.CodeNoSuchBackup, "no such backup")
 		}

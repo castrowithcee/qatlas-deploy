@@ -88,7 +88,7 @@ func TestCommitFileRefusals(t *testing.T) {
 	}{
 		"unchanged":    {"web/.env", "m", same, ErrUnchanged},
 		"edit error":   {"web/.env", "m", failing, errEdit},
-		"missing":      {"web/missing.env", "m", setValue, nil},
+		"below a file": {"web/compose.yaml/x", "m", setValue, nil},
 		"folder":       {"web", "m", setValue, nil},
 		"outside":      {"../web/.env", "m", setValue, nil},
 		"git dir":      {"web/.git/config", "m", setValue, nil},
@@ -101,5 +101,46 @@ func TestCommitFileRefusals(t *testing.T) {
 		if err == nil || id != "" || (tc.want != nil && !errors.Is(err, tc.want)) {
 			t.Errorf("%s: id %q, err %v", name, id, err)
 		}
+	}
+}
+
+func TestCommitFileCreatesAMissingFile(t *testing.T) {
+	ctx := context.Background()
+	f := newRemote(t)
+	r, _ := cloneFixture(t, f)
+	base, _ := r.RemoteHead(ctx)
+	idxBefore, bodyBefore := indexAndFiles(t, r)
+	got := []byte("not called")
+	id, err := r.CommitFile(ctx, ".qatlas/qdeploy/web.yaml", func(old []byte) ([]byte, error) {
+		got = old
+		return []byte("version: 1\n"), nil
+	}, "qdeploy: settings of web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("edit got %q, want nil", got)
+	}
+	if idxAfter, bodyAfter := indexAndFiles(t, r); idxAfter != idxBefore || bodyAfter != bodyBefore {
+		t.Fatal("CommitFile touched the index or the working copy")
+	}
+	if d := fixtureGit(t, r.dir, "diff", "--name-status", base, id); d != "A\t.qatlas/qdeploy/web.yaml" {
+		t.Fatalf("diff = %q", d)
+	}
+	if m := fixtureGit(t, r.dir, "ls-tree", id, "--", ".qatlas/qdeploy/web.yaml"); !strings.HasPrefix(m, "100644 blob ") {
+		t.Fatalf("ls-tree = %q", m)
+	}
+	if err := r.Push(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.FastForward(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if st := fixtureGit(t, r.dir, "status", "--porcelain"); st != "" {
+		t.Fatalf("status = %q", st)
+	}
+	same := func(old []byte) ([]byte, error) { return old, nil }
+	if _, err := r.CommitFile(ctx, ".qatlas/qdeploy/web.yaml", same, "m"); !errors.Is(err, ErrUnchanged) {
+		t.Fatalf("err = %v, want ErrUnchanged", err)
 	}
 }

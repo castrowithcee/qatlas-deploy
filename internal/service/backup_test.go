@@ -11,6 +11,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/backup"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
+	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -79,7 +80,7 @@ func withBackups(f *fakeBackups) func(*service.Config) {
 
 func backupHarness(t *testing.T, f *fakeBackups) *harness {
 	t.Helper()
-	return boundWith(t, &fakeDeployer{}, map[string]string{"plain-stack/qdeploy.yaml": backupRules}, withBackups(f))
+	return boundWith(t, &fakeDeployer{}, map[string]string{servicetest.Settings("plain-stack"): backupRules}, withBackups(f))
 }
 
 func codeOf(t *testing.T, err error) string {

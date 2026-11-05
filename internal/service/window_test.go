@@ -11,6 +11,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/registry/registrytest"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
+	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -195,7 +196,7 @@ func (d *sequentialDeployer) pulled() ([]string, bool) {
 
 func TestWindowUpdatesAutomaticStacksOneAfterAnother(t *testing.T) {
 	dep := &sequentialDeployer{}
-	h, clock, notices := windowHarness(t, dep, map[string]string{"plain-stack/qdeploy.yaml": automaticRules})
+	h, clock, notices := windowHarness(t, dep, map[string]string{servicetest.Settings("plain-stack"): automaticRules})
 	dep.reset(nil)
 	before := runCount(t, h)
 
@@ -229,7 +230,7 @@ func TestWindowUpdatesAutomaticStacksOneAfterAnother(t *testing.T) {
 func TestWindowEndBeginsNothingNewAndAbortsNothing(t *testing.T) {
 	dep := &sequentialDeployer{}
 	majorRules := "version: 1\nupdate:\n  mode: automatic\n  ceiling: major\n"
-	h, clock, _ := windowHarness(t, dep, map[string]string{"demo-stack/qdeploy.yaml": majorRules, "plain-stack/qdeploy.yaml": automaticRules})
+	h, clock, _ := windowHarness(t, dep, map[string]string{servicetest.Settings("demo-stack"): majorRules, servicetest.Settings("plain-stack"): automaticRules})
 	// the first step of demo-stack runs past the end of the window
 	plainBefore := stackStatus(t, h, "plain-stack").Deployed
 	var once sync.Once
@@ -263,7 +264,7 @@ func TestWindowEndBeginsNothingNewAndAbortsNothing(t *testing.T) {
 
 func TestWindowLeavesPausedAndPinnedStacksAlone(t *testing.T) {
 	dep := &sequentialDeployer{}
-	h, clock, notices := windowHarness(t, dep, map[string]string{"plain-stack/qdeploy.yaml": automaticRules})
+	h, clock, notices := windowHarness(t, dep, map[string]string{servicetest.Settings("plain-stack"): automaticRules})
 	if err := h.call(control.PinCommand, control.HoldArgs{Stack: "demo-stack"}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +295,7 @@ func TestWindowLeavesPausedAndPinnedStacksAlone(t *testing.T) {
 
 func TestWindowOnlyReportsAManualStack(t *testing.T) {
 	dep := &sequentialDeployer{}
-	h, clock, notices := windowHarness(t, dep, map[string]string{"demo-stack/qdeploy.yaml": manualRules, "plain-stack/qdeploy.yaml": manualRules})
+	h, clock, notices := windowHarness(t, dep, map[string]string{servicetest.Settings("demo-stack"): manualRules, servicetest.Settings("plain-stack"): manualRules})
 	dep.reset(nil)
 	before := runCount(t, h)
 

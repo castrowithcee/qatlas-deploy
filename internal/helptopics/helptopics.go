@@ -12,7 +12,7 @@ func All() []helptopics.Topic {
 		{Name: "credentials", Short: "The deploy key and stored credentials", Text: credentialsTopic},
 		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
 		{Name: "stack-standard", Short: "The stacks-repo standard that qdeploy stack check enforces", Text: stackStandardTopic},
-		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
+		{Name: "stack-settings", Short: "Stack settings", Text: stackSettingsTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
 		{Name: "data-directories", Short: "Missing data directories of a stack: the data-dir-missing finding and how to resolve it", Text: dataDirectoriesTopic},
 		{Name: "notifications", Short: "Notification channels: events, types and secrets", Text: notificationsTopic},
@@ -84,10 +84,12 @@ Binding:
 
 Afterwards:
 - qdeploy repo fetch: fetch new commits into the remote-tracking branch and report whether the working copy is behind; the working copy itself is not changed
-- qdeploy stack list: list each stack with its image version variables, their values and its update mode (none without a qdeploy.yaml)
+- qdeploy stack list: list each stack with its image version variables, their values and its update mode (none without settings)
 - A host key that differs from the pinned one aborts every command. The pinned key is never replaced by a command; verify the change with the git platform's operator first.`
 
-const stackRulesTopic = `Each stack folder of the stacks repository may hold a qdeploy.yaml with the rules for updating it. Without the file the stack is deployed but never updated. The file is read as data only: unknown fields, a missing version, or a path that is absolute or leaves the stack folder are rejected.
+const stackSettingsTopic = `The settings of a stack say how qdeploy updates, backs up and checks it. They live in the stacks repository as .qatlas/qdeploy/<stack>.yaml in its root, one file per stack, named by the stack's Compose project name. A stack without settings is deployed but never updated.
+
+The settings are shown and changed only in the terminal interface or with qdeploy stack settings <stack> and qdeploy stack settings set <stack>; nobody edits the file by hand. qdeploy checks them against the stack, writes the file, commits it and pushes the commit. A settings commit does not touch the stack folder and starts no run; the settings act on the next update or deploy. The file is read as data only: unknown fields, a missing version, or a path that is absolute or leaves the stack folder are rejected.
 
 Fields (all optional except version):
 - version: 1
@@ -123,7 +125,7 @@ check:
 
 Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. qdeploy stack check reports fixed and floating tags such as latest (see qdeploy help stack-standard).`
 
-const backupsTopic = `A backup saves the data of one stack while the stack is stopped, so the copy is consistent. What is saved is listed in the backup section of the stack's qdeploy.yaml (see qdeploy help stack-rules). Backups are kept in the service's state directory under backups/<stack>/<backup>, readable by the service user only.
+const backupsTopic = `A backup saves the data of one stack while the stack is stopped, so the copy is consistent. What is saved is listed in the backup section of the stack settings (see qdeploy help stack-settings). Backups are kept in the service's state directory under backups/<stack>/<backup>, readable by the service user only.
 
 Commands (run with sudo; the service must run):
 - qdeploy stack backup create <stack>: stop the stack if it runs, save every listed data directory and volume, run the backup command, start the stack again, then remove backups beyond the retention limits
@@ -136,7 +138,7 @@ How it works:
 - The backup records the stack, the time, the commit deployed at that time and the image versions.
 - A failed backup is removed and a stack that ran is started again.
 - A backup and a deployment of the same stack never run at the same time.
-- Every deployment run of a stack with backup rules makes a backup after it stopped the stack; when the run is rolled back, that backup is restored. These backups count for retention like any other.
+- Every deployment run of a stack whose settings have a backup section makes a backup after it stopped the stack; when the run is rolled back, that backup is restored. These backups count for retention like any other.
 
 Retention:
 - backup.retention.keep and backup.retention.max_age_days apply after each successful backup; a backup is kept only while it satisfies every limit that is set. The newest backup is never removed.
@@ -145,15 +147,15 @@ Restore:
 - The backup id comes from qdeploy stack backup list; the newest is never chosen for you.
 - At a terminal the command asks first (default no). Without a terminal, and with --agent, it refuses unless --yes is given.
 - Every archive is read through before the first target is emptied. Each target is then emptied and unpacked inside the helper container, on the mounted path only.
-- A backup that holds a data directory or volume the rules no longer list is refused as a whole.
-- The command output is not restored; qdeploy.yaml has no restore command.
+- A backup that holds a data directory or volume the settings no longer list is refused as a whole.
+- The command output is not restored; the settings have no restore command.
 - A restore that fails after the first target was emptied leaves the stack stopped, because it would run on incomplete data.
 - A volume must exist before it is backed up or restored; deploy the stack first.`
 
 const stackStandardTopic = `qdeploy stack check compares the working copy of the stacks repository with this standard. It reports each deviation as a finding with stack, rule, severity, cause and fix. Errors break or endanger a deploy or leak secrets; warnings leave the stack working. The exit code is 1 when there is at least one error.
 
 Layout of a stack folder:
-- one or more compose files: the list compose.files in qdeploy.yaml, else COMPOSE_FILE in .env (entries separated by ':', or by COMPOSE_PATH_SEPARATOR), else the first of compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml
+- one or more compose files: the list compose.files in the stack settings, else COMPOSE_FILE in .env (entries separated by ':', or by COMPOSE_PATH_SEPARATOR), else the first of compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml
 - .env (optional): non-secret values such as image versions, domains, ports, COMPOSE_FILE and COMPOSE_PROJECT_NAME; the values of keys whose name contains PASSWORD, SECRET, TOKEN or KEY are never shown or logged. An .env that qdeploy cannot read leaves the stack deploy-only: it is deployed but never updated, and qdeploy stack check reports unreadable-stack.
 - secrets.env (optional): the secrets; never versioned, listed in .gitignore, present on the host only
 - data (volumes, databases, uploads) never lives in the repository
@@ -172,8 +174,9 @@ Rules (rule ID, severity):
 - tracked-data (error): git tracks files below data/
 - missing-compose-file (error): a file named in compose.files or COMPOSE_FILE does not exist
 - invalid-compose-file (error): a compose.files or COMPOSE_FILE entry is unsafe or not a regular file
-- invalid-rules-file (error): qdeploy.yaml is invalid
-- unknown-rules-variable (error): qdeploy.yaml names an image variable the stack does not have
+- invalid-rules-file (error): the stack settings are invalid
+- unknown-rules-variable (error): the stack settings name an image variable the stack does not have
+- old-rules-file (warning): the stack folder holds a qdeploy.yaml, which is no longer read; set the stack settings instead and delete it
 - unreadable-stack (error): another file of the stack cannot be read, such as an .env qdeploy cannot parse
 
 Secret values are never shown or logged; the check compares only the key names of secrets.env with .env. Compose runs with --env-file for each of .env and secrets.env that exists.`

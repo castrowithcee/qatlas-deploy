@@ -1,9 +1,10 @@
 // Package stacks reads the stacks of a stacks-repo working copy: which stacks exist, which image variables
-// their compose files use, and which update rules (qdeploy.yaml) they carry. It only reads; nothing from the
-// working copy is executed, interpolated through a shell, or written back.
+// their compose files use, and which settings (.qatlas/qdeploy/<stack>.yaml) they carry. It only reads;
+// nothing from the working copy is executed, interpolated through a shell, or written back.
 //
-// The working copy is untrusted data. Paths from it never leave the stack folder, symlinked compose, .env and
-// rule files are rejected rather than followed, and every file read is bounded.
+// The working copy is untrusted data. Paths from it never leave the stack folder or the settings folder,
+// symlinked compose, .env and settings files are rejected rather than followed, and every file read is
+// bounded.
 package stacks
 
 import (
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -28,10 +30,17 @@ const (
 	// MaxComposeFiles bounds the compose files of one stack.
 	MaxComposeFiles = 16
 
-	// RulesFile is the rule file of a stack.
-	RulesFile = "qdeploy.yaml"
-	envFile   = ".env"
+	// SettingsDir holds the settings of the stacks, one file per stack, relative to the repository root. Only
+	// the service writes it; see SettingsPath.
+	SettingsDir = ".qatlas/qdeploy"
+	// OldRulesFile is the rule file a stack folder held before the settings moved to SettingsDir. It is not
+	// read; Stack.OldRulesFile reports it.
+	OldRulesFile = "qdeploy.yaml"
+	envFile      = ".env"
 )
+
+// SettingsPath is the settings file of the stack called name, relative to the repository root.
+func SettingsPath(name string) string { return SettingsDir + "/" + name + ".yaml" }
 
 // Stack is one top-level folder of the working copy that holds a compose file.
 type Stack struct {
@@ -56,8 +65,10 @@ type Stack struct {
 	Images []ImageVar
 	// Findings lists images the standard does not allow, for qdeploy stack check.
 	Findings []Finding
-	// Rules is nil when the stack has no qdeploy.yaml: it is deployed but never updated.
+	// Rules is nil when the stack has no settings: it is deployed but never updated.
 	Rules *Rules
+	// OldRulesFile says the stack folder holds a qdeploy.yaml, which is no longer read.
+	OldRulesFile bool
 	// EnvErr is set when .env cannot be parsed by qdeploy but the stack can still be deployed, because Compose
 	// reads .env itself: the stack is deploy-only and never updated. Env then holds only the lines that parse,
 	// and Images and Findings stay empty.
@@ -67,8 +78,8 @@ type Stack struct {
 	Err error
 }
 
-// RulesError is the Err of a stack whose qdeploy.yaml cannot be used. Variable is set when the file names an
-// image variable the stack does not have.
+// RulesError is the Err of a stack whose settings cannot be used. Variable is set when they name an image
+// variable the stack does not have.
 type RulesError struct {
 	Err      error
 	Variable string
@@ -76,6 +87,14 @@ type RulesError struct {
 
 func (e *RulesError) Error() string { return e.Err.Error() }
 func (e *RulesError) Unwrap() error { return e.Err }
+
+// IsSettingsError reports whether err, the Err of a stack, comes from its settings: they are invalid, name an
+// image variable the stack does not have, list compose files that cannot be used or that change its name.
+func IsSettingsError(err error) bool {
+	var re *RulesError
+	var ce *ComposeFileError
+	return errors.As(err, &re) || errors.As(err, &ce) && ce.FromRules
+}
 
 // ComposeFileProblem is one entry of the compose file list that cannot be used. Missing says the file does not exist;
 // otherwise the entry is unsafe or not a regular file.
@@ -86,7 +105,7 @@ type ComposeFileProblem struct {
 }
 
 // ComposeFileError is the Err of a stack whose file list names unusable files; it lists every one. FromRules
-// says the list is compose.files of qdeploy.yaml, otherwise it is COMPOSE_FILE of .env.
+// says the list is compose.files of the stack settings, otherwise it is COMPOSE_FILE of .env.
 type ComposeFileError struct {
 	Problems  []ComposeFileProblem
 	FromRules bool
@@ -95,7 +114,7 @@ type ComposeFileError struct {
 func (e *ComposeFileError) Error() string {
 	p := e.Problems[0]
 	if e.FromRules {
-		return fmt.Sprintf("%s: compose.files entry %q: %s", RulesFile, p.Entry, p.Reason)
+		return fmt.Sprintf("%s: compose.files entry %q: %s", settingsLabel, p.Entry, p.Reason)
 	}
 	return fmt.Sprintf("%s: COMPOSE_FILE entry %q: %s", envFile, p.Entry, p.Reason)
 }
@@ -122,7 +141,7 @@ func Load(dir string) ([]Stack, error) {
 		if strings.HasPrefix(name, ".") || !e.IsDir() {
 			continue // e.IsDir is false for symlinks: a link is never followed out of the working copy
 		}
-		s, ok := loadStack(filepath.Join(dir, name), name)
+		s, ok := loadStack(dir, name, func(project string) (*Rules, error) { return readSettings(dir, project) })
 		if !ok {
 			continue
 		}
@@ -146,36 +165,69 @@ func Load(dir string) ([]Stack, error) {
 
 var defaultComposeNames = []string{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"}
 
-func loadStack(dir, folder string) (Stack, bool) {
+// WithSettings reads the stack in folder below root as Load does, with rules in place of the settings it has.
+// It tells whether rules fit the stack: the result's Err is set when they or the stack cannot be used. ok is
+// false when folder holds no stack, even with these rules.
+func WithSettings(root, folder string, rules *Rules) (s Stack, ok bool) {
+	return loadStack(root, folder, func(string) (*Rules, error) { return rules, nil })
+}
+
+// loadStack reads the stack in folder below root; settingsOf returns the settings of a project name.
+//
+// The settings are found by the project name, and their compose.files may choose the compose files that the
+// name comes from. To keep that from going in a circle, the settings belong to the name the stack has
+// without them: COMPOSE_PROJECT_NAME of .env, else the name of the compose files Compose finds by itself
+// (COMPOSE_FILE or the default names), else the folder name. Compose files of the settings that would give
+// the stack another name make it unreadable, so the name never depends on the settings.
+func loadStack(root, folder string, settingsOf func(name string) (*Rules, error)) (Stack, bool) {
+	dir := filepath.Join(root, folder)
 	s := Stack{Name: folder, Folder: folder, Dir: dir, Env: map[string]string{}}
 	fail := func(err error) (Stack, bool) {
 		s.Err = fmt.Errorf("stack %s: %w", s.Name, err)
 		return s, true
 	}
+	if _, err := os.Lstat(filepath.Join(dir, OldRulesFile)); err == nil {
+		s.OldRulesFile = true
+	}
 
 	env, risky, err := readEnv(dir)
-	// qdeploy.yaml is read now because compose.files decides which files the stack has; its own error is
-	// reported where it always was, after the compose files and images.
-	rules, rulesErr := readRules(dir)
 	var envParse *EnvParseError
 	switch {
 	case errors.As(err, &envParse) && !risky:
 		s.EnvErr = err
 	case err != nil:
-		if hasAnyCompose(dir) || (rules != nil && rules.ComposeFiles != nil) {
+		// Without .env the project name is unknown; the folder name stands in to find settings.
+		if hasAnyCompose(dir) || hasSettings(settingsOf, folder) {
 			return fail(err)
 		}
 		return s, false
 	}
 	s.Env = env
 
-	var listed []string
-	if rulesErr == nil && rules != nil {
-		listed = rules.ComposeFiles
+	// own are the compose files Compose finds without the settings. COMPOSE_PROJECT_NAME names the stack without
+	// them, so a broken COMPOSE_FILE then matters only when the settings list no files of their own.
+	own, ownErr := composeFiles(dir, env, nil)
+	base, nameErr := "", ownErr
+	if ownErr == nil || env["COMPOSE_PROJECT_NAME"] != "" {
+		base, nameErr = nameOf(dir, folder, env, own)
 	}
-	files, err := composeFiles(dir, env, listed)
-	if err != nil {
-		return fail(err)
+	if nameErr != nil {
+		if ownErr == nil && len(own) == 0 {
+			return s, false
+		}
+		return fail(nameErr)
+	}
+	// The settings' own error is reported where it always was, after the compose files and images.
+	rules, rulesErr := settingsOf(base)
+	files := own
+	switch {
+	case rulesErr == nil && rules != nil && rules.ComposeFiles != nil:
+		var err error
+		if files, err = composeFiles(dir, env, rules.ComposeFiles); err != nil {
+			return fail(err)
+		}
+	case ownErr != nil:
+		return fail(ownErr)
 	}
 	if len(files) == 0 {
 		return s, false
@@ -191,13 +243,17 @@ func loadStack(dir, folder string) (Stack, bool) {
 		s.Images, s.Findings = resolveImages(images, env)
 	}
 
-	fileName, err := readComposeName(dir, files)
-	if err != nil {
-		return fail(err)
-	}
-	name, err := projectNameOf(folder, env, fileName)
-	if err != nil {
-		return fail(err)
+	name := base
+	if !slices.Equal(files, own) {
+		var err error
+		if name, err = nameOf(dir, folder, env, files); err != nil {
+			return fail(err)
+		}
+		if name != base {
+			s.Name = base
+			return fail(&RulesError{Err: fmt.Errorf("%s: compose.files give the stack the project name %s, but its settings belong to %s; "+
+				"set COMPOSE_PROJECT_NAME in .env or the same name in every compose file", settingsLabel, name, base)})
+		}
 	}
 	s.Name, s.NameDerived = name, s.EnvErr == nil
 
@@ -220,13 +276,32 @@ func loadStack(dir, folder string) (Stack, bool) {
 			for _, v := range field.vars {
 				if !known[v] {
 					return fail(&RulesError{Variable: v,
-						Err: fmt.Errorf("%s: %s.%s: no service image uses this variable as its tag", RulesFile, field.name, v)})
+						Err: fmt.Errorf("%s: %s.%s: no service image uses this variable as its tag", settingsLabel, field.name, v)})
 				}
 			}
 		}
 	}
 	s.Rules = rules
 	return s, true
+}
+
+// nameOf resolves the project name of the stack with the given compose files.
+func nameOf(dir, folder string, env map[string]string, files []string) (string, error) {
+	fileName, err := readComposeName(dir, files)
+	if err != nil {
+		return "", err
+	}
+	return projectNameOf(folder, env, fileName)
+}
+
+// hasSettings reports whether settings, valid or not, exist for the name the folder gives.
+func hasSettings(settingsOf func(string) (*Rules, error), folder string) bool {
+	name := normalizeProjectName(folder)
+	if name == "" {
+		return false
+	}
+	rules, err := settingsOf(name)
+	return rules != nil || err != nil
 }
 
 // readComposeName returns the top-level name of the compose files as Compose merges them: the last file that
@@ -314,7 +389,7 @@ func hasAnyCompose(dir string) bool {
 
 var composeSeparator = regexp.MustCompile(`^[^\x00-\x1f]$`)
 
-// composeFiles applies listed (compose.files of qdeploy.yaml), else COMPOSE_FILE from .env, else Compose's
+// composeFiles applies listed (compose.files of the stack settings), else COMPOSE_FILE from .env, else Compose's
 // default lookup: the first default name that exists, plus the override file of the same extension.
 func composeFiles(dir string, env map[string]string, listed []string) ([]string, error) {
 	if listed != nil {

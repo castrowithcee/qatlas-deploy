@@ -122,6 +122,18 @@ backup:
   retention: {keep: 3}
 `
 
+// writeSettings writes the settings of the stack folder dir, which is the stack demo.
+func writeSettings(t *testing.T, dir, rules string) {
+	t.Helper()
+	p := filepath.Join(filepath.Dir(dir), filepath.FromSlash(stacks.SettingsPath("demo")))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(rules), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func newEnv(t *testing.T, rules string) *env {
 	t.Helper()
 	base := t.TempDir()
@@ -130,10 +142,10 @@ func newEnv(t *testing.T, rules string) *env {
 		"compose.yaml":    "services:\n  app:\n    image: registry.example.test/demo/app:${DEMO_APP_VERSION}\n",
 		".env":            "DEMO_APP_VERSION=1.2.3\n",
 		"secrets.env":     "DEMO_TOKEN=invented\n",
-		"qdeploy.yaml":    rules,
 		"data/db/a.txt":   "a",
 		"data/files/b.go": "b",
 	}
+	writeSettings(t, stack, rules)
 	for rel, body := range files {
 		p := filepath.Join(stack, rel)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -342,7 +354,7 @@ func TestCreateStillStartsAfterACanceledContext(t *testing.T) {
 func TestCreateRefusesUnsafeTargetsBeforeAnythingRuns(t *testing.T) {
 	outside := t.TempDir()
 	cases := map[string]func(e *env, b *stacks.Backup){
-		"outside data/":    func(e *env, b *stacks.Backup) { b.Paths = []string{"qdeploy.yaml"} },
+		"outside data/":    func(e *env, b *stacks.Backup) { b.Paths = []string{"compose.yaml"} },
 		"other folder":     func(e *env, b *stacks.Backup) { b.Paths = []string{"storage"} },
 		"parent reference": func(e *env, b *stacks.Backup) { b.Paths = []string{"data/../.."} },
 		"absolute":         func(e *env, b *stacks.Backup) { b.Paths = []string{outside} },
@@ -646,11 +658,9 @@ func TestRestoreRefusesWhatTheRulesNoLongerList(t *testing.T) {
 	e := newEnv(t, rulesYAML)
 	res, _ := e.create()
 	e.docker.calls = nil
-	if err := os.WriteFile(filepath.Join(e.dir, "qdeploy.yaml"), []byte("version: 1\nbackup:\n  paths: [data/db]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeSettings(t, e.dir, "version: 1\nbackup:\n  paths: [data/db]\n")
 	_, err := e.m.Restore(context.Background(), e.stack(), res.Meta.ID, e.log)
-	if err == nil || !strings.Contains(err.Error(), "does not list now") {
+	if err == nil || !strings.Contains(err.Error(), "do not list now") {
 		t.Fatalf("err = %v", err)
 	}
 	if len(e.docker.calls) != 0 {

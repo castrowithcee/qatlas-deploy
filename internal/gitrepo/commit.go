@@ -16,10 +16,10 @@ var ErrUnchanged = errors.New("the edit does not change the file")
 const maxMessageRunes = 200
 
 // CommitFile creates, without touching the working copy or its index, a commit on top of the base ref (see
-// RemoteHead) that differs from it only in the file path: its
-// content becomes what edit returns for the content the file has there. The file must exist there as a
-// regular file; its mode is kept. message is one line, sanitized and bounded here. It returns the new commit
-// id and does not move any ref.
+// RemoteHead) that differs from it only in the file path: its content becomes what edit returns for the content
+// the file has there. A file that exists there must be a regular file, and its mode is kept; a missing one is
+// created as a regular, non-executable file, and edit gets nil. message is one line, sanitized and bounded
+// here. It returns the new commit id and does not move any ref.
 func (r *Repo) CommitFile(ctx context.Context, path string, edit func(old []byte) ([]byte, error), message string) (string, error) {
 	if checkRepoPath(path) != nil || strings.Contains("/"+path+"/", "/.git/") {
 		return "", errors.New("the path must be a clean path of a file in the working copy")
@@ -35,21 +35,27 @@ func (r *Repo) CommitFile(ctx context.Context, path string, edit func(old []byte
 	if err != nil {
 		return "", fmt.Errorf("ls-tree failed: %w", err)
 	}
-	entry, name, _ := strings.Cut(strings.TrimSuffix(out, "\x00"), "\t")
-	mode, rest, _ := strings.Cut(entry, " ")
-	kind, blob, _ := strings.Cut(rest, " ")
-	if name != path || kind != "blob" || (mode != "100644" && mode != "100755") || !hexRe.MatchString(blob) {
-		return "", fmt.Errorf("%s is not a regular file on the branch", path)
+	mode := "100644"
+	var old []byte
+	if out != "" {
+		entry, name, _ := strings.Cut(strings.TrimSuffix(out, "\x00"), "\t")
+		var rest string
+		mode, rest, _ = strings.Cut(entry, " ")
+		kind, blob, _ := strings.Cut(rest, " ")
+		if name != path || kind != "blob" || (mode != "100644" && mode != "100755") || !hexRe.MatchString(blob) {
+			return "", fmt.Errorf("%s is not a regular file on the branch", path)
+		}
+		text, err := r.run(ctx, true, maxStdout, "cat-file", "blob", blob)
+		if err != nil {
+			return "", fmt.Errorf("cat-file failed: %w", err)
+		}
+		old = []byte(text)
 	}
-	old, err := r.run(ctx, true, maxStdout, "cat-file", "blob", blob)
-	if err != nil {
-		return "", fmt.Errorf("cat-file failed: %w", err)
-	}
-	content, err := edit([]byte(old))
+	content, err := edit(old)
 	if err != nil {
 		return "", err
 	}
-	if bytes.Equal(content, []byte(old)) {
+	if old != nil && bytes.Equal(content, old) {
 		return "", ErrUnchanged
 	}
 
@@ -82,7 +88,7 @@ func (r *Repo) CommitFile(ctx context.Context, path string, edit func(old []byte
 	if _, err := git("read-tree", base); err != nil {
 		return "", err
 	}
-	if _, err := git("update-index", "--cacheinfo", mode+","+id+","+path); err != nil {
+	if _, err := git("update-index", "--add", "--cacheinfo", mode+","+id+","+path); err != nil {
 		return "", err
 	}
 	tree, err := git("write-tree")

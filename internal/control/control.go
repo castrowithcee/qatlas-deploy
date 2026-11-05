@@ -286,6 +286,105 @@ type StackActionResult struct {
 	Stopped bool   `json:"stopped"`
 }
 
+// StackSettingsGetCommand answers the settings of a stack with every default written out. StackSettingsSetCommand
+// replaces them as a whole: the service checks them as it checks them when it reads a stack, commits them to
+// the stacks repository, pushes the commit and moves the working copy to it, after waiting for runs like an
+// update's commit. Settings that do not fit answer CodeInvalid and change nothing; settings equal to the
+// present ones commit nothing.
+const (
+	StackSettingsGetCommand = "stack.settings.get"
+	StackSettingsSetCommand = "stack.settings.set"
+)
+
+// StackSettingsTimeout is how long a client should wait for StackSettingsSetCommand: the wait for the
+// working copy, then a fetch and a push, twice when the branch moved meanwhile.
+const StackSettingsTimeout = 3 * time.Minute
+
+// StackSettingsArgs are the arguments of StackSettingsGetCommand.
+type StackSettingsArgs struct {
+	Stack string `json:"stack"`
+}
+
+// StackSettingsSetArgs are the arguments of StackSettingsSetCommand.
+type StackSettingsSetArgs struct {
+	Stack    string        `json:"stack"`
+	Settings StackSettings `json:"settings"`
+}
+
+// StackSettingsResult answers StackSettingsGetCommand. Settings is absent for a stack without settings, which
+// is deployed but never updated.
+type StackSettingsResult struct {
+	Stack    string         `json:"stack"`
+	Settings *StackSettings `json:"settings,omitempty"`
+}
+
+// StackSettingsSetResult answers StackSettingsSetCommand with the settings as stored. Commit is the pushed
+// commit; it is empty when Changed is false.
+type StackSettingsSetResult struct {
+	Stack    string        `json:"stack"`
+	Settings StackSettings `json:"settings"`
+	Changed  bool          `json:"changed"`
+	Commit   string        `json:"commit,omitempty"`
+}
+
+// StackSettings are the settings of a stack. Version must be 1. A member left out takes its default: update
+// mode manual, ceiling minor, major stepwise; no backup; containers checked, no HTTP probe; the compose files
+// Compose finds itself.
+type StackSettings struct {
+	Version int                   `json:"version"`
+	Compose *StackComposeSettings `json:"compose,omitempty"`
+	Update  *StackUpdateSettings  `json:"update,omitempty"`
+	Backup  *StackBackupSettings  `json:"backup,omitempty"`
+	Check   *StackCheckSettings   `json:"check,omitempty"`
+}
+
+// StackComposeSettings lists the compose files in merge order, relative to the stack folder. They must not
+// change the project name of the stack.
+type StackComposeSettings struct {
+	Files []string `json:"files"`
+}
+
+// StackUpdateSettings say whether and how far the stack is updated. Mode is automatic or manual, Ceiling
+// patch, minor or major, Major direct or stepwise. Tags maps an image version variable to a regular
+// expression its candidate tags must match; Changelog maps it to a GitHub repository (owner/name).
+type StackUpdateSettings struct {
+	Mode      string            `json:"mode,omitempty"`
+	Ceiling   string            `json:"ceiling,omitempty"`
+	Major     string            `json:"major,omitempty"`
+	Tags      map[string]string `json:"tags,omitempty"`
+	Changelog map[string]string `json:"changelog,omitempty"`
+}
+
+// StackBackupSettings say what is saved before an update: data directories relative to the stack folder,
+// named volumes and a command as an argument vector. At least one of them is needed.
+type StackBackupSettings struct {
+	Paths     []string                `json:"paths,omitempty"`
+	Volumes   []string                `json:"volumes,omitempty"`
+	Command   []string                `json:"command,omitempty"`
+	Retention *StackRetentionSettings `json:"retention,omitempty"`
+}
+
+// StackRetentionSettings keep a backup while it is among the newest Keep and younger than MaxAgeDays, for
+// each limit that is set; Keep is 7 when neither is set.
+type StackRetentionSettings struct {
+	Keep       int `json:"keep,omitempty"`
+	MaxAgeDays int `json:"max_age_days,omitempty"`
+}
+
+// StackCheckSettings say when a deployed stack counts as healthy.
+type StackCheckSettings struct {
+	Containers *bool              `json:"containers,omitempty"`
+	HTTP       *StackHTTPSettings `json:"http,omitempty"`
+}
+
+// StackHTTPSettings are an HTTP probe: the URL must answer Status (200 by default) within Timeout, a Go
+// duration from 1s to 10m (10s by default).
+type StackHTTPSettings struct {
+	URL     string `json:"url"`
+	Status  int    `json:"status,omitempty"`
+	Timeout string `json:"timeout,omitempty"`
+}
+
 // ResumeArgs are the arguments of ResumeCommand.
 type ResumeArgs struct {
 	Stack string `json:"stack"`

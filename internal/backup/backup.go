@@ -3,7 +3,7 @@
 // and, optionally, the output of the stack's backup command. Backups live under the service's state directory,
 // private to the service user.
 //
-// What may be touched is decided by the stack's qdeploy.yaml and nothing else: the listed data directories
+// What may be touched is decided by the stack settings and nothing else: the listed data directories
 // below data/ and the listed volumes. Every path is checked again right before it is mounted, a target is
 // emptied only inside the helper container on the mounted path, and no value from the working copy reaches a
 // shell: all calls are argv, the one helper script is a constant.
@@ -39,7 +39,7 @@ const dataRoot = "data"
 
 // Errors the callers can tell apart.
 var (
-	ErrNoRules      = errors.New("the stack has no backup rules in qdeploy.yaml")
+	ErrNoRules      = errors.New("the stack settings have no backup section")
 	ErrNoSuchBackup = errors.New("no such backup")
 )
 
@@ -209,7 +209,7 @@ func (m *Manager) Create(ctx context.Context, st stacks.Stack, commit string, lo
 // runs, empties each listed data directory and volume and unpacks the archive into it, then starts the stack
 // again if it was running. Only items that are in the backup and still listed in the stack's rules are
 // restored; a backup that holds an item the rules no longer list is refused as a whole. The command output
-// is not restored: qdeploy.yaml defines no restore command.
+// is not restored: the stack settings define no restore command.
 //
 // Before anything is emptied every archive is read through once. A failure up to there starts the stack again.
 // A failure after the first target was emptied leaves the stack stopped, because it would run on half-restored
@@ -234,7 +234,7 @@ func (m *Manager) Restore(ctx context.Context, st stacks.Stack, id string, log L
 			wants = append(wants, it)
 		case it.Kind == KindCommand:
 		default:
-			return Meta{}, fmt.Errorf("the backup holds %s %q, which qdeploy.yaml does not list now; nothing was changed", it.Kind, it.Name)
+			return Meta{}, fmt.Errorf("the backup holds %s %q, which the stack settings do not list now; nothing was changed", it.Kind, it.Name)
 		}
 	}
 	if len(wants) == 0 {

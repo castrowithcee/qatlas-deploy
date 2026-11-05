@@ -17,8 +17,8 @@ func newStacksCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Use:   "list",
 		Short: "List the stacks of the working copy with image versions and update mode",
 		Long: "list reads the working copy of the bound stacks repository and lists each stack with the image\n" +
-			"version variables of its compose files, their current values and its update mode (none without a\n" +
-			"qdeploy.yaml). A stack that cannot be read shows its problem and does not hide the others. Run it\n" +
+			"version variables of its compose files, their current values and its update mode (none without stack\n" +
+			"settings). A stack that cannot be read shows its problem and does not hide the others. Run it\n" +
 			"after 'qdeploy repo set'; it reads the working copy as it is and does not fetch.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {

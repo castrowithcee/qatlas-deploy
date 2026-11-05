@@ -53,7 +53,7 @@ func (d *Detector) Plan(ctx context.Context, st stacks.Stack, target, variable s
 		return nil, refuse("", "the stack is deploy-only: "+st.EnvErr.Error())
 	}
 	if st.Rules == nil {
-		return nil, refuse("", "the stack has no qdeploy.yaml and is never updated")
+		return nil, refuse("", "the stack has no settings and is never updated; set them in the qdeploy TUI or with 'qdeploy stack settings set'")
 	}
 	var vars []stacks.ImageVar
 	for _, img := range st.Images {

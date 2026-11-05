@@ -32,7 +32,7 @@ func newUpdateCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 	cmd := &cobra.Command{
 		Use:   "update <stack>... [--version <v> [--var <NAME>]]",
 		Short: "Update the image versions of stacks with a commit and a secured run per version step",
-		Long: "update moves the image version variables of each named stack to the version its rules allow, asking\n" +
+		Long: "update moves the image version variables of each named stack to the version its settings allow, asking\n" +
 			"the registries now; --version names the version instead, also above the ceiling, for exactly one stack.\n" +
 			"A stack with several image version variables needs --var NAME for the one --version raises, the others\n" +
 			"stay. The version must be in the registry's tag list, of the same variant and higher than the\n" +
@@ -42,7 +42,7 @@ func newUpdateCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 			"line changes), pushes the commit to the branch, then pulls, starts and checks the stack. A step that\n" +
 			"fails is rolled back like any run, and the later steps are not attempted; the earlier steps stay. A\n" +
 			"failure before the push leaves the branch as it was and starts the previous state again. The stacks run\n" +
-			"one after another. Every stack is checked first: one that has no qdeploy.yaml, was never deployed, has\n" +
+			"one after another. Every stack is checked first: one that has no settings, was never deployed, has\n" +
 			"local changes or undeployed commits, is paused or has a run in progress refuses the whole call before\n" +
 			"anything changes. The deploy key needs write access to the branch. The command waits until the last\n" +
 			"step is done and exits with 1 when a stack was not updated.",
