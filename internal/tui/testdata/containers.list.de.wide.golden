@@ -1,0 +1,40 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]                                                
+------------------------------------------------------------------------------------------------------------------------
+    NAME               ZUSTAND   IMAGE                      LAUFZEIT  NEUSTARTS                                         
+  v # eigener Stack demo-stack (2)                                                                                      
+>   demo-stack-app-1   ok        example.invalid/app:1.4.2  3h2m      0                                                 
+    demo-stack-db-1    ungesund  example.invalid/db:16      1m        2                                                 
+  v # einzelne Container (1)                                                                                            
+    example-cache      ok        example.invalid/cache:7    45s       0                                                 
+  v # fremdes Projekt legacy-blog (2)                                                                                   
+    legacy-blog-db-1   gestoppt  example.invalid/db:15      -         0                                                 
+    legacy-blog-web-1  ok        example.invalid/blog:2     5d1h      0                                                 
+  v # fremdes Projekt wiki [Konflikt: Name eines Stacks, anderer Ordner] (1)                                            
+    wiki-app-1         Neustart  example.invalid/wiki:1     -         14                                                
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+enter Details  / Suchen  r Neu laden  1-5 Bereich  q Beenden                                      up/down Auswählen  1/6

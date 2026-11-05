@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-  1 Stacks 2 Stack-Details 3 Läufe [4 Einstellungen]    
+  1 2 3 [4 Einstellungen] 5                             
 --------------------------------------------------------
   EINSTELLUNG         INHALT                            
 > Stacks-Repository   Repository binden, Hostschlüssel ~
@@ -20,5 +20,5 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
                                                         
                                                         
-enter öffnen  r Neu laden  1-4 Bereich  q Beenden       
+enter öffnen  r Neu laden  1-5 Bereich  q Beenden       
                                   up/down Auswählen  1/5

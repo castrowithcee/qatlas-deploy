@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen                                                               
+  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
       STACK        VERSION  #= pin ========================================================#               BEFUNDE      
 > [ ] demo-stack   1.4.2    | ! demo-stack pinnen?                                         |2              1 Warnung    

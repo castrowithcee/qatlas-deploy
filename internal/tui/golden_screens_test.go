@@ -6,7 +6,7 @@ import (
 
 // The heights of the detail goldens: tall enough for the whole detail, and short enough to scroll.
 const (
-	detailRows   = 44
+	detailRows   = 47
 	scrolledRows = 16
 )
 

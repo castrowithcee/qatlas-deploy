@@ -55,7 +55,7 @@ const (
 )
 
 // areaKeys are the keys of actArea, one per area in the order of the tab line.
-var areaKeys = []string{"1", "2", "3", "4"}
+var areaKeys = []string{"1", "2", "3", "4", "5"}
 
 func keyTable() []kittui.Action {
 	act := func(id kittui.ActionID, level kittui.KeyLevel, help kittui.TextID, keys ...string) kittui.Action {

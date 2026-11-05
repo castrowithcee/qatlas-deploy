@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-  1 Stacks [2 Stack-Details] 3 Läufe 4 Einstellungen    
+  1 [2 Stack-Details] 3 4 5                             
 --------------------------------------------------------
   demo-stack                                            
                                                         
@@ -11,14 +11,14 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
     APP_VERSION  example/app                            
       1.4.2 -> 1.5.0  Update verfügbar                  
                                                         
+  Container                                             
+    Keine Container dieses Stacks.                      
+                                                        
   Changelog                                             
     APP_VERSION  1.4.2 -> 1.5.0                         
       Quelle example/app                                
       1.5.0  Spring release  2026-10-29                 
-        Adds a dark theme.                              
-                                                        
-        - faster start                                  
 Backup 20261023T031000Z-4567cdef für den Stack demo-    
 stack eingespielt.                                      
 a Geheimnis setzen  x Geheimnis löschen                 
-R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden
+R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden

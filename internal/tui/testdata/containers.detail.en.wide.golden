@@ -1,0 +1,40 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]                                                      
+------------------------------------------------------------------------------------------------------------------------
+  demo-stack-app-1                                                                                                      
+                                                                                                                        
+  group     own stack demo-stack                                                                                        
+  state     ok (running)                                                                                                
+  image     example.invalid/app:1.4.2                                                                                   
+  uptime    3h2m                                                                                                        
+  restarts  0                                                                                                           
+                                                                                                                        
+  Ports                                                                                                                 
+    127.0.0.1:8080->8080/tcp                                                                                            
+    9000/tcp                                                                                                            
+                                                                                                                        
+  Mounts                                                                                                                
+    bind /srv/example/data:/data                                                                                        
+    volume demo-config:/config (read-only)                                                                              
+                                                                                                                        
+  Networks                                                                                                              
+    demo-stack_default 172.18.0.2                                                                                       
+                                                                                                                        
+  Labels                                                                                                                
+    com.docker.compose.project=demo-stack                                                                               
+    com.docker.compose.service=app                                                                                      
+                                                                                                                        
+  Environment variables (names only)                                                                                    
+    APP_MODE                                                                                                            
+    DB_PASSWORD                                                                                                         
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+esc back  r reload  1-5 area  q quit                                                                      up/down scroll

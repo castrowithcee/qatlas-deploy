@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs  [4 Settings]     
+  1 2 3 [4 Settings] 5                                  
 --------------------------------------------------------
   Credentials                                           
                                                         
@@ -20,5 +20,5 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
                                                         
-a add  x remove  esc back  r reload  1-4 area  q quit   
+a add  x remove  esc back  r reload  1-5 area  q quit   
                                           up/down choose
