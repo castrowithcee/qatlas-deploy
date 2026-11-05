@@ -67,3 +67,23 @@ func TestRegistry(t *testing.T) {
 		t.Error("unknown command found")
 	}
 }
+
+func TestStackDirUsesTheFolderOfTheListedName(t *testing.T) {
+	r := StacksResult{Dir: "/srv/stacks", Stacks: []StackInfo{
+		{Name: "demo-project", Folder: "demo-folder"},
+		{Name: "escape", Folder: "../etc"},
+		{Name: "nested", Folder: "a/b"},
+		{Name: "empty"},
+	}}
+	if got, ok := r.StackDir("demo-project"); !ok || got != "/srv/stacks/demo-folder" {
+		t.Fatalf("StackDir(demo-project) = %q, %v", got, ok)
+	}
+	for _, name := range []string{"demo-folder", "escape", "nested", "empty", "missing"} {
+		if got, ok := r.StackDir(name); ok {
+			t.Errorf("StackDir(%s) = %q, want none", name, got)
+		}
+	}
+	if _, ok := (StacksResult{Stacks: r.Stacks}).StackDir("demo-project"); ok {
+		t.Error("StackDir without Dir answered")
+	}
+}

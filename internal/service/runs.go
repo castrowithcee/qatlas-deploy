@@ -187,7 +187,14 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 			item.Stopped = &control.HoldInfo{Since: s.Stopped.Since}
 		}
 		for _, f := range s.Findings {
-			item.Findings = append(item.Findings, control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)})
+			info := control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)}
+			for _, d := range f.Dirs {
+				// Validated paths pass unchanged: a client acts on them, so they are never shortened.
+				if engine.ValidDirPath(d.Path) {
+					info.Dirs = append(info.Dirs, control.DirInfo{Path: d.Path, Owner: d.Owner})
+				}
+			}
+			item.Findings = append(item.Findings, info)
 		}
 		if f := s.Failure; f != nil {
 			detail := "since " + f.Since.UTC().Format(time.RFC3339) + ": " + f.Kind

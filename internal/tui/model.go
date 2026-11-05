@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -14,7 +15,14 @@ import (
 
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
+	"github.com/castrowithcee/qatlas-deploy/internal/datadir"
 	"github.com/castrowithcee/qatlas-deploy/internal/helptopics"
+)
+
+// defaultEuid and defaultMakeDirs are what a new model uses; tests replace them for the models they cannot reach.
+var (
+	defaultEuid     = os.Geteuid
+	defaultMakeDirs = datadir.Create
 )
 
 // The areas of the tab line, in its order.
@@ -114,7 +122,10 @@ type Model struct {
 	modalGen, runGen int
 	stale            bool
 	// after starts a timer; tests replace it.
-	after    func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	after func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	// euid and makeDirs are the user the interface runs as and the creation of data directories; tests replace them.
+	euid     func() int
+	makeDirs func(datadir.Request) (datadir.Result, error)
 	help     *kittui.Help
 	helpOpen bool
 }
@@ -135,7 +146,8 @@ func newModel(c config) (*Model, error) {
 	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, frame: kittui.NewFrame(keys, text),
 		loc: c.loc, themes: themes, theme: c.theme, profile: c.profile, charset: c.charset, area: areaStacks,
 		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
-		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick}
+		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick,
+		euid: defaultEuid, makeDirs: defaultMakeDirs}
 	if m.ctx == nil {
 		m.ctx = context.Background()
 	}
@@ -401,7 +413,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 				m.toggleStackOnly()
 				return nil
 			}
-		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter, actRestore:
+		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
 			switch m.area {
 			case areaSettings:
 				if cmd, handled := m.settingsAction(id); handled {
@@ -552,7 +564,7 @@ func (m *Model) footer() []kittui.Hint {
 		if _, ok := m.rows[m.chosen]; !ok {
 			return common
 		}
-		return append(append(detailHints(), common...), scroll...)
+		return append(append(m.detailHints(), common...), scroll...)
 	case m.area == areaRuns && m.log.open:
 		if m.log.view.Searching() {
 			return m.log.view.Hints()

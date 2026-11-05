@@ -427,7 +427,7 @@ func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any,
 	res := control.StacksResult{Dir: c.Dir, Stacks: make([]control.StackInfo, 0, len(list))}
 	// Everything below comes from the working copy and may reach a terminal: it is reduced to printable text.
 	for _, st := range list {
-		info := control.StackInfo{Name: printable(st.Name), Update: st.UpdateMode(), Images: []control.ImageInfo{}, Findings: len(st.Findings)}
+		info := control.StackInfo{Name: printable(st.Name), Folder: printable(st.Folder), Update: st.UpdateMode(), Images: []control.ImageInfo{}, Findings: len(st.Findings)}
 		for _, img := range st.Images {
 			info.Images = append(info.Images, control.ImageInfo{
 				Service: printable(img.Service), Image: printable(img.Image), Var: printable(img.Var), Version: printable(img.Value),

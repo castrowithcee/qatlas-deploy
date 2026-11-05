@@ -41,6 +41,7 @@ const (
 	textStatePending       kittui.TextID = "state.pending"
 	textStateDeployed      kittui.TextID = "state.deployed"
 	textStateNotDeployed   kittui.TextID = "state.notdeployed"
+	textStateNeedsDirs     kittui.TextID = "state.needsdirs"
 
 	textResultSucceeded      kittui.TextID = "result.succeeded"
 	textResultFailed         kittui.TextID = "result.failed"
@@ -208,6 +209,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textStateRunning:        "running",
 			textStateRollbackPause:  "paused after rollback",
 			textStateUnreadable:     "unreadable",
+			textStateNeedsDirs:      "needs data dirs",
 			textStateRemoved:        "removed",
 			textStatePaused:         "paused",
 			textStatePinned:         "pinned",
@@ -370,6 +372,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textStateRunning:        "läuft",
 			textStateRollbackPause:  "pausiert nach Rollback",
 			textStateUnreadable:     "unlesbar",
+			textStateNeedsDirs:      "Datenordner fehlen",
 			textStateRemoved:        "entfernt",
 			textStatePaused:         "pausiert",
 			textStatePinned:         "gepinnt",

@@ -14,6 +14,7 @@ func All() []helptopics.Topic {
 		{Name: "stack-standard", Short: "The stacks-repo standard that qdeploy stack check enforces", Text: stackStandardTopic},
 		{Name: "stack-rules", Short: "The qdeploy.yaml rule file of a stack", Text: stackRulesTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
+		{Name: "data-directories", Short: "Missing data directories of a stack: the data-dir-missing finding and how to resolve it", Text: dataDirectoriesTopic},
 		{Name: "notifications", Short: "Notification channels: events, types and secrets", Text: notificationsTopic},
 		{Name: "containers", Short: "The containers of the host: kinds, states, metrics, start, stop, restart", Text: containersTopic},
 	}
@@ -42,6 +43,7 @@ Commands:
 - qdeploy stack updates [stack] [--refresh]: show the current and the available image versions per stack and variable, with newer major versions flagged as not automatic; --refresh asks the registries now (run with sudo)
 - qdeploy stack changelog <stack>: show the release notes between the current and the available version of each variable with an update; qdeploy stack updates --changelog shows them for all stacks (run with sudo)
 - qdeploy stack backup create|list <stack>, qdeploy stack backup restore <stack> <backup> [--yes]: back up, list and restore the data of a stack (run with sudo; see qdeploy help backups)
+- qdeploy stack datadir <stack> [--owner UID:GID] [--mode 0750] --yes: create the missing data directories of a stack and deploy it (run with sudo; see qdeploy help data-directories)
 - qdeploy stack secret set <stack> <KEY>, qdeploy stack secret list <stack>, qdeploy stack secret delete <stack> <KEY>: write, list by key and remove the secrets in a stack's secrets.env; the value is read without echo at a terminal or from standard input, never from an argument, and nothing is redeployed (run with sudo)
 - qdeploy credential set|list|delete: manage registry tokens and notification credentials (run with sudo)
 - qdeploy notify list|add|remove|test: manage the notification channels (webhook, Slack, Telegram, e-mail) and send a test message through one (run with sudo; see qdeploy help notifications)
@@ -175,6 +177,19 @@ Rules (rule ID, severity):
 - unreadable-stack (error): another file of the stack cannot be read, such as an .env qdeploy cannot parse
 
 Secret values are never shown or logged; the check compares only the key names of secrets.env with .env. Compose runs with --env-file for each of .env and secrets.env that exists.`
+
+const dataDirectoriesTopic = `A data directory is a bind mount source inside the stack folder that git does not track, for example ./data/db. If it is missing when a container starts, Docker creates it owned by root, and an image that runs as another user then cannot write to it.
+
+The finding data-dir-missing:
+- Before a run touches the stack, the service reads the bind mount sources inside the stack folder from the rendered Compose configuration and finds the user each image runs as. A missing, unversioned directory of a service that does not run as root stops the run with this finding, which lists the paths relative to the stack folder and the owner (UID:GID) the image user suggests, when it is known.
+- The finding clears and the same commit runs by itself as soon as all listed directories exist. A manual run (qdeploy stack deploy) checks again. Nothing is created without you.
+- Directories of services that run as root, named volumes, files and tracked paths are not part of the finding.
+
+Resolving it (run with sudo):
+- In the terminal interface, open the stack detail, check the owner and mode, and confirm the creation.
+- qdeploy stack datadir <stack> [--owner UID:GID] [--mode 0750] --yes creates the listed directories and then starts a run of the stack. Without --yes it asks at a terminal and otherwise only prints what it would create. The owner comes from --owner or from the finding; the mode is 0750 unless given.
+- Existing directories are never changed, missing parents are created like the listed directories, and nothing outside the stack folder is touched. A symlink on the way refuses the creation.
+- If you create the directories yourself, set the owner the container user needs; the service takes them as they are.`
 
 const notificationsTopic = `A notification channel receives the events it selected. Channels belong to the host, not to a stack. Commands (run with sudo; the service must run):
 - qdeploy notify list: the channels with type, events and settings, never their secrets

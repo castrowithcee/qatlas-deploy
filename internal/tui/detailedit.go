@@ -67,6 +67,8 @@ func (m *Model) detailAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 		return m.openSecretPick(), true
 	case actRestore:
 		return m.openBackupPick(), true
+	case actDataDirs:
+		return m.openDataDirForm(), true
 	}
 	return nil, false
 }
@@ -213,15 +215,23 @@ func (m *Model) formView(width, height int) string {
 	m.scrollNote = ""
 	f := m.set.form
 	head := []string{m.heading(f.title, width), ""}
+	if f.kind == formDataDirs {
+		head = append(head, m.formDataDirLines(f, width)...)
+	}
 	view, _ := f.form.View(m.styles, width, max(height-len(head), 1))
 	return strings.Join(head, "\n") + "\n" + view
 }
 
 // detailHints are the keys of the detail that change something.
-func detailHints() []kittui.Hint {
-	return []kittui.Hint{
-		{Action: actAdd, Label: textKeySecretSet, Priority: 3},
-		{Action: actRemove, Label: textKeySecretDelete, Priority: 3},
-		{Action: actRestore, Label: textKeyRestore, Priority: 3},
+func (m *Model) detailHints() []kittui.Hint {
+	var hints []kittui.Hint
+	if stack, ok := m.detailStack(); ok {
+		if _, found := m.dataDirFinding(stack); found {
+			hints = append(hints, kittui.Hint{Action: actDataDirs, Label: textKeyDataDirs, Priority: 2})
+		}
 	}
+	return append(hints,
+		kittui.Hint{Action: actAdd, Label: textKeySecretSet, Priority: 3},
+		kittui.Hint{Action: actRemove, Label: textKeySecretDelete, Priority: 3},
+		kittui.Hint{Action: actRestore, Label: textKeyRestore, Priority: 3})
 }

@@ -35,6 +35,9 @@ type settingsForm struct {
 	notify control.NotifyAddArgs
 	// stack is the stack a secret form belongs to.
 	stack string
+	// dirs and stackDir are the missing directories and the stack folder a data directory form is about.
+	dirs     []control.DirInfo
+	stackDir string
 }
 
 // problem shows a problem without a field above the form.
@@ -171,6 +174,8 @@ func (m *Model) submitForm() tea.Cmd {
 		return m.submitNotifyDetail(f, v)
 	case formSecret:
 		return m.submitSecret(f, text("key"), v["value"].Text)
+	case formDataDirs:
+		return m.submitDataDirs(f, text("owner"), text("mode"))
 	}
 	return nil
 }
