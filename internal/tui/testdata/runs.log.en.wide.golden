@@ -10,5 +10,5 @@ qdeploy  maintenance window closed                                              
   info up -d finished                                                                                                   
   step verify                                                                                                           
   info all services healthy                                                                                             
-[ L following ]  [ / search ]  [ w wrap lines off ]  [ t timestamps off ]                                 lines 2-9 of 9
-/ search  L follow  w wrap lines  t timestamps  r reload  1-4 area  q quit                                up/down scroll
+[ L following ]  [ / search ]  [ T period: all ]  [ w wrap lines off ]  [ t timestamps off ]              lines 2-9 of 9
+/ search  L follow  T period  w wrap lines  t timestamps  r reload  1-4 area  q quit                      up/down scroll

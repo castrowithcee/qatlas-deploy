@@ -67,6 +67,7 @@ type config struct {
 	charset  kittui.CharsetMode
 	start    kittui.AreaID
 	loc      *time.Location
+	now      func() time.Time // clock of the log filter; nil takes time.Now
 	warnings []string
 }
 
@@ -83,6 +84,7 @@ type Model struct {
 	text    kittui.Translator
 	frame   *kittui.Frame
 	loc     *time.Location
+	now     func() time.Time
 
 	themes          *kittui.ThemeSet
 	theme           string
@@ -155,6 +157,9 @@ func newModel(c config) (*Model, error) {
 	}
 	if m.loc == nil {
 		m.loc = time.Local
+	}
+	if m.now = c.now; m.now == nil {
+		m.now = time.Now
 	}
 	if slices.ContainsFunc(areas(), func(a kittui.Area) bool { return a.ID == c.start }) {
 		m.area = c.start
@@ -264,7 +269,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case tea.KeyPressMsg:
-		return m, m.key(msg)
+		cmd := m.key(msg)
+		m.refeedFilteredLog()
+		return m, cmd
 	}
 	return m, nil
 }
@@ -377,6 +384,14 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		return m.formKey(msg)
+	}
+	if m.area == areaRuns && m.log.open && m.log.view.FilterOpen() {
+		// The period form takes every key; only the forced quit passes.
+		if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actForceQuit {
+			return tea.Quit
+		}
+		m.log.view.Update(msg)
+		return nil
 	}
 	if m.helpOpen {
 		if act, handled := m.help.Update(msg); handled {
@@ -568,7 +583,7 @@ func (m *Model) footer() []kittui.Hint {
 		}
 		return append(append(m.detailHints(), common...), scroll...)
 	case m.area == areaRuns && m.log.open:
-		if m.log.view.Searching() {
+		if m.log.view.Searching() || m.log.view.FilterOpen() {
 			return m.log.view.Hints()
 		}
 		return append(m.log.view.Hints(), common...)
@@ -715,6 +730,16 @@ func (m *Model) render() string {
 			spec.Footer, spec.Input, spec.Position, spec.Back = m.modal.dialog.Hints(), kittui.InputNavigation, "", nil
 			room = m.frame.Workspace(spec)
 			spec.Workspace, _ = m.modal.dialog.View(m.styles, room.Width, room.Height)
+			view, _ = m.frame.Render(m.styles, spec)
+		}
+	}
+	if m.area == areaRuns && m.log.open && m.log.view.FilterOpen() {
+		if over, _, ok := m.log.view.ModalOverlay(m.styles, view, m.width, m.height, room); ok {
+			view = over
+		} else {
+			spec.Footer, spec.Input, spec.Position, spec.Back = m.log.view.Hints(), m.log.view.Input(), "", nil
+			room = m.frame.Workspace(spec)
+			spec.Workspace, _ = m.log.view.ModalView(m.styles, room.Width, room.Height)
 			view, _ = m.frame.Render(m.styles, spec)
 		}
 	}
