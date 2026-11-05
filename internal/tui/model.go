@@ -92,6 +92,8 @@ type Model struct {
 	loaded, loading bool
 	// failure is the error of the last refresh; notice a warning that stays until the next key.
 	failure, notice string
+	// result is the success of a change without details; it stays until the next key.
+	result string
 	// chosen is the stack the detail area shows.
 	chosen kittui.ItemID
 	detail detailState
@@ -351,7 +353,7 @@ func (m *Model) typed(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
 }
 
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
-	m.notice = ""
+	m.notice, m.result = "", ""
 	if m.modal != nil {
 		return m.modalKey(msg)
 	}
@@ -645,6 +647,8 @@ func (m *Model) message() *kittui.Message {
 		return &kittui.Message{Kind: kittui.MessageError, Text: m.failure}
 	case m.notice != "":
 		return &kittui.Message{Kind: kittui.MessageWarning, Text: m.notice}
+	case m.result != "":
+		return &kittui.Message{Kind: kittui.MessageResult, Text: m.result}
 	}
 	return nil
 }

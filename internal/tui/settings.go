@@ -462,7 +462,7 @@ func (m *Model) ask(title kittui.TextID, question, consequence string, details [
 		Answers: []kittui.Answer{{Action: actYes, Label: textAnswerYes}, {Action: actNo, Label: textAnswerCancel}},
 		Default: actNo, Keys: kittui.DialogKeys{Enter: actEnter}}
 	if destructive {
-		spec.Danger = actYes
+		spec.Danger, spec.Irreversible = actYes, true
 	}
 	dialog, err := kittui.NewDialog(spec, m.keys, m.text)
 	if err != nil {
@@ -472,10 +472,14 @@ func (m *Model) ask(title kittui.TextID, question, consequence string, details [
 	m.modal = &modal{kind: modalAsk, dialog: dialog, yes: yes}
 }
 
-// tell opens the result of a change, closed by any answer.
+// tell reports the result of a change: a calm notice dialog when there are details, else the message line.
 func (m *Model) tell(title kittui.TextID, text string, details []string) {
-	dialog, err := kittui.NewDialog(kittui.DialogSpec{Title: title, Question: text,
-		Consequence: m.text.Lookup(textSettingDoneNote), Details: dialogLines(details),
+	if len(details) == 0 {
+		m.result = text
+		return
+	}
+	dialog, err := kittui.NewDialog(kittui.DialogSpec{Title: title, Question: text, Notice: true,
+		Details: dialogLines(details),
 		Answers: []kittui.Answer{{Action: actNo, Label: textAnswerClose}}, Default: actNo,
 		Keys: kittui.DialogKeys{Enter: actEnter}}, m.keys, m.text)
 	if err != nil {
