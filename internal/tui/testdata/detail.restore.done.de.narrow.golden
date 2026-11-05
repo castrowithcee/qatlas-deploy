@@ -6,19 +6,19 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   Modus    automatisch                                  
   Zustand  deployt                                      
   Befunde  1 Warnung                                    
-  #= Erledigt =======================================#  
-  | ! Backup 20261023T031000Z-4567cdef für den Stack |  
-  |   demo-stack eingespielt.                        |  
-  |                                                  |  
-  | Der Dienst hat die Änderung vorgenommen.         |  
-  |                                                  |  
-  | > schließen <                                    |  
-  | n/esc/enter schließen                            |  
-  #==================================================#  
+                                                        
+  Image-Versionen                                       
+    APP_VERSION  example/app                            
+      1.4.2 -> 1.5.0  Update verfügbar                  
+                                                        
+  Container                                             
+    Keine Container dieses Stacks.                      
+                                                        
+  Changelog                                             
     APP_VERSION  1.4.2 -> 1.5.0                         
       Quelle example/app                                
       1.5.0  Spring release  2026-10-29                 
-        Adds a dark theme.                              
-                                                        
-        - faster start                                  
-                                                   20/43
+Backup 20261023T031000Z-4567cdef für den Stack demo-    
+stack eingespielt.                                      
+a Geheimnis setzen  x Geheimnis löschen                 
+R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden

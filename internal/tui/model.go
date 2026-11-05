@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -14,7 +15,14 @@ import (
 
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
+	"github.com/castrowithcee/qatlas-deploy/internal/datadir"
 	"github.com/castrowithcee/qatlas-deploy/internal/helptopics"
+)
+
+// defaultEuid and defaultMakeDirs are what a new model uses; tests replace them for the models they cannot reach.
+var (
+	defaultEuid     = os.Geteuid
+	defaultMakeDirs = datadir.Create
 )
 
 // The areas of the tab line, in its order.
@@ -95,6 +103,8 @@ type Model struct {
 	loaded, loading bool
 	// failure is the error of the last refresh; notice a warning that stays until the next key.
 	failure, notice string
+	// result is the success of a change without details; it stays until the next key.
+	result string
 	// chosen is the stack the detail area shows.
 	chosen kittui.ItemID
 	detail detailState
@@ -123,7 +133,10 @@ type Model struct {
 	modalGen, runGen int
 	stale            bool
 	// after starts a timer; tests replace it.
-	after    func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	after func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	// euid and makeDirs are the user the interface runs as and the creation of data directories; tests replace them.
+	euid     func() int
+	makeDirs func(datadir.Request) (datadir.Result, error)
 	help     *kittui.Help
 	helpOpen bool
 }
@@ -145,7 +158,8 @@ func newModel(c config) (*Model, error) {
 		loc: c.loc, themes: themes, theme: c.theme, profile: c.profile, charset: c.charset, area: areaStacks,
 		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
 		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick,
-		ctTones: map[string]kittui.TextStyle{}, ctNames: map[kittui.ItemID]string{}}
+		ctTones: map[string]kittui.TextStyle{}, ctNames: map[kittui.ItemID]string{},
+		euid: defaultEuid, makeDirs: defaultMakeDirs}
 	if m.ctx == nil {
 		m.ctx = context.Background()
 	}
@@ -385,7 +399,7 @@ func (m *Model) typed(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
 }
 
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
-	m.notice = ""
+	m.notice, m.result = "", ""
 	if m.modal != nil {
 		return m.modalKey(msg)
 	}
@@ -435,7 +449,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 				m.toggleStackOnly()
 				return nil
 			}
-		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter, actRestore:
+		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
 			switch m.area {
 			case areaSettings:
 				if cmd, handled := m.settingsAction(id); handled {
@@ -603,7 +617,7 @@ func (m *Model) footer() []kittui.Hint {
 		if _, ok := m.rows[m.chosen]; !ok {
 			return common
 		}
-		return append(append(detailHints(), common...), scroll...)
+		return append(append(m.detailHints(), common...), scroll...)
 	case m.area == areaContainers && m.ctv.open:
 		return append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}}, common...), scrollHints()...)
 	case m.area == areaContainers:
@@ -709,6 +723,8 @@ func (m *Model) message() *kittui.Message {
 		return &kittui.Message{Kind: kittui.MessageError, Text: m.failure}
 	case m.notice != "":
 		return &kittui.Message{Kind: kittui.MessageWarning, Text: m.notice}
+	case m.result != "":
+		return &kittui.Message{Kind: kittui.MessageResult, Text: m.result}
 	}
 	return nil
 }

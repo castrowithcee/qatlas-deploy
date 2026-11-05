@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -90,6 +91,78 @@ func readImages(dir string, files []string) ([]rawImage, error) {
 		out = append(out, rawImage{n, byService[n]})
 	}
 	return out, nil
+}
+
+// readBindMounts returns the bind-mount sources of every service of the compose files that lie below dir, as
+// clean paths relative to dir; see Stack.BindMounts. A file that cannot be read or parsed adds nothing, which
+// leaves the paths to the stricter treatment; the stack reports such a file elsewhere.
+func readBindMounts(dir string, files []string) []string {
+	set := map[string]bool{}
+	for _, f := range files {
+		data, err := readBounded(dir, f)
+		if err != nil {
+			continue
+		}
+		var doc struct {
+			Services map[string]struct {
+				Volumes []any `yaml:"volumes"`
+			} `yaml:"services"`
+		}
+		if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&doc); err != nil {
+			continue
+		}
+		for _, svc := range doc.Services {
+			for _, v := range svc.Volumes {
+				if p, ok := bindSource(dir, v); ok {
+					set[p] = true
+				}
+			}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for p := range set {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// bindSource returns the source of a bind mount as a path relative to dir, for the short syntax
+// "./host:/container[:mode]" and the long syntax with type bind. Compose takes a short source as a path only
+// when it starts with "." or "/"; anything else is a named volume.
+func bindSource(dir string, v any) (string, bool) {
+	var src string
+	switch m := v.(type) {
+	case string:
+		host, _, ok := strings.Cut(m, ":")
+		if !ok || !(strings.HasPrefix(host, ".") || strings.HasPrefix(host, "/")) {
+			return "", false
+		}
+		src = host
+	case map[string]any:
+		typ, _ := m["type"].(string)
+		src, _ = m["source"].(string)
+		if typ != "bind" || src == "" {
+			return "", false
+		}
+	default:
+		return "", false
+	}
+	if strings.ContainsAny(src, "$~\x00") {
+		return "", false
+	}
+	if filepath.IsAbs(src) {
+		rel, err := filepath.Rel(dir, filepath.Clean(src))
+		if err != nil {
+			return "", false
+		}
+		src = rel
+	}
+	src = filepath.ToSlash(filepath.Clean(src))
+	if checkRelative(src) != nil {
+		return "", false
+	}
+	return src, true
 }
 
 var tagVar = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?)([-?+])([^}]*))?\}|\$([A-Za-z_][A-Za-z0-9_]*)`)

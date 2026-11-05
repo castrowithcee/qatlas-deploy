@@ -77,7 +77,7 @@ func (e *Engine) setHold(ctx context.Context, name string, on bool, field func(*
 	}
 	now := e.cfg.Clock.Now().UTC()
 	var changed bool
-	_, err := e.store.Update(func(s State) (State, error) {
+	err := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur, ok := s.Stacks[name]
 		if !ok && !on {
@@ -113,7 +113,9 @@ func (e *Engine) holdable(ctx context.Context, name string, on bool) error {
 		}
 		return err
 	}
-	e.lock.Lock()
+	if err := e.lockCommand(ctx); err != nil {
+		return err
+	}
 	defer e.lock.Unlock()
 	list, err := stacks.Load(b.Dir)
 	if err != nil {

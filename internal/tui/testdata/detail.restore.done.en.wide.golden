@@ -6,19 +6,19 @@ qdeploy  maintenance window closed                                              
   mode      automatic                                                                                                   
   state     deployed                                                                                                    
   findings  1 warning                                                                                                   
-                            #= Done =======================================================#                            
-  Image versions            | ! Backup 20261023T031000Z-4567cdef restored for the stack    |                            
-    APP_VERSION  example/app|   demo-stack.                                                |                            
-      1.4.2 -> 1.5.0  update|                                                              |                            
-                            | The service has made the change.                             |                            
-  Containers                |                                                              |                            
-    No containers of this st| > close <                                                    |                            
-                            | n/esc/enter close                                            |                            
-  Changelog                 #==============================================================#                            
+                                                                                                                        
+  Image versions                                                                                                        
+    APP_VERSION  example/app                                                                                            
+      1.4.2 -> 1.5.0  update available                                                                                  
+                                                                                                                        
+  Containers                                                                                                            
+    No containers of this stack.                                                                                        
+                                                                                                                        
+  Changelog                                                                                                             
     APP_VERSION  1.4.2 -> 1.5.0                                                                                         
       source example/app                                                                                                
       1.5.0  Spring release  2026-10-29                                                                                 
         Adds a dark theme.                                                                                              
                                                                                                                         
-        - faster start                                                                                                  
-                                                                                                                   20/43
+Backup 20261023T031000Z-4567cdef restored for the stack demo-stack.                                                     
+a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                        up/down scroll  19/43

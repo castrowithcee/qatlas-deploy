@@ -7,15 +7,15 @@ qdeploy  maintenance window closed                                              
     remote commit: -                                                                                                    
     stacks: 6                                                                                                           
                             #= Done =======================================================#                            
-    b binds a repository, F | ! Fetched; the remote has newer commits.                     |                            
+    b binds a repository, F | Fetched; the remote has newer commits.                       |                            
                             |                                                              |                            
-                            | The service has made the change.                             |                            
                             | commit: 111111111111                                         |                            
                             | remote commit: 222222222222                                  |                            
                             |                                                              |                            
                             | > close <                                                    |                            
                             | n/esc/enter close                                            |                            
                             #==============================================================#                            
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

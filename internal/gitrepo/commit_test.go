@@ -51,7 +51,7 @@ func TestCommitFileChangesOnlyTheFileOnTheRemoteHead(t *testing.T) {
 	if err := r.Push(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.FastForward(ctx); err != nil {
+	if err := r.FastForward(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if h, _ := r.Head(ctx); h != id {

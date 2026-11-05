@@ -212,7 +212,7 @@ func failureOf(err error) error {
 			NextStep: "Resolve the cause named in the message (see 'qdeploy status' and 'qdeploy help stack-rules'), then run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeBusy:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
-			NextStep: "Run the command again once the service is up.", Cause: err}
+			NextStep: "Run the command again in a moment.", Cause: err}
 	case errors.As(err, &remote):
 		return &cli.Failure{Code: output.CodeRuntime, Message: "the service refused the request: " + remote.Message,
 			NextStep: "Check that the client and the service are the same version.", Cause: err}

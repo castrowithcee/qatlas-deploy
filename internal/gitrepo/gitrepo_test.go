@@ -397,8 +397,8 @@ func TestFastForward(t *testing.T) {
 	r, _ := cloneFixture(t, f)
 	head, _ := r.Head(ctx)
 
-	// nothing fetched: a no-op
-	if err := r.FastForward(ctx); err != nil {
+	// the commit it is at: a no-op
+	if err := r.FastForward(ctx, head); err != nil {
 		t.Fatalf("no-op fast-forward: %v", err)
 	}
 	next := f.commit(map[string]string{"web/compose.yaml": "b\n"})
@@ -408,7 +408,7 @@ func TestFastForward(t *testing.T) {
 	if h, _ := r.Head(ctx); h != head {
 		t.Fatal("fetch moved HEAD")
 	}
-	if err := r.FastForward(ctx); err != nil {
+	if err := r.FastForward(ctx, next); err != nil {
 		t.Fatal(err)
 	}
 	if h, _ := r.Head(ctx); h != next {
@@ -420,18 +420,85 @@ func TestFastForward(t *testing.T) {
 	}
 }
 
+// TestFastForwardStopsAtTheNamedCommit: a fetch after the caller read the remote head moves only the
+// remote-tracking ref; the fast-forward still ends at the commit read. A fetch beside a push's update-ref and
+// a fast-forward leaves both refs where they belong.
+func TestFastForwardStopsAtTheNamedCommit(t *testing.T) {
+	ctx := context.Background()
+	f := newRemote(t)
+	f.commit(map[string]string{"web/.env": "APP_VERSION=1.0.0\n"})
+	r, _ := cloneFixture(t, f)
+
+	read := f.commit(map[string]string{"web/compose.yaml": "read\n"})
+	if err := r.Fetch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	target, err := r.RemoteHead(ctx)
+	if err != nil || target != read {
+		t.Fatalf("RemoteHead = %q, %v; want %s", target, err, read)
+	}
+	later := f.commit(map[string]string{"web/compose.yaml": "later\n"})
+	if err := r.Fetch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.FastForward(ctx, target); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := r.Head(ctx); h != read {
+		t.Fatalf("HEAD = %s; want the commit read %s, not %s", h, read, later)
+	}
+	if rh, _ := r.RemoteHead(ctx); rh != later {
+		t.Fatalf("RemoteHead = %s; want %s", rh, later)
+	}
+	if body, _ := os.ReadFile(filepath.Join(r.dir, "web", "compose.yaml")); string(body) != "read\n" {
+		t.Fatalf("working file = %q", body)
+	}
+
+	// a push's update-ref, then a fetch beside the fast-forward to the pushed commit
+	id, err := r.CommitFile(ctx, "web/.env", setValue, "Update web APP_VERSION from 1.0.0 to 1.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Push(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	errs := make(chan error, 2)
+	go func() { errs <- r.Fetch(ctx) }()
+	go func() { errs <- r.FastForward(ctx, id) }()
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if h, _ := r.Head(ctx); h != id {
+		t.Fatalf("HEAD = %s; want %s", h, id)
+	}
+	if rh, _ := r.RemoteHead(ctx); rh != id {
+		t.Fatalf("RemoteHead = %s; want the pushed %s", rh, id)
+	}
+	if got := fixtureGit(t, r.dir, "status", "--porcelain"); got != "" {
+		t.Fatalf("status = %q", got)
+	}
+
+	for _, bad := range []string{"", "main", "refs/remotes/origin/main", "--help", strings.ToUpper(id)} {
+		if err := r.FastForward(ctx, bad); err == nil {
+			t.Fatalf("FastForward(%q) succeeded", bad)
+		}
+	}
+}
+
 func TestFastForwardRefusesCollisionAndKeepsLocalFiles(t *testing.T) {
 	ctx := context.Background()
 	f := newRemote(t)
 	r, _ := cloneFixture(t, f)
 	head, _ := r.Head(ctx)
 
-	f.commit(map[string]string{"web/compose.yaml": "remote\n", "db/new.txt": "n\n"})
+	next := f.commit(map[string]string{"web/compose.yaml": "remote\n", "db/new.txt": "n\n"})
 	if err := r.Fetch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	writeTree(t, r.dir, map[string]string{"web/compose.yaml": "local\n", "db/new.txt": "mine\n"})
-	if err := r.FastForward(ctx); err == nil {
+	if err := r.FastForward(ctx, next); err == nil {
 		t.Fatal("fast-forward over colliding local changes succeeded")
 	}
 	if h, _ := r.Head(ctx); h != head {
@@ -450,11 +517,11 @@ func TestFastForwardRefusesDivergence(t *testing.T) {
 	r, _ := cloneFixture(t, f)
 	fixtureGit(t, r.dir, "commit", "-q", "--allow-empty", "-m", "local")
 	local, _ := r.Head(ctx)
-	f.commit(map[string]string{"web/compose.yaml": "remote\n"})
+	next := f.commit(map[string]string{"web/compose.yaml": "remote\n"})
 	if err := r.Fetch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.FastForward(ctx); err == nil {
+	if err := r.FastForward(ctx, next); err == nil {
 		t.Fatal("fast-forward of a diverged branch succeeded")
 	}
 	if h, _ := r.Head(ctx); h != local {

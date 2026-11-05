@@ -184,7 +184,7 @@ func TestPushFastForwardsRemoteAndTrackingRef(t *testing.T) {
 	if rh, _ := r.RemoteHead(ctx); rh != id {
 		t.Fatalf("tracking ref = %s", rh)
 	}
-	if err := r.FastForward(ctx); err != nil {
+	if err := r.FastForward(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(r.dir, "web", "compose.yaml")); string(got) != "a\n" {

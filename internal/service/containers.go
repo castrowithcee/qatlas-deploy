@@ -82,10 +82,8 @@ func registerContainerCommands(r *control.Registry, repo *repoService, eng *engi
 }
 
 // stackDirs maps the stack names of the working copy to their folders. Without a binding or a readable
-// working copy it is empty, so nothing counts as own: the narrower reading.
+// working copy it is empty, so nothing counts as own: the narrower reading. It takes no lock.
 func (s *repoService) stackDirs(log *slog.Logger, onStack func(stacks.Stack)) map[string]string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	c, err := s.bound()
 	if err != nil {
 		return nil

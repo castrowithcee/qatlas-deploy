@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
@@ -39,6 +40,9 @@ type run struct {
 	// change is set for a step of an update; pushed says its commit is on the branch.
 	change *VersionStep
 	pushed bool
+	// tracked caches the files git tracks in the stack folder for the data directory check.
+	tracked   []string
+	trackedOK bool
 }
 
 // outcome is what a run ended with. cause is why the run failed, rollbackErr why its rollback failed and
@@ -49,6 +53,8 @@ type outcome struct {
 	rollbackErr error
 	at          string
 	backup      string
+	// dirs are the missing data directories that stopped the run before it touched the stack.
+	dirs []MissingDir
 }
 
 func (r *run) execute() {
@@ -100,18 +106,25 @@ func (r *run) record(out outcome) RunRecord {
 
 	now := e.cfg.Clock.Now().UTC()
 	var dropped []RunRecord
-	_, uerr := e.store.Update(func(s State) (State, error) {
+	uerr := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur := s.Stacks[rec.Stack]
 		x := rec
 		cur.LastRun = &x
 		cur.Folder = folderField(r.st)
+		cur.DataDirs = nil
+		cur.Findings = slices.DeleteFunc(cur.Findings, func(f Finding) bool { return f.Kind == FindingDataDirMissing })
+		if len(out.dirs) > 0 {
+			cur.DataDirs = &DataDirWait{Commit: rec.Commit, Dirs: out.dirs}
+			cur.Findings = append([]Finding{dataDirFinding(out.dirs)}, cur.Findings...)
+		}
 		switch rec.Result {
 		case ResultSucceeded:
 			cur.Deployed, cur.FailedCommit = out.at, ""
 			cur.Findings = slices.DeleteFunc(cur.Findings, func(f Finding) bool { return f.Kind == FindingProjectRenamed })
 		case ResultFailed:
-			if marks {
+			// Waiting for a human is not a failed commit: the same commit runs once the directories exist.
+			if marks && len(out.dirs) == 0 {
 				cur.FailedCommit = rec.Commit
 			}
 		case ResultRolledBack:
@@ -126,7 +139,7 @@ func (r *run) record(out outcome) RunRecord {
 				cur.FailedCommit = rec.Commit
 			}
 			cur.Paused = &Pause{Time: now, Run: rec.ID, Reason: e.text(out.rollbackErr.Error())}
-			cur.Findings = append([]Finding{{FindingPaused, e.pauseDetail(cur.Paused)}}, cur.Findings...)
+			cur.Findings = append([]Finding{{Kind: FindingPaused, Detail: e.pauseDetail(cur.Paused)}}, cur.Findings...)
 		}
 		if cur.Pending != "" && (cur.Pending == rec.Commit || cur.Pending == out.at) {
 			cur.Pending = ""
@@ -173,6 +186,9 @@ func (r *run) step(name string, fn func() error) (err error) {
 // An update step commits and pushes its version change after the backup; see advance.
 func (r *run) secured(ctx context.Context) outcome {
 	d, st, log := r.e.cfg.Deployer, r.st, r.log
+	if out, stop := r.checkDataDirs(ctx); stop {
+		return out
+	}
 	if err := r.step("stop", func() error { return d.Stop(ctx, st, log) }); err != nil {
 		return outcome{result: ResultFailed, cause: fmt.Errorf("stop: %w", err)}
 	}
@@ -266,6 +282,57 @@ func (r *run) secured(ctx context.Context) outcome {
 	return out
 }
 
+// checkDataDirs stops the run before the stack is touched when bind-mount source directories are missing that
+// Docker would create as root for an image that does not run as root. Nothing is created here.
+func (r *run) checkDataDirs(ctx context.Context) (outcome, bool) {
+	c, ok := r.e.cfg.Deployer.(DataDirChecker)
+	if !ok {
+		return outcome{}, false
+	}
+	var dirs []MissingDir
+	err := r.step("data-dirs", func() error {
+		var err error
+		dirs, err = c.MissingDataDirs(ctx, r.st, r.versioned, r.log)
+		return err
+	})
+	switch {
+	case err != nil:
+		return outcome{result: ResultFailed, cause: fmt.Errorf("data-dirs: %w", err)}, true
+	case len(dirs) == 0:
+		r.log.Printf("none missing")
+		return outcome{}, false
+	}
+	if len(dirs) > maxDataDirs {
+		dirs = dirs[:maxDataDirs]
+	}
+	r.log.Printf("missing: %d", len(dirs))
+	return outcome{result: ResultFailed, dirs: dirs, cause: errors.New(dataDirDetail(dirs))}, true
+}
+
+// versioned reports whether git tracks rel, a path below the stack folder, or something below it.
+func (r *run) versioned(ctx context.Context, rel string) (bool, error) {
+	l, ok := r.b.Copy.(interface {
+		TrackedFiles(ctx context.Context, dir string) ([]string, error)
+	})
+	if !ok {
+		return false, nil
+	}
+	if !r.trackedOK {
+		files, err := l.TrackedFiles(ctx, r.st.Name)
+		if err != nil {
+			return false, err
+		}
+		r.tracked, r.trackedOK = files, true
+	}
+	p := r.st.Name + "/" + rel
+	for _, f := range r.tracked {
+		if f == p || strings.HasPrefix(f, p+"/") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // rollback brings the stack back to its deployed state: stop, restore the run's backup unless skip says why
 // not, revert the stack folder on the branch and follow it, start and check. An update step whose commit was
 // not pushed has nothing to revert: the working copy and the stack folder never left the deployed state. It
@@ -307,8 +374,8 @@ func (r *run) rollback(ctx context.Context, failedAt, backup, skip string) (stri
 
 // revert moves the working copy to a commit whose stack folder equals the deployed state: a revert commit on
 // the freshly fetched branch, pushed as a fast-forward, or the branch itself when it already has that state.
-// It waits until no other run relies on the working copy and keeps everyone else off it meanwhile; it returns
-// holding the run's hold again.
+// It waits until no other run relies on the working copy and keeps everyone else off it meanwhile, and holds
+// the ref lock from its fetch to its fast-forward; it returns holding the run's hold again.
 func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 	e, log, wc := r.e, r.log, r.b.Copy
 	log.Step("revert")
@@ -321,6 +388,8 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 		e.share()
 		r.held = true
 	}()
+	e.refs.Lock()
+	defer e.refs.Unlock()
 
 	if err := wc.Fetch(ctx); err != nil {
 		return "", fmt.Errorf("fetch: %w", err)
@@ -330,7 +399,7 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 		return "", fmt.Errorf("status: %w", err)
 	}
 	// Checked before anything is pushed: a working copy that cannot follow the revert must not get one.
-	if local, dirty := classify(changes); dirty {
+	if local, dirty := classify(changes, r.stackList()); dirty {
 		var paths []string
 		for _, p := range local {
 			paths = append(paths, p...)
@@ -380,7 +449,7 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 // The caller has the working copy to itself.
 func (r *run) follow(ctx context.Context, at, what string) error {
 	e, log, wc := r.e, r.log, r.b.Copy
-	if err := r.step("fast-forward", func() error { return wc.FastForward(ctx) }); err != nil {
+	if err := r.step("fast-forward", func() error { return wc.FastForward(ctx, at) }); err != nil {
 		return err
 	}
 	head, err := wc.Head(ctx)
@@ -406,6 +475,13 @@ func (r *run) follow(ctx context.Context, at, what string) error {
 	return nil
 }
 
+// stackList reads the stacks of the working copy for classify; a list that cannot be read is empty, which
+// leaves every change counting.
+func (r *run) stackList() []stacks.Stack {
+	list, _ := stacks.Load(r.b.Dir)
+	return list
+}
+
 // stopAfterFailure leaves the stack stopped once it can be neither deployed nor rolled back.
 func (r *run) stopAfterFailure() {
 	ctx, cancel := context.WithTimeout(r.e.base, stopTimeout)
@@ -417,10 +493,15 @@ func (r *run) stopAfterFailure() {
 }
 
 // The working copy's position is shared by every active run and claim (a hold, see start and claim) and
-// moved only by poll's fast-forward, which needs no run active, and by a rollback, which needs exclusive. New
-// holds are taken only with the working-copy lock held, so exclusive owning that lock while holds is zero
-// keeps everyone off the position. Nobody waits for holds with the lock held, which keeps two rollbacks and
-// a poll from waiting on each other.
+// moved only by poll's fast-forward, which needs no run active, and by an update's commit or a rollback, which
+// need exclusive. New holds are taken only with the working-copy lock held, so exclusive owning that lock while
+// holds is zero keeps everyone off the position. Nobody waits for holds with the lock held, which keeps two
+// rollbacks and a poll from waiting on each other.
+//
+// The lock order is pollMu, then the working-copy lock, then the ref lock; each may be skipped. A poll's fetch
+// holds pollMu and the ref lock and releases the ref lock before it takes the working-copy lock; in the engine
+// only an update's commit and a rollback's revert hold the working-copy lock over a fetch or a push. Commands
+// wait for the working-copy lock at most LockWait.
 
 // exclusive waits until no hold is left and returns with the working-copy lock held. The caller holds
 // neither a hold nor the lock.
@@ -468,6 +549,20 @@ func (e *Engine) releaseHold() {
 	}
 }
 
+// lockCommand takes the working-copy lock for a command: it gives up with ErrBusy after LockWait, which an
+// update's commit and push or a rollback's revert can exceed.
+func (e *Engine) lockCommand(ctx context.Context) error {
+	wctx, cancel := context.WithTimeout(ctx, e.cfg.LockWait)
+	defer cancel()
+	if err := e.lockContext(wctx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return ErrBusy
+		}
+		return err
+	}
+	return nil
+}
+
 // lockContext takes the working-copy lock unless ctx ends first; a lock taken too late is released.
 func (e *Engine) lockContext(ctx context.Context) error {
 	got := make(chan struct{})
@@ -491,7 +586,7 @@ func (e *Engine) lockContext(ctx context.Context) error {
 // marked, so the stack runs again on a new commit or a manual trigger. ErrNotPaused when it is not paused.
 func (e *Engine) Resume(name string) (Pause, error) {
 	var was Pause
-	_, err := e.store.Update(func(s State) (State, error) {
+	err := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur, ok := s.Stacks[name]
 		if !ok || cur.Paused == nil {

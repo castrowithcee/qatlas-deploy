@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -97,6 +98,7 @@ const (
 	opSecretSet
 	opSecretDelete
 	opRestore
+	opDataDirs
 )
 
 // settingMsg carries the answer of a write. A write answers with the name it concerned, never with a value.
@@ -413,6 +415,8 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		}
 		done(text, t.Lookup(textSecretAppliesLater))
 		cmds = append(cmds, m.readSecrets())
+	case dataDirsResult:
+		cmds = append(cmds, m.dataDirsDone(res, done))
 	case control.BackupRestoreResult:
 		done(t.Lookup(textDoneRestored, res.Backup.ID, res.Backup.Stack))
 		cmds = append(cmds, m.reloadNow(), m.readBackups())
@@ -462,7 +466,7 @@ func (m *Model) ask(title kittui.TextID, question, consequence string, details [
 		Answers: []kittui.Answer{{Action: actYes, Label: textAnswerYes}, {Action: actNo, Label: textAnswerCancel}},
 		Default: actNo, Keys: kittui.DialogKeys{Enter: actEnter}}
 	if destructive {
-		spec.Danger = actYes
+		spec.Danger, spec.Irreversible = actYes, true
 	}
 	dialog, err := kittui.NewDialog(spec, m.keys, m.text)
 	if err != nil {
@@ -472,10 +476,14 @@ func (m *Model) ask(title kittui.TextID, question, consequence string, details [
 	m.modal = &modal{kind: modalAsk, dialog: dialog, yes: yes}
 }
 
-// tell opens the result of a change, closed by any answer.
+// tell reports the result of a change: a calm notice dialog when there are details, else the message line.
 func (m *Model) tell(title kittui.TextID, text string, details []string) {
-	dialog, err := kittui.NewDialog(kittui.DialogSpec{Title: title, Question: text,
-		Consequence: m.text.Lookup(textSettingDoneNote), Details: dialogLines(details),
+	if len(details) == 0 {
+		m.result = text
+		return
+	}
+	dialog, err := kittui.NewDialog(kittui.DialogSpec{Title: title, Question: text, Notice: true,
+		Details: dialogLines(details),
 		Answers: []kittui.Answer{{Action: actNo, Label: textAnswerClose}}, Default: actNo,
 		Keys: kittui.DialogKeys{Enter: actEnter}}, m.keys, m.text)
 	if err != nil {
@@ -705,23 +713,22 @@ func (m *Model) windowLines(width int) []string {
 		return m.partLines(s.window, width)
 	}
 	w := s.windowRes
-	layout := "Mon 2006-01-02 15:04"
 	state := t.Lookup(textHeaderWindowShut)
 	if w.Open {
 		state = t.Lookup(textHeaderWindowOpen)
 	}
 	lines := []string{
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDays, strings.Join(w.Days, ",")), width),
+		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDays, m.dayList(w.Days)), width),
 		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailStart, w.Start), width),
 		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDuration, w.Duration), width),
 		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailZone, w.Zone), width),
 		m.line(detailIndent, kittui.StyleText, state, width),
 	}
 	if !w.NextOpening.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailNext, w.NextOpening.Format(layout)), width))
+		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailNext, m.stamp(w.NextOpening)), width))
 	}
 	if !w.LastRun.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastRun, w.LastRun.Format(layout)), width))
+		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastRun, m.stamp(w.LastRun)), width))
 	}
 	return lines
 }
@@ -760,4 +767,26 @@ func (m *Model) settingsPosition() string {
 		return l.Position()
 	}
 	return ""
+}
+
+var weekdayTexts = [...]kittui.TextID{textWeekdaySun, textWeekdayMon, textWeekdayTue, textWeekdayWed, textWeekdayThu, textWeekdayFri, textWeekdaySat}
+
+var dayWords = map[string]time.Weekday{"mon": time.Monday, "tue": time.Tuesday, "wed": time.Wednesday,
+	"thu": time.Thursday, "fri": time.Friday, "sat": time.Saturday, "sun": time.Sunday}
+
+// stamp formats a time with the weekday in the UI language.
+func (m *Model) stamp(t time.Time) string {
+	return m.text.Lookup(weekdayTexts[t.Weekday()]) + " " + t.Format("2006-01-02 15:04")
+}
+
+// dayList shows command day words in the UI language, lower case; an unknown word stays as given.
+func (m *Model) dayList(days []string) string {
+	out := make([]string, len(days))
+	for i, d := range days {
+		out[i] = d
+		if wd, ok := dayWords[d]; ok {
+			out[i] = strings.ToLower(m.text.Lookup(weekdayTexts[wd]))
+		}
+	}
+	return strings.Join(out, ",")
 }

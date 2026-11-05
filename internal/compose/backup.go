@@ -39,6 +39,31 @@ func (x *Executor) Running(ctx context.Context, st stacks.Stack, log Logger) (bo
 // The rendered configuration contains interpolated values of the env files. It is read into memory,
 // reduced to the volume names and never logged.
 func (x *Executor) VolumeNames(ctx context.Context, st stacks.Stack, log Logger) (map[string]string, error) {
+	raw, err := x.renderConfig(ctx, st, log)
+	if err != nil {
+		return nil, err
+	}
+	var cfg struct {
+		Volumes map[string]struct {
+			Name string `json:"name"`
+		} `json:"volumes"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return nil, errors.New("docker compose config: unexpected output")
+	}
+	out := make(map[string]string, len(cfg.Volumes))
+	for key, v := range cfg.Volumes {
+		if v.Name == "" {
+			return nil, fmt.Errorf("docker compose config: volume %q has no resolved name", key)
+		}
+		out[key] = v.Name
+	}
+	return out, nil
+}
+
+// renderConfig returns the merged Compose configuration as JSON. It contains interpolated secrets: callers
+// reduce it to what they need and never log it.
+func (x *Executor) renderConfig(ctx context.Context, st stacks.Stack, log Logger) ([]byte, error) {
 	c, err := x.command(st, st.Name, 0, "config", "--format", "json")
 	if err != nil {
 		return nil, err
@@ -51,22 +76,7 @@ func (x *Executor) VolumeNames(ctx context.Context, st stacks.Stack, log Logger)
 	if buf.over {
 		return nil, errors.New("docker compose config: the configuration is too large")
 	}
-	var cfg struct {
-		Volumes map[string]struct {
-			Name string `json:"name"`
-		} `json:"volumes"`
-	}
-	if err := json.Unmarshal(bytes.TrimSpace(buf.b.Bytes()), &cfg); err != nil {
-		return nil, errors.New("docker compose config: unexpected output")
-	}
-	out := make(map[string]string, len(cfg.Volumes))
-	for key, v := range cfg.Volumes {
-		if v.Name == "" {
-			return nil, fmt.Errorf("docker compose config: volume %q has no resolved name", key)
-		}
-		out[key] = v.Name
-	}
-	return out, nil
+	return bytes.TrimSpace(buf.b.Bytes()), nil
 }
 
 // limitBuffer collects at most limit bytes and notes when more came.

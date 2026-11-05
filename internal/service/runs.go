@@ -42,6 +42,8 @@ func runsAnswer(err error) error {
 		return control.NewError(control.CodeStackStopped, "the stack was stopped through qdeploy; start it with start first")
 	case errors.Is(err, engine.ErrNoSuchRun):
 		return control.NewError(control.CodeNoSuchRun, "no such run")
+	case errors.Is(err, engine.ErrBusy):
+		return control.NewError(control.CodeBusy, "the working copy is busy with an update or a rollback; try again")
 	}
 	return err
 }
@@ -138,7 +140,7 @@ func holdHandler(set func(context.Context, string, bool) (bool, error), on bool)
 		switch {
 		case err == nil:
 			return control.HoldResult{Stack: printable(a.Stack), Active: on, Changed: changed}, nil
-		case errors.Is(err, engine.ErrUnknownStack), errors.Is(err, engine.ErrNoRepo):
+		case errors.Is(err, engine.ErrUnknownStack), errors.Is(err, engine.ErrNoRepo), errors.Is(err, engine.ErrBusy):
 			return nil, runsAnswer(err)
 		}
 		return nil, errors.New("the engine state cannot be written")
@@ -185,7 +187,14 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 			item.Stopped = &control.HoldInfo{Since: s.Stopped.Since}
 		}
 		for _, f := range s.Findings {
-			item.Findings = append(item.Findings, control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)})
+			info := control.FindingInfo{Kind: printable(f.Kind), Detail: printable(f.Detail)}
+			for _, d := range f.Dirs {
+				// Validated paths pass unchanged: a client acts on them, so they are never shortened.
+				if engine.ValidDirPath(d.Path) {
+					info.Dirs = append(info.Dirs, control.DirInfo{Path: d.Path, Owner: d.Owner})
+				}
+			}
+			item.Findings = append(item.Findings, info)
 		}
 		if f := s.Failure; f != nil {
 			detail := "since " + f.Since.UTC().Format(time.RFC3339) + ": " + f.Kind

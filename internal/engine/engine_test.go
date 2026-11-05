@@ -23,11 +23,15 @@ import (
 func commit(n int) string { return fmt.Sprintf("%040x", n) }
 
 // fakeCopy stands in for the git layer; FastForward writes into the directory so a forbidden call is visible.
-// RevertStack and Push take their answers from revertErrs and pushErrs, one per call, nil once used up.
+// RevertStack and Push take their answers from revertErrs and pushErrs, one per call, nil once used up. With
+// local set it behaves like gitrepo's local mode: the base is head, and Push lands the commit as a
+// fast-forward, rejected when head is no longer the commit's base.
 type fakeCopy struct {
 	mu           sync.Mutex
 	dir          string
+	local        bool
 	head, remote string
+	bases        map[string]string // commit id to the base it was built on
 	changes      []gitrepo.Change
 	folders      map[[2]string][]string
 	fetchErr     error
@@ -40,10 +44,17 @@ type fakeCopy struct {
 	diverged     bool // the working copy has commits the branch lacks
 	commits      []commitCall
 	// files holds what a fast-forward to a commit made by CommitFile or RevertStack writes, by path.
-	files         map[string]map[string][]byte
-	onFetch       func(*fakeCopy) // called with mu held
+	files   map[string]map[string][]byte
+	onFetch func(*fakeCopy) // called with mu held
+	// fetchGate, when set, holds every Fetch until it is closed, outside mu; fetchIn gets a value per held
+	// Fetch.
+	fetchGate     chan struct{}
+	fetchIn       chan struct{}
+	onStatus      func(*fakeCopy) // called with mu held
+	onCommit      func(*fakeCopy) // called with mu held after CommitFile built a commit
 	calls         []string
 	fastForwarded int
+	ffTo          []string
 }
 
 type revertCall struct{ Stack, Deployed, Failed, Reason, Base string }
@@ -68,8 +79,22 @@ func (f *fakeCopy) rec(s string) {
 	f.mu.Unlock()
 }
 
-func (f *fakeCopy) Fetch(context.Context) error {
+func (f *fakeCopy) Fetch(ctx context.Context) error {
 	f.rec("fetch")
+	f.mu.Lock()
+	gate, in := f.fetchGate, f.fetchIn
+	f.mu.Unlock()
+	if gate != nil {
+		select {
+		case in <- struct{}{}:
+		default:
+		}
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.onFetch != nil {
@@ -83,11 +108,12 @@ func (f *fakeCopy) RevertStack(_ context.Context, stack, deployed, failed, reaso
 	f.rec("revert")
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.reverts = append(f.reverts, revertCall{stack, deployed, failed, reason, f.remote})
+	f.reverts = append(f.reverts, revertCall{stack, deployed, failed, reason, f.base()})
 	if err := pop(&f.revertErrs); err != nil {
 		return "", err
 	}
 	id := commit(1000 + len(f.reverts))
+	f.bases[id] = f.base()
 	// Reverting a commit of CommitFile puts its file back.
 	for i, c := range f.commits {
 		if commit(2001+i) == failed {
@@ -120,10 +146,22 @@ func (f *fakeCopy) CommitFile(_ context.Context, path string, edit func([]byte) 
 	if err := pop(&f.commitErrs); err != nil {
 		return "", err
 	}
-	f.commits = append(f.commits, commitCall{Path: path, Message: message, Base: f.remote, Old: old, New: content})
+	f.commits = append(f.commits, commitCall{Path: path, Message: message, Base: f.base(), Old: old, New: content})
 	id := commit(2000 + len(f.commits))
 	f.files[id] = map[string][]byte{path: content}
+	f.bases[id] = f.base()
+	if f.onCommit != nil {
+		f.onCommit(f)
+	}
 	return id, nil
+}
+
+// base is what RemoteHead answers. The caller holds mu.
+func (f *fakeCopy) base() string {
+	if f.local {
+		return f.head
+	}
+	return f.remote
 }
 
 func (f *fakeCopy) Push(_ context.Context, c string) error {
@@ -132,6 +170,14 @@ func (f *fakeCopy) Push(_ context.Context, c string) error {
 	defer f.mu.Unlock()
 	if err := pop(&f.pushErrs); err != nil {
 		return err
+	}
+	if f.local {
+		if f.bases[c] != f.head {
+			return gitrepo.ErrPushRejected
+		}
+		f.pushed = append(f.pushed, c)
+		f.remote = c
+		return f.moveTo(c)
 	}
 	f.pushed = append(f.pushed, c)
 	f.remote = c
@@ -145,11 +191,14 @@ func (f *fakeCopy) Head(context.Context) (string, error) {
 func (f *fakeCopy) RemoteHead(context.Context) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.remote, nil
+	return f.base(), nil
 }
 func (f *fakeCopy) Status(context.Context) ([]gitrepo.Change, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.onStatus != nil {
+		f.onStatus(f)
+	}
 	return slices.Clone(f.changes), nil
 }
 func (f *fakeCopy) ChangedFolders(_ context.Context, from, to string) ([]string, error) {
@@ -157,15 +206,24 @@ func (f *fakeCopy) ChangedFolders(_ context.Context, from, to string) ([]string,
 	defer f.mu.Unlock()
 	return f.folders[[2]string{from, to}], nil
 }
-func (f *fakeCopy) FastForward(context.Context) error {
+func (f *fakeCopy) FastForward(_ context.Context, to string) error {
 	f.rec("ff")
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.ffTo = append(f.ffTo, to)
 	if f.ffErr != nil {
 		return f.ffErr
 	}
+	if f.local && to == f.head {
+		return nil // already there, as git's fast-forward to HEAD
+	}
 	f.fastForwarded++
-	f.head = f.remote
+	return f.moveTo(to)
+}
+
+// moveTo puts head and the files at commit c. The caller holds mu.
+func (f *fakeCopy) moveTo(c string) error {
+	f.head = c
 	for path, body := range f.files[f.head] {
 		if err := os.WriteFile(filepath.Join(f.dir, path), body, 0o644); err != nil {
 			return err
@@ -404,7 +462,8 @@ func newRig(t *testing.T, names ...string) *rig {
 	for _, n := range names {
 		writeStack(t, r.wc, n)
 	}
-	r.copy = &fakeCopy{dir: r.wc, head: commit(1), remote: commit(1), folders: map[[2]string][]string{}, files: map[string]map[string][]byte{}}
+	r.copy = &fakeCopy{dir: r.wc, head: commit(1), remote: commit(1), folders: map[[2]string][]string{}, files: map[string]map[string][]byte{},
+		bases: map[string]string{}}
 	r.dep = &fakeDeployer{head: func() string {
 		h, _ := r.copy.Head(context.Background())
 		return h

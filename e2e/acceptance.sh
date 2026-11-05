@@ -6,7 +6,7 @@
 # Both stacks are deployed and get test data. A real maintenance window then updates them with a version commit
 # each, after the changelog was shown; a later update to the test tags with a failing healthcheck ends with the
 # data restored, a revert commit and a message at the webhook; an older backup is restored with owners and modes
-# of the data kept; the wait of a stack command during a deliberately slow fetch is measured.
+# of the data kept; a stack command must not wait more than 5 seconds during a deliberately slow fetch or poll.
 # Sourced by run.sh acceptance after scenario.sh, whose helpers it uses.
 
 # The stack folder is the administrator's free choice; it does not exist until the setup creates it.
@@ -53,12 +53,13 @@ acc_n8n() {
 
 # acc_n8n_login opens the session of the owner; n8n answers /healthz a little before its REST routes are there.
 acc_n8n_login() {
-	i=0
+	i=0 first=
 	while :; do
 		out=$(acc_n8n POST /rest/login "{\"emailOrLdapLoginId\":\"$acc_owner_email\",\"password\":\"$acc_owner_password\"}" || true)
 		printf '%s' "$out" | grep -qF "$acc_owner_email" && return 0
+		[ -n "$first" ] || first=$out
 		i=$((i + 1))
-		[ "$i" -lt 60 ] || fail "n8n login did not return the owner: $out"
+		[ "$i" -lt 60 ] || fail "n8n login did not return the owner: $out (first answer: $first)"
 		sleep 2
 	done
 }
@@ -263,11 +264,25 @@ acc_first_setup() {
 	wait_for 'the first run of n8n' 180 stack_idle n8n
 	wait_for 'the first run of bookstack' 180 stack_idle bookstack
 
-	# n8n runs as the user node (UID 1000) and Docker would create a missing bind mount source as root, so the
-	# data directory has to belong to that user before the first start; this is the one step by hand.
-	step 'the administrator gives n8n the data directory its container user can write'
-	docker exec "$host" install -d -o 1000 -g 1000 -m 0750 "$acc_stacks/n8n/data" || fail 'cannot create the data directory of n8n'
-	acc 'data directory of n8n created for UID 1000 by the administrator'
+	# n8n runs as the user node (UID 1000) and Docker would create a missing bind mount source as root, so its first
+	# run waits until the directory exists with that owner; BookStack and MariaDB run as root.
+	step 'the first run of n8n waits for its data directory'
+	i=0
+	until stack_field n8n findings | grep -q data-dir-missing; do
+		i=$((i + 1))
+		[ "$i" -lt 90 ] || fail "n8n has no data-dir-missing finding: $(qd --output json status) $(qd stack runs n8n) $(docker exec "$host" docker ps -a)"
+		sleep 1
+	done
+	finding=$(stack_field n8n findings)
+	case $finding in
+	data-dir-missing:*' data (owner 1000:1000)'*) ;;
+	*) fail "n8n has no finding for the directory data with the owner 1000:1000: $(qd --output json status)" ;;
+	esac
+	log "status of n8n: \"stack.n8n.findings\": \"$finding\""
+	docker exec "$host" test ! -e "$acc_stacks/n8n/data" || fail 'the data directory of n8n exists before it was created'
+	[ -z "$(docker exec "$host" docker ps -aq --filter label=com.docker.compose.project=n8n)" ] ||
+		fail 'containers of n8n exist although its data directory is missing'
+	acc "n8n waits with: $finding"
 
 	step 'Stack detail: the secrets of secrets.example.env are set through the interface'
 	for stack in n8n bookstack; do
@@ -292,10 +307,43 @@ VALUES_END
 	done
 	acc 'secrets of n8n and bookstack set through the interface (mode 600, owner qdeploy)'
 
-	step 'Stacks: both stacks are deployed'
+	step 'Stacks: bookstack is deployed without asking'
 	tui_send 1
-	acc_deploy_via_tui n8n
 	acc_deploy_via_tui bookstack
+	[ -z "$(stack_field bookstack findings)" ] || fail "bookstack has findings: $(stack_field bookstack findings)"
+	acc 'bookstack deployed without a finding'
+
+	step 'Stack detail: the data directory of n8n is created through the interface with the proposed owner'
+	tui_send 1
+	tui_wait 'needs data dirs' 30
+	acc_cursor_to n8n
+	prev=$(newest_run n8n)
+	tui_send Enter
+	tui_wait 'Missing data directories' 15
+	tui_wait 'owner 1000:1000' 10
+	tui_send m
+	tui_wait 'Create data directories' 10
+	tui_wait '1000:1000' 10
+	tui_wait '0750' 10
+	tui_send F2
+	tui_wait 'Create the missing data directories of the stack' 10
+	tui_send y
+	tui_wait 'Data directories created for the stack n8n' 60
+	tui_wait 'started at commit' 10
+	tui_send Enter
+	tui_send Escape
+	owner_mode=$(docker exec "$host" stat -c '%u:%g %a' "$acc_stacks/n8n/data") || fail 'the data directory of n8n does not exist'
+	log "stat of $acc_stacks/n8n/data: $owner_mode"
+	[ "$owner_mode" = '1000:1000 750' ] || fail "the data directory of n8n has owner and mode '$owner_mode'"
+	run=$(next_run n8n "$prev") || fail 'no run of n8n started after the creation'
+	wait_for "the run $run" 600 run_finished n8n "$run"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run of n8n did not succeed: $(qd stack log "$run")"
+	[ -n "$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=n8n --filter status=running)" ] ||
+		fail 'n8n does not run after the creation'
+	# The owner setup of the later steps is silently ignored by n8n while it still starts up.
+	wait_for 'n8n to answer' 180 acc_healthy n8n
+	wait_for 'n8n to be ready' 120 sh -c "[ \"\$(docker exec $host curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5678/healthz/readiness)\" = 200 ]"
+	acc "data directory of n8n created through the interface ($owner_mode); run $run succeeded and n8n runs"
 	tui_send q
 	tui_wait 'qdeploy-exit=0' 10
 	tui_tmux kill-server >/dev/null 2>&1 || true
@@ -420,33 +468,77 @@ acc_restore_older() {
 	acc "restore of the older backup $older of $stack: '$acc_beta' gone, '$acc_alpha' there; owner:group:mode of $(wc -l <"$work/tree-$stack-before") paths in data/ unchanged"
 }
 
-# acc_lock_wait makes the git server slow to pack objects, starts a fetch and measures how long a stack list waits.
+# acc_slow_git makes the git server slow to pack objects when $1 is on and restores it when $1 is off. The
+# restore leaves the log of the slow packings in $slow.
+acc_slow_git() {
+	if [ "$1" = on ]; then
+		docker exec "$prefix-git" sh -ec '
+			printf "#!/bin/sh\necho slow >>/tmp/qdeploye2e-slow-pack.log\nsleep 15\nexec \"\$@\"\n" >/usr/local/bin/qdeploye2e-slow-pack
+			chmod 755 /usr/local/bin/qdeploye2e-slow-pack
+			rm -f /tmp/qdeploye2e-slow-pack.log
+			git config --system uploadpack.packObjectsHook /usr/local/bin/qdeploye2e-slow-pack'
+		return
+	fi
+	docker exec "$prefix-git" sh -ec 'git config --system --unset uploadpack.packObjectsHook; rm -f /usr/local/bin/qdeploye2e-slow-pack'
+	slow=$(docker exec "$prefix-git" cat /tmp/qdeploye2e-slow-pack.log 2>/dev/null || true)
+	docker exec "$prefix-git" rm -f /tmp/qdeploye2e-slow-pack.log
+}
+
+# acc_push_note pushes a commit with a new note, so that the next fetch has objects to pack.
+acc_push_note() {
+	as_admin "cd ~/stacks && git pull -q --ff-only && printf '$1\n' >note.txt && git add note.txt &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -m 'Add a note' && git push -q origin main"
+}
+
+# acc_list_wait times sudo qdeploy stack list. It sets $waited and $list_rc and leaves the verdict to
+# acc_list_verdict, so the git server can be restored first.
+acc_list_wait() {
+	list_start=$(date +%s%N)
+	list_rc=0
+	as_admin 'sudo qdeploy stack list' >/dev/null || list_rc=$?
+	list_end=$(date +%s%N)
+	waited=$(LC_ALL=C awk -v a="$list_start" -v b="$list_end" 'BEGIN { printf "%.1f", (b - a) / 1e9 }')
+}
+
+# acc_list_verdict fails unless the stack list during $1 succeeded within 5 seconds.
+acc_list_verdict() {
+	[ "$list_rc" = 0 ] || fail "stack list failed during $1"
+	LC_ALL=C awk -v w="$waited" 'BEGIN { exit !(w <= 5) }' || fail "stack list waited ${waited}s during $1; the limit is 5s"
+}
+
+# acc_lock_wait makes the git server slow to pack objects and measures how long a stack list waits during a
+# fetch and during a poll of the engine; each wait must stay within 5 seconds.
 acc_lock_wait() {
 	step 'the git server is made slow, a fetch starts, and sudo qdeploy stack list is timed'
-	docker exec "$prefix-git" sh -ec '
-		printf "#!/bin/sh\necho slow >>/tmp/qdeploye2e-slow-pack.log\nsleep 15\nexec \"\$@\"\n" >/usr/local/bin/qdeploye2e-slow-pack
-		chmod 755 /usr/local/bin/qdeploye2e-slow-pack
-		rm -f /tmp/qdeploye2e-slow-pack.log
-		git config --system uploadpack.packObjectsHook /usr/local/bin/qdeploye2e-slow-pack'
-	as_admin "cd ~/stacks && git pull -q --ff-only && printf 'invented note\n' >note.txt && git add note.txt &&
-		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -m 'Add a note' && git push -q origin main"
+	acc_slow_git on
+	acc_push_note 'invented note'
 	rm -f "$work/fetch.rc"
 	fetch_start=$(date +%s%N)
 	( rc=0; qd repo fetch >"$work/fetch.out" || rc=$?; echo $rc >"$work/fetch.rc" ) &
 	sleep 2
-	list_start=$(date +%s%N)
-	as_admin 'sudo qdeploy stack list' >/dev/null || fail 'stack list failed during the fetch'
-	list_end=$(date +%s%N)
+	acc_list_wait
 	wait_for 'the fetch to end' 120 test -s "$work/fetch.rc"
 	fetch_end=$(date +%s%N)
-	docker exec "$prefix-git" sh -ec 'git config --system --unset uploadpack.packObjectsHook; rm -f /usr/local/bin/qdeploye2e-slow-pack'
-	slow=$(docker exec "$prefix-git" cat /tmp/qdeploye2e-slow-pack.log 2>/dev/null || true)
-	docker exec "$prefix-git" rm -f /tmp/qdeploye2e-slow-pack.log
+	acc_slow_git off
 	[ -n "$slow" ] || fail 'the fetch did not go through the slow packing of the git server'
 	[ "$(cat "$work/fetch.rc")" = 0 ] || fail "the fetch failed: $(cat "$work/fetch.out")"
-	waited=$(LC_ALL=C awk -v a="$list_start" -v b="$list_end" 'BEGIN { printf "%.1f", (b - a) / 1e9 }')
+	acc_list_verdict 'a fetch'
 	fetched=$(LC_ALL=C awk -v a="$fetch_start" -v b="$fetch_end" 'BEGIN { printf "%.1f", (b - a) / 1e9 }')
 	acc "stack list waited ${waited}s during a fetch (the fetch took ${fetched}s)"
+
+	step 'the git server is made slow, the engine polls after a restart, and sudo qdeploy stack list is timed'
+	acc_slow_git on
+	acc_push_note 'another invented note'
+	restart_service
+	wait_for 'the poll to reach the slow packing' 20 docker exec "$prefix-git" test -s /tmp/qdeploye2e-slow-pack.log
+	polling=
+	poll_done || polling=yes
+	acc_list_wait
+	wait_for 'the poll to end' 120 poll_done
+	acc_slow_git off
+	[ -n "$polling" ] || fail 'the poll was over before the stack list started'
+	acc_list_verdict 'a poll'
+	acc "stack list waited ${waited}s during a poll of the engine"
 }
 
 run_acceptance() {

@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings   5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  Create data directories                                                                                               
+                                                                                                                        
+  Missing below /srv/stacks/#= Create data directories ====================================#                            
+    data/db                 | ! Create the missing data directories of the stack demo-     |                            
+    data/files              |   stack and deploy it?                                       |                            
+                            |                                                              |                            
+        #===================| Only the directories below are created, with this owner and  |===========================#
+> Owner | 1000:1000_        | mode. Existing directories stay as they are. Then a run of   |                           |
+        #===================| the stack is started.                                        |===========================#
+        UID:GID of the user | stack folder: /srv/stacks/demo-stack                         |                            
+        +-------------------| owner: 1000:1000                                             |---------------------------+
+  Mode  | 0750              | mode: 0750                                                   |                           |
+        +-------------------|   data/db                                                    |---------------------------+
+                            |   data/files                                                 |                            
+                            |                                                              |                            
+                            | [ yes, do it ]  > cancel <                                   |                            
+                            | y yes, do it  n/esc/enter cancel                             |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

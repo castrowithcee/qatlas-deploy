@@ -50,6 +50,8 @@ const (
 	// actRestore opens the choice of a backup in the stack detail.
 	actRestore kittui.ActionID = "restore"
 	actShowLog kittui.ActionID = "showlog"
+	// actDataDirs opens the creation of the missing data directories in the stack detail.
+	actDataDirs kittui.ActionID = "datadirs"
 )
 
 // areaKeys are the keys of actArea, one per area in the order of the tab line.
@@ -97,6 +99,7 @@ func keyTable() []kittui.Action {
 		act(actEdit, kittui.LevelLetter, textKeyEdit, "e"),
 		act(actTest, kittui.LevelLetter, textKeyTest, "s"),
 		act(actRestore, kittui.LevelLetter, textKeyRestore, "R"),
+		act(actDataDirs, kittui.LevelLetter, textKeyDataDirs, "m"),
 		act(actYes, kittui.LevelConfirm, textAnswerYes, "y"),
 		act(actNo, kittui.LevelConfirm, textAnswerCancel, "n", "esc"),
 		act(actShowLog, kittui.LevelConfirm, textAnswerLog, "l"),

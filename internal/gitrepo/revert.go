@@ -13,12 +13,13 @@ import (
 )
 
 var (
-	// ErrRevertConflict means the stack folder changed on the remote after the failed commit, so reverting it
+	// ErrRevertConflict means the stack folder changed on the branch after the failed commit, so reverting it
 	// would drop foreign work. Nothing was created.
 	ErrRevertConflict = errors.New("the stack changed after the failed commit")
-	// ErrNothingToRevert means the stack folder at the remote head already equals the deployed commit.
+	// ErrNothingToRevert means the stack folder at the base ref already equals the deployed commit.
 	ErrNothingToRevert = errors.New("the stack already equals the deployed state")
-	// ErrPushRejected means the remote refused the push because it is not a fast-forward; fetch and retry.
+	// ErrPushRejected means the push is not a fast-forward because the branch moved: the remote refused it, or
+	// in local mode the checked-out branch is no longer an ancestor of the commit. Fetch, rebuild and retry.
 	ErrPushRejected = errors.New("push rejected: remote branch moved")
 
 	stackNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
@@ -32,13 +33,13 @@ const (
 	commitEmail = "qdeploy@localhost.invalid"
 )
 
-// RevertStack creates, without touching the working copy or its index, a commit on top of the remote-tracking
-// ref of the checked-out branch (as of the last Fetch) that restores the folder stack to its state in the
+// RevertStack creates, without touching the working copy or its index, a commit on top of the base ref (see
+// RemoteHead) that restores the folder stack to its state in the
 // commit deployed. The stack must be a single top-level folder name; deployed and failed are full lowercase
 // commit ids and reason is a short note (sanitized and bounded here). It returns the new commit id and does
 // not move any ref.
 //
-// ErrRevertConflict is returned if the stack differs between the remote head and failed, and
+// ErrRevertConflict is returned if the stack differs between the base ref and failed, and
 // ErrNothingToRevert if it already equals its state in deployed; in both cases nothing is created.
 func (r *Repo) RevertStack(ctx context.Context, stack, deployed, failed, reason string) (string, error) {
 	if checkRepoPath(stack) != nil || !stackNameRe.MatchString(stack) || stack == ".git" {
@@ -190,6 +191,10 @@ func sanitizeLine(s string, limit int) string {
 // Push publishes the commit to the checked-out branch of origin as a plain fast-forward update, never forced.
 // If the remote branch is not an ancestor of the commit it returns ErrPushRejected and changes nothing. On
 // success the remote-tracking ref points to the commit, so FastForward can follow.
+//
+// In local mode Push lands the commit instead: it fast-forwards the checked-out branch and the working copy to
+// it, which leaves a following FastForward nothing to do. A branch that moved so that it is no longer an
+// ancestor of the commit gives ErrPushRejected and stays untouched.
 func (r *Repo) Push(ctx context.Context, commit string) error {
 	if !hexRe.MatchString(commit) {
 		return errors.New("commit must be a full lowercase commit id")
@@ -200,6 +205,9 @@ func (r *Repo) Push(ctx context.Context, commit string) error {
 	}
 	if _, err := r.revParse(ctx, commit+"^{commit}"); err != nil {
 		return err
+	}
+	if r.cfg.Local {
+		return r.land(ctx, commit)
 	}
 	_, err = r.run(ctx, true, maxStdout, "push", "--porcelain", "--no-verify", "--no-recurse-submodules",
 		"--", "origin", commit+":refs/heads/"+branch)
@@ -216,6 +224,30 @@ func (r *Repo) Push(ctx context.Context, commit string) error {
 		return fmt.Errorf("update tracking ref failed: %w", err)
 	}
 	return nil
+}
+
+// land fast-forwards the checked-out branch to commit. A failed fast-forward is a rejection when the branch is
+// not an ancestor of the commit, checked again after the attempt because a person may commit meanwhile.
+func (r *Repo) land(ctx context.Context, commit string) error {
+	behind := func() (bool, error) {
+		head, err := r.Head(ctx)
+		if err != nil {
+			return false, err
+		}
+		return r.IsAncestor(ctx, head, commit)
+	}
+	if ok, err := behind(); err != nil {
+		return err
+	} else if !ok {
+		return ErrPushRejected
+	}
+	err := r.FastForward(ctx, commit)
+	if err != nil {
+		if ok, aerr := behind(); aerr == nil && !ok {
+			return ErrPushRejected
+		}
+	}
+	return err
 }
 
 // isNonFastForward reads git's --porcelain ref lines ("!\t<ref>\t[rejected] (<reason>)"). A "[remote

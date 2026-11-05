@@ -39,7 +39,6 @@ const (
 	textNotifyEmpty           kittui.TextID = "notify.empty"
 	textEventsAll             kittui.TextID = "events.all"
 	textSettingDoneTitle      kittui.TextID = "setting.done.title"
-	textSettingDoneNote       kittui.TextID = "setting.done.note"
 	textDoneBound             kittui.TextID = "done.bound"
 	textDetailHead            kittui.TextID = "detail.head"
 	textDetailRemote          kittui.TextID = "detail.remote"
@@ -87,6 +86,13 @@ const (
 	textKeyNone               kittui.TextID = "key.none"
 	textKeyCopy               kittui.TextID = "key.copy"
 	textDetailDays            kittui.TextID = "detail.days"
+	textWeekdayMon            kittui.TextID = "weekday.mon"
+	textWeekdayTue            kittui.TextID = "weekday.tue"
+	textWeekdayWed            kittui.TextID = "weekday.wed"
+	textWeekdayThu            kittui.TextID = "weekday.thu"
+	textWeekdayFri            kittui.TextID = "weekday.fri"
+	textWeekdaySat            kittui.TextID = "weekday.sat"
+	textWeekdaySun            kittui.TextID = "weekday.sun"
 	textDetailStart           kittui.TextID = "detail.start"
 	textDetailDuration        kittui.TextID = "detail.duration"
 	textDetailZone            kittui.TextID = "detail.zone"
@@ -216,7 +222,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textNotifyEmpty:           "No notification channels. {add} adds one.",
 		textEventsAll:             "all",
 		textSettingDoneTitle:      "Done",
-		textSettingDoneNote:       "The service has made the change.",
 		textDoneBound:             "The stacks repository is bound.",
 		textDetailHead:            "commit: %s",
 		textDetailRemote:          "remote commit: %s",
@@ -264,6 +269,13 @@ func settingsEnglish() map[kittui.TextID]string {
 		textKeyNone:               "No deploy key yet. Press {generate} to create one.",
 		textKeyCopy:               "Add this public key as a deploy key on the git platform:",
 		textDetailDays:            "days: %s",
+		textWeekdayMon:            "Mon",
+		textWeekdayTue:            "Tue",
+		textWeekdayWed:            "Wed",
+		textWeekdayThu:            "Thu",
+		textWeekdayFri:            "Fri",
+		textWeekdaySat:            "Sat",
+		textWeekdaySun:            "Sun",
 		textDetailStart:           "start: %s",
 		textDetailDuration:        "duration: %s",
 		textDetailZone:            "time zone: %s",
@@ -394,7 +406,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textNotifyEmpty:           "Keine Benachrichtigungskanäle. {add} legt einen an.",
 		textEventsAll:             "alle",
 		textSettingDoneTitle:      "Erledigt",
-		textSettingDoneNote:       "Der Dienst hat die Änderung vorgenommen.",
 		textDoneBound:             "Das Stacks-Repository ist gebunden.",
 		textDetailHead:            "Commit: %s",
 		textDetailRemote:          "Remote-Commit: %s",
@@ -442,6 +453,13 @@ func settingsGerman() map[kittui.TextID]string {
 		textKeyNone:               "Noch kein Deploy-Schlüssel. {generate} erzeugt einen.",
 		textKeyCopy:               "Trage diesen öffentlichen Schlüssel als Deploy-Key bei der Git-Plattform ein:",
 		textDetailDays:            "Tage: %s",
+		textWeekdayMon:            "Mo",
+		textWeekdayTue:            "Di",
+		textWeekdayWed:            "Mi",
+		textWeekdayThu:            "Do",
+		textWeekdayFri:            "Fr",
+		textWeekdaySat:            "Sa",
+		textWeekdaySun:            "So",
 		textDetailStart:           "Beginn: %s",
 		textDetailDuration:        "Dauer: %s",
 		textDetailZone:            "Zeitzone: %s",

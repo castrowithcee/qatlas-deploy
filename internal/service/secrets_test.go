@@ -159,3 +159,30 @@ func TestRunLogRedactsTheSecretsOfTheStack(t *testing.T) {
 		t.Fatalf("a value is in the service log:\n%s", logs)
 	}
 }
+
+func TestSecretListFindsTheStackByItsProjectName(t *testing.T) {
+	h := boundWith(t, nil, map[string]string{
+		"demo-plain/docker-compose.yml": "name: demo-shop\nservices:\n  app:\n    image: nginx:1.27.0\n",
+		"demo-plain/secrets.env":        "SHOP_TOKEN=" + fakeSecretValue + "\nSHOP_KEY=" + otherSecretValue + "\n",
+		// A folder named like the other stack's project name, holding a stack of its own.
+		"demo-shop/docker-compose.yml": "name: other-shop\nservices:\n  app:\n    image: nginx:1.27.0\n",
+		"demo-shop/secrets.env":        "OTHER_KEY=" + fakeSecretValue + "\n",
+	})
+	var list control.SecretListResult
+	if err := h.call(control.SecretListCommand, control.SecretListArgs{Stack: "demo-shop"}, &list); err != nil ||
+		list.Stack != "demo-shop" || strings.Join(list.Keys, ",") != "SHOP_KEY,SHOP_TOKEN" {
+		t.Fatalf("list demo-shop = %+v, %v", list, err)
+	}
+	if err := h.call(control.SecretListCommand, control.SecretListArgs{Stack: "other-shop"}, &list); err != nil ||
+		strings.Join(list.Keys, ",") != "OTHER_KEY" {
+		t.Fatalf("list other-shop = %+v, %v", list, err)
+	}
+	wantCode(t, h.call(control.SecretListCommand, control.SecretListArgs{Stack: "demo-plain"}, nil), control.CodeNoSuchStack)
+	var raw map[string]any
+	if err := h.call(control.SecretListCommand, control.SecretListArgs{Stack: "demo-shop"}, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if text := fmt.Sprint(raw); strings.Contains(text, fakeSecretValue) || strings.Contains(text, otherSecretValue) {
+		t.Fatalf("list shows a value: %s", text)
+	}
+}
