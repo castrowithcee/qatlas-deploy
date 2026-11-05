@@ -61,6 +61,9 @@ const (
 	textDataDirsExisting     kittui.TextID = "datadirs.existing"
 	textDataDirsDeployFailed kittui.TextID = "datadirs.deployfailed"
 	textErrDataDirs          kittui.TextID = "err.datadirs"
+	textDetailStopped        kittui.TextID = "detail.stopped"
+	textStoppedSince         kittui.TextID = "stopped.since"
+	textStoppedHint          kittui.TextID = "stopped.hint"
 )
 
 func detailEnglish() map[kittui.TextID]string {
@@ -99,6 +102,9 @@ func detailEnglish() map[kittui.TextID]string {
 		textDataDirLine:          "%s  owner %s",
 		textDataDirLineNoOwner:   "%s  owner unknown",
 		textDataDirsHint:         "The stack waits until these directories exist. {datadirs} creates them with an owner and mode you confirm, then deploys the stack.",
+		textDetailStopped:        "Stopped",
+		textStoppedSince:         "Stopped since %s",
+		textStoppedHint:          "The stack stays stopped: commits, the maintenance window and updates leave it out. {stackstart} starts it and lifts the mark.",
 		textDataDirsIntro:        "Missing below %s:",
 		textKeyDataDirs:          "create data directories",
 		textTitleDataDirs:        "Create data directories",
@@ -161,6 +167,9 @@ func detailGerman() map[kittui.TextID]string {
 		textDataDirLine:          "%s  Besitzer %s",
 		textDataDirLineNoOwner:   "%s  Besitzer unbekannt",
 		textDataDirsHint:         "Der Stack wartet, bis diese Ordner existieren. {datadirs} legt sie mit dem bestätigten Besitzer und Modus an und rollt den Stack danach aus.",
+		textDetailStopped:        "Gestoppt",
+		textStoppedSince:         "Gestoppt seit %s",
+		textStoppedHint:          "Der Stack bleibt gestoppt: Commits, das Wartungsfenster und Updates lassen ihn aus. {stackstart} startet ihn und hebt die Markierung auf.",
 		textDataDirsIntro:        "Fehlend unter %s:",
 		textKeyDataDirs:          "Datenordner anlegen",
 		textTitleDataDirs:        "Datenordner anlegen",

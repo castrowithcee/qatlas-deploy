@@ -1,0 +1,14 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+      STACK        CURRENT  AVAILABLE  STATE  FINDINGS  
+> [ ] demo-stack   1.4.2    1.5.0      depl~  1 warning 
+  [ ] mail-relay   3.1      up to da~  stop~  none      
+  [ ] old-tool     -        unchecked  remo~  none      
+  [ ] photo-album  2.0.1    error      roll~  1 error   
+  [ ] web-shop     5.2.0,~  6.0.0 (m~  runn~  none      
+  [ ] wiki         1.41.0   unchecked  pinn~  2 warnings
+                                                        
+                                                        
+enter details  / search  space tick  u update  d deploy 
+r reload  1-5 area  q quit           up/down choose  1/6

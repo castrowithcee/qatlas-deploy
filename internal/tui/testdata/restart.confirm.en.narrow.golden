@@ -1,0 +1,20 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+      STACK        CURRENT  AVAILABLE  STATE  FINDINGS  
+> [ ] demo-stack   1.4.2    1.5.0      depl~  1 warning 
+  [ ] mail-relay   3.1      up to da~  stop~  none      
+  #= restart ========================================#  
+  | ! Restart demo-stack?                            |  
+  |                                                  |  
+  | Restarts the containers of the stack and checks  |gs
+  | the stack. A stack stopped through qdeploy is    |  
+  | refused; start it instead.                       |  
+  |                                                  |  
+  | [ yes, do it ]  > cancel <                       |  
+  | y yes, do it  n/esc/enter cancel                 |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        
+                                                     1/6

@@ -1,0 +1,20 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+      STACK        CURRENT  AVAILABLE  STATE  FINDINGS  
+  [ ] demo-stack   1.4.2    1.5.0      depl~  1 warning 
+> #= start ==========================================#  
+  | ! Start mail-relay?                              |  
+  |                                                  |  
+  | Starts the existing containers of the stack,     |  
+  | removes the stopped mark and checks the stack.   |gs
+  | It creates no containers; a stack that was never |  
+  | deployed needs a deploy.                         |  
+  |                                                  |  
+  | [ yes, do it ]  > cancel <                       |  
+  | y yes, do it  n/esc/enter cancel                 |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        
+                                                     2/6

@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed              [?] help
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+  stop finished: 1 ok, 1 failed                         
+                                                        
+  demo-stack  ok                                        
+    stopped, it stays stopped until it is started       
+                                                        
+  mail-relay  failed                                    
+    the stack action failed: compose stop failed        
+                                                        
+  wiki  not run                                         
+    an earlier stack failed                             
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+n/esc/enter close                         up/down scroll

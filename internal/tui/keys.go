@@ -33,6 +33,10 @@ const (
 	actUnpin   kittui.ActionID = "unpin"
 	actResume  kittui.ActionID = "resume"
 	actCheck   kittui.ActionID = "check"
+	// The actions on the containers of a whole stack.
+	actStackStart   kittui.ActionID = "stackstart"
+	actStackStop    kittui.ActionID = "stackstop"
+	actStackRestart kittui.ActionID = "stackrestart"
 	// The answers of a question, and of a result that started runs.
 	actYes kittui.ActionID = "yes"
 	// The keys of the Settings area and of its forms.
@@ -88,6 +92,9 @@ func keyTable() []kittui.Action {
 		act(actUnpin, kittui.LevelLetter, textKeyUnpin, "I"),
 		act(actResume, kittui.LevelLetter, textKeyResume, "g"),
 		act(actCheck, kittui.LevelLetter, textKeyCheck, "c"),
+		act(actStackStart, kittui.LevelLetter, textKeyStart, "S"),
+		act(actStackStop, kittui.LevelLetter, textKeyStop, "X"),
+		act(actStackRestart, kittui.LevelLetter, textKeyRestart, "Z"),
 		act(actNext, kittui.LevelMove, textKeyNext, "tab"),
 		act(actPrev, kittui.LevelMove, textKeyPrev, "shift+tab"),
 		act(actSave, kittui.LevelGlobal, textKeySave, "f2"),

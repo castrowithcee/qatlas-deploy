@@ -48,6 +48,10 @@ type Backend interface {
 	Unpin(ctx context.Context, stack string) (control.HoldResult, error)
 	// Resume clears the pause a failed rollback left on a stack.
 	Resume(ctx context.Context, stack string) (control.ResumeResult, error)
+	// StackStart, StackStop and StackRestart act on the containers of a stack and return when the service is done.
+	StackStart(ctx context.Context, stack string) (control.StackActionResult, error)
+	StackStop(ctx context.Context, stack string) (control.StackActionResult, error)
+	StackRestart(ctx context.Context, stack string) (control.StackActionResult, error)
 
 	// The settings calls. Reads are free; the others the interface makes only after a confirmation. None of
 	// the results carries a stored secret.
@@ -191,6 +195,23 @@ func (b *ChannelBackend) Unpin(ctx context.Context, stack string) (control.HoldR
 func (b *ChannelBackend) Resume(ctx context.Context, stack string) (res control.ResumeResult, err error) {
 	err = b.call(ctx, control.ResumeCommand, control.ResumeArgs{Stack: stack}, &res)
 	return res, err
+}
+
+func (b *ChannelBackend) stackAction(ctx context.Context, command, stack string) (res control.StackActionResult, err error) {
+	err = client.Do(ctx, b.endpoint, control.StackActionTimeout, command, control.StackActionArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) StackStart(ctx context.Context, stack string) (control.StackActionResult, error) {
+	return b.stackAction(ctx, control.StackStartCommand, stack)
+}
+
+func (b *ChannelBackend) StackStop(ctx context.Context, stack string) (control.StackActionResult, error) {
+	return b.stackAction(ctx, control.StackStopCommand, stack)
+}
+
+func (b *ChannelBackend) StackRestart(ctx context.Context, stack string) (control.StackActionResult, error) {
+	return b.stackAction(ctx, control.StackRestartCommand, stack)
 }
 
 func (b *ChannelBackend) RepoProbe(ctx context.Context, url string) (res control.RepoProbeResult, err error) {

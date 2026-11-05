@@ -5,7 +5,7 @@ qdeploy  Wartungsfenster zu                                                     
   [x] demo-stack   1.4.2        1.5.0          automatisch  deployt   erfolgreich 10-30 14:02              1 Warnung    
   [ ] mail-relay   3.1          aktuell        manuell      offen     erfolgreich 10-28 03:10              keine        
   [ ] old-tool     -            ungeprüft      -            entfernt  erfolgreich                          keine        
-  [ ] photo-album  2.0.1        Fehler         automatisch  gestoppt  Rollback fehlgeschlagen 10-29 03:10  1 Fehler     
+  [ ] photo-album  2.0.1        Fehler         automatisch  Rollback  Rollback fehlgeschlagen 10-29 03:10  1 Fehler     
 > [ ] web-shop     5.2.0, 16.4  6.0.0 (Major)  automatisch  läuft     zurückgerollt 10-30 12:00            keine        
   [x] wiki         1.41.0       ungeprüft      keiner       gepinnt   erfolgreich 10-27 03:10              2 Warnungen  
                                                                                                                         

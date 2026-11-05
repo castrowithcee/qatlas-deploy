@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -27,12 +28,16 @@ const (
 	kindUnpin
 	kindResume
 	kindCheck
+	kindStart
+	kindStop
+	kindRestart
 )
 
 // actionKinds maps the key of each action to what it does.
 var actionKinds = map[kittui.ActionID]actionKind{
 	actDeploy: kindDeploy, actUpdate: kindUpdate, actPause: kindPause, actUnpause: kindUnpause,
 	actPin: kindPin, actUnpin: kindUnpin, actResume: kindResume, actCheck: kindCheck,
+	actStackStart: kindStart, actStackStop: kindStop, actStackRestart: kindRestart,
 }
 
 // kindTexts are the texts of each kind: the word of its command (English in every language), the question, the
@@ -46,6 +51,9 @@ var kindTexts = map[actionKind]struct{ word, ask, consequence kittui.TextID }{
 	kindUnpin:   {textKeyUnpin, textAskUnpin, textWhatUnpin},
 	kindResume:  {textKeyResume, textAskResume, textWhatResume},
 	kindCheck:   {textKeyCheck, textAskCheck, textWhatCheck},
+	kindStart:   {textKeyStart, textAskStart, textWhatStart},
+	kindStop:    {textKeyStop, textAskStop, textWhatStop},
+	kindRestart: {textKeyRestart, textAskRestart, textWhatRestart},
 }
 
 // maxListedTargets is how many stack names a confirmation lists before it says how many more there are.
@@ -59,6 +67,10 @@ type plan struct {
 
 func (p plan) steps() int { return max(len(p.stacks), 1) }
 
+// stopsAtFailure reports whether the action is a start, stop or restart. These end the sequence at the first
+// failed stack, since the next one would likely fail for the same reason.
+func (k actionKind) stopsAtFailure() bool { return k == kindStart || k == kindStop || k == kindRestart }
+
 // runRef names a run a finished action started.
 type runRef struct{ id, stack string }
 
@@ -66,6 +78,8 @@ type runRef struct{ id, stack string }
 type outcome struct {
 	stack  string
 	failed bool
+	// notRun marks a stack the sequence ended before; it is neither ok nor failed.
+	notRun bool
 	lines  []string
 	runs   []runRef
 }
@@ -179,6 +193,15 @@ func (m *Model) beginAction(kind actionKind) tea.Cmd {
 		for _, name := range p.stacks {
 			if r := m.rowNamed(name); r.state != stateRollbackPause {
 				m.warn(m.text.Lookup(textActionNotResumable, name))
+				return nil
+			}
+		}
+	}
+	if kind == kindRestart {
+		// A stopped stack is started, not restarted; the whole action is refused like resume.
+		for _, name := range p.stacks {
+			if m.rowNamed(name).state == stateStopped {
+				m.warn(m.text.Lookup(textActionStopped, name))
 				return nil
 			}
 		}
@@ -420,12 +443,19 @@ func callService(ctx context.Context, b Backend, kind actionKind, stack string) 
 		return b.Unpin(ctx, stack)
 	case kindResume:
 		return b.Resume(ctx, stack)
+	case kindStart:
+		return b.StackStart(ctx, stack)
+	case kindStop:
+		return b.StackStop(ctx, stack)
+	case kindRestart:
+		return b.StackRestart(ctx, stack)
 	}
 	return b.Updates(ctx, control.UpdatesArgs{Refresh: true})
 }
 
-// applyStep takes the answer of a call, goes on with the next stack whatever it was, and ends the sequence
-// with the summary.
+// applyStep takes the answer of a call, goes on with the next stack, and ends the sequence with the summary.
+// After a failure it goes on only unless the action stops at the first failure; the stacks left are then marked
+// as not run.
 func (m *Model) applyStep(msg stepMsg) tea.Cmd {
 	r := m.run
 	if r == nil || msg.gen != r.gen || msg.index != len(r.outcomes) {
@@ -436,6 +466,11 @@ func (m *Model) applyStep(msg stepMsg) tea.Cmd {
 		stack = r.plan.stacks[msg.index]
 	}
 	r.outcomes = append(r.outcomes, m.outcomeOf(r.plan.kind, stack, msg))
+	if last := r.outcomes[len(r.outcomes)-1]; last.failed && r.plan.kind.stopsAtFailure() {
+		for _, name := range r.plan.stacks[len(r.outcomes):] {
+			r.outcomes = append(r.outcomes, outcome{stack: name, notRun: true, lines: []string{m.text.Lookup(textDoneNotRun)}})
+		}
+	}
 	if len(r.outcomes) < r.plan.steps() {
 		return tea.Batch(m.step(), m.reloadNow())
 	}
@@ -446,13 +481,17 @@ func (m *Model) applyStep(msg stepMsg) tea.Cmd {
 func (m *Model) finish() tea.Cmd {
 	r := m.run
 	m.run = nil
-	failed := 0
+	failed, notRun := 0, 0
 	var again []kittui.ItemID
 	for _, o := range r.outcomes {
-		if !o.failed {
+		if !o.failed && !o.notRun {
 			continue
 		}
-		failed++
+		if o.notRun {
+			notRun++
+		} else {
+			failed++
+		}
 		for id, row := range m.rows {
 			if row.name == o.stack {
 				again = append(again, id)
@@ -464,7 +503,7 @@ func (m *Model) finish() tea.Cmd {
 	}
 	m.detail = detailState{gen: m.detail.gen + 1}
 	md := &modal{kind: modalSummary, plan: r.plan, outcomes: r.outcomes}
-	md.title = m.text.Lookup(textSummaryTitle, m.text.Lookup(kindTexts[r.plan.kind].word), len(r.outcomes)-failed, failed)
+	md.title = m.text.Lookup(textSummaryTitle, m.text.Lookup(kindTexts[r.plan.kind].word), len(r.outcomes)-failed-notRun, failed)
 	answers := []kittui.Answer{{Action: actNo, Label: textAnswerClose}}
 	if len(md.runs()) > 0 {
 		answers = append(answers, kittui.Answer{Action: actShowLog, Label: textAnswerLog})
@@ -500,7 +539,7 @@ func (m *Model) outcomeOf(kind actionKind, stack string, msg stepMsg) outcome {
 	}
 	if msg.err != nil {
 		o.failed = true
-		o.lines = []string{m.serviceText(msg.err)}
+		o.lines = []string{m.stackActionError(kind, msg.err)}
 		return o
 	}
 	switch res := msg.result.(type) {
@@ -518,6 +557,9 @@ func (m *Model) outcomeOf(kind actionKind, stack string, msg stepMsg) outcome {
 		}
 	case control.ResumeResult:
 		o.lines = []string{t.Lookup(textDoneResume)}
+	case control.StackActionResult:
+		o.lines = []string{t.Lookup(map[actionKind]kittui.TextID{kindStart: textDoneStart, kindStop: textDoneStop,
+			kindRestart: textDoneRestart}[kind])}
 	case control.UpdatesResult:
 		var updates, broken int
 		for _, su := range res.Stacks {
@@ -531,6 +573,23 @@ func (m *Model) outcomeOf(kind actionKind, stack string, msg stepMsg) outcome {
 		o.lines = []string{t.Lookup(textDoneCheck, len(res.Stacks), updates, broken)}
 	}
 	return o
+}
+
+// stackActionError names what went wrong with a start, stop or restart in plain words; other failures keep the
+// text of the service.
+func (m *Model) stackActionError(kind actionKind, err error) string {
+	var remote *control.Error
+	if kind.stopsAtFailure() && errors.As(err, &remote) {
+		switch remote.Code {
+		case control.CodeStackStopped:
+			return m.text.Lookup(textErrStackStopped)
+		case control.CodeRunActive:
+			return m.text.Lookup(textErrRunActive)
+		case control.CodeStackAction:
+			return m.text.Lookup(textErrStackAction, remote.Message)
+		}
+	}
+	return m.serviceText(err)
 }
 
 // maxShownCommit is how many characters of a commit a result shows.
@@ -611,6 +670,8 @@ func (m *Model) moreActionHints() []kittui.Hint {
 		{Action: actPause, Label: textKeyPause}, {Action: actUnpause, Label: textKeyUnpause},
 		{Action: actPin, Label: textKeyPin}, {Action: actUnpin, Label: textKeyUnpin},
 		{Action: actCheck, Label: textKeyCheck},
+		{Action: actStackStart, Label: textKeyStart}, {Action: actStackStop, Label: textKeyStop},
+		{Action: actStackRestart, Label: textKeyRestart},
 	}
 	if id, ok := m.list.Selected(); !ok || m.rows[id].state != stateRollbackPause {
 		hints = append(hints, kittui.Hint{Action: actResume, Label: textKeyResume})
@@ -714,8 +775,11 @@ func (m *Model) summaryLinesOf(width int) []string {
 	lines := m.questionLines(md.title, "", width, false)
 	for _, o := range md.outcomes {
 		word, tone := t.Lookup(textOutcomeOK), kittui.StyleOK
-		if o.failed {
+		switch {
+		case o.failed:
 			word, tone = t.Lookup(textOutcomeFailed), kittui.StyleFail
+		case o.notRun:
+			word, tone = t.Lookup(textOutcomeNotRun), kittui.StyleHint
 		}
 		lines = append(lines, "", m.pair(detailMargin, o.stack, word, tone, width))
 		for _, l := range o.lines {

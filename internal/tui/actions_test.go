@@ -488,3 +488,116 @@ func TestRefreshUnderWayIsFollowedByAnother(t *testing.T) {
 		t.Errorf("status read %d times, want %d", b.called("status"), before+2)
 	}
 }
+
+func TestStackActionsCallTheServiceOnlyAfterConfirmation(t *testing.T) {
+	for _, tt := range []struct{ key, want string }{
+		{"S", "start:demo-stack"}, {"X", "stop:demo-stack"}, {"Z", "restart:demo-stack"},
+	} {
+		t.Run(tt.key, func(t *testing.T) {
+			b := demoBackend()
+			m := newActionModel(t, b)
+			send(m, tt.key)
+			if m.modal == nil {
+				t.Fatalf("%s opened no question", tt.key)
+			}
+			send(m, "n")
+			if m.modal != nil || len(b.actions()) != 0 {
+				t.Fatalf("cancel reached the service: %v", b.actions())
+			}
+			cmd := press(m, tt.key, "y")
+			if len(b.actions()) != 0 {
+				t.Fatalf("the call was made before the answer: %v", b.actions())
+			}
+			drain(m, cmd)
+			if got := b.actions(); !slices.Equal(got, []string{tt.want}) {
+				t.Fatalf("calls = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStopSaysTheStackStaysStopped(t *testing.T) {
+	m := newActionModel(t, demoBackend())
+	send(m, "X")
+	screen := m.render()
+	for _, want := range []string{"Stop demo-stack and keep it stopped until it is started?", "stack stays stopped until it is started"} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("question misses %q:\n%s", want, screen)
+		}
+	}
+}
+
+func TestStackActionEndsAtTheFirstFailure(t *testing.T) {
+	b := demoBackend()
+	b.errs["stop:mail-relay"] = control.NewError(control.CodeStackAction, "compose stop failed")
+	m := newActionModel(t, b)
+	send(m, "space", "down", "space", "end", "space", "X", "y")
+	if got := b.actions(); !slices.Equal(got, []string{"stop:demo-stack", "stop:mail-relay"}) {
+		t.Fatalf("calls = %v", got)
+	}
+	screen := m.render()
+	for _, want := range []string{"stop finished: 1 ok, 1 failed", "the stack action failed: compose stop failed", "wiki", "not run"} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("summary misses %q:\n%s", want, screen)
+		}
+	}
+	send(m, "esc")
+	if got := m.list.Ticked(); len(got) != 2 || got[0] != "mail-relay" || got[1] != "wiki" {
+		t.Errorf("ticked after the run = %v", got)
+	}
+}
+
+func TestRestartOfAStoppedStackIsRefusedBeforeAsking(t *testing.T) {
+	b := stoppedBackend()
+	m := newActionModel(t, b)
+	send(m, "space", "down", "space", "Z")
+	if m.modal != nil || len(b.actions()) != 0 || !strings.Contains(m.render(), "mail-relay is stopped; restart does not apply") {
+		t.Fatalf("restart was not refused:\n%s", m.render())
+	}
+}
+
+func TestStackActionErrorsAreTranslated(t *testing.T) {
+	for _, tt := range []struct{ code, want string }{
+		{control.CodeStackStopped, "the stack is stopped; start it instead of restarting it"},
+		{control.CodeRunActive, "a run of the stack is active"},
+		{control.CodeStackAction, "the stack action failed: boom"},
+	} {
+		b := demoBackend()
+		b.errs["restart:demo-stack"] = control.NewError(tt.code, "boom")
+		m := newActionModel(t, b)
+		send(m, "Z", "y")
+		if !strings.Contains(m.render(), tt.want) {
+			t.Errorf("%s: summary misses %q:\n%s", tt.code, tt.want, m.render())
+		}
+	}
+}
+
+func TestStoppedRanksBehindRunningRollbackPauseAndRemoved(t *testing.T) {
+	since := &control.HoldInfo{Since: at(29, 16, 40)}
+	for _, tt := range []struct {
+		name string
+		st   control.StackStatus
+		want stackState
+	}{
+		{"stopped", control.StackStatus{Stopped: since}, stateStopped},
+		{"running", control.StackStatus{Stopped: since, ActiveRun: "r"}, stateRunning},
+		{"rollback", control.StackStatus{Stopped: since, Paused: &control.PauseInfo{}}, stateRollbackPause},
+		{"removed", control.StackStatus{Stopped: since, Removed: true}, stateRemoved},
+		{"paused", control.StackStatus{Stopped: since, OperatorPause: since}, stateStopped},
+		{"pinned", control.StackStatus{Stopped: since, Pinned: since}, stateStopped},
+		{"failed", control.StackStatus{Stopped: since, LastRun: "failed"}, stateStopped},
+	} {
+		if got := stateOf(tt.st); got != tt.want {
+			t.Errorf("%s: state %d, want %d", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestRollbackPauseShortTextIsNotStopped(t *testing.T) {
+	for lang, want := range map[i18n.Lang]string{i18n.English: "rollback", i18n.German: "Rollback"} {
+		m := newTestModel(t, lang, demoBackend(), narrowWidth, goldenRows)
+		if got := m.text.Lookup(textStateRollbackPauseS); got != want {
+			t.Errorf("%s: short text %q, want %q", lang, got, want)
+		}
+	}
+}

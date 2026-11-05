@@ -29,3 +29,38 @@ func TestGoldenMultiActionSummary(t *testing.T) {
 		return b
 	}, "space", "down", "space", "end", "space", "i", "y")
 }
+
+// stoppedBackend is the demo host with mail-relay stopped through qdeploy.
+func stoppedBackend() *fakeBackend {
+	b := demoBackend()
+	b.status.Engine.Stacks[1].Stopped = &control.HoldInfo{Since: at(29, 16, 40)}
+	return b
+}
+
+func TestGoldenStopConfirmation(t *testing.T) {
+	goldenScreens(t, "stop.confirm", 20, stoppedBackend, "X")
+}
+
+func TestGoldenStartConfirmation(t *testing.T) {
+	goldenScreens(t, "start.confirm", 20, stoppedBackend, "down", "S")
+}
+
+func TestGoldenRestartConfirmation(t *testing.T) {
+	goldenScreens(t, "restart.confirm", 20, stoppedBackend, "Z")
+}
+
+func TestGoldenStoppedStack(t *testing.T) {
+	goldenScreens(t, "stacks.stopped", goldenRows, stoppedBackend)
+}
+
+func TestGoldenStoppedStackDetail(t *testing.T) {
+	goldenScreens(t, "detail.stopped", detailRows, stoppedBackend, "down", "enter")
+}
+
+func TestGoldenStopSummaryEndsAtTheFirstFailure(t *testing.T) {
+	goldenScreens(t, "stop.summary", 24, func() *fakeBackend {
+		b := demoBackend()
+		b.errs["stop:mail-relay"] = control.NewError(control.CodeStackAction, "compose stop failed")
+		return b
+	}, "space", "down", "space", "end", "space", "X", "y")
+}
