@@ -158,11 +158,20 @@ func registerSecretCommands(r *control.Registry, eng *engine.Engine, source func
 			}
 			// The file is replaced atomically, so reading without the stack's run slot never sees a half
 			// written file and works while a run is active.
-			dir, exists, err := stacks.ResolveDir(b.Dir, a.Stack)
+			// The stack is found by its project name, which may differ from its folder. A stack with Err is
+			// still answered: only key names are read.
+			all, err := stacks.Load(b.Dir)
 			if err != nil {
 				return nil, answer(a.Stack, err)
 			}
-			if !exists {
+			dir := ""
+			for _, st := range all {
+				if st.Name == a.Stack {
+					dir = st.Dir
+					break
+				}
+			}
+			if dir == "" {
 				return nil, control.NewError(control.CodeNoSuchStack, "no such stack in the working copy")
 			}
 			keys, _, err := stacks.SecretKeys(dir)
