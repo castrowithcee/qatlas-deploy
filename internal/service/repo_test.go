@@ -357,7 +357,7 @@ func TestStacksListsValidInvalidAndPlainStacks(t *testing.T) {
 	if plain := by["plain-stack"]; plain.Update != "none" || plain.Error != "" || plain.Images[0].Version != "0.9.1" {
 		t.Fatalf("plain-stack = %+v", plain)
 	}
-	if broken := by["broken-stack"]; broken.Error == "" || !strings.Contains(broken.Error, "qdeploy.yaml") {
+	if broken := by["broken-stack"]; broken.Error == "" || !strings.Contains(broken.Error, "stack settings") {
 		t.Fatalf("broken-stack = %+v", broken)
 	}
 }

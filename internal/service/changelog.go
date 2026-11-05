@@ -154,7 +154,7 @@ func (l *labelReader) read(ctx context.Context, image, tag string) string {
 	return labels[sourceLabel]
 }
 
-// ruleSource is the repository the stack's qdeploy.yaml names for the variable; it beats the image label.
+// ruleSource is the repository the stack settings name for the variable; it beats the image label.
 func ruleSource(st stacks.Stack, variable string) string {
 	if st.Rules == nil {
 		return ""

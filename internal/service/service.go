@@ -152,6 +152,9 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err := registerStackActionCommands(registry, eng, secrets.Apply, log); err != nil {
 		return err
 	}
+	if err := registerSettingsCommands(registry, eng, secrets.Apply, log); err != nil {
+		return err
+	}
 	repo.stopped = func(name string) *control.HoldInfo {
 		if st, ok, err := eng.Stack(name); err == nil && ok && st.Stopped != nil {
 			return &control.HoldInfo{Since: st.Stopped.Since}

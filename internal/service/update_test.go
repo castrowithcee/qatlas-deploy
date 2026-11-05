@@ -9,6 +9,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/registry/registrytest"
+	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -30,7 +31,7 @@ const manualRules = "version: 1\nupdate:\n  mode: manual\n"
 func updateHarness(t *testing.T, dep engine.Deployer) *harness {
 	t.Helper()
 	srv := registrytest.New(t, registrytest.Config{Repos: map[string][]string{"demo/app": {"0.9.1", "0.9.2", "1.2.3", "1.3.0", "2.0.0", "2.1.0-rc.1"}}})
-	return boundWith(t, dep, map[string]string{"plain-stack/qdeploy.yaml": manualRules}, withRegistry(srv.URL))
+	return boundWith(t, dep, map[string]string{servicetest.Settings("plain-stack"): manualRules}, withRegistry(srv.URL))
 }
 
 func (h *harness) update(args control.UpdateRunArgs) (control.UpdateRunResult, error) {

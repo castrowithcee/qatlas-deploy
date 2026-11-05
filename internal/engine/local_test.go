@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
+	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
 // localRig is a rig whose working copy has no remote, deployed at commit 1.
@@ -146,5 +148,24 @@ func TestUntrackedFilesBelowABindMountDoNotBlock(t *testing.T) {
 			!strings.Contains(web.Findings[0].Detail, c.Path) {
 			t.Fatalf("%s: web = %+v", c.Path, web)
 		}
+	}
+}
+
+func TestLocalSettingsLandOnTheBranch(t *testing.T) {
+	r := localRig(t, nil)
+	ctx := context.Background()
+	c, err := r.eng.SetSettings(ctx, "web", rulesOf(t, automaticSettings))
+	if err != nil || c != commit(2001) {
+		t.Fatalf("set = %q, %v", c, err)
+	}
+	if cs := r.copy.commits; len(cs) != 1 || cs[0].Base != commit(1) || cs[0].Path != ".qatlas/qdeploy/web.yaml" {
+		t.Fatalf("commits = %+v", cs)
+	}
+	head, _ := r.copy.Head(ctx)
+	if head != c || !slices.Equal(r.copy.pushed, []string{c}) {
+		t.Fatalf("head %s, landed %v", head, r.copy.pushed)
+	}
+	if got, err := r.eng.StackSettings(ctx, "web"); err != nil || got == nil || got.Update.Mode != stacks.ModeAutomatic {
+		t.Fatalf("settings after = %+v, %v", got, err)
 	}
 }

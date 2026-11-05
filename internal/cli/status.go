@@ -194,7 +194,7 @@ func failureOf(err error) error {
 			NextStep: "Update the service to a version that can back up stacks.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoBackupRules:
 		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
-			NextStep: "Add a backup section to the stack's qdeploy.yaml (see 'qdeploy help stack-rules').", Cause: err}
+			NextStep: "Add a backup section to the stack settings in the qdeploy TUI or with 'qdeploy stack settings set' (see 'qdeploy help stack-settings').", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchBackup:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
 			NextStep: "List the backups with 'qdeploy stack backup list <stack>'.", Cause: err}
@@ -209,7 +209,7 @@ func failureOf(err error) error {
 			NextStep: "Check the network and the registry login (see 'qdeploy help credentials'), then run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNotUpdatable:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
-			NextStep: "Resolve the cause named in the message (see 'qdeploy status' and 'qdeploy help stack-rules'), then run the command again.", Cause: err}
+			NextStep: "Resolve the cause named in the message (see 'qdeploy status' and 'qdeploy help stack-settings'), then run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeBusy:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Run the command again in a moment.", Cause: err}

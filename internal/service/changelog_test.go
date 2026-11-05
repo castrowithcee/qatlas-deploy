@@ -17,6 +17,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/registry"
 	"github.com/castrowithcee/qatlas-deploy/internal/registry/registrytest"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
+	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
 )
 
 const (
@@ -176,7 +177,7 @@ func TestChangelogOnlyForItemsWithUpdate(t *testing.T) {
 }
 
 func TestChangelogRuleBeatsLabel(t *testing.T) {
-	files := map[string]string{"demo-stack/qdeploy.yaml": "version: 1\nupdate:\n  mode: automatic\n  changelog:\n    " + demoDetectedVar + ": " + demoSourceURL + ".git\n"}
+	files := map[string]string{servicetest.Settings("demo-stack"): "version: 1\nupdate:\n  mode: automatic\n  changelog:\n    " + demoDetectedVar + ": " + demoSourceURL + ".git\n"}
 	h, gh := changelogHarness(t, map[string]string{sourceLabel: "https://github.com/other-org/other-app"}, files)
 	c := refreshWithChangelog(t, h).Changelogs[0]
 	if c.Source != demoRepo || releaseVersions(c) != "1.3.0,1.2.4" {

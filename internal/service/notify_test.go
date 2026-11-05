@@ -23,6 +23,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/notifier"
 	"github.com/castrowithcee/qatlas-deploy/internal/registry/registrytest"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
+	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
 )
 
 const (
@@ -417,7 +418,7 @@ func TestUpdateAvailableIsSentOnlyForManualStacksAndOncePerVersion(t *testing.T)
 	dep := &sequentialDeployer{}
 	srv := registrytest.New(t, registrytest.Config{Repos: map[string][]string{"demo/app": {"0.9.1", "0.9.2", "1.2.3", "1.3.0", "2.0.0", "2.1.0-rc.1"}}})
 	clock := &svcClock{now: noon}
-	files := map[string]string{"demo-stack/qdeploy.yaml": manualRules, "plain-stack/qdeploy.yaml": automaticRules}
+	files := map[string]string{servicetest.Settings("demo-stack"): manualRules, servicetest.Settings("plain-stack"): automaticRules}
 	h := boundWith(t, dep, files, withRegistry(srv.URL), withClock(clock, nil), withNotify(rcv))
 	addWebhook(t, h, "updates", rcv.url("/upd"), "update-available")
 

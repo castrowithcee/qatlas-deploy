@@ -31,7 +31,7 @@ func newChangelogCommand(program *cobracli.Program, state *notRunning) *cobra.Co
 		Short: "Show the release notes between the current and the available version of a stack",
 		Long: "changelog lists, for every image version variable of the stack with an available update, the GitHub\n" +
 			"release notes after the current version up to and including the available one. The repository comes\n" +
-			"from update.changelog in the stack's qdeploy.yaml or else from the image label\n" +
+			"from update.changelog in the stack settings or else from the image label\n" +
 			"org.opencontainers.image.source. If no notes can be read, the row says why and shows a link instead;\n" +
 			"this never affects a deployment. Only the stored update check is used (see qdeploy stack updates --refresh).\n" +
 			"The table and compact formats show the first line of each release's notes; json and toon carry the\n" +

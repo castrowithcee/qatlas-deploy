@@ -25,10 +25,10 @@ func newUpdatesCommand(program *cobracli.Program, state *notRunning) *cobra.Comm
 	cmd := &cobra.Command{
 		Use:   "updates [stack] [--refresh] [--changelog]",
 		Short: "Show the current and the available image versions of the stacks",
-		Long: "updates lists, per stack and image version variable, the current version, the version the stack's rules\n" +
+		Long: "updates lists, per stack and image version variable, the current version, the version the stack settings\n" +
 			"allow it to move to (available) and, if a newer major version exists, major_available, which is never\n" +
-			"taken automatically. The rules are the stack's update.ceiling and update.tags; a stack without a\n" +
-			"qdeploy.yaml is listed too. Statuses: current, update, not-comparable (the current tag cannot be\n" +
+			"taken automatically. The settings that count are update.ceiling and update.tags; a stack without settings\n" +
+			"is listed too. Statuses: current, update, not-comparable (the current tag cannot be\n" +
 			"ordered, for example 'latest') and error (the registry could not be asked); the error column says why.\n\n" +
 			"Without --refresh the result of the last check is shown with its time; a stack never checked says so.\n" +
 			"With --refresh the service asks the registries now and stores the result. Nothing in any stack, in the\n" +

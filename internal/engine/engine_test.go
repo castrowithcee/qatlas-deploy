@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -129,17 +130,20 @@ func (f *fakeCopy) IsAncestor(_ context.Context, a, b string) (bool, error) {
 	return !f.diverged || a == b, nil
 }
 
-// CommitFile edits the file as the working copy has it and answers with a new commit id per call; a
-// fast-forward to the commit writes the result.
+// CommitFile edits the file as the working copy has it, nil when it has none, and answers with a new commit
+// id per call; a fast-forward to the commit writes the result.
 func (f *fakeCopy) CommitFile(_ context.Context, path string, edit func([]byte) ([]byte, error), message string) (string, error) {
 	f.rec("commit")
 	old, err := os.ReadFile(filepath.Join(f.dir, path))
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
 	content, err := edit(old)
 	if err != nil {
 		return "", err
+	}
+	if old != nil && bytes.Equal(old, content) {
+		return "", gitrepo.ErrUnchanged
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -225,6 +229,9 @@ func (f *fakeCopy) FastForward(_ context.Context, to string) error {
 func (f *fakeCopy) moveTo(c string) error {
 	f.head = c
 	for path, body := range f.files[f.head] {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(f.dir, path)), 0o755); err != nil {
+			return err
+		}
 		if err := os.WriteFile(filepath.Join(f.dir, path), body, 0o644); err != nil {
 			return err
 		}
@@ -452,6 +459,18 @@ func writeStack(t *testing.T, wc, name string) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("APP_VERSION=1.0.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writeSettings writes the settings file of the stack name into the working copy wc.
+func writeSettings(t *testing.T, wc, name, body string) {
+	t.Helper()
+	p := filepath.Join(wc, filepath.FromSlash(stacks.SettingsPath(name)))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -908,9 +927,7 @@ func TestTriggerUnknownAndUnreadable(t *testing.T) {
 	if _, err := r.eng.Trigger(context.Background(), "nope"); !errors.Is(err, ErrUnknownStack) {
 		t.Fatalf("err = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(r.wc, "web", "qdeploy.yaml"), []byte("version: 1\nupdate:\n  mode: sometimes\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeSettings(t, r.wc, "web", "version: 1\nupdate:\n  mode: sometimes\n")
 	if _, err := r.eng.Trigger(context.Background(), "web"); !errors.Is(err, ErrUnreadable) {
 		t.Fatalf("err = %v", err)
 	}
@@ -1099,13 +1116,11 @@ func TestWithStackRefusals(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	r.copy.set(func(f *fakeCopy) { f.changes = nil })
-	if err := os.WriteFile(filepath.Join(r.wc, "web", "qdeploy.yaml"), []byte("version: 1\nupdate:\n  mode: sometimes\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeSettings(t, r.wc, "web", "version: 1\nupdate:\n  mode: sometimes\n")
 	if err := r.eng.WithStack(context.Background(), "web", "backup", noop); !errors.Is(err, ErrUnreadable) {
 		t.Fatalf("err = %v", err)
 	}
-	if err := os.Remove(filepath.Join(r.wc, "web", "qdeploy.yaml")); err != nil {
+	if err := os.Remove(filepath.Join(r.wc, filepath.FromSlash(stacks.SettingsPath("web")))); err != nil {
 		t.Fatal(err)
 	}
 	r.eng.Close()

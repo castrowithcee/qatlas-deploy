@@ -205,7 +205,7 @@ func (k *Checker) client() *http.Client {
 	return &c
 }
 
-// checkHTTP polls the URL of qdeploy.yaml until it answers with the wanted status; the configured timeout is
+// checkHTTP polls the URL of the stack settings until it answers with the wanted status; the configured timeout is
 // the whole time allowed for the check.
 func (k *Checker) checkHTTP(ctx context.Context, h stacks.HTTPCheck, log Logger) error {
 	u, err := url.Parse(h.URL)

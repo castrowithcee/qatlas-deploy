@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/backup"
+	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -60,7 +61,7 @@ func startBackupService(t *testing.T) *recordingBackups {
 	testBackups = rb
 	t.Cleanup(func() { testBackups = old })
 	e := startRepoService(t)
-	e.git.Files["plain-stack/qdeploy.yaml"] = "version: 1\nbackup:\n  paths: [data/db]\n"
+	e.git.Files[servicetest.Settings("plain-stack")] = "version: 1\nbackup:\n  paths: [data/db]\n"
 	if code, _, stderr := run(t, "repo", "set", e.srv.URL(), "--dir", e.dir, "--fingerprint", e.srv.Key().Fingerprint); code != 0 {
 		t.Fatalf("repo set: %d %s", code, stderr)
 	}
@@ -136,7 +137,7 @@ func TestBackupFailuresAreMapped(t *testing.T) {
 		t.Fatalf("bad name: %d %q", code, stderr)
 	}
 	rb.err = backup.ErrNoRules
-	if code, _, stderr := run(t, "stack", "backup", "create", "demo-stack"); code == 0 || !strings.Contains(stderr, "no backup rules") || !strings.Contains(stderr, "stack-rules") {
+	if code, _, stderr := run(t, "stack", "backup", "create", "demo-stack"); code == 0 || !strings.Contains(stderr, "no backup section") || !strings.Contains(stderr, "stack settings set") {
 		t.Fatalf("no rules: %d %q", code, stderr)
 	}
 	rb.err = errors.New("docker exploded")

@@ -21,7 +21,7 @@ func newBackupCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 	group := &cobra.Command{
 		Use:   "backup",
 		Short: "Back up, list and restore the data of a stack",
-		Long: "A backup saves the data directories and named volumes that the stack's qdeploy.yaml lists, and the\n" +
+		Long: "A backup saves the data directories and named volumes that the stack settings list, and the\n" +
 			"output of its backup command. The stack is stopped while it is saved and started again afterwards.\n" +
 			"Backups are kept under the service's state directory, readable by the service user only. Only root\n" +
 			"may use the service channel, so run these commands with sudo.",

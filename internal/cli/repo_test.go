@@ -94,7 +94,7 @@ func TestRepoSetWithFingerprintBindsAndStacksLists(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("stacks: code %d, stderr %q", code, stderr)
 	}
-	for _, want := range []string{"demo-stack", "automatic", "DEMO_APP_VERSION=1.2.3", "plain-stack", "none", "broken-stack", "qdeploy.yaml"} {
+	for _, want := range []string{"demo-stack", "automatic", "DEMO_APP_VERSION=1.2.3", "plain-stack", "none", "broken-stack", "stack settings"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stacks output lacks %q:\n%s", want, stdout)
 		}

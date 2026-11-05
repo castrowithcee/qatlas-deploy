@@ -3,6 +3,7 @@
 package servicetest
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
+	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
 // Git implements service.Git. A clone writes Files below the target directory.
@@ -202,7 +204,11 @@ func (c *copyOf) FastForward(_ context.Context, to string) error {
 	if !ok || c.g.Head == to {
 		return nil
 	}
-	if err := os.WriteFile(filepath.Join(c.dir, filepath.FromSlash(fc.path)), fc.content, 0o644); err != nil {
+	p := filepath.Join(c.dir, filepath.FromSlash(fc.path))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(p, fc.content, 0o644); err != nil {
 		return err
 	}
 	c.g.Head = to
@@ -219,16 +225,19 @@ func (c *copyOf) RevertStack(context.Context, string, string, string, string) (s
 	return "", gitrepo.ErrNothingToRevert
 }
 
-// CommitFile makes a commit on the remote head that changes path, read from the working copy, which the fake
-// keeps at the remote head after every push.
+// CommitFile makes a commit on the remote head that changes or creates path, read from the working copy, which
+// the fake keeps at the remote head after every push.
 func (c *copyOf) CommitFile(_ context.Context, path string, edit func([]byte) ([]byte, error), message string) (string, error) {
 	old, err := os.ReadFile(filepath.Join(c.dir, filepath.FromSlash(path)))
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
 	content, err := edit(old)
 	if err != nil {
 		return "", err
+	}
+	if old != nil && bytes.Equal(old, content) {
+		return "", gitrepo.ErrUnchanged
 	}
 	c.g.mu.Lock()
 	defer c.g.mu.Unlock()
@@ -290,18 +299,21 @@ func (c *copyOf) RemoteURL(context.Context) (string, error) {
 	return "", errors.New("no origin")
 }
 
-// Stacks is a small working copy: a valid stack with rules, one with an invalid rule file and one without.
+// Stacks is a small working copy: a valid stack with settings, one with invalid settings and one without.
 func Stacks() map[string]string {
 	compose := "services:\n  app:\n    image: registry.example.test/demo/app:${DEMO_APP_VERSION}\n"
 	return map[string]string{
 		"README.md":                 "stacks\n",
 		"demo-stack/compose.yaml":   compose,
 		"demo-stack/.env":           "DEMO_APP_VERSION=1.2.3\n",
-		"demo-stack/qdeploy.yaml":   "version: 1\nupdate:\n  mode: automatic\n  ceiling: minor\n",
 		"broken-stack/compose.yaml": compose,
 		"broken-stack/.env":         "DEMO_APP_VERSION=2.0.0\n",
-		"broken-stack/qdeploy.yaml": "version: 1\nupdate:\n  mode: sometimes\n",
 		"plain-stack/compose.yaml":  compose,
 		"plain-stack/.env":          "DEMO_APP_VERSION=0.9.1\n",
+		Settings("demo-stack"):      "version: 1\nupdate:\n  mode: automatic\n  ceiling: minor\n",
+		Settings("broken-stack"):    "version: 1\nupdate:\n  mode: sometimes\n",
 	}
 }
+
+// Settings is the path of the settings file of the stack name, for Git.Files.
+func Settings(name string) string { return stacks.SettingsPath(name) }

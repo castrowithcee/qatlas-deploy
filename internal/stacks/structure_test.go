@@ -15,9 +15,7 @@ func named(name string) string {
 func loadFolder(t *testing.T, folder string, files map[string]string) Stack {
 	t.Helper()
 	root := t.TempDir()
-	for k, v := range files {
-		write(t, root, folder+"/"+k, v)
-	}
+	writeStack(t, root, folder, files)
 	list, err := Load(root)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("Load: %v, %d stacks", err, len(list))
@@ -98,7 +96,7 @@ func TestComposeFilesFromRules(t *testing.T) {
 	s := one(t, map[string]string{
 		"compose.yaml":      "services:\n  app:\n    image: registry.example.test/demo/app:1.0.0\n",
 		"compose.prod.yaml": appCompose,
-		"qdeploy.yaml":      "version: 1\ncompose:\n  files: [compose.yaml, compose.prod.yaml]\n",
+		settingsKey:         "version: 1\ncompose:\n  files: [compose.yaml, compose.prod.yaml]\n",
 		".env":              "COMPOSE_FILE=compose.yaml\nDEMO_VERSION=2.0.0\n",
 	})
 	if s.Err != nil || strings.Join(s.ComposeFiles, ",") != "compose.yaml,compose.prod.yaml" {
@@ -110,7 +108,7 @@ func TestComposeFilesFromRules(t *testing.T) {
 }
 
 func TestComposeFilesFromRulesWithoutDefaultNames(t *testing.T) {
-	s := one(t, map[string]string{"stack.yaml": appCompose, "qdeploy.yaml": "version: 1\ncompose: {files: [stack.yaml]}\n"})
+	s := one(t, map[string]string{"stack.yaml": appCompose, settingsKey: "version: 1\ncompose: {files: [stack.yaml]}\n"})
 	if s.Err != nil || len(s.ComposeFiles) != 1 || s.ComposeFiles[0] != "stack.yaml" {
 		t.Fatalf("stack = %+v", s)
 	}
@@ -127,11 +125,11 @@ func TestComposeFilesFromRulesAreValidated(t *testing.T) {
 		{"unknown field", "compose: {file: [compose.yaml]}", "unknown field file"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": "version: 1\n" + c.yaml + "\n"})
+			s := one(t, map[string]string{"compose.yaml": appCompose, settingsKey: "version: 1\n" + c.yaml + "\n"})
 			wantErr(t, s, c.want)
 		})
 	}
-	s := one(t, map[string]string{"compose.yaml": appCompose, "qdeploy.yaml": "version: 1\ncompose: {files: [compose.yaml, missing.yaml]}\n"})
+	s := one(t, map[string]string{"compose.yaml": appCompose, settingsKey: "version: 1\ncompose: {files: [compose.yaml, missing.yaml]}\n"})
 	wantErr(t, s, "compose.files entry \"missing.yaml\"")
 	var ce *ComposeFileError
 	if !asComposeFileError(s.Err, &ce) || !ce.FromRules || !ce.Problems[0].Missing {
@@ -143,7 +141,7 @@ func TestComposeFilesFromRulesRejectLinks(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "outside.yaml", appCompose)
 	write(t, root, "demo-stack/compose.yaml", appCompose)
-	write(t, root, "demo-stack/qdeploy.yaml", "version: 1\ncompose: {files: [linked.yaml]}\n")
+	write(t, root, SettingsPath("demo-stack"), "version: 1\ncompose: {files: [linked.yaml]}\n")
 	if err := symlink(filepath.Join(root, "outside.yaml"), filepath.Join(root, "demo-stack", "linked.yaml")); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +152,7 @@ func TestComposeFilesFromRulesRejectLinks(t *testing.T) {
 func TestUnreadableEnvIsDeployOnly(t *testing.T) {
 	s := one(t, map[string]string{
 		"compose.yaml": appCompose,
-		"qdeploy.yaml": "version: 1\nupdate: {mode: automatic}\n",
+		settingsKey:    "version: 1\nupdate: {mode: automatic}\n",
 		".env":         "DEMO_VERSION=1.0.0\nthis line is broken\nDEMO_PASSWORD=not-a-real-secret\n",
 	})
 	if s.Err != nil {

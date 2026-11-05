@@ -54,11 +54,17 @@ func with(files map[string]string, overrides map[string]string) map[string]strin
 	return out
 }
 
+// settingsKey in the files of checkFiles stands for the settings file of demo-stack.
+const settingsKey = "<settings>"
+
 func checkFiles(t *testing.T, files map[string]string, git fakeGit) []Finding {
 	t.Helper()
 	root := t.TempDir()
 	for name, body := range files {
 		p := filepath.Join(root, "demo-stack", name)
+		if name == settingsKey {
+			p = filepath.Join(root, filepath.FromSlash(stacks.SettingsPath("demo-stack")))
+		}
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -98,7 +104,7 @@ func TestConformantStackHasNoFinding(t *testing.T) {
 	fs := checkFiles(t, with(demoFiles(), map[string]string{
 		"compose.prod.yaml": "services:\n  app:\n    restart: always\n",
 		".env":              goodEnv + "COMPOSE_FILE=compose.yaml:compose.prod.yaml\n",
-		"qdeploy.yaml":      "version: 1\nupdate:\n  tags:\n    DEMO_VERSION: '^[0-9.]+$'\n",
+		settingsKey:         "version: 1\nupdate:\n  tags:\n    DEMO_VERSION: '^[0-9.]+$'\n",
 	}), fakeGit{tracked: []string{"demo-stack/compose.yaml", "demo-stack/.env", "demo-stack/compose.prod.yaml"}})
 	if len(fs) != 0 {
 		t.Fatalf("findings: %+v", fs)
@@ -142,10 +148,12 @@ func TestRules(t *testing.T) {
 			fakeGit{}, RuleMissingComposeFile, SeverityError, "compose.prod.yaml", "COMPOSE_FILE"},
 		{"compose file unsafe", with(demoFiles(), map[string]string{".env": goodEnv + "COMPOSE_FILE=../compose.yaml\n"}),
 			fakeGit{}, RuleInvalidComposeFile, SeverityError, "..", "relative path"},
-		{"rules invalid", with(demoFiles(), map[string]string{"qdeploy.yaml": "version: 1\nupdate:\n  mode: sometimes\n"}),
-			fakeGit{}, RuleInvalidRules, SeverityError, "qdeploy.yaml", "qdeploy.yaml"},
-		{"rules unknown variable", with(demoFiles(), map[string]string{"qdeploy.yaml": "version: 1\nupdate:\n  tags:\n    NOPE_VERSION: '^1$'\n"}),
-			fakeGit{}, RuleUnknownRulesVar, SeverityError, "NOPE_VERSION", "qdeploy.yaml"},
+		{"rules invalid", with(demoFiles(), map[string]string{settingsKey: "version: 1\nupdate:\n  mode: sometimes\n"}),
+			fakeGit{}, RuleInvalidRules, SeverityError, "stack settings", "qdeploy stack settings set"},
+		{"rules unknown variable", with(demoFiles(), map[string]string{settingsKey: "version: 1\nupdate:\n  tags:\n    NOPE_VERSION: '^1$'\n"}),
+			fakeGit{}, RuleUnknownRulesVar, SeverityError, "NOPE_VERSION", "stack settings"},
+		{"old rules file", with(demoFiles(), map[string]string{"qdeploy.yaml": "version: 1\nupdate:\n  mode: automatic\n"}),
+			fakeGit{}, RuleOldRulesFile, SeverityWarning, "no settings and is not updated", "qdeploy stack settings set demo-stack"},
 		{"unreadable stack", with(demoFiles(), map[string]string{".env": "not a line\n"}),
 			fakeGit{}, RuleUnreadableStack, SeverityError, ".env", "Correct"},
 	}
@@ -174,7 +182,7 @@ func TestRulesStayQuietOnConformantInput(t *testing.T) {
 		"env default is set":  with(demoFiles(), map[string]string{"compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app:${DEMO_VERSION:-9.9.9}\n"}),
 		"distinct keys":       with(demoFiles(), map[string]string{"secrets.env": "# note\nexport OTHER_SECRET=x\n"}),
 		"valid compose files": with(demoFiles(), map[string]string{".env": goodEnv + "COMPOSE_FILE=compose.yaml\n"}),
-		"rules with variable": with(demoFiles(), map[string]string{"qdeploy.yaml": "version: 1\nupdate:\n  tags:\n    DEMO_VERSION: '^1$'\n"}),
+		"rules with variable": with(demoFiles(), map[string]string{settingsKey: "version: 1\nupdate:\n  tags:\n    DEMO_VERSION: '^1$'\n"}),
 	} {
 		if fs := checkFiles(t, files, fakeGit{tracked: []string{"demo-stack/compose.yaml", "demo-stack/database-notes.txt"}}); len(fs) != 0 {
 			t.Errorf("%s: findings %+v", name, fs)
@@ -276,9 +284,18 @@ func TestDeployOnlyEnvIsAFinding(t *testing.T) {
 }
 
 func TestComposeFilesOfRulesAreNamedInTheFinding(t *testing.T) {
-	fs := checkFiles(t, with(demoFiles(), map[string]string{"qdeploy.yaml": "version: 1\ncompose: {files: [compose.yaml, gone.yaml]}\n"}), fakeGit{})
+	fs := checkFiles(t, with(demoFiles(), map[string]string{settingsKey: "version: 1\ncompose: {files: [compose.yaml, gone.yaml]}\n"}), fakeGit{})
 	f := has(fs, RuleMissingComposeFile)
-	if f == nil || !strings.Contains(f.Cause, "compose.files in qdeploy.yaml") || !strings.Contains(f.Cause, "gone.yaml") {
+	if f == nil || !strings.Contains(f.Cause, "compose.files in the stack settings") || !strings.Contains(f.Cause, "gone.yaml") {
+		t.Fatalf("findings: %+v", fs)
+	}
+}
+
+func TestOldRulesFileBesideSettingsNamesTheMode(t *testing.T) {
+	fs := checkFiles(t, with(demoFiles(), map[string]string{
+		"qdeploy.yaml": "version: 1\n", settingsKey: "version: 1\nupdate:\n  mode: automatic\n",
+	}), fakeGit{})
+	if len(fs) != 1 || fs[0].Rule != RuleOldRulesFile || !strings.Contains(fs[0].Cause, "update mode automatic") {
 		t.Fatalf("findings: %+v", fs)
 	}
 }
