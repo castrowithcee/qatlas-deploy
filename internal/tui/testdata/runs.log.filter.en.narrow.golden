@@ -1,0 +1,14 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+  1 2 [3 Runs] 4 5                                      
+--------------------------------------------------------
+  demo-stack        succeeded  20261030T140200Z-0000000c
+  info middle line                                      
+  info late line                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+[ L on ]  [ / ]  [ T last 2 h ]           lines 1-2 of 2
+/ search  L follow  T period  w wrap lines  t timestamps
+r reload  1-5 area  q quit                up/down scroll

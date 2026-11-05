@@ -206,7 +206,7 @@ func (m *Model) openLog(id kittui.ItemID) tea.Cmd {
 
 // showLog shows the log of row, read at once.
 func (m *Model) showLog(row runRow) tea.Cmd {
-	view, err := m.newLogView()
+	view, err := m.newLogView(kittui.LogFilter{})
 	if err != nil {
 		m.failure = m.text.Lookup(kittui.TextError, err.Error())
 		return nil
@@ -215,8 +215,24 @@ func (m *Model) showLog(row runRow) tea.Cmd {
 	return m.readLog()
 }
 
-func (m *Model) newLogView() (*kittui.LogView, error) {
-	return kittui.NewLogView(kittui.LogViewSpec{Lines: logBufferLines, Keys: logKeys()}, m.keys, m.text)
+// newLogView builds a log view that starts with the period filter.
+func (m *Model) newLogView(filter kittui.LogFilter) (*kittui.LogView, error) {
+	return kittui.NewLogView(kittui.LogViewSpec{Lines: logBufferLines, Keys: logKeys(), Filter: filter, Now: m.now,
+		Units: []kittui.LogFilterUnit{kittui.LogUnitMinutes, kittui.LogUnitHours, kittui.LogUnitDays}}, m.keys, m.text)
+}
+
+// refeedFilteredLog fills the view again after the person chose another period. The log is the one already
+// read; the view only holds the lines inside the period.
+func (m *Model) refeedFilteredLog() {
+	l := &m.log
+	if !l.open || l.view == nil {
+		return
+	}
+	if _, changed := l.view.TakeFilterChange(); !changed {
+		return
+	}
+	l.view.Clear()
+	m.appendLog(l.consumed)
 }
 
 // readLog reads the status and then the log of the open run. The status comes first: a run that is not active
@@ -264,7 +280,7 @@ func (m *Model) feedLog(text string) {
 	}
 	if !strings.HasPrefix(text, l.consumed) {
 		// The log was rewritten; start over rather than guess what is new.
-		if view, err := m.newLogView(); err == nil {
+		if view, err := m.newLogView(l.view.Filter()); err == nil {
 			l.view, l.consumed = view, ""
 		}
 	}
@@ -273,11 +289,19 @@ func (m *Model) feedLog(text string) {
 		return
 	}
 	l.consumed = text
+	m.appendLog(delta)
+}
+
+// appendLog hands complete log lines to the view, which drops those outside its period.
+func (m *Model) appendLog(delta string) {
+	if delta == "" {
+		return
+	}
 	var lines []kittui.LogLine
 	for _, raw := range strings.Split(strings.TrimSuffix(delta, "\n"), "\n") {
 		lines = append(lines, m.logLine(raw))
 	}
-	l.view.Append(lines...)
+	m.log.view.Append(lines...)
 }
 
 // logLine splits a line of the service's run log into its time, its kind and its text.

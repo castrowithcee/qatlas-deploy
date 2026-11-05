@@ -111,7 +111,8 @@ func logKeys() kittui.LogViewKeys {
 	return kittui.LogViewKeys{Up: actUp, Down: actDown, PageUp: actPageUp, PageDown: actPageDown, First: actFirst,
 		Last: actLast, Search: actSearch, Enter: actEnter, Back: actBack, Follow: kittui.ActionLogFollow,
 		NextMatch: kittui.ActionLogNextMatch, PrevMatch: kittui.ActionLogPrevMatch, Wrap: kittui.ActionLogWrap,
-		Timestamps: kittui.ActionLogTimestamps}
+		Timestamps: kittui.ActionLogTimestamps,
+		Filter:     kittui.ActionLogFilter, FilterForm: formKeys()}
 }
 
 func listKeys() kittui.ListKeys {

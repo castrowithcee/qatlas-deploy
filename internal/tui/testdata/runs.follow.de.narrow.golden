@@ -9,6 +9,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   step deploy                                           
   info pull example/shop:5.2.0                          
                                                         
-[ L an ]  [ / ]  [ w aus ]  [ t aus ]   Zeilen 1-6 von 6
-/ Suchen  L mitlaufen  w Zeilen umbrechen  t Zeitstempel
-r Neu laden  1-5 Bereich  q Beenden     up/down Scrollen
+[ L an ]  [ / ]  [ T alle ]  [ w aus ]  Zeilen 1-6 von 6
+/ Suchen  L mitlaufen  T Zeitraum  w Zeilen umbrechen   
+t Zeitstempel  r Neu laden  1-5 Bereich  q Beenden      
