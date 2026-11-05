@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"strings"
 	"testing"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/castrowithcee/qatlas-kit/docker"
 	"github.com/castrowithcee/qatlas-kit/output"
+
+	"github.com/castrowithcee/qatlas-deploy/internal/service"
 )
 
 type fakeEngine struct {
@@ -17,6 +20,8 @@ type fakeEngine struct {
 	details map[string]docker.Details
 	err     error
 	acts    []string
+	logs    map[string][]docker.LogLine // by container ID
+	onLogs  func()                      // called at every Logs request
 }
 
 func (f *fakeEngine) List(context.Context) ([]docker.Container, error) { return f.list, f.err }
@@ -27,6 +32,39 @@ func (f *fakeEngine) Inspect(_ context.Context, ref string) (docker.Details, err
 	}
 	return docker.Details{}, &docker.Error{Code: output.CodeNotFound, Message: "no such container"}
 }
+
+func (f *fakeEngine) Logs(_ context.Context, ref string, o docker.LogOptions) (service.LogReader, error) {
+	if f.onLogs != nil {
+		f.onLogs()
+	}
+	d, ok := f.details[ref]
+	if !ok {
+		d = docker.Details{Container: docker.Container{ID: ref}}
+	}
+	var lines []docker.LogLine
+	for _, l := range f.logs[d.ID] {
+		if !l.Time.Before(o.Since) && (o.Until.IsZero() || !l.Time.After(o.Until)) {
+			lines = append(lines, l)
+		}
+	}
+	if o.Tail > 0 && len(lines) > o.Tail {
+		lines = lines[len(lines)-o.Tail:]
+	}
+	return &sliceStream{lines: lines}, nil
+}
+
+type sliceStream struct{ lines []docker.LogLine }
+
+func (s *sliceStream) Next() (docker.LogLine, error) {
+	if len(s.lines) == 0 {
+		return docker.LogLine{}, io.EOF
+	}
+	l := s.lines[0]
+	s.lines = s.lines[1:]
+	return l, nil
+}
+
+func (s *sliceStream) Close() error { return nil }
 
 func (f *fakeEngine) Start(_ context.Context, ref string) error { return f.act("start", ref) }
 func (f *fakeEngine) Stop(_ context.Context, ref string, _ time.Duration) error {

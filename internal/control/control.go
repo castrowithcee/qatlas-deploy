@@ -1018,6 +1018,52 @@ type ContainerActionResult struct {
 	NotReady string `json:"not_ready,omitempty"`
 }
 
+// ContainerLogsCommand reads the log of one container (Name, by name or ID) or of all containers of an own
+// stack (Stack), merged by time; exactly one of the two is set. Only text, never a stream: a client that
+// follows asks again with the Cursor of the last answer. A stack that is not an own stack of the working copy
+// is CodeNoSuchStack.
+const ContainerLogsCommand = "container.logs"
+
+// ContainerLogsTimeout is how long a client should wait for ContainerLogsCommand.
+const ContainerLogsTimeout = 30 * time.Second
+
+// ContainerLogsMaxTail is the largest Tail.
+const ContainerLogsMaxTail = 5000
+
+// ContainerLogsArgs are the arguments of ContainerLogsCommand. Since and Until bound the lines by their time
+// (inclusive; zero means unbounded). Tail keeps only the last n lines of the stack or container (zero means
+// all) and cannot be combined with Cursor. Cursor is the Cursor of an earlier answer: only lines from there on
+// are returned, which is how a client continues without gaps or repeats.
+type ContainerLogsArgs struct {
+	Name   string    `json:"name,omitempty"`
+	Stack  string    `json:"stack,omitempty"`
+	Since  time.Time `json:"since,omitzero"`
+	Until  time.Time `json:"until,omitzero"`
+	Tail   int       `json:"tail,omitempty"`
+	Cursor time.Time `json:"cursor,omitzero"`
+}
+
+// ContainerLogsResult answers ContainerLogsCommand with the lines in time order. An answer carries lines up to
+// a byte budget well below MaxResponseBytes; More is set when further lines were left out, and Cursor is then
+// the time to continue from. Cursor is the time of the last line plus one nanosecond and is zero when no line
+// was ever returned. The budget never cuts through lines with the same time: they all come in one answer or
+// all in the next, except a single such group larger than the budget, whose remainder is lost.
+type ContainerLogsResult struct {
+	Lines  []ContainerLogLine `json:"lines"`
+	More   bool               `json:"more,omitempty"`
+	Cursor time.Time          `json:"cursor,omitzero"`
+}
+
+// ContainerLogLine is one line. Source is the container name; Stream is stdout or stderr. Text is redacted and
+// has control characters masked; Truncated marks a line that was longer than the service reads.
+type ContainerLogLine struct {
+	Time      time.Time `json:"time"`
+	Source    string    `json:"source"`
+	Stream    string    `json:"stream"`
+	Text      string    `json:"text"`
+	Truncated bool      `json:"truncated,omitempty"`
+}
+
 // The codes of a container engine that cannot be used; a missing container is CodeNotFound and an answer
 // beyond MaxResponseBytes is CodeTooLarge.
 const (

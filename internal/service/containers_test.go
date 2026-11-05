@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -33,6 +34,7 @@ type fakeDocker struct {
 	stats    map[string]docker.Stats
 	listErr  error
 	statsErr map[string]error
+	logs     map[string][]docker.LogLine // by container ID, in time order
 
 	inflight, peak atomic.Int32
 
@@ -114,6 +116,37 @@ func (f *fakeDocker) Stats(_ context.Context, ref string) (docker.Stats, error) 
 	}
 	return f.stats[ref], nil
 }
+
+// Logs serves the lines of logs[id] like the engine: from Since, up to Until, the last Tail of them.
+func (f *fakeDocker) Logs(_ context.Context, ref string, o docker.LogOptions) (service.LogReader, error) {
+	d, ok := f.details[ref]
+	if !ok {
+		d = docker.Details{Container: docker.Container{ID: ref}}
+	}
+	var lines []docker.LogLine
+	for _, l := range f.logs[d.ID] {
+		if !l.Time.Before(o.Since) && (o.Until.IsZero() || !l.Time.After(o.Until)) {
+			lines = append(lines, l)
+		}
+	}
+	if o.Tail > 0 && len(lines) > o.Tail {
+		lines = lines[len(lines)-o.Tail:]
+	}
+	return &sliceStream{lines: lines}, nil
+}
+
+type sliceStream struct{ lines []docker.LogLine }
+
+func (s *sliceStream) Next() (docker.LogLine, error) {
+	if len(s.lines) == 0 {
+		return docker.LogLine{}, io.EOF
+	}
+	l := s.lines[0]
+	s.lines = s.lines[1:]
+	return l, nil
+}
+
+func (s *sliceStream) Close() error { return nil }
 
 func withDocker(d service.Docker) func(*service.Config) {
 	return func(c *service.Config) { c.Docker = d }

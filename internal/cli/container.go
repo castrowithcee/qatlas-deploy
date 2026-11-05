@@ -22,13 +22,13 @@ import (
 func newContainerCommand(program *cobracli.Program, state *notRunning) *cobra.Command {
 	group := &cobra.Command{
 		Use:   "container",
-		Short: "Show the containers of the host and start, stop or restart one",
+		Short: "Show the containers of the host and their logs, and start, stop or restart one",
 		Long: "The container commands read every container of the host from the container engine: the stacks of this\n" +
-			"host (own), other Compose projects (foreign) and containers that belong to no project (single). list\n" +
-			"and show change nothing; start, stop and restart act on one container after a question. Only root may\n" +
+			"host (own), other Compose projects (foreign) and containers that belong to no project (single). list,\n" +
+			"show and logs change nothing; start, stop and restart act on one container after a question. Only root may\n" +
 			"use the service channel, so run them with sudo. See 'qdeploy help containers'.",
 	}
-	group.AddCommand(newContainerList(program, state), newContainerShow(program, state))
+	group.AddCommand(newContainerList(program, state), newContainerShow(program, state), newContainerLogs(program, state))
 	for _, verb := range []string{"start", "stop", "restart"} {
 		group.AddCommand(newContainerAction(program, state, verb))
 	}
