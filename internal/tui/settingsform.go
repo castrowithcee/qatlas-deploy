@@ -302,7 +302,7 @@ func (m *Model) submitWindow(f *settingsForm, days, start, duration, zone string
 	var details []string
 	if want := splitList(days); len(want) > 0 && strings.Join(want, ",") != strings.Join(cur.Days, ",") {
 		args.Days = want
-		details = append(details, m.text.Lookup(textDetailDays, strings.Join(want, ",")))
+		details = append(details, m.text.Lookup(textDetailDays, m.dayList(want)))
 	}
 	for _, part := range []struct {
 		value, current string

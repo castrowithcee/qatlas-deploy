@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -708,23 +709,22 @@ func (m *Model) windowLines(width int) []string {
 		return m.partLines(s.window, width)
 	}
 	w := s.windowRes
-	layout := "Mon 2006-01-02 15:04"
 	state := t.Lookup(textHeaderWindowShut)
 	if w.Open {
 		state = t.Lookup(textHeaderWindowOpen)
 	}
 	lines := []string{
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDays, strings.Join(w.Days, ",")), width),
+		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDays, m.dayList(w.Days)), width),
 		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailStart, w.Start), width),
 		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDuration, w.Duration), width),
 		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailZone, w.Zone), width),
 		m.line(detailIndent, kittui.StyleText, state, width),
 	}
 	if !w.NextOpening.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailNext, w.NextOpening.Format(layout)), width))
+		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailNext, m.stamp(w.NextOpening)), width))
 	}
 	if !w.LastRun.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastRun, w.LastRun.Format(layout)), width))
+		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastRun, m.stamp(w.LastRun)), width))
 	}
 	return lines
 }
@@ -763,4 +763,26 @@ func (m *Model) settingsPosition() string {
 		return l.Position()
 	}
 	return ""
+}
+
+var weekdayTexts = [...]kittui.TextID{textWeekdaySun, textWeekdayMon, textWeekdayTue, textWeekdayWed, textWeekdayThu, textWeekdayFri, textWeekdaySat}
+
+var dayWords = map[string]time.Weekday{"mon": time.Monday, "tue": time.Tuesday, "wed": time.Wednesday,
+	"thu": time.Thursday, "fri": time.Friday, "sat": time.Saturday, "sun": time.Sunday}
+
+// stamp formats a time with the weekday in the UI language.
+func (m *Model) stamp(t time.Time) string {
+	return m.text.Lookup(weekdayTexts[t.Weekday()]) + " " + t.Format("2006-01-02 15:04")
+}
+
+// dayList shows command day words in the UI language, lower case; an unknown word stays as given.
+func (m *Model) dayList(days []string) string {
+	out := make([]string, len(days))
+	for i, d := range days {
+		out[i] = d
+		if wd, ok := dayWords[d]; ok {
+			out[i] = strings.ToLower(m.text.Lookup(weekdayTexts[wd]))
+		}
+	}
+	return strings.Join(out, ",")
 }
