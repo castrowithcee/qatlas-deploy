@@ -38,6 +38,7 @@ const (
 	textStateStopped       kittui.TextID = "state.stopped"
 	textStatePaused        kittui.TextID = "state.paused"
 	textStatePinned        kittui.TextID = "state.pinned"
+	textStateCtrFailed     kittui.TextID = "state.containerfailed"
 	textStateFailed        kittui.TextID = "state.failed"
 	textStatePending       kittui.TextID = "state.pending"
 	textStateDeployed      kittui.TextID = "state.deployed"
@@ -63,6 +64,7 @@ const (
 
 	textStateRollbackPauseS kittui.TextID = "state.rollbackpause.short"
 	textStatePendingS       kittui.TextID = "state.pending.short"
+	textStateCtrFailedS     kittui.TextID = "state.containerfailed.short"
 	textStateNotDeployedS   kittui.TextID = "state.notdeployed.short"
 	textAvailErrorS         kittui.TextID = "avail.error.short"
 
@@ -237,12 +239,14 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textStateStopped:        "stopped",
 			textStatePaused:         "paused",
 			textStatePinned:         "pinned",
+			textStateCtrFailed:      "container failed",
 			textStateFailed:         "failed",
 			textStatePending:        "pending",
 			textStateDeployed:       "deployed",
 			textStateNotDeployed:    "not deployed",
 			textStateRollbackPauseS: "rollback",
 			textStatePendingS:       "pending",
+			textStateCtrFailedS:     "down",
 			textStateNotDeployedS:   "new",
 
 			textResultSucceeded:      "succeeded",
@@ -419,12 +423,14 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textStateStopped:        "gestoppt",
 			textStatePaused:         "pausiert",
 			textStatePinned:         "gepinnt",
+			textStateCtrFailed:      "Container ausgefallen",
 			textStateFailed:         "fehlgeschlagen",
 			textStatePending:        "ausstehend",
 			textStateDeployed:       "deployt",
 			textStateNotDeployed:    "nicht deployt",
 			textStateRollbackPauseS: "Rollback",
 			textStatePendingS:       "offen",
+			textStateCtrFailedS:     "Ausfall",
 			textStateNotDeployedS:   "neu",
 
 			textResultSucceeded:      "erfolgreich",

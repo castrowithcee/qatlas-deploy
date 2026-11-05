@@ -10,10 +10,10 @@ qdeploy  maintenance window closed                                              
   Type   | webhook                                                                                                   v |
          +-------------------------------------------------------------------------------------------------------------+
          #=============================================================================================================#
-> Events | >[x] succeeded  [ ] failed  [ ] rolled-back  [ ] rollback-failed  [ ] update-available                      |
+> Events | >[x] succeeded  [ ] failed  [ ] rolled-back  [ ] rollback-failed  [ ] container-failed  [ ] recovered       |
+         |  [ ] update-available                                                                                       |
          #=============================================================================================================#
          space ticks; none ticked means all                                                                             
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

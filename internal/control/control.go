@@ -203,6 +203,16 @@ type StackStatus struct {
 	Pinned        *HoldInfo `json:"pinned,omitempty"`
 	// Stopped is set while the stack was stopped through qdeploy and gets no runs until it is started.
 	Stopped *HoldInfo `json:"stopped,omitempty"`
+	// Failure is the container failure the monitoring found; it is cleared when the monitoring finds it recovered.
+	Failure *FailureInfo `json:"failure,omitempty"`
+}
+
+// FailureInfo is a failure of a stack's containers: exited, unhealthy, restart-loop or missing, the container
+// (the service for a missing one) and since when.
+type FailureInfo struct {
+	Kind      string    `json:"kind"`
+	Container string    `json:"container,omitempty"`
+	Since     time.Time `json:"since"`
 }
 
 // HoldInfo says since when an operator mark is set.

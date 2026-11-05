@@ -64,6 +64,12 @@ const (
 	textDetailStopped        kittui.TextID = "detail.stopped"
 	textStoppedSince         kittui.TextID = "stopped.since"
 	textStoppedHint          kittui.TextID = "stopped.hint"
+	textDetailFailure        kittui.TextID = "detail.failure"
+	textFailureLine          kittui.TextID = "failure.line"
+	textFailureExited        kittui.TextID = "failure.exited"
+	textFailureUnhealthy     kittui.TextID = "failure.unhealthy"
+	textFailureRestartLoop   kittui.TextID = "failure.restartloop"
+	textFailureMissing       kittui.TextID = "failure.missing"
 )
 
 func detailEnglish() map[kittui.TextID]string {
@@ -104,6 +110,12 @@ func detailEnglish() map[kittui.TextID]string {
 		textDataDirsHint:         "The stack waits until these directories exist. {datadirs} creates them with an owner and mode you confirm, then deploys the stack.",
 		textDetailStopped:        "Stopped",
 		textStoppedSince:         "Stopped since %s",
+		textDetailFailure:        "Failure",
+		textFailureLine:          "%s: %s, since %s",
+		textFailureExited:        "exited",
+		textFailureUnhealthy:     "unhealthy",
+		textFailureRestartLoop:   "restart loop",
+		textFailureMissing:       "missing",
 		textStoppedHint:          "The stack stays stopped: commits, the maintenance window and updates leave it out. {stackstart} starts it and lifts the mark.",
 		textDataDirsIntro:        "Missing below %s:",
 		textKeyDataDirs:          "create data directories",
@@ -169,6 +181,12 @@ func detailGerman() map[kittui.TextID]string {
 		textDataDirsHint:         "Der Stack wartet, bis diese Ordner existieren. {datadirs} legt sie mit dem bestätigten Besitzer und Modus an und rollt den Stack danach aus.",
 		textDetailStopped:        "Gestoppt",
 		textStoppedSince:         "Gestoppt seit %s",
+		textDetailFailure:        "Ausfall",
+		textFailureLine:          "%s: %s, seit %s",
+		textFailureExited:        "beendet",
+		textFailureUnhealthy:     "nicht gesund",
+		textFailureRestartLoop:   "Neustartschleife",
+		textFailureMissing:       "fehlt",
 		textStoppedHint:          "Der Stack bleibt gestoppt: Commits, das Wartungsfenster und Updates lassen ihn aus. {stackstart} startet ihn und hebt die Markierung auf.",
 		textDataDirsIntro:        "Fehlend unter %s:",
 		textKeyDataDirs:          "Datenordner anlegen",
