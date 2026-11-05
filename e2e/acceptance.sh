@@ -6,7 +6,7 @@
 # Both stacks are deployed and get test data. A real maintenance window then updates them with a version commit
 # each, after the changelog was shown; a later update to the test tags with a failing healthcheck ends with the
 # data restored, a revert commit and a message at the webhook; an older backup is restored with owners and modes
-# of the data kept; the wait of a stack command during a deliberately slow fetch is measured.
+# of the data kept; a stack command must not wait more than 5 seconds during a deliberately slow fetch or poll.
 # Sourced by run.sh acceptance after scenario.sh, whose helpers it uses.
 
 # The stack folder is the administrator's free choice; it does not exist until the setup creates it.
@@ -420,33 +420,77 @@ acc_restore_older() {
 	acc "restore of the older backup $older of $stack: '$acc_beta' gone, '$acc_alpha' there; owner:group:mode of $(wc -l <"$work/tree-$stack-before") paths in data/ unchanged"
 }
 
-# acc_lock_wait makes the git server slow to pack objects, starts a fetch and measures how long a stack list waits.
+# acc_slow_git makes the git server slow to pack objects when $1 is on and restores it when $1 is off. The
+# restore leaves the log of the slow packings in $slow.
+acc_slow_git() {
+	if [ "$1" = on ]; then
+		docker exec "$prefix-git" sh -ec '
+			printf "#!/bin/sh\necho slow >>/tmp/qdeploye2e-slow-pack.log\nsleep 15\nexec \"\$@\"\n" >/usr/local/bin/qdeploye2e-slow-pack
+			chmod 755 /usr/local/bin/qdeploye2e-slow-pack
+			rm -f /tmp/qdeploye2e-slow-pack.log
+			git config --system uploadpack.packObjectsHook /usr/local/bin/qdeploye2e-slow-pack'
+		return
+	fi
+	docker exec "$prefix-git" sh -ec 'git config --system --unset uploadpack.packObjectsHook; rm -f /usr/local/bin/qdeploye2e-slow-pack'
+	slow=$(docker exec "$prefix-git" cat /tmp/qdeploye2e-slow-pack.log 2>/dev/null || true)
+	docker exec "$prefix-git" rm -f /tmp/qdeploye2e-slow-pack.log
+}
+
+# acc_push_note pushes a commit with a new note, so that the next fetch has objects to pack.
+acc_push_note() {
+	as_admin "cd ~/stacks && git pull -q --ff-only && printf '$1\n' >note.txt && git add note.txt &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -m 'Add a note' && git push -q origin main"
+}
+
+# acc_list_wait times sudo qdeploy stack list. It sets $waited and $list_rc and leaves the verdict to
+# acc_list_verdict, so the git server can be restored first.
+acc_list_wait() {
+	list_start=$(date +%s%N)
+	list_rc=0
+	as_admin 'sudo qdeploy stack list' >/dev/null || list_rc=$?
+	list_end=$(date +%s%N)
+	waited=$(LC_ALL=C awk -v a="$list_start" -v b="$list_end" 'BEGIN { printf "%.1f", (b - a) / 1e9 }')
+}
+
+# acc_list_verdict fails unless the stack list during $1 succeeded within 5 seconds.
+acc_list_verdict() {
+	[ "$list_rc" = 0 ] || fail "stack list failed during $1"
+	LC_ALL=C awk -v w="$waited" 'BEGIN { exit !(w <= 5) }' || fail "stack list waited ${waited}s during $1; the limit is 5s"
+}
+
+# acc_lock_wait makes the git server slow to pack objects and measures how long a stack list waits during a
+# fetch and during a poll of the engine; each wait must stay within 5 seconds.
 acc_lock_wait() {
 	step 'the git server is made slow, a fetch starts, and sudo qdeploy stack list is timed'
-	docker exec "$prefix-git" sh -ec '
-		printf "#!/bin/sh\necho slow >>/tmp/qdeploye2e-slow-pack.log\nsleep 15\nexec \"\$@\"\n" >/usr/local/bin/qdeploye2e-slow-pack
-		chmod 755 /usr/local/bin/qdeploye2e-slow-pack
-		rm -f /tmp/qdeploye2e-slow-pack.log
-		git config --system uploadpack.packObjectsHook /usr/local/bin/qdeploye2e-slow-pack'
-	as_admin "cd ~/stacks && git pull -q --ff-only && printf 'invented note\n' >note.txt && git add note.txt &&
-		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -m 'Add a note' && git push -q origin main"
+	acc_slow_git on
+	acc_push_note 'invented note'
 	rm -f "$work/fetch.rc"
 	fetch_start=$(date +%s%N)
 	( rc=0; qd repo fetch >"$work/fetch.out" || rc=$?; echo $rc >"$work/fetch.rc" ) &
 	sleep 2
-	list_start=$(date +%s%N)
-	as_admin 'sudo qdeploy stack list' >/dev/null || fail 'stack list failed during the fetch'
-	list_end=$(date +%s%N)
+	acc_list_wait
 	wait_for 'the fetch to end' 120 test -s "$work/fetch.rc"
 	fetch_end=$(date +%s%N)
-	docker exec "$prefix-git" sh -ec 'git config --system --unset uploadpack.packObjectsHook; rm -f /usr/local/bin/qdeploye2e-slow-pack'
-	slow=$(docker exec "$prefix-git" cat /tmp/qdeploye2e-slow-pack.log 2>/dev/null || true)
-	docker exec "$prefix-git" rm -f /tmp/qdeploye2e-slow-pack.log
+	acc_slow_git off
 	[ -n "$slow" ] || fail 'the fetch did not go through the slow packing of the git server'
 	[ "$(cat "$work/fetch.rc")" = 0 ] || fail "the fetch failed: $(cat "$work/fetch.out")"
-	waited=$(LC_ALL=C awk -v a="$list_start" -v b="$list_end" 'BEGIN { printf "%.1f", (b - a) / 1e9 }')
+	acc_list_verdict 'a fetch'
 	fetched=$(LC_ALL=C awk -v a="$fetch_start" -v b="$fetch_end" 'BEGIN { printf "%.1f", (b - a) / 1e9 }')
 	acc "stack list waited ${waited}s during a fetch (the fetch took ${fetched}s)"
+
+	step 'the git server is made slow, the engine polls after a restart, and sudo qdeploy stack list is timed'
+	acc_slow_git on
+	acc_push_note 'another invented note'
+	restart_service
+	wait_for 'the poll to reach the slow packing' 20 docker exec "$prefix-git" test -s /tmp/qdeploye2e-slow-pack.log
+	polling=
+	poll_done || polling=yes
+	acc_list_wait
+	wait_for 'the poll to end' 120 poll_done
+	acc_slow_git off
+	[ -n "$polling" ] || fail 'the poll was over before the stack list started'
+	acc_list_verdict 'a poll'
+	acc "stack list waited ${waited}s during a poll of the engine"
 }
 
 run_acceptance() {

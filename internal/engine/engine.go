@@ -35,9 +35,11 @@ const (
 	DefaultInterval   = 5 * time.Minute
 	MinInterval       = 10 * time.Second
 	DefaultRunTimeout = 30 * time.Minute
-	idleWait          = time.Minute
-	maxSpread         = time.Minute
-	maxFindingPaths   = 5
+	// DefaultLockWait stays below the call limit of the command line, so a command answers ErrBusy in time.
+	DefaultLockWait = 20 * time.Second
+	idleWait        = time.Minute
+	maxSpread       = time.Minute
+	maxFindingPaths = 5
 
 	stateFile = "state.json"
 	engineDir = "deploy"
@@ -58,6 +60,9 @@ var (
 	ErrPaused       = errors.New("the stack is paused after a failed rollback")
 	ErrNotPaused    = errors.New("the stack is not paused")
 	ErrPinned       = errors.New("the stack is pinned")
+	// ErrBusy means a command gave up waiting for the working-copy lock, which an update's commit and push or a
+	// rollback's revert may hold for minutes.
+	ErrBusy = errors.New("the working copy is busy; try again")
 	// ErrNoBackup is what Deployer.Backup returns for a stack without backup rules: the run goes on without a
 	// backup, and a rollback without a data restore.
 	ErrNoBackup       = errors.New("the stack has no backup rules")
@@ -72,7 +77,7 @@ type WorkingCopy interface {
 	RemoteHead(ctx context.Context) (string, error)
 	Status(ctx context.Context) ([]gitrepo.Change, error)
 	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
-	FastForward(ctx context.Context) error
+	FastForward(ctx context.Context, commit string) error
 	RevertStack(ctx context.Context, stack, deployed, failed, reason string) (string, error)
 	CommitFile(ctx context.Context, path string, edit func(old []byte) ([]byte, error), message string) (string, error)
 	IsAncestor(ctx context.Context, a, b string) (bool, error)
@@ -126,8 +131,14 @@ type Config struct {
 	// Source returns the current binding, ErrNoRepo while none exists. It is called without Lock held and
 	// again in every cycle, so a binding made later is picked up.
 	Source func() (Binding, error)
-	// Lock serializes all use of the working copy with the other users of it. Nil means a private mutex.
+	// Lock serializes moving and evaluating the working copy with the other users of it; the engine holds it
+	// over a fetch or a push only in a run's commit or revert. Nil means a private mutex.
 	Lock sync.Locker
+	// Refs serializes every fetch and every update of the remote-tracking ref with the other users of the
+	// working copy. Whoever needs both takes Lock first. Nil means a private mutex.
+	Refs sync.Locker
+	// LockWait bounds how long a command waits for Lock before it answers ErrBusy; DefaultLockWait when zero.
+	LockWait time.Duration
 	// Deployer is nil in a service that cannot deploy yet: the engine then only polls, fast-forwards and
 	// reports pending stacks, and never starts a run or records a deployed commit.
 	Deployer Deployer
@@ -151,6 +162,7 @@ type Config struct {
 type Engine struct {
 	cfg   Config
 	lock  sync.Locker
+	refs  sync.Locker
 	store *configfile.Store[State]
 	logs  logStore
 
@@ -158,9 +170,11 @@ type Engine struct {
 	cancel context.CancelFunc
 	wake   chan struct{}
 
-	pollMu  sync.Mutex // one poll at a time
+	pollMu  sync.Mutex // one poll at a time; taken before refs and lock, never while holding either
 	running sync.Mutex // guards the loop flag
 	looping bool
+
+	stateMu sync.Mutex // one state write of this engine at a time, see update
 
 	mu     sync.Mutex // guards active, closed, holds, idle and wg.Add
 	active map[string]string
@@ -184,6 +198,9 @@ func New(cfg Config) (*Engine, error) {
 	if cfg.RunTimeout <= 0 {
 		cfg.RunTimeout = DefaultRunTimeout
 	}
+	if cfg.LockWait <= 0 {
+		cfg.LockWait = DefaultLockWait
+	}
 	if cfg.Clock == nil {
 		cfg.Clock = realClock{}
 	}
@@ -204,11 +221,14 @@ func New(cfg Config) (*Engine, error) {
 		return nil, err
 	}
 	e := &Engine{
-		cfg: cfg, lock: cfg.Lock, store: store, logs: logStore{dir: filepath.Join(dir, runsDir)},
+		cfg: cfg, lock: cfg.Lock, refs: cfg.Refs, store: store, logs: logStore{dir: filepath.Join(dir, runsDir)},
 		wake: make(chan struct{}, 1), active: map[string]string{}, idle: make(chan struct{}),
 	}
 	if e.lock == nil {
 		e.lock = &sync.Mutex{}
+	}
+	if e.refs == nil {
+		e.refs = &sync.Mutex{}
 	}
 	e.base, e.cancel = context.WithCancel(context.Background())
 	return e, nil
@@ -256,7 +276,9 @@ type PollResult struct {
 }
 
 // Poll runs one cycle: fetch, bring the working copy up to date when that is safe, find the stacks that
-// changed since their deployed commit and start a run for each. Runs continue in the background.
+// changed since their deployed commit and start a run for each. Runs continue in the background. The fetch
+// holds only the ref lock and ends before the working-copy lock is taken, so a slow remote keeps no command
+// waiting.
 //
 // When the working copy has local changes outside secrets.env and data/ (anywhere in it, also in files
 // outside the stacks), the fast-forward is not attempted at all: git would either refuse or merge around the
@@ -269,6 +291,11 @@ func (e *Engine) Poll(ctx context.Context) (PollResult, error) {
 	if err != nil {
 		return PollResult{}, err
 	}
+	if err := e.fetch(ctx, b.Copy); err != nil {
+		perr := fmt.Errorf("fetch: %w", err)
+		e.recordPollError(perr)
+		return PollResult{}, perr
+	}
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	res, perr := e.poll(ctx, b)
@@ -278,11 +305,17 @@ func (e *Engine) Poll(ctx context.Context) (PollResult, error) {
 	return res, perr
 }
 
+// fetch fetches under the ref lock alone.
+func (e *Engine) fetch(ctx context.Context, wc WorkingCopy) error {
+	e.refs.Lock()
+	defer e.refs.Unlock()
+	return wc.Fetch(ctx)
+}
+
+// poll evaluates the fetched branch. The caller holds the working-copy lock: only a fetch can move the
+// remote-tracking ref meanwhile, and the fast-forward goes to the commit read here, not further.
 func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 	var res PollResult
-	if err := b.Copy.Fetch(ctx); err != nil {
-		return res, fmt.Errorf("fetch: %w", err)
-	}
 	head, err := b.Copy.Head(ctx)
 	if err != nil {
 		return res, err
@@ -306,7 +339,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 		case e.activeCount() > 0:
 			note = "fast-forward skipped: a run is active"
 		default:
-			if ffErr = b.Copy.FastForward(ctx); ffErr == nil {
+			if ffErr = b.Copy.FastForward(ctx, remote); ffErr == nil {
 				res.FastForwarded = true
 				if head, err = b.Copy.Head(ctx); err != nil {
 					return res, err
@@ -403,7 +436,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 
 	// The state is written before runs start, so a run that ends at once never races a stale write.
 	now := e.cfg.Clock.Now().UTC()
-	_, err = e.store.Update(func(s State) (State, error) {
+	err = e.update(func(s State) (State, error) {
 		s = normalize(s)
 		for name, v := range verdicts {
 			cur := s.Stacks[name]
@@ -473,7 +506,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 
 func (e *Engine) recordPollError(perr error) {
 	now := e.cfg.Clock.Now().UTC()
-	_, err := e.store.Update(func(s State) (State, error) {
+	err := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		s.LastPoll, s.PollError = now, e.text(perr.Error())
 		return s, nil
@@ -602,7 +635,9 @@ func (e *Engine) Trigger(ctx context.Context, name string) (RunInfo, error) {
 	if err != nil {
 		return RunInfo{}, err
 	}
-	e.lock.Lock()
+	if err := e.lockCommand(ctx); err != nil {
+		return RunInfo{}, err
+	}
 	defer e.lock.Unlock()
 	changes, err := b.Copy.Status(ctx)
 	if err != nil {
@@ -700,7 +735,7 @@ func (e *Engine) newLog(now time.Time) (string, io.WriteCloser, error) {
 func (e *Engine) recordDropped(name, trigger string) {
 	now := e.cfg.Clock.Now().UTC()
 	e.cfg.Logger.Info("trigger dropped: a run is active", "stack", name, "trigger", trigger)
-	_, err := e.store.Update(func(s State) (State, error) {
+	err := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur := s.Stacks[name]
 		cur.Dropped = &DroppedTrig{Time: now, Trigger: trigger}
@@ -727,7 +762,7 @@ func (e *Engine) RecordUpdates(stack string, check UpdateCheck) error {
 	if err := validateUpdates(check); err != nil {
 		return err
 	}
-	_, err := e.store.Update(func(s State) (State, error) {
+	err := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur := s.Stacks[stack]
 		cur.Updates = &check
@@ -806,6 +841,15 @@ func (e *Engine) Snapshot() (Snapshot, error) {
 	return Snapshot{State: s, Active: active}, err
 }
 
+// update changes the state. The store's lock orders writers too, but the first write creates the state
+// directory, and two writers doing that at once can fail; the engine's own writers therefore go one at a time.
+func (e *Engine) update(change func(State) (State, error)) error {
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
+	_, err := e.store.Update(change)
+	return err
+}
+
 func (e *Engine) snapshot() (State, error) {
 	s, _, err := e.store.LoadVersioned()
 	if err != nil && !errors.Is(err, errNotExist) {
@@ -870,7 +914,9 @@ func (e *Engine) WithStack(ctx context.Context, name, label string,
 		release func()
 	)
 	err = func() error {
-		e.lock.Lock()
+		if err := e.lockCommand(ctx); err != nil {
+			return err
+		}
 		defer e.lock.Unlock()
 		changes, err := b.Copy.Status(ctx)
 		if err != nil {

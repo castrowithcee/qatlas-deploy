@@ -44,7 +44,9 @@ func (e *Engine) CheckUpdate(ctx context.Context, name string) (stacks.Stack, er
 	if err != nil {
 		return stacks.Stack{}, err
 	}
-	e.lock.Lock()
+	if err := e.lockCommand(ctx); err != nil {
+		return stacks.Stack{}, err
+	}
 	defer e.lock.Unlock()
 	st, head, err := e.updatable(ctx, b, name)
 	if err != nil {
@@ -97,7 +99,9 @@ func (e *Engine) UpdateWhile(ctx context.Context, name string, steps []VersionSt
 		deployed string
 	)
 	err = func() error {
-		e.lock.Lock()
+		if err := e.lockCommand(ctx); err != nil {
+			return err
+		}
 		defer e.lock.Unlock()
 		var head string
 		var err error
@@ -250,8 +254,9 @@ func (e *Engine) stepRun(b Binding, st stacks.Stack, deployed string) (*run, err
 // advance commits the version change of an update step, pushes it and moves the working copy to it. The
 // commit is built on the freshly fetched branch and changes only the variable's line in the stack's .env; a
 // push the remote rejects because the branch moved is built and pushed once more. Like revert it waits until
-// no other run relies on the working copy and returns holding the run's hold again. r.pushed is set as soon
-// as the commit is on the branch: from then on a failure is rolled back with a revert.
+// no other run relies on the working copy, holds the ref lock from its fetch to its fast-forward and returns
+// holding the run's hold again. r.pushed is set as soon as the commit is on the branch: from then on a
+// failure is rolled back with a revert.
 func (r *run) advance(ctx context.Context) error {
 	e, log, wc, ch := r.e, r.log, r.b.Copy, r.change
 	log.Step("commit")
@@ -264,6 +269,8 @@ func (r *run) advance(ctx context.Context) error {
 		e.share()
 		r.held = true
 	}()
+	e.refs.Lock()
+	defer e.refs.Unlock()
 
 	name := r.st.Name
 	message := fmt.Sprintf("Update %s %s from %s to %s", name, ch.Variable, ch.From, ch.To)
@@ -296,7 +303,7 @@ func (r *run) advance(ctx context.Context) error {
 	return r.follow(ctx, at, "update")
 }
 
-// landed fetches and reports whether the branch is at commit c.
+// landed fetches and reports whether the branch is at commit c. The caller holds the ref lock.
 func (r *run) landed(ctx context.Context, c string) bool {
 	if r.b.Copy.Fetch(ctx) != nil {
 		return false

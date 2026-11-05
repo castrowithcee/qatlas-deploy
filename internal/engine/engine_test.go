@@ -40,10 +40,16 @@ type fakeCopy struct {
 	diverged     bool // the working copy has commits the branch lacks
 	commits      []commitCall
 	// files holds what a fast-forward to a commit made by CommitFile or RevertStack writes, by path.
-	files         map[string]map[string][]byte
-	onFetch       func(*fakeCopy) // called with mu held
+	files   map[string]map[string][]byte
+	onFetch func(*fakeCopy) // called with mu held
+	// fetchGate, when set, holds every Fetch until it is closed, outside mu; fetchIn gets a value per held
+	// Fetch.
+	fetchGate     chan struct{}
+	fetchIn       chan struct{}
+	onStatus      func(*fakeCopy) // called with mu held
 	calls         []string
 	fastForwarded int
+	ffTo          []string
 }
 
 type revertCall struct{ Stack, Deployed, Failed, Reason, Base string }
@@ -68,8 +74,22 @@ func (f *fakeCopy) rec(s string) {
 	f.mu.Unlock()
 }
 
-func (f *fakeCopy) Fetch(context.Context) error {
+func (f *fakeCopy) Fetch(ctx context.Context) error {
 	f.rec("fetch")
+	f.mu.Lock()
+	gate, in := f.fetchGate, f.fetchIn
+	f.mu.Unlock()
+	if gate != nil {
+		select {
+		case in <- struct{}{}:
+		default:
+		}
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.onFetch != nil {
@@ -150,6 +170,9 @@ func (f *fakeCopy) RemoteHead(context.Context) (string, error) {
 func (f *fakeCopy) Status(context.Context) ([]gitrepo.Change, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.onStatus != nil {
+		f.onStatus(f)
+	}
 	return slices.Clone(f.changes), nil
 }
 func (f *fakeCopy) ChangedFolders(_ context.Context, from, to string) ([]string, error) {
@@ -157,15 +180,16 @@ func (f *fakeCopy) ChangedFolders(_ context.Context, from, to string) ([]string,
 	defer f.mu.Unlock()
 	return f.folders[[2]string{from, to}], nil
 }
-func (f *fakeCopy) FastForward(context.Context) error {
+func (f *fakeCopy) FastForward(_ context.Context, to string) error {
 	f.rec("ff")
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.ffTo = append(f.ffTo, to)
 	if f.ffErr != nil {
 		return f.ffErr
 	}
 	f.fastForwarded++
-	f.head = f.remote
+	f.head = to
 	for path, body := range f.files[f.head] {
 		if err := os.WriteFile(filepath.Join(f.dir, path), body, 0o644); err != nil {
 			return err

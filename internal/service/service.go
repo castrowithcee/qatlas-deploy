@@ -117,7 +117,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		deployer = redactingDeployer{next: deployer, r: secrets}
 	}
 	eng, err := engine.New(engine.Config{
-		StateDir: cfg.StateDir, Source: repo.engineSource, Lock: &repo.mu, Deployer: deployer,
+		StateDir: cfg.StateDir, Source: repo.engineSource, Lock: &repo.mu, Refs: &repo.refs, Deployer: deployer,
 		Events: notifier.runEvent,
 		Redact: secrets.Apply, Interval: cfg.PollInterval, Clock: cfg.Clock, Logger: log,
 	})
