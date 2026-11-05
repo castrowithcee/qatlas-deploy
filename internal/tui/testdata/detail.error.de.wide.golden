@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen                                                               
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
   demo-stack                                                                                                            
                                                                                                                         
@@ -10,6 +10,9 @@ qdeploy  Wartungsfenster zu                                                     
   Image-Versionen                                                                                                       
     APP_VERSION  example/app                                                                                            
       1.4.2 -> 1.5.0  Update verfügbar                                                                                  
+                                                                                                                        
+  Container                                                                                                             
+    Keine Container dieses Stacks.                                                                                      
                                                                                                                         
   Changelog                                                                                                             
     APP_VERSION  1.4.2 -> 1.5.0                                                                                         
@@ -41,4 +44,4 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden       up/down Scrollen
+a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden       up/down Scrollen

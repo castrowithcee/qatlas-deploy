@@ -46,14 +46,16 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 		t.Fatalf("status = %+v, %v", st, err)
 	}
 	calls := map[string]func() error{
-		"stacks":    func() error { _, err := b.Stacks(ctx); return err },
-		"check":     func() error { _, err := b.Check(ctx, ""); return err },
-		"updates":   func() error { _, err := b.Updates(ctx, control.UpdatesArgs{}); return err },
-		"runs":      func() error { _, err := b.Runs(ctx, ""); return err },
-		"log":       func() error { _, err := b.Log(ctx, "20261030T140200Z-0000000c"); return err },
-		"changelog": func() error { _, err := b.Changelog(ctx, "demo-stack"); return err },
-		"backups":   func() error { _, err := b.Backups(ctx, "demo-stack"); return err },
-		"window":    func() error { _, err := b.Window(ctx); return err },
+		"stacks":     func() error { _, err := b.Stacks(ctx); return err },
+		"check":      func() error { _, err := b.Check(ctx, ""); return err },
+		"updates":    func() error { _, err := b.Updates(ctx, control.UpdatesArgs{}); return err },
+		"runs":       func() error { _, err := b.Runs(ctx, ""); return err },
+		"log":        func() error { _, err := b.Log(ctx, "20261030T140200Z-0000000c"); return err },
+		"changelog":  func() error { _, err := b.Changelog(ctx, "demo-stack"); return err },
+		"backups":    func() error { _, err := b.Backups(ctx, "demo-stack"); return err },
+		"window":     func() error { _, err := b.Window(ctx); return err },
+		"containers": func() error { _, err := b.Containers(ctx); return err },
+		"container":  func() error { _, err := b.Container(ctx, "demo-app"); return err },
 		// The service in this test has no stacks repository, so it refuses each of these before it changes anything.
 		"deploy":  func() error { _, err := b.Deploy(ctx, "demo-stack"); return err },
 		"update":  func() error { _, err := b.Update(ctx, []string{"demo-stack"}); return err },

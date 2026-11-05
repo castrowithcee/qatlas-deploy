@@ -31,6 +31,10 @@ type Backend interface {
 	Window(ctx context.Context) (control.WindowResult, error)
 	// Secrets lists the key names of the secrets of one stack; never a value.
 	Secrets(ctx context.Context, stack string) (control.SecretListResult, error)
+	// Containers lists the containers of the host in groups, without readings of CPU and memory.
+	Containers(ctx context.Context) (control.ContainerListResult, error)
+	// Container reads one container by name; the result holds the names of its environment variables, never values.
+	Container(ctx context.Context, name string) (control.ContainerDetail, error)
 
 	// The calls below change something in the service; the interface makes them only after a confirmation.
 
@@ -81,6 +85,11 @@ const remoteCallLimit = 3 * time.Minute
 // restoreCallLimit bounds a restore, which waits for the stack to stop, unpack and start again; it is the limit
 // of the backup command.
 const restoreCallLimit = 6*time.Hour + time.Minute
+
+// containerCallLimit bounds the container reads. They are one request to the container engine and repeat every
+// few seconds, so a call that hangs gives way early; the engine's own limit is longer and its answer, if any, is
+// only seen when it comes sooner.
+const containerCallLimit = 10 * time.Second
 
 // ChannelBackend is the Backend over the service channel. Every call dials a connection of its own, so calls
 // may run concurrently.
@@ -249,6 +258,16 @@ func (b *ChannelBackend) NotifyTest(ctx context.Context, name string) (res contr
 
 func (b *ChannelBackend) Secrets(ctx context.Context, stack string) (res control.SecretListResult, err error) {
 	err = b.call(ctx, control.SecretListCommand, control.SecretListArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Containers(ctx context.Context) (res control.ContainerListResult, err error) {
+	err = client.Do(ctx, b.endpoint, containerCallLimit, control.ContainerListCommand, control.ContainerListArgs{}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) Container(ctx context.Context, name string) (res control.ContainerDetail, err error) {
+	err = client.Do(ctx, b.endpoint, containerCallLimit, control.ContainerGetCommand, control.ContainerGetArgs{Name: name}, &res)
 	return res, err
 }
 

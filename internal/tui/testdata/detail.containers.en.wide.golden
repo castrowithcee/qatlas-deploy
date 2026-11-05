@@ -1,0 +1,40 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings   5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  demo-stack                                                                                                            
+                                                                                                                        
+  mode      automatic                                                                                                   
+  state     deployed                                                                                                    
+  findings  1 warning                                                                                                   
+                                                                                                                        
+  Image versions                                                                                                        
+    APP_VERSION  example/app                                                                                            
+      1.4.2 -> 1.5.0  update available                                                                                  
+                                                                                                                        
+  Containers                                                                                                            
+    demo-stack-app-1  ok                                                                                                
+      example.invalid/app:1.4.2  3h2m                                                                                   
+    demo-stack-db-1  unhealthy                                                                                          
+      example.invalid/db:16  1m                                                                                         
+                                                                                                                        
+  Changelog                                                                                                             
+    APP_VERSION  1.4.2 -> 1.5.0                                                                                         
+      source example/app                                                                                                
+      1.5.0  Spring release  2026-10-29                                                                                 
+        Adds a dark theme.                                                                                              
+                                                                                                                        
+        - faster start                                                                                                  
+        - fixes the upload limit                                                                                        
+      1.4.3  2026-10-20                                                                                                 
+        Fixes a crash on empty input.                                                                                   
+      more at https://example.invalid/app/releases                                                                      
+                                                                                                                        
+  Secrets                                                                                                               
+    API_SIGNING_KEY                                                                                                     
+    DB_PASSWORD                                                                                                         
+                                                                                                                        
+  Backups                                                                                                               
+    20261030T140100Z-0123abcd                                                                                           
+      10-30 14:01  12.0 MiB                                                                                             
+    20261023T031000Z-4567cdef                                                                                           
+a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                        up/down scroll  36/46

@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                    [?] Hilfe
-  [1 Stacks] 2 Stack-Details 3 Läufe 4 Einstellungen    
+  [1 Stacks] 2 3 4 5                                    
 --------------------------------------------------------
       STACK        VERSION  VERFÜGBAR  ZUSTAND  BEFUNDE 
 > [ ] demo-stack   1.4.2    1.5.0      deployt  1 Warnu~
@@ -11,4 +11,4 @@ qdeploy  Wartungsfenster zu                    [?] Hilfe
                                                         
                                                         
 enter Details  / Suchen  space markieren  u update      
-d deploy  r Neu laden  1-4 Bereich  q Beenden        1/6
+d deploy  r Neu laden  1-5 Bereich  q Beenden        1/6

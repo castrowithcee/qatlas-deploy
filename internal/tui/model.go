@@ -25,6 +25,8 @@ const (
 	// areaSettings holds what a host needs to operate: the repository, the deploy key, credentials, the
 	// maintenance window and the notifications.
 	areaSettings kittui.AreaID = "settings"
+	// areaContainers lists every container of the host; it is the last area so the keys of the others stay.
+	areaContainers kittui.AreaID = "containers"
 )
 
 func areas() []kittui.Area {
@@ -33,6 +35,7 @@ func areas() []kittui.Area {
 		{ID: areaDetail, Title: textAreaDetail},
 		{ID: areaRuns, Title: textAreaRuns},
 		{ID: areaSettings, Title: textAreaSettings},
+		{ID: areaContainers, Title: textAreaContainers},
 	}
 }
 
@@ -106,6 +109,12 @@ type Model struct {
 	// runsOnly limits the Runs area to the chosen stack.
 	runsOnly bool
 	log      runLog
+	// The Containers area: the list read, its rows and the container whose detail is open.
+	ct      containerState
+	ctv     containerView
+	ctList  *kittui.List
+	ctTones map[string]kittui.TextStyle
+	ctNames map[kittui.ItemID]string
 	// modal is the question or result that takes every key; run the sequence of calls under way. stale is set
 	// when a refresh must follow the one under way.
 	set              *settingsState
@@ -135,7 +144,8 @@ func newModel(c config) (*Model, error) {
 	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, frame: kittui.NewFrame(keys, text),
 		loc: c.loc, themes: themes, theme: c.theme, profile: c.profile, charset: c.charset, area: areaStacks,
 		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
-		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick}
+		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick,
+		ctTones: map[string]kittui.TextStyle{}, ctNames: map[kittui.ItemID]string{}}
 	if m.ctx == nil {
 		m.ctx = context.Background()
 	}
@@ -157,6 +167,13 @@ func newModel(c config) (*Model, error) {
 		return nil, err
 	}
 	m.runsList.SetFocused(true)
+	m.ctList, err = kittui.NewList(kittui.ListSpec{Columns: containerColumns(text, m.ctTones), Keys: listKeys(),
+		Search: kittui.SearchByKey, Empty: textCtEmpty}, keys, text)
+	if err != nil {
+		return nil, err
+	}
+	m.ctList.SetFocused(true)
+	m.ctList.SetGrouped(true)
 	if m.set, err = newSettings(keys, text); err != nil {
 		return nil, err
 	}
@@ -182,6 +199,9 @@ func (m *Model) restyle() bool {
 
 func (m *Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.reload(), m.tick()}
+	if m.area == areaContainers {
+		cmds = append(cmds, m.startContainers())
+	}
 	if m.themes.AsksTerminalColors(m.theme, m.profile) {
 		cmds = append(cmds, tea.RequestForegroundColor, tea.RequestBackgroundColor)
 	}
@@ -208,6 +228,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 	case tickMsg:
 		return m, tea.Batch(m.reload(), m.tick())
+	case containerTickMsg:
+		return m, m.containerTick(msg)
+	case containersMsg:
+		m.applyContainers(msg)
+	case containerDetailMsg:
+		m.applyContainer(msg)
 	case refreshMsg:
 		m.apply(msg)
 		if m.stale {
@@ -321,6 +347,11 @@ func (m *Model) input() kittui.InputFocus {
 		return m.settingsInput()
 	case areaStacks:
 		return m.list.Input()
+	case areaContainers:
+		if m.ctv.open {
+			return kittui.InputNavigation
+		}
+		return m.ctList.Input()
 	case areaRuns:
 		if m.log.open {
 			return m.log.view.Input()
@@ -338,6 +369,9 @@ func (m *Model) typed(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
 		return m.open(open), handled
 	case m.area == areaSettings:
 		return m.settingsTyped(msg)
+	case m.area == areaContainers && !m.ctv.open:
+		open, handled := m.ctList.Update(msg)
+		return m.openContainer(open), handled
 	case m.area == areaDetail && m.pick != nil:
 		open, handled := m.pick.list.Update(msg)
 		return m.picked(open), handled
@@ -429,6 +463,15 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 					return nil
 				}
 				return m.enter(areaStacks)
+			case areaContainers:
+				if m.ctv.open {
+					m.ctv = containerView{gen: m.ctv.gen}
+					return nil
+				}
+				if _, handled := m.ctList.Update(msg); !handled {
+					return m.enter(areaStacks)
+				}
+				return nil
 			case areaRuns:
 				switch {
 				case m.log.open:
@@ -447,11 +490,18 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			m.scrollDetail(id)
 			return nil
 		}
+		if m.area == areaContainers && m.ctv.open {
+			m.ctv.top = scrolled(m.ctv.top, m.ctv.total, m.ctv.rows, id)
+			return nil
+		}
 	}
 	switch {
 	case m.area == areaStacks:
 		open, _ := m.list.Update(msg)
 		return m.open(open)
+	case m.area == areaContainers && !m.ctv.open:
+		open, _ := m.ctList.Update(msg)
+		return m.openContainer(open)
 	case m.area == areaRuns && m.log.open:
 		m.log.view.Update(msg)
 	case m.area == areaRuns:
@@ -472,7 +522,9 @@ func (m *Model) reloadAll() tea.Cmd {
 	cmds := []tea.Cmd{m.reload()}
 	switch {
 	case m.area == areaDetail:
-		cmds = append(cmds, m.loadDetail(true))
+		cmds = append(cmds, m.loadDetail(true), m.readContainers())
+	case m.area == areaContainers:
+		cmds = append(cmds, m.readContainers(), m.readContainer())
 	case m.area == areaSettings:
 		cmds = append(cmds, m.loadPage(true))
 	case m.area == areaRuns && m.log.open && !m.log.busy:
@@ -490,7 +542,9 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 	m.area = area
 	switch area {
 	case areaDetail:
-		return m.loadDetail(false)
+		return tea.Batch(m.loadDetail(false), m.readContainers())
+	case areaContainers:
+		return m.startContainers()
 	case areaRuns:
 		return m.followLog()
 	case areaSettings:
@@ -545,14 +599,15 @@ func (m *Model) footer() []kittui.Hint {
 		return append(append([]kittui.Hint{{Action: actEnter, Label: textKeyPick}, {Action: actBack, Label: kittui.TextKeyBack, Priority: 1}},
 			common...), nav...)
 	case m.area == areaDetail:
-		scroll := []kittui.Hint{
-			{Action: actUp, Label: kittui.TextHelpScroll, Kind: kittui.HintNavigation},
-			{Action: actDown, Label: kittui.TextHelpScroll, Kind: kittui.HintNavigation},
-		}
+		scroll := scrollHints()
 		if _, ok := m.rows[m.chosen]; !ok {
 			return common
 		}
 		return append(append(detailHints(), common...), scroll...)
+	case m.area == areaContainers && m.ctv.open:
+		return append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}}, common...), scrollHints()...)
+	case m.area == areaContainers:
+		return m.listFooter(m.ctList, len(m.ctNames), textKeyDetails, common, nav)
 	case m.area == areaRuns && m.log.open:
 		if m.log.view.Searching() {
 			return m.log.view.Hints()
@@ -568,6 +623,13 @@ func (m *Model) footer() []kittui.Hint {
 		return m.listFooter(m.list, len(m.rows), textKeyDetails, common, nav)
 	}
 	return common
+}
+
+func scrollHints() []kittui.Hint {
+	return []kittui.Hint{
+		{Action: actUp, Label: kittui.TextHelpScroll, Kind: kittui.HintNavigation},
+		{Action: actDown, Label: kittui.TextHelpScroll, Kind: kittui.HintNavigation},
+	}
 }
 
 // helpScreen are the keys the help lists for the screen it was opened from.
@@ -641,6 +703,8 @@ func (m *Model) marks() []kittui.StatusMark {
 
 func (m *Model) message() *kittui.Message {
 	switch {
+	case m.area == areaContainers && m.ct.err != nil && m.ct.loaded:
+		return &kittui.Message{Kind: kittui.MessageError, Text: m.containerErrorText(m.ct.err)}
 	case m.failure != "":
 		return &kittui.Message{Kind: kittui.MessageError, Text: m.failure}
 	case m.notice != "":
@@ -665,6 +729,11 @@ func (m *Model) frameSpec() kittui.FrameSpec {
 	case m.area == areaSettings:
 		spec.Position = m.settingsPosition()
 		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
+	case m.area == areaContainers:
+		if !m.ctv.open {
+			spec.Position = m.ctList.Position()
+		}
+		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
 	default:
 		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
 	}
@@ -688,7 +757,7 @@ func (m *Model) render() string {
 	spec := m.frameSpec()
 	room := m.frame.Workspace(spec)
 	spec.Workspace = m.workspace(room.Width, room.Height)
-	if m.area == areaDetail || m.modal != nil && m.modal.sheet() {
+	if m.area == areaDetail || m.area == areaContainers && m.ctv.open || m.modal != nil && m.modal.sheet() {
 		spec.Position = m.scrollNote
 	}
 	view, _ := m.frame.Render(m.styles, spec)
@@ -738,6 +807,9 @@ func (m *Model) workspace(width, height int) string {
 	}
 	if m.area == areaDetail && m.set.form != nil {
 		return m.formView(width, height)
+	}
+	if m.area == areaContainers {
+		return m.containersView(width, height)
 	}
 	if !m.loaded {
 		return m.note(m.text.Lookup(textStacksLoading), width)

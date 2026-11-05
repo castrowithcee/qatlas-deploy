@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen                                                               
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
   demo-stack                                                                                                            
                                                                                                                         
@@ -11,14 +11,14 @@ qdeploy  Wartungsfenster zu                                                     
     APP_VERSION  example/app|   eingespielt.                                               |                            
       1.4.2 -> 1.5.0  Update|                                                              |                            
                             | Der Dienst hat die Änderung vorgenommen.                     |                            
-  Changelog                 |                                                              |                            
-    APP_VERSION  1.4.2 -> 1.| > schließen <                                                |                            
-      Quelle example/app    | n/esc/enter schließen                                        |                            
-      1.5.0  Spring release #==============================================================#                            
+  Container                 |                                                              |                            
+    Keine Container dieses S| > schließen <                                                |                            
+                            | n/esc/enter schließen                                        |                            
+  Changelog                 #==============================================================#                            
+    APP_VERSION  1.4.2 -> 1.5.0                                                                                         
+      Quelle example/app                                                                                                
+      1.5.0  Spring release  2026-10-29                                                                                 
         Adds a dark theme.                                                                                              
                                                                                                                         
         - faster start                                                                                                  
-        - fixes the upload limit                                                                                        
-      1.4.3  2026-10-20                                                                                                 
-        Fixes a crash on empty input.                                                                                   
-                                                                                                                   20/40
+                                                                                                                   20/43

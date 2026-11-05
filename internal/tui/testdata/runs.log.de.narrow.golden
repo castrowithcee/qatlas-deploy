@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-  1 Stacks 2 Stack-Details [3 Läufe] 4 Einstellungen    
+  1 2 [3 Läufe] 4 5                                     
 --------------------------------------------------------
   demo-stack      erfolgreich  20261030T140200Z-0000000c
   step backup                                           
@@ -11,4 +11,4 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   info all services healthy                             
 [ L an ]  [ / ]  [ w aus ]  [ t aus ]   Zeilen 3-9 von 9
 / Suchen  L mitlaufen  w Zeilen umbrechen  t Zeitstempel
-r Neu laden  1-4 Bereich  q Beenden     up/down Scrollen
+r Neu laden  1-5 Bereich  q Beenden     up/down Scrollen

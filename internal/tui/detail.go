@@ -161,24 +161,29 @@ func (m *Model) applyBackups(msg backupsMsg) {
 // scrollDetail moves the first shown line of the detail and keeps it inside the text.
 func (m *Model) scrollDetail(id kittui.ActionID) {
 	d := &m.detail
-	page := max(d.rows-1, 1)
+	d.top = scrolled(d.top, d.total, d.rows, id)
+}
+
+// scrolled is the first shown line after a scroll key, kept inside a text of total lines shown in rows lines.
+func scrolled(top, total, rows int, id kittui.ActionID) int {
+	page := max(rows-1, 1)
 	switch id {
 	case actUp:
-		d.top--
+		top--
 	case actDown:
-		d.top++
+		top++
 	case actPageUp:
-		d.top -= page
+		top -= page
 	case actPageDown:
-		d.top += page
+		top += page
 	case actFirst:
-		d.top = 0
+		top = 0
 	case actLast:
-		d.top = d.total
+		top = total
 	default:
-		return
+		return top
 	}
-	d.top = max(min(d.top, d.total-d.rows), 0)
+	return max(min(top, total-rows), 0)
 }
 
 // detailView is the stack chosen in Stacks: its versions, changelogs, backups and last runs, scrolled to the
@@ -228,6 +233,7 @@ func (m *Model) detailLines(r stackRow, width int) []string {
 		lines = append(lines, body...)
 	}
 	section(textDetailVersions, m.versionLines(r.name, width))
+	section(textDetailContainers, m.stackContainerLines(r.name, width))
 	section(textDetailChangelog, m.changelogLines(width))
 	section(textDetailSecrets, m.secretLines(width))
 	section(textDetailBackups, m.backupLines(width))

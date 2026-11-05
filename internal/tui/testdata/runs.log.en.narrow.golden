@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks   2 Stack detail  [3 Runs]  4 Settings      
+  1 2 [3 Runs] 4 5                                      
 --------------------------------------------------------
   demo-stack        succeeded  20261030T140200Z-0000000c
   step backup                                           
@@ -11,4 +11,4 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   info all services healthy                             
 [ L on ]  [ / ]  [ w off ]  [ t off ]     lines 3-9 of 9
 / search  L follow  w wrap lines  t timestamps  r reload
-1-4 area  q quit                          up/down scroll
+1-5 area  q quit                          up/down scroll

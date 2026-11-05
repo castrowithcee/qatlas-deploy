@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs   4 Settings      
+  1 [2 Stack detail] 3 4 5                              
 --------------------------------------------------------
   demo-stack                                            
                                                         
@@ -10,6 +10,9 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   Image versions                                        
     APP_VERSION  example/app                            
       1.4.2 -> 1.5.0  update available                  
+                                                        
+  Containers                                            
+    No containers of this stack.                        
                                                         
   Changelog                                             
     APP_VERSION  1.4.2 -> 1.5.0                         
@@ -41,4 +44,4 @@ qdeploy  maintenance window closed  [esc] back  [?] help
     failed  10-29 02:00  poll  850ms                    
       20261029T020000Z-00000010                         
 a set secret  x delete secret  R restore backup         
-r reload  1-4 area  q quit         up/down scroll  39/40
+r reload  1-5 area  q quit         up/down scroll  42/43

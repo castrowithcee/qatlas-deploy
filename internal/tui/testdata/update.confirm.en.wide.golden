@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed                                                                              [?] help
-  [1 Stacks]  2 Stack detail   3 Runs   4 Settings                                                                      
+  [1 Stacks]  2 Stack detail   3 Runs   4 Settings   5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
   ! Update demo-stack?                                                                                                  
                                                                                                                         
@@ -21,6 +21,9 @@ qdeploy  maintenance window closed                                              
       1.4.3  2026-10-20                                                                                                 
         Fixes a crash on empty input.                                                                                   
       more at https://example.invalid/app/releases                                                                      
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

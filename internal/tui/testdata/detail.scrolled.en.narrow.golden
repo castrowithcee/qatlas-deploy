@@ -1,6 +1,9 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs   4 Settings      
+  1 [2 Stack detail] 3 4 5                              
 --------------------------------------------------------
+  Containers                                            
+    No containers of this stack.                        
+                                                        
   Changelog                                             
     APP_VERSION  1.4.2 -> 1.5.0                         
       source example/app                                
@@ -9,8 +12,5 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
         - faster start                                  
         - fixes the upload limit                        
-      1.4.3  2026-10-20                                 
-        Fixes a crash on empty input.                   
-      more at https://example.invalid/app/releases      
 a set secret  x delete secret  R restore backup         
-r reload  1-4 area  q quit         up/down scroll  21/40
+r reload  1-5 area  q quit         up/down scroll  21/43
