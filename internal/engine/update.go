@@ -160,8 +160,8 @@ func (e *Engine) updatable(ctx context.Context, b Binding, name string) (stacks.
 	if err != nil {
 		return stacks.Stack{}, "", err
 	}
-	local, dirty := classify(changes)
 	list, loadErr := stacks.Load(b.Dir)
+	local, dirty := classify(changes, list)
 	folder := folderOf(list, name)
 	switch {
 	case len(local[folder]) > 0:
@@ -324,7 +324,7 @@ func (r *run) unchangedOnBranch(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("status: %w", err)
 	}
-	if _, dirty := classify(changes); dirty {
+	if _, dirty := classify(changes, r.stackList()); dirty {
 		return errors.New("the working copy has local changes and cannot follow a new commit; nothing was pushed")
 	}
 	remote, err := wc.RemoteHead(ctx)

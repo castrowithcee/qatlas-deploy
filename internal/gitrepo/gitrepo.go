@@ -1,8 +1,8 @@
 // Package gitrepo runs the system git against the host's stacks repository over SSH with the service's own
-// deploy key. The remote and the working copy are untrusted: git gets a fresh minimal environment, no user or
-// system configuration, no hooks, only the SSH transport and a pinned known_hosts file, and its output and run
-// time are bounded. Nothing goes through a shell except what git itself hands to GIT_SSH_COMMAND, which here
-// contains only validated, quote-free words.
+// deploy key, or, in local mode, against a repository without a remote. The remote and the working copy are
+// untrusted: git gets a fresh minimal environment, no user or system configuration, no hooks, only the SSH
+// transport and a pinned known_hosts file, and its output and run time are bounded. Nothing goes through a
+// shell except what git itself hands to GIT_SSH_COMMAND, which here contains only validated, quote-free words.
 package gitrepo
 
 import (
@@ -40,10 +40,14 @@ var (
 )
 
 // Config names the files git's SSH child may use. Both paths must be absolute and consist of plain path
-// characters, because they are words of GIT_SSH_COMMAND.
+// characters, because they are words of GIT_SSH_COMMAND; in local mode both may be empty.
 type Config struct {
 	// KeyFile is the private deploy key, KnownHosts the pinned host keys.
 	KeyFile, KnownHosts string
+	// Local selects the local mode: the checked-out branch itself is the base, nothing is fetched or pushed,
+	// and Push lands a commit on the branch as a fast-forward. Otherwise the base is the remote-tracking ref
+	// of origin.
+	Local bool
 	// Timeout bounds one git call; zero means DefaultTimeout.
 	Timeout time.Duration
 
@@ -82,6 +86,9 @@ func Open(cfg Config, dir string) (*Repo, error) {
 // Clone clones url into dir, which must not exist or be empty, checks out the remote's default branch and
 // returns the handle.
 func Clone(ctx context.Context, cfg Config, url, dir string) (*Repo, error) {
+	if cfg.Local {
+		return nil, errors.New("clone needs the remote mode")
+	}
 	r, err := Open(cfg, dir)
 	if err != nil {
 		return nil, err
@@ -103,10 +110,11 @@ func Clone(ctx context.Context, cfg Config, url, dir string) (*Repo, error) {
 	return r, nil
 }
 
-// Fetch updates the remote-tracking ref of the checked-out branch and leaves the working copy alone.
+// Fetch updates the remote-tracking ref of the checked-out branch and leaves the working copy alone. In local
+// mode there is nothing to fetch; it only requires a checked-out branch.
 func (r *Repo) Fetch(ctx context.Context) error {
 	branch, err := r.branch(ctx)
-	if err != nil {
+	if err != nil || r.cfg.Local {
 		return err
 	}
 	spec := "+refs/heads/" + branch + ":refs/remotes/origin/" + branch
@@ -118,8 +126,11 @@ func (r *Repo) Fetch(ctx context.Context) error {
 	return nil
 }
 
-// RemoteURL returns the URL of the remote "origin".
+// RemoteURL returns the URL of the remote "origin". A working copy in local mode has none.
 func (r *Repo) RemoteURL(ctx context.Context) (string, error) {
+	if r.cfg.Local {
+		return "", errors.New("the working copy is in local mode and has no remote")
+	}
 	out, err := r.run(ctx, true, maxErrorText, "config", "--local", "--get", "remote.origin.url")
 	url := strings.TrimSpace(out)
 	if err != nil || url == "" {
@@ -133,13 +144,26 @@ func (r *Repo) Head(ctx context.Context) (string, error) {
 	return r.revParse(ctx, "HEAD^{commit}")
 }
 
-// RemoteHead returns the commit id of the branch as of the last Fetch.
+// RemoteHead returns the commit id of the base ref: the branch as of the last Fetch, in local mode the
+// checked-out branch itself.
 func (r *Repo) RemoteHead(ctx context.Context) (string, error) {
+	ref, err := r.baseRef(ctx)
+	if err != nil {
+		return "", err
+	}
+	return r.revParse(ctx, ref+"^{commit}")
+}
+
+// baseRef is the ref new commits are built on: refs/remotes/origin/<branch>, in local mode refs/heads/<branch>.
+func (r *Repo) baseRef(ctx context.Context) (string, error) {
 	branch, err := r.branch(ctx)
 	if err != nil {
 		return "", err
 	}
-	return r.revParse(ctx, "refs/remotes/origin/"+branch+"^{commit}")
+	if r.cfg.Local {
+		return "refs/heads/" + branch, nil
+	}
+	return "refs/remotes/origin/" + branch, nil
 }
 
 // FastForward moves the checked-out branch to commit, a full commit id the caller read before, and only if that
@@ -295,10 +319,11 @@ func (r *Repo) runEnv(ctx context.Context, inRepo bool, outLimit int, extraEnv [
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	full := append(r.baseOptions(), args...)
+	full := r.baseOptions()
 	if inRepo {
-		full = slices.Insert(full, len(r.baseOptions()), "-C", r.dir)
+		full = append(full, "-C", r.dir)
 	}
+	full = append(full, args...)
 	cmd := exec.CommandContext(ctx, gitPath, full...)
 	cmd.Dir = tmp
 	cmd.Env = env
@@ -334,26 +359,31 @@ type runFailure struct {
 func (f *runFailure) Error() string { return f.text }
 
 // baseOptions switches off everything repository-defined code could hang on and the transports other than
-// SSH.
+// SSH. safe.directory admits the working copy when another user owns it; git honours it only from protected
+// configuration such as the command line, and compares it with the resolved path.
 func (r *Repo) baseOptions() []string {
 	fileAllow := "never"
 	if r.cfg.test.allowLocal {
 		fileAllow = "always"
 	}
-	return []string{
+	opts := []string{"-c", "safe.directory=" + r.dir}
+	if real, err := filepath.EvalSymlinks(r.dir); err == nil && real != r.dir {
+		opts = append(opts, "-c", "safe.directory="+real)
+	}
+	return append(opts,
 		"-c", "core.hooksPath=/dev/null",
 		"-c", "core.fsmonitor=false",
 		"-c", "core.untrackedCache=false",
 		"-c", "core.attributesFile=/dev/null",
 		"-c", "credential.helper=",
-		"-c", "protocol.file.allow=" + fileAllow,
+		"-c", "protocol.file.allow="+fileAllow,
 		"-c", "protocol.ext.allow=never",
 		"-c", "submodule.recurse=false",
 		"-c", "fetch.recurseSubmodules=false",
 		"-c", "transfer.fsckObjects=true",
 		"-c", "gc.auto=0",
 		"-c", "maintenance.auto=false",
-	}
+	)
 }
 
 // environment is everything the child gets; nothing of the caller's environment is passed on.
@@ -396,6 +426,9 @@ func (r *Repo) environment(tmp string) []string {
 }
 
 func checkConfig(cfg Config) error {
+	if cfg.Local && cfg.KeyFile == "" && cfg.KnownHosts == "" {
+		return nil
+	}
 	for _, p := range []string{cfg.KeyFile, cfg.KnownHosts} {
 		if !safePathRe.MatchString(p) || filepath.Clean(p) != p {
 			return errors.New("key and known_hosts paths must be absolute, clean and use only letters, digits and ._/@+-")

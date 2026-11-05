@@ -47,6 +47,9 @@ type Stack struct {
 	Dir string
 	// ComposeFiles are the compose files in merge order, relative to Dir.
 	ComposeFiles []string
+	// BindMounts are the sorted host paths, relative to Dir, that a service of the compose files mounts as a bind
+	// mount and that lie below Dir. A source with a variable, one outside Dir and Dir itself are left out.
+	BindMounts []string
 	// Env holds the values of .env; never of secrets.env.
 	Env map[string]string
 	// Images lists every service image whose tag is a variable.
@@ -178,6 +181,7 @@ func loadStack(dir, folder string) (Stack, bool) {
 		return s, false
 	}
 	s.ComposeFiles = files
+	s.BindMounts = readBindMounts(dir, files)
 
 	if s.EnvErr == nil {
 		images, err := readImages(dir, files)
