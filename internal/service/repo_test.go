@@ -422,36 +422,48 @@ func TestCheckReportsFindingsPerStack(t *testing.T) {
 	if err := h.call(control.StacksCheckCommand, control.StacksCheckArgs{}, &res); err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Stacks) != 2 || res.Dir != h.dir {
+	if len(res.Stacks) != 2 || res.Dir != h.dir || res.Stacks[0].Stack != "bad-stack" || res.Stacks[1].Stack != "good-stack" {
 		t.Fatalf("result = %+v", res)
 	}
 	rules := map[string]string{}
-	for _, f := range res.Findings {
-		if f.Stack == "good-stack" {
-			t.Errorf("finding for the conformant stack: %+v", f)
+	for _, rep := range res.Stacks {
+		if len(rep.Functions) != 5 || rep.Functions[0].Function != "deploy" || rep.Functions[4].Function != "redact" {
+			t.Errorf("functions of %s: %+v", rep.Stack, rep.Functions)
 		}
-		if f.Cause == "" || f.Fix == "" || (f.Severity != "error" && f.Severity != "warning") {
-			t.Errorf("incomplete finding %+v", f)
+		for _, f := range rep.Functions {
+			if f.Reason == "" || strings.Contains(f.Reason+f.Action, checkSecret) {
+				t.Errorf("function %+v", f)
+			}
 		}
-		if strings.Contains(f.Cause+f.Fix, checkSecret) {
-			t.Errorf("secret value in %+v", f)
+		for _, f := range rep.Findings {
+			if rep.Stack == "good-stack" {
+				t.Errorf("finding for the conformant stack: %+v", f)
+			}
+			if f.Stack != rep.Stack || f.Cause == "" || f.Fix == "" || (f.Severity != "error" && f.Severity != "warning") {
+				t.Errorf("incomplete finding %+v", f)
+			}
+			if strings.Contains(f.Cause+f.Fix, checkSecret) {
+				t.Errorf("secret value in %+v", f)
+			}
+			rules[f.Rule] = f.Severity
 		}
-		rules[f.Rule] = f.Severity
 	}
-	for _, want := range []string{"floating-image-tag", "duplicate-key", "tracked-secrets-env"} {
-		if rules[want] != "error" {
-			t.Errorf("missing error %s in %v", want, rules)
-		}
+	// The repository has a remote, so the versioned secrets.env is an error; the floating tag only stops updates.
+	if rules["tracked-secrets-env"] != "error" || rules["duplicate-key"] != "warning" || len(rules) != 2 {
+		t.Errorf("rules %v", rules)
 	}
-	if res.Errors != 3 || res.Warnings != 0 {
+	if res.Errors != 1 || res.Warnings != 1 {
 		t.Fatalf("counts = %d errors, %d warnings", res.Errors, res.Warnings)
+	}
+	if up := res.Stacks[0].Functions[1]; up.Works || up.Mode != "none" || !strings.Contains(up.Reason, "latest") {
+		t.Errorf("update of bad-stack = %+v", up)
 	}
 
 	var one control.StacksCheckResult
 	if err := h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "good-stack"}, &one); err != nil {
 		t.Fatal(err)
 	}
-	if len(one.Stacks) != 1 || one.Stacks[0] != "good-stack" || len(one.Findings) != 0 || one.Findings == nil {
+	if len(one.Stacks) != 1 || one.Stacks[0].Stack != "good-stack" || len(one.Stacks[0].Findings) != 0 || one.Stacks[0].Findings == nil {
 		t.Fatalf("single stack result = %+v", one)
 	}
 }
@@ -483,13 +495,18 @@ func TestCheckReducesRepoTextToPrintable(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for _, f := range res.Findings {
+	for _, f := range res.Stacks[0].Findings {
 		found = found || f.Rule == "missing-compose-file"
 		if strings.ContainsRune(f.Cause+f.Fix+f.Stack, '\x1b') {
 			t.Errorf("control character in %+v", f)
 		}
 	}
+	for _, f := range res.Stacks[0].Functions {
+		if strings.ContainsRune(f.Reason+f.Action, '\x1b') {
+			t.Errorf("control character in %+v", f)
+		}
+	}
 	if !found {
-		t.Fatalf("findings = %+v", res.Findings)
+		t.Fatalf("report = %+v", res.Stacks)
 	}
 }

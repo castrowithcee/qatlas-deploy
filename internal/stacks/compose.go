@@ -44,7 +44,7 @@ const (
 	SourceUnset   = "unset"
 )
 
-// Finding reports an image that deviates from the standard.
+// Finding reports an image whose tag qdeploy cannot update.
 type Finding struct {
 	Service string
 	Kind    string

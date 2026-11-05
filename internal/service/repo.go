@@ -469,30 +469,37 @@ func (s *repoService) handleCheck(ctx context.Context, raw json.RawMessage) (any
 		}
 		list = one
 	}
-	wc, err := s.git.Open(s.gitConfig(), c.Dir)
+	cfg := s.gitConfig()
+	wc, err := s.git.Open(cfg, c.Dir)
 	if err != nil {
 		return nil, gitFailure(err)
 	}
-	found, err := stackcheck.Check(ctx, list, wc)
+	// Only the local mode has no remote a versioned secret could reach.
+	reports, err := stackcheck.Check(ctx, list, wc, !cfg.Local)
 	if err != nil {
 		return nil, gitFailure(err)
 	}
-	res := control.StacksCheckResult{
-		Dir: c.Dir, Stacks: make([]string, 0, len(list)), Findings: make([]control.CheckFinding, 0, len(found)),
-	}
+	res := control.StacksCheckResult{Dir: c.Dir, Stacks: make([]control.StackReport, 0, len(reports))}
 	// Everything below comes from the working copy and may reach a terminal: it is reduced to printable text.
-	for _, st := range list {
-		res.Stacks = append(res.Stacks, printable(st.Name))
-	}
-	for _, f := range found {
-		if f.Severity == stackcheck.SeverityError {
-			res.Errors++
-		} else {
-			res.Warnings++
+	for _, r := range reports {
+		rep := control.StackReport{Stack: printable(r.Stack), Functions: make([]control.StackFunction, 0, len(r.Functions)),
+			Findings: make([]control.CheckFinding, 0, len(r.Findings))}
+		for _, f := range r.Functions {
+			rep.Functions = append(rep.Functions, control.StackFunction{
+				Function: f.Name, Works: f.Works, Mode: f.Mode, Reason: printable(f.Reason), Action: printable(f.Action),
+			})
 		}
-		res.Findings = append(res.Findings, control.CheckFinding{
-			Stack: printable(f.Stack), Rule: f.Rule, Severity: f.Severity, Cause: printable(f.Cause), Fix: printable(f.Fix),
-		})
+		for _, f := range r.Findings {
+			if f.Severity == stackcheck.SeverityError {
+				res.Errors++
+			} else {
+				res.Warnings++
+			}
+			rep.Findings = append(rep.Findings, control.CheckFinding{
+				Stack: printable(f.Stack), Rule: f.Rule, Severity: f.Severity, Cause: printable(f.Cause), Fix: printable(f.Fix),
+			})
+		}
+		res.Stacks = append(res.Stacks, rep)
 	}
 	return res, nil
 }

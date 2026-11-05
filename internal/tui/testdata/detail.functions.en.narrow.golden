@@ -1,0 +1,28 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+  1 [2 Stack detail] 3 4 5                              
+--------------------------------------------------------
+      20261030T140200Z-0000000c                         
+    failed  10-29 02:00  poll  850ms                    
+      20261029T020000Z-00000010                         
+      compose pull failed: registry unreachable         
+                                                        
+  Functions                                             
+    Deploy  works                                       
+      Compose starts the stack from compose.yaml        
+    Update  works, automatic                            
+      the maintenance window updates APP_VERSION by     
+      itself                                            
+    Rollback with data  works                           
+      a failed run goes back to the previous commit and 
+      restores the backup it made before the change     
+    Backup  works                                       
+      a backup saves the data directories data/db       
+    Redact secrets  works                               
+      the values of secrets.env (2 key(s)) are redacted 
+      in logs and messages                              
+    secrets-env-not-ignored  warning                    
+      secrets.env is not listed in .gitignore           
+      To do: Add the line 'secrets.env' to the          
+      .gitignore.                                       
+a set secret  x delete secret  R restore backup         
+r reload  1-5 area  q quit         up/down scroll  62/62

@@ -40,8 +40,8 @@ qdeploy  maintenance window closed                                              
       20261029T020000Z-00000010                                                                                         
       compose pull failed: registry unreachable                                                                         
                                                                                                                         
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                               up/down scroll
+  Functions                                                                                                             
+    Deploy  works                                                                                                       
+      Compose starts the stack from compose.yaml                                                                        
+    Update  works, automatic                                                                                            
+a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                        up/down scroll  43/53
