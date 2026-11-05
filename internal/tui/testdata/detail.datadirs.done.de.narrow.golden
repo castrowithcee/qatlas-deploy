@@ -4,10 +4,10 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   demo-stack                                            
                                                         
   Modus    automatisch                                  
+  Zustand  Datenordner fehlen                           
   #= Erledigt =======================================#  
-  | ! Datenordner für den Stack demo-stack angelegt. |  
+  | Datenordner für den Stack demo-stack angelegt.   |  
   |                                                  |  
-  | Der Dienst hat die Änderung vorgenommen.         |  
   | angelegt: data/db                                |  
   | Elternordner: data                               |  
   | bereits vorhanden: data/files                    |  

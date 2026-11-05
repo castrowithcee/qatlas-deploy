@@ -7,15 +7,15 @@ qdeploy  maintenance window closed  [esc] back  [?] help
     remote commit: -                                    
     stacks: 6                                           
   #= Done ===========================================#  
-  | ! Fetched; the remote has newer commits.         |  
+  | Fetched; the remote has newer commits.           |  
   |                                                  |  
-  | The service has made the change.                 |  
   | commit: 111111111111                             |  
   | remote commit: 222222222222                      |  
   |                                                  |  
   | > close <                                        |  
   | n/esc/enter close                                |  
   #==================================================#  
+                                                        
                                                         
                                                         
                                                         

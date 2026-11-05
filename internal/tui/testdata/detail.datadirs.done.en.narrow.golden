@@ -5,10 +5,9 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
   mode      automatic                                   
   #= Done ===========================================#  
-  | ! Data directories created for the stack demo-   |  
-  |   stack.                                         |  
+  | Data directories created for the stack demo-     |  
+  | stack.                                           |  
   |                                                  |  
-  | The service has made the change.                 |  
   | created: data/db                                 |  
   | parent directories: data                         |  
   | already existing: data/files                     |  
@@ -18,6 +17,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   | > close <                                        |  
   | n/esc/enter close                                |  
   #==================================================#  
+                                                        
   Changelog                                             
     APP_VERSION  1.4.2 -> 1.5.0                         
       source example/app                                

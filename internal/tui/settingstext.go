@@ -39,7 +39,6 @@ const (
 	textNotifyEmpty           kittui.TextID = "notify.empty"
 	textEventsAll             kittui.TextID = "events.all"
 	textSettingDoneTitle      kittui.TextID = "setting.done.title"
-	textSettingDoneNote       kittui.TextID = "setting.done.note"
 	textDoneBound             kittui.TextID = "done.bound"
 	textDetailHead            kittui.TextID = "detail.head"
 	textDetailRemote          kittui.TextID = "detail.remote"
@@ -223,7 +222,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textNotifyEmpty:           "No notification channels. {add} adds one.",
 		textEventsAll:             "all",
 		textSettingDoneTitle:      "Done",
-		textSettingDoneNote:       "The service has made the change.",
 		textDoneBound:             "The stacks repository is bound.",
 		textDetailHead:            "commit: %s",
 		textDetailRemote:          "remote commit: %s",
@@ -408,7 +406,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textNotifyEmpty:           "Keine Benachrichtigungskanäle. {add} legt einen an.",
 		textEventsAll:             "alle",
 		textSettingDoneTitle:      "Erledigt",
-		textSettingDoneNote:       "Der Dienst hat die Änderung vorgenommen.",
 		textDoneBound:             "Das Stacks-Repository ist gebunden.",
 		textDetailHead:            "Commit: %s",
 		textDetailRemote:          "Remote-Commit: %s",

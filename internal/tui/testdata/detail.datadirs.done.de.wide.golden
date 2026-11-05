@@ -4,10 +4,10 @@ qdeploy  Wartungsfenster zu                                                     
   demo-stack                                                                                                            
                                                                                                                         
   Modus    automatisch                                                                                                  
-  Zustand  Datenordner fehle#= Erledigt ===================================================#                            
-  Befunde  1 Warnung        | ! Datenordner für den Stack demo-stack angelegt.             |                            
-                            |                                                              |                            
-  Fehlende Datenordner      | Der Dienst hat die Änderung vorgenommen.                     |                            
+  Zustand  Datenordner fehlen                                                                                           
+  Befunde  1 Warnung        #= Erledigt ===================================================#                            
+                            | Datenordner für den Stack demo-stack angelegt.               |                            
+  Fehlende Datenordner      |                                                              |                            
     data/db  Besitzer 1000:1| angelegt: data/db                                            |                            
     data/files  Besitzer 100| Elternordner: data                                           |                            
     Der Stack wartet, bis di| bereits vorhanden: data/files                                |nd Modus an und rollt den   
