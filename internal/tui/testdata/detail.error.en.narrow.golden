@@ -41,7 +41,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
       20261029T020000Z-00000010                         
       compose pull failed: registry unreachable         
                                                         
-                                                        
-                                                        
+  Functions                                             
+    Deploy  works                                       
 a set secret  x delete secret  R restore backup         
-r reload  1-5 area  q quit                up/down scroll
+r reload  1-5 area  q quit         up/down scroll  42/58

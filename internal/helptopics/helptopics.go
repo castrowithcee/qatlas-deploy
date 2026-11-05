@@ -11,7 +11,7 @@ func All() []helptopics.Topic {
 		{Name: "qdeploy", Short: "What qdeploy is and what it is for", Text: overview},
 		{Name: "credentials", Short: "The deploy key and stored credentials", Text: credentialsTopic},
 		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
-		{Name: "stack-standard", Short: "The stacks-repo standard that qdeploy stack check enforces", Text: stackStandardTopic},
+		{Name: "stack-capabilities", Short: "What qdeploy can do with a stack's files, and what qdeploy stack check reports", Text: stackCapabilitiesTopic},
 		{Name: "stack-settings", Short: "Stack settings", Text: stackSettingsTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
 		{Name: "data-directories", Short: "Missing data directories of a stack: the data-dir-missing finding and how to resolve it", Text: dataDirectoriesTopic},
@@ -30,8 +30,8 @@ Commands:
 - qdeploy repo set <ssh-url> [--dir <path>]: bind the stacks repository, confirm its host key and clone it (run with sudo)
 - qdeploy repo fetch: fetch new commits without touching the working copy (run with sudo)
 - qdeploy stack list: list the stacks of the working copy with image versions, update mode and whether the stack is stopped (run with sudo)
-- qdeploy stack check [stack]: check the stacks of the working copy against the stacks-repo standard; exit code 1 on errors (run with sudo)
-- qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has; the stack is named by its Compose project (see qdeploy help stack-standard), and for a stack with the finding project-renamed this decides to start the new project, next to the old one, which keeps running (run with sudo)
+- qdeploy stack check [stack]: show per stack of the working copy whether deploy, update, rollback with data, backup and the redaction of secrets work with its files, why not and what to change, and the findings; exit code 1 on errors (run with sudo; see qdeploy help stack-capabilities)
+- qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has; the stack is named by its Compose project (see qdeploy help stack-capabilities), and for a stack with the finding project-renamed this decides to start the new project, next to the old one, which keeps running (run with sudo)
 - qdeploy stack runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy stack log <run>: print the log of a run (run with sudo)
 - qdeploy stack resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
@@ -123,7 +123,7 @@ backup:
 check:
   http: {url: 'http://localhost:8080/health', status: 200, timeout: 5s}
 
-Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. qdeploy stack check reports fixed and floating tags such as latest (see qdeploy help stack-standard).`
+Image versions stand as variables in the stack's .env, for example image: registry.example.test/demo/app:${DEMO_APP_VERSION}. A fixed or floating tag such as latest leaves the image deploy only; qdeploy stack check names it (see qdeploy help stack-capabilities).`
 
 const backupsTopic = `A backup saves the data of one stack while the stack is stopped, so the copy is consistent. What is saved is listed in the backup section of the stack settings (see qdeploy help stack-settings). Backups are kept in the service's state directory under backups/<stack>/<backup>, readable by the service user only.
 
@@ -152,34 +152,40 @@ Restore:
 - A restore that fails after the first target was emptied leaves the stack stopped, because it would run on incomplete data.
 - A volume must exist before it is backed up or restored; deploy the stack first.`
 
-const stackStandardTopic = `qdeploy stack check compares the working copy of the stacks repository with this standard. It reports each deviation as a finding with stack, rule, severity, cause and fix. Errors break or endanger a deploy or leak secrets; warnings leave the stack working. The exit code is 1 when there is at least one error.
+const stackCapabilitiesTopic = `qdeploy stack check reads the working copy of the stacks repository and reports for each stack which functions of qdeploy work with its files, which do not, why, and what a person would change. qdeploy never changes these files itself. The TUI shows the same report at the end of the stack detail.
 
-Layout of a stack folder:
-- one or more compose files: the list compose.files in the stack settings, else COMPOSE_FILE in .env (entries separated by ':', or by COMPOSE_PATH_SEPARATOR), else the first of compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml
-- .env (optional): non-secret values such as image versions, domains, ports, COMPOSE_FILE and COMPOSE_PROJECT_NAME; the values of keys whose name contains PASSWORD, SECRET, TOKEN or KEY are never shown or logged. An .env that qdeploy cannot read leaves the stack deploy-only: it is deployed but never updated, and qdeploy stack check reports unreadable-stack.
-- secrets.env (optional): the secrets; never versioned, listed in .gitignore, present on the host only
-- data (volumes, databases, uploads) never lives in the repository
+Functions, in this order:
+- deploy: works when qdeploy can read the stack: its compose files exist and are safe, its settings are valid, secrets.env, if there is one, is a regular file of at most 1 MiB, and every image version variable has a value. An .env with lines qdeploy cannot parse still deploys, unless such a line is a COMPOSE_ setting, because Compose reads it itself; the stack is then deploy-only.
+- update, with the mode automatic, manual or none: works when the stack deploys, qdeploy can read .env, at least one image takes its version from a variable in .env whose value has a MAJOR.MINOR.PATCH core (SemVer or CalVer, x.y.z), and the stack settings exist. Without settings the mode is none and updates are not switched on. An image with a fixed tag, a digest, no tag or a floating tag such as latest is deploy only and is left alone; a version that only comes from a default in the compose file, or a variable that is the tag of two different images, stops the update of the whole stack.
+- rollback: the rollback with data. A failed run of a stack that was deployed before goes back to the previous commit; it restores the data only when the stack settings have a backup section, from the backup the run made before the change.
+- backup: works when the stack settings have a backup section, every backup path lies below data/, and the stack name has lowercase letters, digits, - and _ only and at most 63 characters (see qdeploy help backups).
+- redact: the values of secrets.env and of the .env keys whose name contains PASSWORD, SECRET, TOKEN or KEY are removed from the service log, the run logs and the notifications. It does not work for a secrets.env that is a link or too large, and finds nothing when the stack has neither.
 
-A stack is named by its Compose project name, which is not necessarily its folder: COMPOSE_PROJECT_NAME in .env, else the top-level name: of the compose files, else the folder name. This name is used by every command. When the project name of a deployed stack changes, both names get the finding project-renamed and nothing is deployed automatically: the old project keeps running and is not stopped. qdeploy stack deploy <new name> is the decision to start the new project next to the old one, with new volumes prefixed by the new name; the old project must be stopped by a person.
-
-Rules (rule ID, severity):
-- fixed-image-tag (error): an image version is written into a compose file; use a variable from .env
-- image-version-default (warning): the version only comes from a default in the compose file; set it in .env
-- floating-image-tag (error): a tag such as latest, no tag, or a tag without a MAJOR.MINOR.PATCH core (SemVer or CalVer, x.y.z)
-- unset-image-variable (error): the version variable has no value
-- duplicate-key (error): a key stands in both .env and secrets.env; keep it in one file
-- unreadable-secrets-env (error): secrets.env is a link or too large
-- tracked-secrets-env (error): git tracks secrets.env
-- secrets-env-not-ignored (warning): .gitignore does not cover secrets.env
-- tracked-data (error): git tracks files below data/
+Findings (rule ID, severity):
 - missing-compose-file (error): a file named in compose.files or COMPOSE_FILE does not exist
 - invalid-compose-file (error): a compose.files or COMPOSE_FILE entry is unsafe or not a regular file
 - invalid-rules-file (error): the stack settings are invalid
 - unknown-rules-variable (error): the stack settings name an image variable the stack does not have
+- unreadable-stack (error, or warning for an .env qdeploy cannot parse): a file of the stack cannot be read
+- unreadable-secrets-env (error): secrets.env is a link or too large
+- unset-image-variable (error): an image version variable has no value, so the image has an empty tag
+- tracked-secrets-env (error with a remote, else warning): git tracks secrets.env, so its secrets reach the remote
+- duplicate-key (warning): a key stands in both .env and secrets.env; keep it in one file
+- secrets-env-not-ignored (warning): .gitignore does not cover secrets.env
+- tracked-data (warning): git tracks files below data/
 - old-rules-file (warning): the stack folder holds a qdeploy.yaml, which is no longer read; set the stack settings instead and delete it
-- unreadable-stack (error): another file of the stack cannot be read, such as an .env qdeploy cannot parse
 
-Secret values are never shown or logged; the check compares only the key names of secrets.env with .env. Compose runs with --env-file for each of .env and secrets.env that exists.`
+A finding is an error only when the stack cannot be deployed or a secret would reach a remote; everything else is a warning or only part of the functions. The exit code is 1 when there is at least one error.
+
+Layout of a stack folder:
+- one or more compose files: the list compose.files in the stack settings, else COMPOSE_FILE in .env (entries separated by ':', or by COMPOSE_PATH_SEPARATOR), else the first of compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml
+- .env (optional): non-secret values such as image versions, domains, ports, COMPOSE_FILE and COMPOSE_PROJECT_NAME
+- secrets.env (optional): the secrets, set with qdeploy stack secret set or in the stack detail of the TUI; kept out of git with .gitignore
+- data/ (optional): the data directories of the host, kept out of git
+
+A stack is named by its Compose project name, which is not necessarily its folder: COMPOSE_PROJECT_NAME in .env, else the top-level name: of the compose files, else the folder name. This name is used by every command. When the project name of a deployed stack changes, both names get the finding project-renamed and nothing is deployed automatically: the old project keeps running and is not stopped. qdeploy stack deploy <new name> is the decision to start the new project next to the old one, with new volumes prefixed by the new name; the old project must be stopped by a person.
+
+Secret values are never shown or logged; the check reads only the key names of secrets.env. Compose runs with --env-file for each of .env and secrets.env that exists.`
 
 const dataDirectoriesTopic = `A data directory is a bind mount source inside the stack folder that git does not track, for example ./data/db. If it is missing when a container starts, Docker creates it owned by root, and an image that runs as another user then cannot write to it.
 

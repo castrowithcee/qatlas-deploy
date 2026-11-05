@@ -1,0 +1,28 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
+------------------------------------------------------------------------------------------------------------------------
+    20261016T031000Z-89abcdef                                                                                           
+      0 B  unvollständig                                                                                                
+                                                                                                                        
+  Letzte Läufe                                                                                                          
+    erfolgreich  10-30 14:02  update  48s                                                                               
+      20261030T140200Z-0000000c                                                                                         
+    fehlgeschlagen  10-29 02:00  poll  850ms                                                                            
+      20261029T020000Z-00000010                                                                                         
+      compose pull failed: registry unreachable                                                                         
+                                                                                                                        
+  Funktionen                                                                                                            
+    Deploy  geht                                                                                                        
+      Compose starts the stack from compose.yaml                                                                        
+    Update  geht, automatisch                                                                                           
+      the maintenance window updates APP_VERSION by itself                                                              
+    Rollback mit Daten  geht                                                                                            
+      a failed run goes back to the previous commit and restores the backup it made before the change                   
+    Backup  geht                                                                                                        
+      a backup saves the data directories data/db                                                                       
+    Geheimnisse schwärzen  geht                                                                                         
+      the values of secrets.env (2 key(s)) are redacted in logs and messages                                            
+    secrets-env-not-ignored  Warnung                                                                                    
+      secrets.env is not listed in .gitignore                                                                           
+a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden                       
+                                                                                                 up/down Scrollen  58/58

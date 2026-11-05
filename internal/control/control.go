@@ -489,7 +489,7 @@ const (
 	RepoSetCommand    = "repo.set"
 	RepoFetchCommand  = "repo.fetch"
 	StacksListCommand = "stacks.list"
-	// StacksCheckCommand compares the stacks of the working copy with the standard.
+	// StacksCheckCommand reports per stack of the working copy which functions work with its files, and why not.
 	StacksCheckCommand = "stacks.check"
 )
 
@@ -582,17 +582,36 @@ type StacksCheckArgs struct {
 	Stack string `json:"stack,omitempty"`
 }
 
-// StacksCheckResult answers StacksCheckCommand. Stacks names every stack that was checked, so a stack without
-// findings is visible; Findings is sorted by stack, severity and rule.
+// StacksCheckResult answers StacksCheckCommand with one report per checked stack, sorted by name. Errors and
+// Warnings count the findings of all reports.
 type StacksCheckResult struct {
-	Dir      string         `json:"dir"`
-	Stacks   []string       `json:"stacks"`
-	Findings []CheckFinding `json:"findings"`
-	Errors   int            `json:"errors"`
-	Warnings int            `json:"warnings"`
+	Dir      string        `json:"dir"`
+	Stacks   []StackReport `json:"stacks"`
+	Errors   int           `json:"errors"`
+	Warnings int           `json:"warnings"`
 }
 
-// CheckFinding is one deviation from the standard. Severity is "error" or "warning"; Rule is a stable word.
+// StackReport is the check of one stack: the functions in the order deploy, update, rollback, backup, redact,
+// and the findings sorted by severity and rule.
+type StackReport struct {
+	Stack     string          `json:"stack"`
+	Functions []StackFunction `json:"functions"`
+	Findings  []CheckFinding  `json:"findings"`
+}
+
+// StackFunction says whether one function works with the stack's files. Function is deploy, update, rollback
+// (with data), backup or redact (the secrets in logs and messages); Mode is the update mode (automatic, manual
+// or none) and set for update only. Action is what a person would change, empty when nothing is to do.
+type StackFunction struct {
+	Function string `json:"function"`
+	Works    bool   `json:"works"`
+	Mode     string `json:"mode,omitempty"`
+	Reason   string `json:"reason"`
+	Action   string `json:"action,omitempty"`
+}
+
+// CheckFinding is one problem of a stack's files. Severity is "error" when the stack cannot be deployed or a
+// secret would reach a remote, else "warning"; Rule is a stable word.
 type CheckFinding struct {
 	Stack    string `json:"stack"`
 	Rule     string `json:"rule"`

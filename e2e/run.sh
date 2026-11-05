@@ -362,7 +362,7 @@ check_services() {
 }
 
 up() {
-	for tool in docker go openssl ssh-keygen; do
+	for tool in docker go jq openssl ssh-keygen; do
 		command -v "$tool" >/dev/null 2>&1 || fail "$tool is required"
 	done
 	[ -z "$(named container)$(named network)$(named volume)$(named image)$(workdirs)" ] ||

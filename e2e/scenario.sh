@@ -632,6 +632,20 @@ scenario_backup() {
 	out=$(qd_fails stack check demo-badpath) || fail "check accepted a path outside the stack: $out"
 	printf '%s' "$out" | grep -q -- "'..' is not allowed" || fail "check does not name the path error: $out"
 	log "scenario: check refused: $out"
+
+	step 'stack check reports the functions of a stack with settings and of one without'
+	out=$(qd --output json stack check demo-stack) || fail "stack check of demo-stack failed: $out"
+	case $out in *"$secret"*) fail 'stack check shows a secret value' ;; esac
+	printf '%s' "$out" | jq -e '.errors == 0 and (.stacks | length) == 1 and
+		(.stacks[0].functions | map(.function)) == ["deploy", "update", "rollback", "backup", "redact"] and
+		all(.stacks[0].functions[]; .works) and .stacks[0].functions[1].mode == "manual"' >/dev/null ||
+		fail "unexpected check of demo-stack: $out"
+	out=$(qd --output json stack check demo-shop) || fail "stack check of demo-shop failed: $out"
+	printf '%s' "$out" | jq -e '.errors == 0 and
+		([.stacks[0].functions[] | {(.function): .works}] | add) == {deploy: true, update: false, rollback: false, backup: false, redact: true} and
+		.stacks[0].functions[1].mode == "none" and (.stacks[0].functions[1].action | length) > 0' >/dev/null ||
+		fail "unexpected check of demo-shop: $out"
+	log "scenario: check of demo-stack and demo-shop as expected"
 	out=$(qd_fails stack backup create demo-badpath) || fail "backup create accepted a path outside the stack: $out"
 	printf '%s' "$out" | grep -q -- 'config-invalid' || fail "backup create does not refuse the invalid settings: $out"
 	if docker exec "$host" test -e /var/lib/qdeploy/backups/demo-badpath; then fail 'a refused backup left a store directory'; fi

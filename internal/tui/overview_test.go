@@ -94,7 +94,7 @@ func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
 	m := newTestModel(t, i18n.English, demoBackend(), narrowWidth, 14)
 	send(m, "enter")
 	first := m.render()
-	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, "/43") {
+	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, "/62") {
 		t.Fatalf("top:\n%s", first)
 	}
 	send(m, "down", "down")
@@ -103,7 +103,7 @@ func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
 	}
 	send(m, "end")
 	last := m.render()
-	if !strings.Contains(last, "compose pull failed") || !strings.Contains(last, "43/43") {
+	if !strings.Contains(last, "secrets-env-not-ignored") || !strings.Contains(last, "62/62") {
 		t.Fatalf("end:\n%s", last)
 	}
 	send(m, "down", "pgdown")
@@ -128,6 +128,27 @@ func TestDetailWithoutUpdatesOrImagesSaysSo(t *testing.T) {
 	}
 }
 
+func TestDetailShowsTheFunctionsOfTheCheck(t *testing.T) {
+	for lang, want := range map[i18n.Lang][]string{
+		i18n.English: {"Functions", "Update  not possible, none", "updates are not switched on", "To do: Switch on updates", "tracked-data  warning"},
+		i18n.German:  {"Funktionen", "Update  geht nicht, keiner", "updates are not switched on", "Zu tun: Switch on updates", "tracked-data  Warnung"},
+	} {
+		m := newTestModel(t, lang, demoBackend(), wideWidth, 90)
+		send(m, "/", "w", "i", "k", "enter", "enter")
+		screen := m.render()
+		for _, w := range want {
+			if !strings.Contains(screen, w) {
+				t.Errorf("%s: %q missing:\n%s", lang, w, screen)
+			}
+		}
+	}
+	m := newTestModel(t, i18n.English, demoBackend(), wideWidth, 90)
+	send(m, "down", "enter")
+	if screen := m.render(); !strings.Contains(screen, "Not checked.") {
+		t.Errorf("a stack without a report:\n%s", screen)
+	}
+}
+
 func TestDetailEscapesTextFromTheOutside(t *testing.T) {
 	b := demoBackend()
 	b.updates.Stacks[0].Items[0].Variable = hostile
@@ -138,10 +159,11 @@ func TestDetailEscapesTextFromTheOutside(t *testing.T) {
 		Releases: []control.ChangelogRelease{{Version: hostile, Name: hostile, Body: hostile + "\n" + hostile}}}}}
 	b.backups["demo-stack"] = control.BackupListResult{Backups: []control.BackupInfo{{ID: hostile, Created: at(30, 1, 1)}}}
 	b.runs.Runs[1].Error, b.runs.Runs[1].Trigger = hostile, hostile
+	b.check.Stacks[0].Functions[0].Reason, b.check.Stacks[0].Findings[0].Fix = hostile, hostile
 	b.errs["backups:mail-relay"] = errServiceBusy()
 	for _, profile := range []kittui.ColorProfile{kittui.ProfileNone, kittui.ProfileTrueColor} {
 		for _, width := range []int{narrowWidth, wideWidth} {
-			m := newTestModel(t, i18n.English, b, width, 90)
+			m := newTestModel(t, i18n.English, b, width, 120)
 			m.profile = profile
 			m.restyle()
 			send(m, "enter")

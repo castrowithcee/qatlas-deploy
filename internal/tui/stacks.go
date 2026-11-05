@@ -150,12 +150,17 @@ func buildRows(s snapshot) []stackRow {
 			r.avail = availNone
 		}
 	}
-	for _, f := range s.check.Findings {
-		r := row(f.Stack)
-		if f.Severity == "error" {
-			r.errors++
-		} else {
-			r.warnings++
+	for _, rep := range s.check.Stacks {
+		if len(rep.Findings) == 0 {
+			continue
+		}
+		r := row(rep.Stack)
+		for _, f := range rep.Findings {
+			if f.Severity == "error" {
+				r.errors++
+			} else {
+				r.warnings++
+			}
 		}
 	}
 	for _, su := range s.updates.Stacks {

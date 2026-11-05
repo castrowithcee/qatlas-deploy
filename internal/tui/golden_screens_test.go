@@ -45,6 +45,11 @@ func TestGoldenDetailScrolled(t *testing.T) {
 	goldenScreens(t, "detail.scrolled", scrolledRows, demoBackend, "enter", "pgdown")
 }
 
+// The end of the detail is the stack check: the functions and the findings.
+func TestGoldenDetailFunctions(t *testing.T) {
+	goldenScreens(t, "detail.functions", 28, demoBackend, "enter", "end")
+}
+
 func TestGoldenRunsList(t *testing.T) {
 	goldenScreens(t, "runs.list", goldenRows, demoBackend, "3")
 }
