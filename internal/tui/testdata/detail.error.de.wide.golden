@@ -43,5 +43,5 @@ qdeploy  Wartungsfenster zu                                                     
   Funktionen                                                                                                            
     Deploy  geht                                                                                                        
       Compose starts the stack from compose.yaml                                                                        
-a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden                       
-                                                                                                 up/down Scrollen  43/53
+o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden                
+                                                                                                 up/down Scrollen  42/53

@@ -1,0 +1,40 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
+------------------------------------------------------------------------------------------------------------------------
+  demo-stack                                                                                              alle Container
+  demo-stack-app-1 app started on port 8080                                                                             
+  demo-stack-db-1  database system is ready                                                                             
+  demo-stack-app-1 GET /health 200                                                                                      
+  demo-stack-db-1  checkpoint complete                                                                                  
+  demo-stack-app-1 token is ***                                                                                         
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ L mitlaufend ]  [ / Suchen ]  [ T Zeitraum: alle ]  [ w Zeilen umbrechen aus ]  [ t aus ]             Zeilen 1-5 von 5
+/ Suchen  L mitlaufen  T Zeitraum  w Zeilen umbrechen  t Zeitstempel  r Neu laden  1-5 Bereich  q Beenden               
+                                                                                                        up/down Scrollen

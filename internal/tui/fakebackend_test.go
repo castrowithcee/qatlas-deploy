@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,6 +54,11 @@ type fakeBackend struct {
 	// name; errs "containers:" and "container:<name>" fail those calls.
 	containers       control.ContainerListResult
 	containerDetails map[string]control.ContainerDetail
+	// ctLogLines are all container log lines in time order, ctLogPage the most lines one answer holds (zero:
+	// no limit) and ctLogArgs the arguments of the calls made.
+	ctLogLines []control.ContainerLogLine
+	ctLogPage  int
+	ctLogArgs  []control.ContainerLogsArgs
 }
 
 func (f *fakeBackend) count(name string) {
@@ -599,4 +605,42 @@ func (f *fakeBackend) Container(_ context.Context, name string) (control.Contain
 		return control.ContainerDetail{}, control.NewError(control.CodeNotFound, "no such container")
 	}
 	return d, nil
+}
+
+// ContainerLogs answers like the service from ctLogLines: it filters by container or stack (a source that
+// starts with "<stack>-"), by time and cursor, keeps the last Tail lines and cuts a page at ctLogPage lines.
+// The arguments of every call are kept in ctLogArgs; an error set in errs under "containerlogs:<name or stack>"
+// fails the call.
+func (f *fakeBackend) ContainerLogs(_ context.Context, a control.ContainerLogsArgs) (control.ContainerLogsResult, error) {
+	f.count("containerlogs")
+	if err := f.fail("containerlogs", a.Name+a.Stack); err != nil {
+		return control.ContainerLogsResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ctLogArgs = append(f.ctLogArgs, a)
+	var sel []control.ContainerLogLine
+	for _, l := range f.ctLogLines {
+		switch {
+		case a.Name != "" && l.Source != a.Name,
+			a.Stack != "" && !strings.HasPrefix(l.Source, a.Stack+"-"),
+			!a.Since.IsZero() && l.Time.Before(a.Since),
+			!a.Until.IsZero() && l.Time.After(a.Until),
+			!a.Cursor.IsZero() && l.Time.Before(a.Cursor):
+			continue
+		}
+		sel = append(sel, l)
+	}
+	if a.Tail > 0 && len(sel) > a.Tail {
+		sel = sel[len(sel)-a.Tail:]
+	}
+	res := control.ContainerLogsResult{Lines: []control.ContainerLogLine{}}
+	if f.ctLogPage > 0 && len(sel) > f.ctLogPage {
+		sel, res.More = sel[:f.ctLogPage], true
+	}
+	res.Lines = append(res.Lines, sel...)
+	if len(sel) > 0 {
+		res.Cursor = sel[len(sel)-1].Time.Add(time.Nanosecond)
+	}
+	return res, nil
 }

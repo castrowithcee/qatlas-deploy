@@ -44,4 +44,4 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                               up/down scroll
+o log  a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                        up/down scroll

@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                          [esc] back  [?] help
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings   5 Containers               
+--------------------------------------------------------------------------------
+  demo-stack                                                      all containers
+  demo-stack-app-1 app started on port 8080                                     
+  demo-stack-db-1  database system is ready                                     
+  demo-stack-app-1 GET /health 200                                              
+  demo-stack-db-1  checkpoint complete                                          
+  demo-stack-app-1 token is ***                                                 
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+[ L following ]  [ / search ]  [ T all ]  [ w off ]  [ t off ]    lines 1-5 of 5
+/ search  L follow  T period  w wrap lines  t timestamps  r reload  1-5 area    
+q quit                                                            up/down scroll

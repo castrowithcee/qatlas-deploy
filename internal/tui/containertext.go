@@ -48,6 +48,11 @@ const (
 	textErrDockerPermission  kittui.TextID = "error.dockerpermission"
 	textErrDockerTimeout     kittui.TextID = "error.dockertimeout"
 	textErrContainersSlow    kittui.TextID = "error.containersslow"
+
+	textCtLogStack    kittui.TextID = "ct.log.stack"
+	textErrCtLogGone  kittui.TextID = "error.ctlog.gone"
+	textErrCtLogStack kittui.TextID = "error.ctlog.stack"
+	textErrCtLogSlow  kittui.TextID = "error.ctlog.slow"
 )
 
 func containerEnglish() map[kittui.TextID]string {
@@ -95,6 +100,11 @@ func containerEnglish() map[kittui.TextID]string {
 		textErrDockerPermission:  "the service may not use the container engine; give its user access to the engine socket, then press {reload}",
 		textErrDockerTimeout:     "the container engine did not answer in time; check that it is healthy, then press {reload}",
 		textErrContainersSlow:    "the service did not answer in time; the next refresh tries again",
+
+		textCtLogStack:    "all containers",
+		textErrCtLogGone:  "this container no longer exists; press {back} to leave the log",
+		textErrCtLogStack: "this stack is not known to the service; press {back} to leave the log",
+		textErrCtLogSlow:  "the service did not answer in time; press {reload} to try again",
 	}
 }
 
@@ -143,5 +153,10 @@ func containerGerman() map[kittui.TextID]string {
 		textErrDockerPermission:  "der Dienst darf die Container-Engine nicht nutzen; gib seinem Benutzer Zugriff auf den Socket der Engine und drücke dann {reload}",
 		textErrDockerTimeout:     "die Container-Engine hat nicht rechtzeitig geantwortet; prüfe ihren Zustand und drücke dann {reload}",
 		textErrContainersSlow:    "der Dienst hat nicht rechtzeitig geantwortet; die nächste Aktualisierung versucht es erneut",
+
+		textCtLogStack:    "alle Container",
+		textErrCtLogGone:  "diesen Container gibt es nicht mehr; verlasse das Log mit {back}",
+		textErrCtLogStack: "der Dienst kennt diesen Stack nicht; verlasse das Log mit {back}",
+		textErrCtLogSlow:  "der Dienst hat nicht rechtzeitig geantwortet; drücke {reload}, um es erneut zu versuchen",
 	}
 }

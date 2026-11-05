@@ -43,5 +43,5 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
   Functions                                             
     Deploy  works                                       
-a set secret  x delete secret  R restore backup         
+o log  a set secret  x delete secret  R restore backup  
 r reload  1-5 area  q quit         up/down scroll  42/58

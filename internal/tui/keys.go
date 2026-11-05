@@ -56,6 +56,8 @@ const (
 	actShowLog kittui.ActionID = "showlog"
 	// actDataDirs opens the creation of the missing data directories in the stack detail.
 	actDataDirs kittui.ActionID = "datadirs"
+	// actContainerLogs opens the output of a container, or of a whole stack in the stack detail.
+	actContainerLogs kittui.ActionID = "containerlogs"
 )
 
 // areaKeys are the keys of actArea, one per area in the order of the tab line.
@@ -107,6 +109,7 @@ func keyTable() []kittui.Action {
 		act(actTest, kittui.LevelLetter, textKeyTest, "s"),
 		act(actRestore, kittui.LevelLetter, textKeyRestore, "R"),
 		act(actDataDirs, kittui.LevelLetter, textKeyDataDirs, "m"),
+		act(actContainerLogs, kittui.LevelLetter, textKeyLog, "o"),
 		act(actYes, kittui.LevelConfirm, textAnswerYes, "y"),
 		act(actNo, kittui.LevelConfirm, textAnswerCancel, "n", "esc"),
 		act(actShowLog, kittui.LevelConfirm, textAnswerLog, "l"),

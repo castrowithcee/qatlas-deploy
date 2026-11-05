@@ -24,5 +24,5 @@ qdeploy  maintenance window closed  [esc] back  [?] help
       secrets.env is not listed in .gitignore           
       To do: Add the line 'secrets.env' to the          
       .gitignore.                                       
-a set secret  x delete secret  R restore backup         
+o log  a set secret  x delete secret  R restore backup  
 r reload  1-5 area  q quit         up/down scroll  62/62

@@ -121,6 +121,8 @@ type Model struct {
 	// runsOnly limits the Runs area to the chosen stack.
 	runsOnly bool
 	log      runLog
+	// clog is the output of a container or stack, shown in the area it was opened from.
+	clog containerLog
 	// The Containers area: the list read, its rows and the container whose detail is open.
 	ct      containerState
 	ctv     containerView
@@ -281,6 +283,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.applyLog(msg)
 	case logTickMsg:
 		return m, m.logTick(msg)
+	case containerLogMsg:
+		return m, m.applyContainerLog(msg)
+	case containerLogTickMsg:
+		return m, m.containerLogTick(msg)
 	case tea.ForegroundColorMsg:
 		m.terminal.Foreground, m.haveFG = kittui.ColorOf(msg.Color), true
 		m.restyle()
@@ -356,6 +362,9 @@ func (m *Model) input() kittui.InputFocus {
 	if m.helpOpen || m.modal != nil {
 		return kittui.InputNavigation
 	}
+	if m.clogShown() {
+		return m.clog.view.Input()
+	}
 	switch m.area {
 	case areaDetail:
 		switch {
@@ -427,6 +436,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.log.view.Update(msg)
 		return nil
 	}
+	if m.clogShown() && !m.helpOpen {
+		return m.containerLogKey(msg)
+	}
 	if m.helpOpen {
 		if act, handled := m.help.Update(msg); handled {
 			if act != "" {
@@ -463,6 +475,10 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			if m.area == areaRuns && !m.log.open {
 				m.toggleStackOnly()
 				return nil
+			}
+		case actContainerLogs:
+			if cmd, ok := m.openContainerLogs(); ok {
+				return cmd
 			}
 		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
 			switch m.area {
@@ -550,6 +566,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 // reloadAll reads the service again; the detail and an open log are read again with it.
 func (m *Model) reloadAll() tea.Cmd {
 	cmds := []tea.Cmd{m.reload()}
+	if m.clogShown() {
+		return tea.Batch(append(cmds, m.reloadContainerLog(false))...)
+	}
 	switch {
 	case m.area == areaDetail:
 		cmds = append(cmds, m.loadDetail(true), m.readContainers())
@@ -566,6 +585,9 @@ func (m *Model) reloadAll() tea.Cmd {
 
 // enter shows an area and starts what that area reads on its own.
 func (m *Model) enter(area kittui.AreaID) tea.Cmd {
+	if m.clog.open && area != m.clog.area {
+		m.closeContainerLog()
+	}
 	if area != areaDetail {
 		m.pick = nil
 	}
@@ -574,7 +596,7 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 	case areaDetail:
 		return tea.Batch(m.loadDetail(false), m.readContainers())
 	case areaContainers:
-		return m.startContainers()
+		return tea.Batch(m.startContainers(), m.followContainerLog())
 	case areaRuns:
 		return m.followLog()
 	case areaSettings:
@@ -621,6 +643,11 @@ func (m *Model) footer() []kittui.Hint {
 		{Action: actQuit, Label: kittui.TextKeyQuit, Priority: 1},
 	}
 	switch {
+	case m.clogShown():
+		if m.clog.view.Searching() || m.clog.view.FilterOpen() {
+			return m.clog.view.Hints()
+		}
+		return append(m.clog.view.Hints(), common...)
 	case m.area == areaSettings:
 		return m.settingsFooter(common, nav)
 	case m.area == areaDetail && m.set.form != nil:
@@ -635,8 +662,12 @@ func (m *Model) footer() []kittui.Hint {
 		}
 		return append(append(m.detailHints(), common...), scroll...)
 	case m.area == areaContainers && m.ctv.open:
-		return append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}}, common...), scrollHints()...)
+		return append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}, containerLogsHint()},
+			common...), scrollHints()...)
 	case m.area == areaContainers:
+		if len(m.ctNames) > 0 {
+			common = append([]kittui.Hint{containerLogsHint()}, common...)
+		}
 		return m.listFooter(m.ctList, len(m.ctNames), textKeyDetails, common, nav)
 	case m.area == areaRuns && m.log.open:
 		if m.log.view.Searching() || m.log.view.FilterOpen() {
@@ -653,6 +684,10 @@ func (m *Model) footer() []kittui.Hint {
 		return m.listFooter(m.list, len(m.rows), textKeyDetails, common, nav)
 	}
 	return common
+}
+
+func containerLogsHint() kittui.Hint {
+	return kittui.Hint{Action: actContainerLogs, Label: textKeyLog, Priority: 2}
 }
 
 func scrollHints() []kittui.Hint {
@@ -753,6 +788,8 @@ func (m *Model) frameSpec() kittui.FrameSpec {
 		Message: m.message(), Footer: m.footer(),
 	}
 	switch {
+	case m.clogShown():
+		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
 	case m.area == areaStacks:
 		spec.Position = m.list.Position()
 	case m.area == areaRuns && !m.log.open:
@@ -803,13 +840,13 @@ func (m *Model) render() string {
 			view, _ = m.frame.Render(m.styles, spec)
 		}
 	}
-	if m.area == areaRuns && m.log.open && m.log.view.FilterOpen() {
-		if over, _, ok := m.log.view.ModalOverlay(m.styles, view, m.width, m.height, room); ok {
+	if lv := m.filteringLogView(); lv != nil {
+		if over, _, ok := lv.ModalOverlay(m.styles, view, m.width, m.height, room); ok {
 			view = over
 		} else {
-			spec.Footer, spec.Input, spec.Position, spec.Back = m.log.view.Hints(), m.log.view.Input(), "", nil
+			spec.Footer, spec.Input, spec.Position, spec.Back = lv.Hints(), lv.Input(), "", nil
 			room = m.frame.Workspace(spec)
-			spec.Workspace, _ = m.log.view.ModalView(m.styles, room.Width, room.Height)
+			spec.Workspace, _ = lv.ModalView(m.styles, room.Width, room.Height)
 			view, _ = m.frame.Render(m.styles, spec)
 		}
 	}
@@ -824,6 +861,17 @@ func (m *Model) render() string {
 		}
 	}
 	return m.styles.Paint(view, m.width, m.height)
+}
+
+// filteringLogView is the log view whose period form is open, nil when none is.
+func (m *Model) filteringLogView() *kittui.LogView {
+	switch {
+	case m.clogShown() && m.clog.view.FilterOpen():
+		return m.clog.view
+	case m.area == areaRuns && m.log.open && m.log.view.FilterOpen():
+		return m.log.view
+	}
+	return nil
 }
 
 func (m *Model) resizeView() string {
@@ -843,6 +891,9 @@ func (m *Model) resizeView() string {
 func (m *Model) workspace(width, height int) string {
 	if m.modal != nil && m.modal.sheet() {
 		return m.modalView(width, height)
+	}
+	if m.clogShown() {
+		return m.containerLogPane(width, height)
 	}
 	if m.area == areaSettings {
 		return m.settingsView(width, height)
