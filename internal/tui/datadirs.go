@@ -22,6 +22,10 @@ const formDataDirs formKind = formSecret + 1
 // import the engine, so the name is repeated here.
 const findingDataDirMissing = "data-dir-missing"
 
+// findingContainerFailed is the kind of the engine finding for a container failure; stateOf reads the structured
+// failure instead, and the finding is only kept out of the error count.
+const findingContainerFailed = "container-failed"
+
 // dataDirsResult is what the confirmed creation came to. A creation that failed has createErr and nothing else
 // to say; a run that could not be started leaves the directories made.
 type dataDirsResult struct {

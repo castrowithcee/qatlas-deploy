@@ -129,6 +129,8 @@ const (
 	textEventFailed           kittui.TextID = "event.failed"
 	textEventRolledBack       kittui.TextID = "event.rolledback"
 	textEventRollbackFailed   kittui.TextID = "event.rollbackfailed"
+	textEventContainerFailed  kittui.TextID = "event.containerfailed"
+	textEventRecovered        kittui.TextID = "event.recovered"
 	textEventUpdateAvailable  kittui.TextID = "event.updateavailable"
 	textFieldName             kittui.TextID = "field.name"
 	textHintName              kittui.TextID = "hint.name"
@@ -312,6 +314,8 @@ func settingsEnglish() map[kittui.TextID]string {
 		textEventFailed:           "failed",
 		textEventRolledBack:       "rolled-back",
 		textEventRollbackFailed:   "rollback-failed",
+		textEventContainerFailed:  "container-failed",
+		textEventRecovered:        "recovered",
 		textEventUpdateAvailable:  "update-available",
 		textFieldName:             "Name",
 		textHintName:              "lowercase letters, digits and -, starting with a letter, up to 32",
@@ -496,6 +500,8 @@ func settingsGerman() map[kittui.TextID]string {
 		textEventFailed:           "failed",
 		textEventRolledBack:       "rolled-back",
 		textEventRollbackFailed:   "rollback-failed",
+		textEventContainerFailed:  "container-failed",
+		textEventRecovered:        "recovered",
 		textEventUpdateAvailable:  "update-available",
 		textFieldName:             "Name",
 		textHintName:              "Kleinbuchstaben, Ziffern und -, mit einem Buchstaben beginnend, bis 32",

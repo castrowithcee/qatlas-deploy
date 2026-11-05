@@ -72,6 +72,7 @@ const (
 	stateFailed
 	stateNeedsDirs
 	statePinned
+	stateContainerFailed
 	statePaused
 	stateStopped
 	stateRemoved
@@ -109,7 +110,7 @@ type stackRow struct {
 }
 
 // stateFindings are the engine findings the state column already shows; they are not counted again.
-var stateFindings = []string{"removed", "paused", findingDataDirMissing}
+var stateFindings = []string{"removed", "paused", findingDataDirMissing, findingContainerFailed}
 
 // failedResults are the run results after which a stack counts as failed.
 var failedResults = []string{"failed", "rolled-back", "rollback-failed"}
@@ -208,6 +209,8 @@ func stateOf(st control.StackStatus) stackState {
 		return statePaused
 	case st.Pinned != nil:
 		return statePinned
+	case st.Failure != nil:
+		return stateContainerFailed
 	case slices.ContainsFunc(st.Findings, func(f control.FindingInfo) bool { return f.Kind == findingDataDirMissing }):
 		return stateNeedsDirs
 	case slices.Contains(failedResults, st.LastRun):
@@ -292,7 +295,7 @@ func stackColumns(t kittui.Translator, tones map[string]kittui.TextStyle) []kitt
 		{Title: textColAvailable, Short: short(textAvailError, textAvailErrorS)},
 		{Title: textColMode, Optional: true},
 		{Title: textColState, Tone: tone, Short: short(textStateRollbackPause, textStateRollbackPauseS,
-			textStatePending, textStatePendingS, textStateNotDeployed, textStateNotDeployedS)},
+			textStateCtrFailed, textStateCtrFailedS, textStatePending, textStatePendingS, textStateNotDeployed, textStateNotDeployedS)},
 		{Title: textColLastRun, Optional: true, Tone: tone},
 		{Title: textColFindings, Flex: true, Tone: tone},
 	}
@@ -301,15 +304,22 @@ func stackColumns(t kittui.Translator, tones map[string]kittui.TextStyle) []kitt
 var stateTexts = map[stackState]kittui.TextID{
 	stateRunning: textStateRunning, stateRollbackPause: textStateRollbackPause, stateUnreadable: textStateUnreadable,
 	stateRemoved: textStateRemoved, stateStopped: textStateStopped, statePaused: textStatePaused, statePinned: textStatePinned,
-	stateFailed: textStateFailed, statePending: textStatePending, stateDeployed: textStateDeployed,
+	stateContainerFailed: textStateCtrFailed,
+	stateFailed:          textStateFailed, statePending: textStatePending, stateDeployed: textStateDeployed,
 	stateNotDeployed: textStateNotDeployed, stateNeedsDirs: textStateNeedsDirs,
 }
 
 var stateTones = map[stackState]kittui.TextStyle{
 	stateRunning: kittui.StyleActive, stateRollbackPause: kittui.StyleFail, stateUnreadable: kittui.StyleFail,
 	stateRemoved: kittui.StyleHint, stateStopped: kittui.StyleWarn, statePaused: kittui.StyleWarn, statePinned: kittui.StyleWarn,
-	stateFailed: kittui.StyleFail, statePending: kittui.StyleWarn, stateDeployed: kittui.StyleOK,
+	stateContainerFailed: kittui.StyleFail,
+	stateFailed:          kittui.StyleFail, statePending: kittui.StyleWarn, stateDeployed: kittui.StyleOK,
 	stateNotDeployed: kittui.StyleHint, stateNeedsDirs: kittui.StyleWarn,
+}
+
+var failureKinds = map[string]kittui.TextID{
+	"exited": textFailureExited, "unhealthy": textFailureUnhealthy, "restart-loop": textFailureRestartLoop,
+	"missing": textFailureMissing,
 }
 
 // lastRunLayout is the time of the last run; the year is left out to keep the column narrow.

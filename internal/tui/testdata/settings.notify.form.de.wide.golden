@@ -10,10 +10,10 @@ qdeploy  Wartungsfenster zu                                                     
   Typ        | webhook                                                                                               v |
              +---------------------------------------------------------------------------------------------------------+
              #=========================================================================================================#
-> Ereignisse | >[x] succeeded  [ ] failed  [ ] rolled-back  [ ] rollback-failed  [ ] update-available                  |
+> Ereignisse | >[x] succeeded  [ ] failed  [ ] rolled-back  [ ] rollback-failed  [ ] container-failed  [ ] recovered   |
+             |  [ ] update-available                                                                                   |
              #=========================================================================================================#
              Leertaste hakt an; nichts angehakt heißt alle                                                              
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

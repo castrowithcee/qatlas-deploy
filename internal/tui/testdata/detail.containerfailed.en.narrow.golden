@@ -1,0 +1,47 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+  1 [2 Stack detail] 3 4 5                              
+--------------------------------------------------------
+  mail-relay                                            
+                                                        
+  mode      manual                                      
+  state     container failed                            
+  findings  none                                        
+  Failure   unhealthy: mail-relay-relay-1, since 10-30 ~
+                                                        
+  Image versions                                        
+    RELAY_VERSION  example/relay                        
+      3.1  up to date                                   
+                                                        
+  Containers                                            
+    No containers of this stack.                        
+                                                        
+  Changelog                                             
+    Never checked for updates, so there are no release  
+    notes.                                              
+                                                        
+  Secrets                                               
+    No secrets.                                         
+                                                        
+  Backups                                               
+    No backups.                                         
+                                                        
+  Last runs                                             
+    succeeded  10-28 03:10  poll  31s                   
+      20261028T031000Z-0000000e                         
+                                                        
+  Functions                                             
+    Not checked.                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+a set secret  x delete secret  R restore backup         
+r reload  1-5 area  q quit                up/down scroll

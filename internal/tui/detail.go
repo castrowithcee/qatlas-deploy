@@ -274,12 +274,47 @@ func (m *Model) summaryLines(r stackRow, width int) []string {
 		labels = append(labels, label)
 		labelWidth = max(labelWidth, lipgloss.Width(label))
 	}
+	failure := m.failureOf(r.name)
+	failLabel := kittui.Escape(m.text.Lookup(textDetailFailure))
+	if failure != nil {
+		labelWidth = max(labelWidth, lipgloss.Width(failLabel))
+	}
+	row := func(label string, style kittui.TextStyle, value string) string {
+		return "  " + m.styles.Render(kittui.StyleHint, kittui.Pad(label, labelWidth)) + "  " +
+			m.styles.Render(style, m.styles.Truncate(kittui.Escape(value), max(width-labelWidth-4, 1)))
+	}
 	var out []string
 	for n, i := range []int{3, 4, 6} {
-		out = append(out, "  "+m.styles.Render(kittui.StyleHint, kittui.Pad(labels[n], labelWidth))+"  "+
-			m.styles.Render(kittui.StyleText, m.styles.Truncate(kittui.Escape(values[i]), max(width-labelWidth-4, 1))))
+		out = append(out, row(labels[n], kittui.StyleText, values[i]))
+	}
+	if failure != nil {
+		out = append(out, row(failLabel, kittui.StyleFail, m.failureText(*failure)))
 	}
 	return out
+}
+
+// failureOf is the container failure the status reports for a stack, nil when it reports none.
+func (m *Model) failureOf(stack string) *control.FailureInfo {
+	for _, st := range m.snap.status.Engine.Stacks {
+		if st.Name == stack {
+			return st.Failure
+		}
+	}
+	return nil
+}
+
+// failureText is the kind, container and start of a failure as one line; the kind falls back to the raw word.
+func (m *Model) failureText(f control.FailureInfo) string {
+	t := m.text
+	kind := f.Kind
+	if id, ok := failureKinds[f.Kind]; ok {
+		kind = t.Lookup(id)
+	}
+	container := f.Container
+	if container == "" {
+		container = t.Lookup(textNoValue)
+	}
+	return t.Lookup(textFailureLine, kind, container, f.Since.In(m.loc).Format(lastRunLayout))
 }
 
 // versionItem is one image version variable of a stack.

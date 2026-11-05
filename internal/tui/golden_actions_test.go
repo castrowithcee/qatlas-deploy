@@ -64,3 +64,19 @@ func TestGoldenStopSummaryEndsAtTheFirstFailure(t *testing.T) {
 		return b
 	}, "space", "down", "space", "end", "space", "X", "y")
 }
+
+// failedContainerBackend is the demo host with a container of mail-relay failed.
+func failedContainerBackend() *fakeBackend {
+	b := demoBackend()
+	b.status.Engine.Stacks[1].Failure = &control.FailureInfo{Kind: "unhealthy", Container: "mail-relay-relay-1", Since: at(30, 11, 5)}
+	b.status.Engine.Stacks[1].Findings = []control.FindingInfo{{Kind: "container-failed", Detail: "since 2026-10-30T11:05:00Z: unhealthy mail-relay-relay-1"}}
+	return b
+}
+
+func TestGoldenContainerFailedStack(t *testing.T) {
+	goldenScreens(t, "stacks.containerfailed", goldenRows, failedContainerBackend)
+}
+
+func TestGoldenContainerFailedStackDetail(t *testing.T) {
+	goldenScreens(t, "detail.containerfailed", detailRows, failedContainerBackend, "down", "enter")
+}

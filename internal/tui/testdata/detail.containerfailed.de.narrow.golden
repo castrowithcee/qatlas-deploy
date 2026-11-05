@@ -1,0 +1,47 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 [2 Stack-Details] 3 4 5                             
+--------------------------------------------------------
+  mail-relay                                            
+                                                        
+  Modus    manuell                                      
+  Zustand  Container ausgefallen                        
+  Befunde  keine                                        
+  Ausfall  nicht gesund: mail-relay-relay-1, seit 10-30~
+                                                        
+  Image-Versionen                                       
+    RELAY_VERSION  example/relay                        
+      3.1  aktuell                                      
+                                                        
+  Container                                             
+    Keine Container dieses Stacks.                      
+                                                        
+  Changelog                                             
+    Nie auf Updates geprüft, daher gibt es keine        
+    Release-Notes.                                      
+                                                        
+  Geheimnisse                                           
+    Keine Geheimnisse.                                  
+                                                        
+  Backups                                               
+    Keine Backups.                                      
+                                                        
+  Letzte Läufe                                          
+    erfolgreich  10-28 03:10  poll  31s                 
+      20261028T031000Z-0000000e                         
+                                                        
+  Funktionen                                            
+    Nicht geprüft.                                      
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+a Geheimnis setzen  x Geheimnis löschen                 
+R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden

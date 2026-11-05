@@ -202,6 +202,7 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 				detail += " " + f.Container
 			}
 			item.Findings = append(item.Findings, control.FindingInfo{Kind: engine.FindingContainerFailed, Detail: printable(detail)})
+			item.Failure = &control.FailureInfo{Kind: printable(f.Kind), Container: printable(f.Container), Since: f.Since}
 		}
 		res.Stacks = append(res.Stacks, item)
 	}
