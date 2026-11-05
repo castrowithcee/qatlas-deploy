@@ -1776,6 +1776,33 @@ scenario_tui() {
 		fail "the second run started before the first ended: $first_end, $second_start"
 	log "scenario: two stacks updated one after another: $first_commit, $second_commit"
 
+	step 'the Containers area shows a container that is stopped in the background without a key press'
+	single=$prefix-single-tui
+	docker exec "$host" docker rm -f "$single" >/dev/null 2>&1 || true
+	docker exec "$host" docker run -d --name "$single" --label "$label" "$image:1.0.0" >/dev/null ||
+		fail 'cannot start the single container for the Containers area'
+	wait_for 'the single container' 30 health_is "$single" healthy
+	# The summary of the update above is still open and takes every key.
+	tui_send Escape
+	tui_send 5
+	tui_wait '5 Containers' 10
+	tui_wait 'single containers' 15
+	running_seen=0 stopped_seen=0
+	tui_screen | grep -qE " $single +ok " && running_seen=1
+	docker exec "$host" docker stop "$single" >/dev/null || stopped_seen=failed
+	# No key is sent from here on: the area reads the engine again every 5 seconds on its own.
+	i=0
+	while [ "$stopped_seen" = 0 ] && [ "$i" -lt 20 ]; do
+		tui_screen | grep -qE " $single +stopped " && stopped_seen=1
+		i=$((i + 1))
+		[ "$stopped_seen" = 1 ] || sleep 1
+	done
+	final_screen=$(tui_screen)
+	docker exec "$host" docker rm -f "$single" >/dev/null 2>&1
+	[ "$running_seen" = 1 ] || fail "the Containers area does not show $single as ok before the stop: $final_screen"
+	[ "$stopped_seen" = 1 ] || fail "the Containers area did not show $single as stopped within 20 seconds without a key press: $final_screen"
+	log "scenario: the Containers area followed $single from ok to stopped without a key press"
+
 	step 'q ends the interface with exit code 0'
 	tui_send Escape
 	tui_send 1

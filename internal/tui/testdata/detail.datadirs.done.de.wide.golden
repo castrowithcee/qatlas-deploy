@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen                                                               
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
   demo-stack                                                                                                            
                                                                                                                         
@@ -17,8 +17,8 @@ qdeploy  Wartungsfenster zu                                                     
     APP_VERSION  example/app| > schließen <                                                |                            
       1.4.2 -> 1.5.0  Update| n/esc/enter schließen                                        |                            
                             #==============================================================#                            
+  Container                                                                                                             
+    Keine Container dieses Stacks.                                                                                      
+                                                                                                                        
   Changelog                                                                                                             
-    APP_VERSION  1.4.2 -> 1.5.0                                                                                         
-      Quelle example/app                                                                                                
-      1.5.0  Spring release  2026-10-29                                                                                 
-                                                                                                                   20/61
+                                                                                                                   20/64

@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen                                                               
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
   demo-stack                                                                                                            
                                                                                                                         
@@ -17,8 +17,8 @@ qdeploy  Wartungsfenster zu                                                     
     APP_VERSION  example/app                                                                                            
       1.4.2 -> 1.5.0  Update verfügbar                                                                                  
                                                                                                                         
-  Changelog                                                                                                             
-    APP_VERSION  1.4.2 -> 1.5.0                                                                                         
-      Quelle example/app                                                                                                
-m Datenordner anlegen  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden
-                                                                                                 up/down Scrollen  19/61
+  Container                                                                                                             
+    Keine Container dieses Stacks.                                                                                      
+                                                                                                                        
+m Datenordner anlegen  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden
+                                                                                                 up/down Scrollen  19/64

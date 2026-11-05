@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen                                                               
+  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
       STACK        VERSION      VERFÜGBAR      MODUS        ZUSTAND   LETZTER LAUF                         BEFUNDE      
   [x] demo-stack   1.4.2        1.5.0          automatisch  deployt   erfolgreich 10-30 14:02              1 Warnung    
@@ -10,5 +10,5 @@ qdeploy  Wartungsfenster zu                                                     
   [x] wiki         1.41.0       ungeprüft      keiner       gepinnt   erfolgreich 10-27 03:10              2 Warnungen  
                                                                                                                         
                                                                                                                         
-enter Details  / Suchen  space markieren  u update  d deploy  r Neu laden  1-4 Bereich  q Beenden                       
+enter Details  / Suchen  space markieren  u update  d deploy  r Neu laden  1-5 Bereich  q Beenden                       
                                                                                                   up/down Auswählen  5/6

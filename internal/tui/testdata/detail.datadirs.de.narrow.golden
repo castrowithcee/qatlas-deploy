@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-  1 Stacks [2 Stack-Details] 3 Läufe 4 Einstellungen    
+  1 [2 Stack-Details] 3 4 5                             
 --------------------------------------------------------
   demo-stack                                            
                                                         
@@ -18,7 +18,7 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
     APP_VERSION  example/app                            
       1.4.2 -> 1.5.0  Update verfügbar                  
                                                         
-  Changelog                                             
-    APP_VERSION  1.4.2 -> 1.5.0                         
+  Container                                             
+    Keine Container dieses Stacks.                      
 m Datenordner anlegen  a Geheimnis setzen               
 x Geheimnis löschen  r Neu laden  q Beenden             

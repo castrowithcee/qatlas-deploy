@@ -48,6 +48,11 @@ type fakeBackend struct {
 	secrets    map[string][]string
 	secretSets []control.SecretSetArgs
 	restores   []control.BackupRestoreArgs
+
+	// containers is the list the service reads from the container engine, and containerDetails the detail by
+	// name; errs "containers:" and "container:<name>" fail those calls.
+	containers       control.ContainerListResult
+	containerDetails map[string]control.ContainerDetail
 }
 
 func (f *fakeBackend) count(name string) {
@@ -551,4 +556,28 @@ func (f *fakeBackend) BackupRestore(_ context.Context, stack, id string) (contro
 	defer f.mu.Unlock()
 	f.restores = append(f.restores, control.BackupRestoreArgs{Stack: stack, ID: id, Confirm: true})
 	return control.BackupRestoreResult{Backup: control.BackupInfo{ID: id, Stack: stack}}, nil
+}
+
+func (f *fakeBackend) Containers(context.Context) (control.ContainerListResult, error) {
+	f.count("containers")
+	if err := f.fail("containers", ""); err != nil {
+		return control.ContainerListResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.containers, nil
+}
+
+func (f *fakeBackend) Container(_ context.Context, name string) (control.ContainerDetail, error) {
+	f.count("container")
+	if err := f.fail("container", name); err != nil {
+		return control.ContainerDetail{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.containerDetails[name]
+	if !ok {
+		return control.ContainerDetail{}, control.NewError(control.CodeNotFound, "no such container")
+	}
+	return d, nil
 }

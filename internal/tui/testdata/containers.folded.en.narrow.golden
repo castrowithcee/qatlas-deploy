@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                          [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]              
+--------------------------------------------------------------------------------
+    NAME               STATE       IMAGE                      UPTIME  RESTARTS  
+> > # foreign project legacy-blog (2)                                           
+  v # foreign project wiki [conflict: name of a stack, other folder] (1)        
+    wiki-app-1         restarting  example.invalid/wiki:1     -       14        
+  v # own stack demo-stack (2)                                                  
+    demo-stack-app-1   ok          example.invalid/app:1.4.2  3h2m    0         
+    demo-stack-db-1    unhealthy   example.invalid/db:16      1m      2         
+  v # single containers (1)                                                     
+    example-cache      ok          example.invalid/cache:7    45s     0         
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+enter details  / search  r reload  1-5 area  q quit          up/down choose  1/6

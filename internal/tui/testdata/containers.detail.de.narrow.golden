@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                              [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]        
+--------------------------------------------------------------------------------
+  legacy-blog-db-1                                                              
+                                                                                
+  Gruppe     fremdes Projekt legacy-blog                                        
+  Zustand    gestoppt (exited)                                                  
+  Image      example.invalid/db:15                                              
+  Laufzeit   -                                                                  
+  Neustarts  0                                                                  
+                                                                                
+  Ports                                                                         
+    keine                                                                       
+                                                                                
+  Mounts                                                                        
+    keine                                                                       
+                                                                                
+  Netze                                                                         
+    keine                                                                       
+                                                                                
+  Labels                                                                        
+    keine                                                                       
+                                                                                
+esc Zurück  r Neu laden  1-5 Bereich  q Beenden          up/down Scrollen  20/22

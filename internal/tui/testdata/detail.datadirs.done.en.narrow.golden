@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs   4 Settings      
+  1 [2 Stack detail] 3 4 5                              
 --------------------------------------------------------
   demo-stack                                            
                                                         
@@ -18,7 +18,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   | n/esc/enter close                                |  
   #==================================================#  
                                                         
-  Changelog                                             
-    APP_VERSION  1.4.2 -> 1.5.0                         
-      source example/app                                
-                                                   20/66
+  Containers                                            
+    No containers of this stack.                        
+                                                        
+                                                   20/69

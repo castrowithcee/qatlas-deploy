@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-  1 Stacks [2 Stack-Details] 3 Läufe 4 Einstellungen    
+  1 [2 Stack-Details] 3 4 5                             
 --------------------------------------------------------
   demo-stack                                            
                                                         
@@ -18,7 +18,7 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   | [ ja, ausführen ]  > abbrechen <                 |  
   | y ja, ausführen  n/esc/enter abbrechen           |  
   #==================================================#  
-        - fixes the upload limit                        
-      1.4.3  2026-10-20                                 
-        Fixes a crash on empty input.                   
-                                                   20/59
+        Adds a dark theme.                              
+                                                        
+        - faster start                                  
+                                                   20/62

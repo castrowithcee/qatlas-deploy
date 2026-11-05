@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks   2 Stack detail  [3 Runs]  4 Settings      
+  1 2 [3 Runs] 4 5                                      
 --------------------------------------------------------
   STACK        STARTED      RESULT           TRIGGER    
 > web-shop     10-30 15:00  running          manual     
@@ -10,5 +10,5 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   mail-relay   10-28 03:10  succeeded        poll       
   wiki         10-27 03:10  succeeded        manual     
                                                         
-enter log  / search  f this stack  r reload  1-4 area   
+enter log  / search  f this stack  r reload  1-5 area   
 q quit                               up/down choose  1/7

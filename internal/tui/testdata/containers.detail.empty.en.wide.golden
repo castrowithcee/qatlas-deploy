@@ -1,0 +1,40 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]                                                      
+------------------------------------------------------------------------------------------------------------------------
+  legacy-blog-db-1                                                                                                      
+                                                                                                                        
+  group     foreign project legacy-blog                                                                                 
+  state     stopped (exited)                                                                                            
+  image     example.invalid/db:15                                                                                       
+  uptime    -                                                                                                           
+  restarts  0                                                                                                           
+                                                                                                                        
+  Ports                                                                                                                 
+    none                                                                                                                
+                                                                                                                        
+  Mounts                                                                                                                
+    none                                                                                                                
+                                                                                                                        
+  Networks                                                                                                              
+    none                                                                                                                
+                                                                                                                        
+  Labels                                                                                                                
+    none                                                                                                                
+                                                                                                                        
+  Environment variables (names only)                                                                                    
+    none                                                                                                                
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+esc back  r reload  1-5 area  q quit                                                                      up/down scroll

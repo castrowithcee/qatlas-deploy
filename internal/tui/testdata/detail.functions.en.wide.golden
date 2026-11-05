@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs   4 Settings                                                                      
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings   5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
     20261016T031000Z-89abcdef                                                                                           
       0 B  incomplete                                                                                                   
@@ -25,4 +25,4 @@ qdeploy  maintenance window closed                                              
     secrets-env-not-ignored  warning                                                                                    
       secrets.env is not listed in .gitignore                                                                           
       To do: Add the line 'secrets.env' to the .gitignore.                                                              
-a set secret  x delete secret  R restore backup  r reload  1-4 area  q quit                        up/down scroll  55/55
+a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                        up/down scroll  58/58

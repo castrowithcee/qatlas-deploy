@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-  1 Stacks [2 Stack-Details] 3 Läufe 4 Einstellungen    
+  1 [2 Stack-Details] 3 4 5                             
 --------------------------------------------------------
       20261030T140200Z-0000000c                         
     fehlgeschlagen  10-29 02:00  poll  850ms            
@@ -25,4 +25,4 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
       Zu tun: Add the line 'secrets.env' to the         
       .gitignore.                                       
 a Geheimnis setzen  x Geheimnis löschen                 
-R Backup einspielen  r Neu laden  1-4 Bereich  q Beenden
+R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden

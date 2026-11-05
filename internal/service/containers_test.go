@@ -597,3 +597,38 @@ func TestContainerActionErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestContainerTextRedactsStackSecrets(t *testing.T) {
+	const planted = "invented-value-0001"
+	fd := &fakeDocker{}
+	files := map[string]string{
+		"leak-stack/compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app:1\n",
+		"leak-stack/secrets.env":  "DEMO_TAG=" + planted + "\n",
+	}
+	h := boundWith(t, nil, files, withDocker(fd))
+	own := filepath.Join(h.dir, "leak-stack")
+	c := running("c1", "leak-stack-"+planted, map[string]string{lblProject: "leak-stack", lblDir: own, "demo.tag": "v-" + planted})
+	c.Image = "registry.example.test/demo/app:" + planted
+	fd.list = []docker.Container{c}
+	fd.details = map[string]docker.Details{c.Name: {Container: c}}
+
+	var list control.ContainerListResult
+	if err := h.call(control.ContainerListCommand, control.ContainerListArgs{}, &list); err != nil {
+		t.Fatal(err)
+	}
+	var d control.ContainerDetail
+	if err := h.call(control.ContainerGetCommand, control.ContainerGetArgs{Name: c.Name}, &d); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal([]any{list, d})
+	if strings.Contains(string(raw), planted) {
+		t.Fatalf("a planted value left the service: %s", raw)
+	}
+	g := groupByName(t, list, control.ContainerKindOwn, "leak-stack")
+	if d.Kind != control.ContainerKindOwn || d.Project != "leak-stack" || len(g.Containers) != 1 || g.Containers[0].State != control.ContainerOK {
+		t.Fatalf("grouping changed: %+v %+v", g, d)
+	}
+	if !strings.HasPrefix(d.Labels["demo.tag"], "v-") || !strings.HasPrefix(g.Containers[0].Name, "leak-stack-") {
+		t.Fatalf("other text changed: %+v %+v", g, d.Labels)
+	}
+}

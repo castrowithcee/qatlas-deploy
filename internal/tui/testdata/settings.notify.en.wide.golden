@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs  [4 Settings]                                                                     
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
   Notifications                                                                                                         
                                                                                                                         
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-a add  s send test  x remove  esc back  r reload  1-4 area  q quit                                   up/down choose  1/2
+a add  s send test  x remove  esc back  r reload  1-5 area  q quit                                   up/down choose  1/2

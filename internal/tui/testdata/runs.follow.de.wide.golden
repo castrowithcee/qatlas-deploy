@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details  [3 Läufe]  4 Einstellungen                                                               
+   1 Stacks   2 Stack-Details  [3 Läufe]  4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
   web-shop                                                                              läuft  20261030T150000Z-0000000b
   step check                                                                                                            
@@ -10,5 +10,5 @@ qdeploy  Wartungsfenster zu                                                     
   info pull example/shop:5.2.0                                                                                          
                                                                                                                         
 [ L mitlaufend ]  [ / Suchen ]  [ T Zeitraum: alle ]  [ w Zeilen umbrechen aus ]  [ t aus ]             Zeilen 1-6 von 6
-/ Suchen  L mitlaufen  T Zeitraum  w Zeilen umbrechen  t Zeitstempel  r Neu laden  1-4 Bereich  q Beenden               
+/ Suchen  L mitlaufen  T Zeitraum  w Zeilen umbrechen  t Zeitstempel  r Neu laden  1-5 Bereich  q Beenden               
                                                                                                         up/down Scrollen

@@ -1,5 +1,5 @@
 qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen                                                               
+  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
   ! Update von demo-stack ausführen?                                                                                    
                                                                                                                         
@@ -22,6 +22,9 @@ qdeploy  Wartungsfenster zu                                                     
       1.4.3  2026-10-20                                                                                                 
         Fixes a crash on empty input.                                                                                   
       mehr unter https://example.invalid/app/releases                                                                   
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

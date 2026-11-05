@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs   4 Settings                                                                      
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings   5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
   demo-stack                                                                                                            
                                                                                                                         
@@ -11,14 +11,14 @@ qdeploy  maintenance window closed                                              
     APP_VERSION  example/app                                                                                            
       1.4.2 -> 1.5.0  update available                                                                                  
                                                                                                                         
+  Containers                                                                                                            
+    No containers of this stack.                                                                                        
+                                                                                                                        
   Changelog                                                                                                             
     APP_VERSION  1.4.2 -> 1.5.0                                                                                         
       source example/app                                                                                                
       1.5.0  Spring release  2026-10-29                                                                                 
         Adds a dark theme.                                                                                              
                                                                                                                         
-        - faster start                                                                                                  
-        - fixes the upload limit                                                                                        
-      1.4.3  2026-10-20                                                                                                 
 Backup 20261023T031000Z-4567cdef restored for the stack demo-stack.                                                     
-a set secret  x delete secret  R restore backup  r reload  1-4 area  q quit                        up/down scroll  19/55
+a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                        up/down scroll  19/58

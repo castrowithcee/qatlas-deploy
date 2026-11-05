@@ -177,12 +177,12 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		defer client.Close()
 		dock = client
 	}
-	if err := registerContainerCommands(registry, repo, eng, dock, cfg.ContainerWait, log); err != nil {
+	if err := registerContainerCommands(registry, repo, eng, secrets, dock, cfg.ContainerWait, log); err != nil {
 		return err
 	}
 	mon := newContainerMonitor(monitorConfig{
 		Docker: dock, Engine: eng, Clock: cfg.Clock, Interval: cfg.MonitorInterval, Log: log,
-		StackDirs: func() map[string]string { return repo.stackDirs(log) },
+		StackDirs: func() map[string]string { return repo.stackDirs(log, nil) },
 		Hook: func(ev MonitorEvent) {
 			logMonitorEvent(log, ev)
 			notifier.monitorEvent(ev)

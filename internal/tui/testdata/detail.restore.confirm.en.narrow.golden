@@ -1,5 +1,5 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs   4 Settings      
+  1 [2 Stack detail] 3 4 5                              
 --------------------------------------------------------
   demo-stack                                            
                                                         
@@ -17,8 +17,8 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   | [ yes, do it ]  > cancel <                       |  
   | y yes, do it  n/esc/enter cancel                 |  
   #==================================================#  
+      1.5.0  Spring release  2026-10-29                 
+        Adds a dark theme.                              
+                                                        
         - faster start                                  
-        - fixes the upload limit                        
-      1.4.3  2026-10-20                                 
-        Fixes a crash on empty input.                   
-                                                   20/59
+                                                   20/62
