@@ -14,6 +14,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-kit/docker"
 	"github.com/castrowithcee/qatlas-kit/output"
+	"github.com/castrowithcee/qatlas-kit/redact"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
@@ -52,15 +53,21 @@ type containerService struct {
 	eng       *engine.Engine
 	// wait bounds how long a start or restart waits for the container to be ready.
 	wait time.Duration
+	// secrets redacts stack secret values that Compose interpolated into container text.
+	secrets *redact.Redactor
 }
 
-func registerContainerCommands(r *control.Registry, repo *repoService, eng *engine.Engine, d Docker, wait time.Duration, log *slog.Logger) error {
+// text prepares engine text for an answer: secret values are redacted, then control characters masked.
+func (s *containerService) text(v string) string { return maskControl(s.secrets.Apply(v)) }
+
+func registerContainerCommands(r *control.Registry, repo *repoService, eng *engine.Engine, secrets *redact.Redactor, d Docker, wait time.Duration, log *slog.Logger) error {
 	if wait <= 0 {
 		wait = containerReadyWait
 	}
 	s := &containerService{docker: d, now: time.Now, log: log, eng: eng, wait: wait, stackDirs: func() map[string]string {
-		return repo.stackDirs(log)
-	}}
+		// Secrets of every stack are known before an answer is redacted, also those never deployed since start.
+		return repo.stackDirs(log, func(st stacks.Stack) { registerStackSecrets(secrets, st) })
+	}, secrets: secrets}
 	for name, h := range map[string]control.Handler{
 		control.ContainerListCommand: s.handleList, control.ContainerGetCommand: s.handleGet,
 		control.ContainerStartCommand:   s.action("start"),
@@ -76,7 +83,7 @@ func registerContainerCommands(r *control.Registry, repo *repoService, eng *engi
 
 // stackDirs maps the stack names of the working copy to their folders. Without a binding or a readable
 // working copy it is empty, so nothing counts as own: the narrower reading.
-func (s *repoService) stackDirs(log *slog.Logger) map[string]string {
+func (s *repoService) stackDirs(log *slog.Logger, onStack func(stacks.Stack)) map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, err := s.bound()
@@ -90,6 +97,9 @@ func (s *repoService) stackDirs(log *slog.Logger) map[string]string {
 	}
 	dirs := make(map[string]string, len(list))
 	for _, st := range list {
+		if onStack != nil {
+			onStack(st)
+		}
 		if abs, err := filepath.Abs(st.Dir); err == nil && st.Dir != "" {
 			dirs[st.Name] = abs
 		}
@@ -163,8 +173,8 @@ func (s *containerService) summary(c docker.Container) control.ContainerSummary 
 		up = max(0, int64(s.now().Sub(c.StartedAt)/time.Second))
 	}
 	return control.ContainerSummary{
-		Name: maskControl(c.Name), Image: maskControl(c.Image), State: stateOf(c), EngineState: maskControl(c.State),
-		Health: maskControl(c.Health), UptimeSeconds: up, Restarts: c.RestartCount,
+		Name: s.text(c.Name), Image: s.text(c.Image), State: stateOf(c), EngineState: s.text(c.State),
+		Health: s.text(c.Health), UptimeSeconds: up, Restarts: c.RestartCount,
 	}
 }
 
@@ -187,17 +197,17 @@ func (s *containerService) handleList(ctx context.Context, raw json.RawMessage) 
 	var entries []entry
 	for _, p := range projects {
 		kind, conflict := classify(p.Name, p.WorkingDir, own)
-		g := control.ContainerGroup{Kind: kind, Name: maskControl(p.Name), Conflict: conflict}
+		g := control.ContainerGroup{Kind: kind, Name: s.text(p.Name), Conflict: conflict}
 		if kind == control.ContainerKindForeign {
-			g.WorkingDir = maskControl(p.WorkingDir)
+			g.WorkingDir = s.text(p.WorkingDir)
 			for _, f := range p.ConfigFiles {
-				g.ConfigFiles = append(g.ConfigFiles, maskControl(f))
+				g.ConfigFiles = append(g.ConfigFiles, s.text(f))
 			}
 		}
 		entries = append(entries, entry{g, p.Containers})
 	}
 	for _, c := range loose {
-		entries = append(entries, entry{control.ContainerGroup{Kind: control.ContainerKindSingle, Name: maskControl(c.Name)},
+		entries = append(entries, entry{control.ContainerGroup{Kind: control.ContainerKindSingle, Name: s.text(c.Name)},
 			[]docker.Container{c}})
 	}
 	rank := map[string]int{control.ContainerKindOwn: 0, control.ContainerKindForeign: 1, control.ContainerKindSingle: 2}
@@ -304,26 +314,26 @@ func (s *containerService) handleGet(ctx context.Context, raw json.RawMessage) (
 	project, dir := d.Labels["com.docker.compose.project"], d.Labels["com.docker.compose.project.working_dir"]
 	kind, conflict := classify(project, dir, s.stackDirs())
 	res := control.ContainerDetail{
-		ContainerSummary: s.summary(d.Container), ID: maskControl(d.ID), Kind: kind, Project: maskControl(project), Conflict: conflict,
+		ContainerSummary: s.summary(d.Container), ID: s.text(d.ID), Kind: kind, Project: s.text(project), Conflict: conflict,
 		Ports: []control.ContainerPort{}, Mounts: []control.ContainerMount{}, Networks: []control.ContainerNetwork{},
 		Labels: map[string]string{}, EnvNames: []string{},
 	}
 	for _, p := range d.Ports {
 		res.Ports = append(res.Ports, control.ContainerPort{PrivatePort: p.PrivatePort, PublicPort: p.PublicPort,
-			Protocol: maskControl(p.Protocol), HostIP: maskControl(p.HostIP)})
+			Protocol: s.text(p.Protocol), HostIP: s.text(p.HostIP)})
 	}
 	for _, m := range d.Mounts {
-		res.Mounts = append(res.Mounts, control.ContainerMount{Type: maskControl(m.Type), Name: maskControl(m.Name),
-			Source: maskControl(m.Source), Destination: maskControl(m.Destination), ReadOnly: m.ReadOnly})
+		res.Mounts = append(res.Mounts, control.ContainerMount{Type: s.text(m.Type), Name: s.text(m.Name),
+			Source: s.text(m.Source), Destination: s.text(m.Destination), ReadOnly: m.ReadOnly})
 	}
 	for _, n := range d.Networks {
-		res.Networks = append(res.Networks, control.ContainerNetwork{Name: maskControl(n.Name), IPAddress: maskControl(n.IPAddress)})
+		res.Networks = append(res.Networks, control.ContainerNetwork{Name: s.text(n.Name), IPAddress: s.text(n.IPAddress)})
 	}
 	for k, v := range d.Labels {
-		res.Labels[maskControl(k)] = maskControl(v)
+		res.Labels[s.text(k)] = s.text(v)
 	}
 	for _, n := range d.EnvNames {
-		res.EnvNames = append(res.EnvNames, maskControl(n))
+		res.EnvNames = append(res.EnvNames, s.text(n))
 	}
 	return res, fitAnswer(res, "the container details are too large for one answer")
 }
