@@ -1,7 +1,6 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
    1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
-    20261016T031000Z-89abcdef                                                                                           
       0 B  unvollständig                                                                                                
                                                                                                                         
   Letzte Läufe                                                                                                          
@@ -24,5 +23,6 @@ qdeploy  Wartungsfenster zu                                                     
       the values of secrets.env (2 key(s)) are redacted in logs and messages                                            
     secrets-env-not-ignored  Warnung                                                                                    
       secrets.env is not listed in .gitignore                                                                           
-a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden                       
+      Zu tun: Add the line 'secrets.env' to the .gitignore.                                                             
+o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden                
                                                                                                  up/down Scrollen  58/58

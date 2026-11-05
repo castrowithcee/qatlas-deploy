@@ -35,6 +35,8 @@ type Backend interface {
 	Containers(ctx context.Context) (control.ContainerListResult, error)
 	// Container reads one container by name; the result holds the names of its environment variables, never values.
 	Container(ctx context.Context, name string) (control.ContainerDetail, error)
+	// ContainerLogs reads a page of the output of one container or of all containers of an own stack.
+	ContainerLogs(ctx context.Context, args control.ContainerLogsArgs) (control.ContainerLogsResult, error)
 
 	// The calls below change something in the service; the interface makes them only after a confirmation.
 
@@ -289,6 +291,11 @@ func (b *ChannelBackend) Containers(ctx context.Context) (res control.ContainerL
 
 func (b *ChannelBackend) Container(ctx context.Context, name string) (res control.ContainerDetail, err error) {
 	err = client.Do(ctx, b.endpoint, containerCallLimit, control.ContainerGetCommand, control.ContainerGetArgs{Name: name}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) ContainerLogs(ctx context.Context, args control.ContainerLogsArgs) (res control.ContainerLogsResult, err error) {
+	err = client.Do(ctx, b.endpoint, control.ContainerLogsTimeout+client.CallTimeout, control.ContainerLogsCommand, args, &res)
 	return res, err
 }
 

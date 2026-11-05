@@ -230,7 +230,7 @@ func (m *Model) detailHints() []kittui.Hint {
 			hints = append(hints, kittui.Hint{Action: actDataDirs, Label: textKeyDataDirs, Priority: 2})
 		}
 	}
-	return append(hints,
+	return append(hints, containerLogsHint(),
 		kittui.Hint{Action: actAdd, Label: textKeySecretSet, Priority: 3},
 		kittui.Hint{Action: actRemove, Label: textKeySecretDelete, Priority: 3},
 		kittui.Hint{Action: actRestore, Label: textKeyRestore, Priority: 3})

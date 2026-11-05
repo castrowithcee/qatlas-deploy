@@ -20,5 +20,5 @@ qdeploy  maintenance window closed                                              
   Containers                                                                                                            
     No containers of this stack.                                                                                        
                                                                                                                         
-m create data directories  a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit                  
-                                                                                                   up/down scroll  20/64
+m create data directories  o log  a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit           
+                                                                                                   up/down scroll  19/64

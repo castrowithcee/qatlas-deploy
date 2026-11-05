@@ -20,5 +20,5 @@ qdeploy  Wartungsfenster zu                              [esc] Zurück  [?] Hilf
   Changelog                                                                     
     APP_VERSION  1.4.2 -> 1.5.0                                                 
       Quelle example/app                                                        
-a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden       
+o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden
 1-5 Bereich  q Beenden                                   up/down Scrollen  19/62
