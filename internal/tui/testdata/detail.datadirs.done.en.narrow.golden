@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings      
+--------------------------------------------------------
+  demo-stack                                            
+                                                        
+  mode      automatic                                   
+  #= Done ===========================================#  
+  | Data directories created for the stack demo-     |  
+  | stack.                                           |  
+  |                                                  |  
+  | created: data/db                                 |  
+  | parent directories: data                         |  
+  | already existing: data/files                     |  
+  | run 20261031T100000Z-demo-stack started at       |  
+  | commit 222222222222                              |  
+  |                                                  |  
+  | > close <                                        |  
+  | n/esc/enter close                                |  
+  #==================================================#  
+                                                        
+  Changelog                                             
+    APP_VERSION  1.4.2 -> 1.5.0                         
+      source example/app                                
+                                                   20/47

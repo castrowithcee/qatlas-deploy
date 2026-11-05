@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-kit/localipc"
@@ -219,6 +221,15 @@ type PauseInfo struct {
 type FindingInfo struct {
 	Kind   string `json:"kind"`
 	Detail string `json:"detail,omitempty"`
+	// Dirs lists the missing data directories of a finding of kind "data-dir-missing".
+	Dirs []DirInfo `json:"dirs,omitempty"`
+}
+
+// DirInfo is a missing data directory: Path relative to the stack folder, Owner the proposed "UID:GID",
+// empty when unknown.
+type DirInfo struct {
+	Path  string `json:"path"`
+	Owner string `json:"owner,omitempty"`
 }
 
 // The commands that control runs. ResumeCommand clears the pause of a stack and starts no run.
@@ -430,9 +441,27 @@ type StacksResult struct {
 	Stacks []StackInfo `json:"stacks"`
 }
 
+// StackDir returns the folder of the listed stack name as a path below Dir; false when the list does not hold
+// the stack or its folder is not a single plain name.
+func (r StacksResult) StackDir(name string) (string, bool) {
+	for _, s := range r.Stacks {
+		if s.Name != name {
+			continue
+		}
+		f := s.Folder
+		if r.Dir == "" || f == "" || f == "." || f == ".." || strings.ContainsAny(f, "/\\\x00") {
+			return "", false
+		}
+		return filepath.Join(r.Dir, f), true
+	}
+	return "", false
+}
+
 // StackInfo describes one stack of the working copy. Error is set when the stack cannot be read.
 type StackInfo struct {
-	Name     string      `json:"name"`
+	Name string `json:"name"`
+	// Folder is the directory of the stack below Dir; it differs from Name when the Compose file names the project.
+	Folder   string      `json:"folder"`
 	Update   string      `json:"update"`
 	Images   []ImageInfo `json:"images"`
 	Findings int         `json:"findings"`

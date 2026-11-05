@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 Stacks [2 Stack-Details] 3 Läufe 4 Einstellungen    
+--------------------------------------------------------
+  Datenordner anlegen                                   
+  #= Datenordner anlegen ============================#  
+  | ! Die fehlenden Datenordner des Stacks demo-     |  
+  |   stack anlegen und ihn ausrollen?               |  
+  |                                                  |  
+  | Es werden nur die unten genannten Ordner mit     |  
+  | diesem Besitzer und Modus angelegt. Vorhandene   |=#
+> | Ordner bleiben unverändert. Danach wird ein Lauf | |
+  | des Stacks gestartet.                            |=#
+  | Stack-Ordner: /srv/stacks/demo-stack             |r 
+  | Besitzer: 1000:1000                              |  
+  | Modus: 0750                                      |-+
+  |   data/db                                        | |
+  |   data/files                                     |-+
+  |                                                  |  
+  | [ ja, ausführen ]  > abbrechen <                 |  
+  | y ja, ausführen  n/esc/enter abbrechen           |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        

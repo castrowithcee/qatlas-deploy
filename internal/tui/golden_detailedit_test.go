@@ -42,3 +42,38 @@ func TestGoldenDetailRestoreQuestion(t *testing.T) {
 func TestGoldenDetailRestoreDone(t *testing.T) {
 	goldenScreens(t, "detail.restore.done", detailEditRows, settingsBackend, seq(toRestore, keys("enter", "y"))...)
 }
+
+// asRoot makes new models run as root and record their creations instead of touching the disk.
+func asRoot(t *testing.T) *dirMaker {
+	t.Helper()
+	oldEuid, oldMake := defaultEuid, defaultMakeDirs
+	d := &dirMaker{}
+	defaultEuid, defaultMakeDirs = func() int { return 0 }, d.make
+	t.Cleanup(func() { defaultEuid, defaultMakeDirs = oldEuid, oldMake })
+	return d
+}
+
+func TestGoldenDetailDataDirs(t *testing.T) {
+	goldenScreens(t, "detail.datadirs", detailEditRows, dataDirBackend, "enter")
+}
+
+func TestGoldenDetailDataDirsForm(t *testing.T) {
+	asRoot(t)
+	goldenScreens(t, "detail.datadirs.form", detailEditRows, dataDirBackend, toDataDirs...)
+}
+
+func TestGoldenDetailDataDirsProblem(t *testing.T) {
+	asRoot(t)
+	goldenScreens(t, "detail.datadirs.problem", detailEditRows+6, dataDirBackend,
+		seq(toDataDirs, keys("backspace", "backspace", "x", "f2"))...)
+}
+
+func TestGoldenDetailDataDirsQuestion(t *testing.T) {
+	asRoot(t)
+	goldenScreens(t, "detail.datadirs.confirm", detailEditRows, dataDirBackend, seq(toDataDirs, keys("f2"))...)
+}
+
+func TestGoldenDetailDataDirsDone(t *testing.T) {
+	asRoot(t)
+	goldenScreens(t, "detail.datadirs.done", detailEditRows, dataDirBackend, seq(toDataDirs, keys("f2", "y"))...)
+}

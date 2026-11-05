@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings      
+--------------------------------------------------------
+  demo-stack                                            
+                                                        
+  mode      automatic                                   
+  state     needs data dirs                             
+  findings  1 warning                                   
+                                                        
+  Missing data directories                              
+    data/db  owner 1000:1000                            
+    data/files  owner 1000:1000                         
+    The stack waits until these directories exist. m    
+    creates them with an owner and mode you confirm,    
+    then deploys the stack.                             
+                                                        
+  Image versions                                        
+    APP_VERSION  example/app                            
+      1.4.2 -> 1.5.0  update available                  
+                                                        
+  Changelog                                             
+    APP_VERSION  1.4.2 -> 1.5.0                         
+m create data directories  a set secret  x delete secret
+R restore backup  r reload  1-4 area  q quit       19/47

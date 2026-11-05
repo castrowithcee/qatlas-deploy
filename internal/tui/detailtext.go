@@ -34,6 +34,33 @@ const (
 	textDoneSecretDeleted    kittui.TextID = "done.secretdeleted"
 	textSecretAppliesLater   kittui.TextID = "secret.applieslater"
 	textDoneRestored         kittui.TextID = "done.restored"
+	textDetailDataDirs       kittui.TextID = "detail.datadirs"
+	textDataDirLine          kittui.TextID = "datadirs.line"
+	textDataDirLineNoOwner   kittui.TextID = "datadirs.linenoowner"
+	textDataDirsHint         kittui.TextID = "datadirs.hint"
+	textDataDirsIntro        kittui.TextID = "datadirs.intro"
+	textKeyDataDirs          kittui.TextID = "key.datadirs"
+	textTitleDataDirs        kittui.TextID = "title.datadirs"
+	textFieldDataOwner       kittui.TextID = "field.dataowner"
+	textHintDataOwner        kittui.TextID = "hint.dataowner"
+	textFieldDataMode        kittui.TextID = "field.datamode"
+	textHintDataMode         kittui.TextID = "hint.datamode"
+	textProblemDataOwner     kittui.TextID = "problem.dataowner"
+	textProblemDataMode      kittui.TextID = "problem.datamode"
+	textDataDirsNone         kittui.TextID = "datadirs.none"
+	textDataDirsNeedRoot     kittui.TextID = "datadirs.needroot"
+	textDataDirsNoFolder     kittui.TextID = "datadirs.nofolder"
+	textAskDataDirs          kittui.TextID = "ask.datadirs"
+	textWhatDataDirs         kittui.TextID = "what.datadirs"
+	textDataDirsFolder       kittui.TextID = "datadirs.folder"
+	textDataDirsOwner        kittui.TextID = "datadirs.owner"
+	textDataDirsMode         kittui.TextID = "datadirs.mode"
+	textDoneDataDirs         kittui.TextID = "done.datadirs"
+	textDataDirsCreated      kittui.TextID = "datadirs.created"
+	textDataDirsParents      kittui.TextID = "datadirs.parents"
+	textDataDirsExisting     kittui.TextID = "datadirs.existing"
+	textDataDirsDeployFailed kittui.TextID = "datadirs.deployfailed"
+	textErrDataDirs          kittui.TextID = "err.datadirs"
 )
 
 func detailEnglish() map[kittui.TextID]string {
@@ -68,6 +95,33 @@ func detailEnglish() map[kittui.TextID]string {
 		textDoneSecretDeleted:    "Secret %s of the stack %s deleted.",
 		textSecretAppliesLater:   "The change applies at the next deployment.",
 		textDoneRestored:         "Backup %s restored for the stack %s.",
+		textDetailDataDirs:       "Missing data directories",
+		textDataDirLine:          "%s  owner %s",
+		textDataDirLineNoOwner:   "%s  owner unknown",
+		textDataDirsHint:         "The stack waits until these directories exist. {datadirs} creates them with an owner and mode you confirm, then deploys the stack.",
+		textDataDirsIntro:        "Missing below %s:",
+		textKeyDataDirs:          "create data directories",
+		textTitleDataDirs:        "Create data directories",
+		textFieldDataOwner:       "Owner",
+		textHintDataOwner:        "UID:GID of the user the container runs as, for example 1000:1000",
+		textFieldDataMode:        "Mode",
+		textHintDataMode:         "octal permission bits, for example 0750",
+		textProblemDataOwner:     "The owner must be UID:GID with decimal numbers, for example 1000:1000.",
+		textProblemDataMode:      "The mode must be octal permission bits such as 0750; setuid, setgid and sticky are not allowed.",
+		textDataDirsNone:         "This stack has no missing data directories.",
+		textDataDirsNeedRoot:     "Creating data directories needs root; start the interface with sudo.",
+		textDataDirsNoFolder:     "The stacks folder is not known yet; reload and try again.",
+		textAskDataDirs:          "Create the missing data directories of the stack %s and deploy it?",
+		textWhatDataDirs:         "Only the directories below are created, with this owner and mode. Existing directories stay as they are. Then a run of the stack is started.",
+		textDataDirsFolder:       "stack folder: %s",
+		textDataDirsOwner:        "owner: %s",
+		textDataDirsMode:         "mode: %s",
+		textDoneDataDirs:         "Data directories created for the stack %s.",
+		textDataDirsCreated:      "created: %s",
+		textDataDirsParents:      "parent directories: %s",
+		textDataDirsExisting:     "already existing: %s",
+		textDataDirsDeployFailed: "The run could not be started: %s",
+		textErrDataDirs:          "Cannot create the data directories: %s",
 	}
 }
 
@@ -103,5 +157,32 @@ func detailGerman() map[kittui.TextID]string {
 		textDoneSecretDeleted:    "Geheimnis %s des Stacks %s gelöscht.",
 		textSecretAppliesLater:   "Die Änderung gilt ab dem nächsten Deployment.",
 		textDoneRestored:         "Backup %s für den Stack %s eingespielt.",
+		textDetailDataDirs:       "Fehlende Datenordner",
+		textDataDirLine:          "%s  Besitzer %s",
+		textDataDirLineNoOwner:   "%s  Besitzer unbekannt",
+		textDataDirsHint:         "Der Stack wartet, bis diese Ordner existieren. {datadirs} legt sie mit dem bestätigten Besitzer und Modus an und rollt den Stack danach aus.",
+		textDataDirsIntro:        "Fehlend unter %s:",
+		textKeyDataDirs:          "Datenordner anlegen",
+		textTitleDataDirs:        "Datenordner anlegen",
+		textFieldDataOwner:       "Besitzer",
+		textHintDataOwner:        "UID:GID des Benutzers, als der der Container läuft, z. B. 1000:1000",
+		textFieldDataMode:        "Modus",
+		textHintDataMode:         "oktale Zugriffsrechte, z. B. 0750",
+		textProblemDataOwner:     "Der Besitzer muss UID:GID mit Dezimalzahlen sein, z. B. 1000:1000.",
+		textProblemDataMode:      "Der Modus muss aus oktalen Zugriffsrechten wie 0750 bestehen; setuid, setgid und Sticky-Bit sind nicht erlaubt.",
+		textDataDirsNone:         "Diesem Stack fehlen keine Datenordner.",
+		textDataDirsNeedRoot:     "Datenordner anzulegen braucht root; die Oberfläche muss mit sudo gestartet werden.",
+		textDataDirsNoFolder:     "Der Stacks-Ordner ist noch nicht bekannt; neu laden und erneut versuchen.",
+		textAskDataDirs:          "Die fehlenden Datenordner des Stacks %s anlegen und ihn ausrollen?",
+		textWhatDataDirs:         "Es werden nur die unten genannten Ordner mit diesem Besitzer und Modus angelegt. Vorhandene Ordner bleiben unverändert. Danach wird ein Lauf des Stacks gestartet.",
+		textDataDirsFolder:       "Stack-Ordner: %s",
+		textDataDirsOwner:        "Besitzer: %s",
+		textDataDirsMode:         "Modus: %s",
+		textDoneDataDirs:         "Datenordner für den Stack %s angelegt.",
+		textDataDirsCreated:      "angelegt: %s",
+		textDataDirsParents:      "Elternordner: %s",
+		textDataDirsExisting:     "bereits vorhanden: %s",
+		textDataDirsDeployFailed: "Der Lauf konnte nicht gestartet werden: %s",
+		textErrDataDirs:          "Die Datenordner konnten nicht angelegt werden: %s",
 	}
 }

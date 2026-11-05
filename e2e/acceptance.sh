@@ -53,12 +53,13 @@ acc_n8n() {
 
 # acc_n8n_login opens the session of the owner; n8n answers /healthz a little before its REST routes are there.
 acc_n8n_login() {
-	i=0
+	i=0 first=
 	while :; do
 		out=$(acc_n8n POST /rest/login "{\"emailOrLdapLoginId\":\"$acc_owner_email\",\"password\":\"$acc_owner_password\"}" || true)
 		printf '%s' "$out" | grep -qF "$acc_owner_email" && return 0
+		[ -n "$first" ] || first=$out
 		i=$((i + 1))
-		[ "$i" -lt 60 ] || fail "n8n login did not return the owner: $out"
+		[ "$i" -lt 60 ] || fail "n8n login did not return the owner: $out (first answer: $first)"
 		sleep 2
 	done
 }
@@ -263,11 +264,25 @@ acc_first_setup() {
 	wait_for 'the first run of n8n' 180 stack_idle n8n
 	wait_for 'the first run of bookstack' 180 stack_idle bookstack
 
-	# n8n runs as the user node (UID 1000) and Docker would create a missing bind mount source as root, so the
-	# data directory has to belong to that user before the first start; this is the one step by hand.
-	step 'the administrator gives n8n the data directory its container user can write'
-	docker exec "$host" install -d -o 1000 -g 1000 -m 0750 "$acc_stacks/n8n/data" || fail 'cannot create the data directory of n8n'
-	acc 'data directory of n8n created for UID 1000 by the administrator'
+	# n8n runs as the user node (UID 1000) and Docker would create a missing bind mount source as root, so its first
+	# run waits until the directory exists with that owner; BookStack and MariaDB run as root.
+	step 'the first run of n8n waits for its data directory'
+	i=0
+	until stack_field n8n findings | grep -q data-dir-missing; do
+		i=$((i + 1))
+		[ "$i" -lt 90 ] || fail "n8n has no data-dir-missing finding: $(qd --output json status) $(qd stack runs n8n) $(docker exec "$host" docker ps -a)"
+		sleep 1
+	done
+	finding=$(stack_field n8n findings)
+	case $finding in
+	data-dir-missing:*' data (owner 1000:1000)'*) ;;
+	*) fail "n8n has no finding for the directory data with the owner 1000:1000: $(qd --output json status)" ;;
+	esac
+	log "status of n8n: \"stack.n8n.findings\": \"$finding\""
+	docker exec "$host" test ! -e "$acc_stacks/n8n/data" || fail 'the data directory of n8n exists before it was created'
+	[ -z "$(docker exec "$host" docker ps -aq --filter label=com.docker.compose.project=n8n)" ] ||
+		fail 'containers of n8n exist although its data directory is missing'
+	acc "n8n waits with: $finding"
 
 	step 'Stack detail: the secrets of secrets.example.env are set through the interface'
 	for stack in n8n bookstack; do
@@ -292,10 +307,43 @@ VALUES_END
 	done
 	acc 'secrets of n8n and bookstack set through the interface (mode 600, owner qdeploy)'
 
-	step 'Stacks: both stacks are deployed'
+	step 'Stacks: bookstack is deployed without asking'
 	tui_send 1
-	acc_deploy_via_tui n8n
 	acc_deploy_via_tui bookstack
+	[ -z "$(stack_field bookstack findings)" ] || fail "bookstack has findings: $(stack_field bookstack findings)"
+	acc 'bookstack deployed without a finding'
+
+	step 'Stack detail: the data directory of n8n is created through the interface with the proposed owner'
+	tui_send 1
+	tui_wait 'needs data dirs' 30
+	acc_cursor_to n8n
+	prev=$(newest_run n8n)
+	tui_send Enter
+	tui_wait 'Missing data directories' 15
+	tui_wait 'owner 1000:1000' 10
+	tui_send m
+	tui_wait 'Create data directories' 10
+	tui_wait '1000:1000' 10
+	tui_wait '0750' 10
+	tui_send F2
+	tui_wait 'Create the missing data directories of the stack' 10
+	tui_send y
+	tui_wait 'Data directories created for the stack n8n' 60
+	tui_wait 'started at commit' 10
+	tui_send Enter
+	tui_send Escape
+	owner_mode=$(docker exec "$host" stat -c '%u:%g %a' "$acc_stacks/n8n/data") || fail 'the data directory of n8n does not exist'
+	log "stat of $acc_stacks/n8n/data: $owner_mode"
+	[ "$owner_mode" = '1000:1000 750' ] || fail "the data directory of n8n has owner and mode '$owner_mode'"
+	run=$(next_run n8n "$prev") || fail 'no run of n8n started after the creation'
+	wait_for "the run $run" 600 run_finished n8n "$run"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run of n8n did not succeed: $(qd stack log "$run")"
+	[ -n "$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=n8n --filter status=running)" ] ||
+		fail 'n8n does not run after the creation'
+	# The owner setup of the later steps is silently ignored by n8n while it still starts up.
+	wait_for 'n8n to answer' 180 acc_healthy n8n
+	wait_for 'n8n to be ready' 120 sh -c "[ \"\$(docker exec $host curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5678/healthz/readiness)\" = 200 ]"
+	acc "data directory of n8n created through the interface ($owner_mode); run $run succeeded and n8n runs"
 	tui_send q
 	tui_wait 'qdeploy-exit=0' 10
 	tui_tmux kill-server >/dev/null 2>&1 || true

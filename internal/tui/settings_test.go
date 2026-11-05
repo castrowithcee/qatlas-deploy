@@ -648,3 +648,18 @@ func TestRepoBindStopsWhenTheFolderCannotBeGranted(t *testing.T) {
 		t.Fatalf("the bind went on: %v", b.actions())
 	}
 }
+
+func TestWindowDaysInUILanguage(t *testing.T) {
+	week := []string{"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+	for _, c := range []struct {
+		days []string
+		want string
+	}{{week, "Tage: mo,di,mi,do,fr,sa,so"}, {[]string{"mon", "thu", "x"}, "Tage: mo,do,x"}} {
+		b := settingsBackend()
+		b.window.Days = c.days
+		m := newTestModel(t, i18n.German, b, wideWidth, settingsRows)
+		send(m, toWindow...)
+		contains(t, m, c.want)
+		contains(t, m, "Sa 2026-10-31 03:00")
+	}
+}

@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks  [2 Stack detail]  3 Runs   4 Settings                                                                      
+------------------------------------------------------------------------------------------------------------------------
+  demo-stack                                                                                                            
+                                                                                                                        
+  mode      automatic                                                                                                   
+  state     needs data dirs                                                                                             
+  findings  1 warning       #= Done =======================================================#                            
+                            | Data directories created for the stack demo-stack.           |                            
+  Missing data directories  |                                                              |                            
+    data/db  owner 1000:1000| created: data/db                                             |                            
+    data/files  owner 1000:1| parent directories: data                                     |                            
+    The stack waits until th| already existing: data/files                                 | confirm, then deploys the  
+    stack.                  | run 20261031T100000Z-demo-stack started at commit            |                            
+                            | 222222222222                                                 |                            
+  Image versions            |                                                              |                            
+    APP_VERSION  example/app| > close <                                                    |                            
+      1.4.2 -> 1.5.0  update| n/esc/enter close                                            |                            
+                            #==============================================================#                            
+  Changelog                                                                                                             
+    APP_VERSION  1.4.2 -> 1.5.0                                                                                         
+      source example/app                                                                                                
+      1.5.0  Spring release  2026-10-29                                                                                 
+                                                                                                                   20/46
