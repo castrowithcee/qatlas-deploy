@@ -9,6 +9,6 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   step deploy                                           
   info pull example/shop:5.2.0                          
                                                         
-[ L on ]  [ / ]  [ w off ]  [ t off ]     lines 1-6 of 6
-/ search  L follow  w wrap lines  t timestamps  r reload
-1-4 area  q quit                          up/down scroll
+[ L on ]  [ / ]  [ T all ]  [ w off ]     lines 1-6 of 6
+/ search  L follow  T period  w wrap lines  t timestamps
+r reload  1-4 area  q quit                up/down scroll
