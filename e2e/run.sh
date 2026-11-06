@@ -22,21 +22,23 @@
 # The registry is also the Docker Hub mirror of the host's Docker daemon, and holds busybox by the digest of
 # the default backup helper image, so qdeploy runs a backup there without --backup-image.
 #
-# Everything is named qdeploye2e-* and labelled qdeploy.e2e=1; down touches only what carries both. Nothing
-# is published on the machine's ports. Set E2E_KEEP_ON_FAIL=1 to keep a failed environment for inspection.
+# Up to four instances run side by side. up takes a free one (1-4), or waits until one is free, and holds it for
+# the checkout it runs from until down; every other command acts on the instance of that checkout. E2E_INSTANCE=<n>
+# picks an instance explicitly, for example to remove the leftovers of a checkout that is gone.
+# Instance n names everything qdeploye2e<n>-* and labels it qdeploy.e2e=<n>; down touches only what carries both,
+# so it never reaches another instance. The host names *.qdeploye2e.test are aliases inside the instance's own
+# network. Nothing is published on the machine's ports. Set E2E_KEEP_ON_FAIL=1 to keep a failed environment for
+# inspection.
 # Needs docker (rootless is fine), go, openssl, ssh-keygen.
 set -eu
 
-prefix=qdeploye2e
-label=qdeploy.e2e=1
+base=qdeploye2e
+instances='1 2 3 4'
 domain=qdeploye2e.test
 hostname_=qdeploy-e2e-host
 admin=e2e-admin
-net=$prefix-net
-host=$prefix-host
 tags='1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0 5.0.0'
 unhealthy_tags='4.0.0'
-backup_image=$prefix-backup-helper:1
 # Real images copied into the registry as "<source>|<path in the registry>:<tag>", and test images derived from
 # one of them as "<registry path>:<base tag>|<new tag>".
 real_images='n8nio/n8n:2.46.4|n8nio/n8n:2.46.4
@@ -51,6 +53,8 @@ linuxserver/bookstack:26.09.1|26.10.0'
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 tmp_base=${TMPDIR:-/tmp}
+# Fixed, not under TMPDIR: every caller of the same Docker daemon must see the same claims.
+claims=/tmp/$base-instances
 
 fail() {
 	printf 'e2e: %s\n' "$*" >&2
@@ -59,6 +63,59 @@ fail() {
 
 log() {
 	printf 'e2e: %s\n' "$*"
+}
+
+# use_instance sets the names of instance $1.
+use_instance() {
+	case $1 in 1 | 2 | 3 | 4) ;; *) fail "unknown instance $1; use 1 to 4" ;; esac
+	instance=$1
+	prefix=$base$instance
+	label=qdeploy.e2e=$instance
+	net=$prefix-net
+	host=$prefix-host
+	backup_image=$prefix-backup-helper:1
+}
+
+# held prints the instance this checkout holds, if any.
+held() {
+	for n in $instances; do
+		if [ "$(cat "$claims/$n/owner" 2>/dev/null)" = "$root" ]; then
+			printf '%s\n' "$n"
+			return 0
+		fi
+	done
+}
+
+# pick uses E2E_INSTANCE, else the instance this checkout holds; it fails when there is none.
+pick() {
+	n=${E2E_INSTANCE:-$(held)}
+	[ -n "$n" ] || return 1
+	use_instance "$n"
+}
+
+# claim takes a free instance for this checkout, the one E2E_INSTANCE names if set, and waits until one is free.
+claim() {
+	mkdir -p "$claims"
+	[ -O "$claims" ] || fail "$claims belongs to another user"
+	waiting=
+	while :; do
+		for n in ${E2E_INSTANCE:-$instances}; do
+			# mkdir is atomic: of two callers only one gets the instance.
+			if mkdir "$claims/$n" 2>/dev/null; then
+				printf '%s\n' "$root" >"$claims/$n/owner"
+				use_instance "$n"
+				return 0
+			fi
+		done
+		[ -n "$waiting" ] || log "no free instance; waiting (holders: $(cat "$claims"/*/owner 2>/dev/null | tr '\n' ' '))"
+		waiting=1
+		sleep 5
+	done
+}
+
+release() {
+	rm -f "$claims/$instance/owner"
+	rmdir "$claims/$instance" 2>/dev/null || true
 }
 
 # owned lists "<id> <name>" of the objects of one kind whose name starts with the prefix and that carry the label.
@@ -98,7 +155,7 @@ require_up() {
 }
 
 down() {
-	log 'removing containers, networks, volumes, images and temp directories'
+	log "instance $instance: removing containers, networks, volumes, images and temp directories"
 	owned container | while read -r id name; do
 		docker rm -f -v "$id" >/dev/null && log "removed container $name"
 	done
@@ -125,7 +182,8 @@ down() {
 	done
 	[ -z "$(workdirs)" ] || left="$left tmp-dir"
 	[ -z "$left" ] || fail "leftovers with the prefix $prefix:$left"
-	log "clean: nothing with the prefix $prefix remains"
+	release
+	log "clean: nothing with the prefix $prefix remains; instance $instance is free"
 }
 
 make_keys_and_certs() {
@@ -365,6 +423,9 @@ up() {
 	for tool in docker go jq openssl ssh-keygen; do
 		command -v "$tool" >/dev/null 2>&1 || fail "$tool is required"
 	done
+	n=$(held)
+	if [ -n "$n" ]; then use_instance "$n"; else claim; fi
+	log "instance $instance for $root"
 	[ -z "$(named container)$(named network)$(named volume)$(named image)$(workdirs)" ] ||
 		fail "something with the prefix $prefix exists already; run: e2e/run.sh down"
 
@@ -406,8 +467,15 @@ main() {
 	cmd=${1:-}
 	[ $# -eq 0 ] || shift
 	case $cmd in
+	status | env | requests | messages | scenario | acceptance | exec)
+		pick || fail 'this checkout holds no instance; run: e2e/run.sh up'
+		;;
+	esac
+	case $cmd in
 	up) up ;;
-	down) down ;;
+	down)
+		if pick; then down; else log "this checkout holds no instance; nothing to remove"; fi
+		;;
 	status) status ;;
 	env)
 		require_up
@@ -447,7 +515,7 @@ main() {
 		exec docker exec -i -u "$user" "$host" "$@"
 		;;
 	*)
-		sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
 		[ -z "$cmd" ] || exit 2
 		;;
 	esac
