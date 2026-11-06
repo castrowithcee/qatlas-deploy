@@ -11,7 +11,7 @@ qdeploy  Wartungsfenster zu                                                     
              +---------------------------------------------------------------------------------------------------------+
              #=========================================================================================================#
 > Ereignisse | >[x] succeeded  [ ] failed  [ ] rolled-back  [ ] rollback-failed  [ ] container-failed  [ ] recovered   |
-             |  [ ] update-available                                                                                   |
+             |  [ ] recovery-failed  [ ] update-available                                                              |
              #=========================================================================================================#
              Leertaste hakt an; nichts angehakt heißt alle                                                              
                                                                                                                         

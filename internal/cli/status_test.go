@@ -177,3 +177,19 @@ func TestStatusFieldsAreUniqueAcrossSources(t *testing.T) {
 		}
 	}
 }
+
+func TestRepairText(t *testing.T) {
+	at := time.Date(2026, 5, 4, 3, 2, 1, 0, time.UTC)
+	for _, tt := range []struct {
+		r    control.RepairInfo
+		want string
+	}{
+		{control.RepairInfo{Attempts: 1, Max: 3, Next: at}, "1 of 3 attempts, next 2026-05-04T03:02:01Z"},
+		{control.RepairInfo{Attempts: 3, Max: 3}, "3 of 3 attempts"},
+		{control.RepairInfo{Attempts: 3, Max: 3, Halted: &control.HoldInfo{Since: at}}, "halted since 2026-05-04T03:02:01Z after 3 of 3 attempts"},
+	} {
+		if got := repairText(&tt.r); got != tt.want {
+			t.Errorf("repairText(%+v) = %q, want %q", tt.r, got, tt.want)
+		}
+	}
+}

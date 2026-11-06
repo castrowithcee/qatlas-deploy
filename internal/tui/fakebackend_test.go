@@ -235,7 +235,7 @@ func (f *fakeBackend) Resume(_ context.Context, stack string) (control.ResumeRes
 	if err := f.act("resume", stack); err != nil {
 		return control.ResumeResult{}, err
 	}
-	return control.ResumeResult{Stack: stack, Pause: control.PauseInfo{Since: at(29, 3, 12), Run: "20261029T031000Z-0000000a"}}, nil
+	return control.ResumeResult{Stack: stack, Pause: &control.PauseInfo{Since: at(29, 3, 12), Run: "20261029T031000Z-0000000a"}}, nil
 }
 
 func (f *fakeBackend) stackAction(call, stack string, stopped bool) (control.StackActionResult, error) {

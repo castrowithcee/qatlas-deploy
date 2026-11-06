@@ -318,6 +318,17 @@ hook_seen() {
 		grep -F "\"X-Qdeploy-Event\":\"$2\"" | grep -F '"X-Qdeploy-Signature":"' | grep -qF -- "$stack_pattern"
 }
 
+# hook_has succeeds when the webhook receiver recorded a signed request to the path $1 for the event $2 whose
+# body contains every further fixed string.
+hook_has() {
+	lines=$(docker exec "$prefix-hooks" cat /data/requests.jsonl 2>/dev/null | grep -F "\"path\":\"$1\"" |
+		grep -F "\"X-Qdeploy-Event\":\"$2\"" | grep -F '"X-Qdeploy-Signature":"') || return 1
+	shift 2
+	for part in "$@"; do
+		lines=$(printf '%s\n' "$lines" | grep -F -- "$part") || return 1
+	done
+}
+
 # journal prints the log of the qdeploy service.
 journal() {
 	docker exec "$host" journalctl -u qdeploy --no-pager -o cat
@@ -1126,6 +1137,8 @@ scenario_stacks_repo() {
 
 	scenario_stack_actions
 
+	scenario_repair_start
+
 	scenario_container_monitor
 
 	scenario_backup
@@ -1179,6 +1192,8 @@ scenario_stacks_repo() {
 	qd repo fetch >/dev/null || fail 'repo fetch fails after the host keys were restored'
 
 	scenario_sources
+
+	scenario_repair_end
 
 	scenario_tui_setup
 }
@@ -1474,9 +1489,10 @@ no_finding() {
 }
 
 # scenario_container_monitor proves that the failure monitor reports a container of demo-stack that dies outside
-# qdeploy: the webhook hears container-failed and qdeploy status shows the finding; after the container runs
-# again the webhook hears recovered and the finding is gone. The restart policy is switched off for the kill
-# and back on afterwards; the monitor reads every 30 seconds and ends a failure after two clean readings.
+# qdeploy and then repairs it: the webhook hears container-failed and qdeploy status shows the finding; qdeploy
+# restarts the container after a minute, and the webhook hears recovered with restarted. The same for a container
+# that turns unhealthy. The restart policy is switched off for the kill, so only qdeploy can bring the container
+# back; the monitor reads every 30 seconds and ends a failure after two clean readings.
 scenario_container_monitor() {
 	step 'a channel for the failure monitor events is added'
 	out=$(qd_in "$hook_url
@@ -1497,14 +1513,106 @@ $hook_signing_value
 	stack_field demo-stack findings | grep -q 'exited' || fail "the finding does not name the kind exited: $(qd --output json status)"
 	log 'scenario: the killed container was reported and shown as a finding'
 
-	step 'the container runs again: recovered is reported and the finding ends'
-	docker exec "$host" docker update --restart=unless-stopped "$victim" >/dev/null || fail 'cannot restore the restart policy'
-	docker exec "$host" docker start "$victim" >/dev/null || fail 'cannot start the container again'
-	wait_for 'demo-stack healthy again' 90 stack_healthy demo-stack
-	wait_for 'the webhook for the recovered container' 150 hook_seen /notify recovered demo-stack
+	step 'qdeploy restarts the container: recovered is reported with restarted and the finding ends'
+	wait_for 'demo-stack healthy again' 150 stack_healthy demo-stack
+	wait_for 'the webhook for the recovered container' 240 hook_has /notify recovered '\"stack\":\"demo-stack\"' '\"kind\":\"exited\"' '\"restarted\":true'
 	wait_for 'the finding to end' 60 no_finding demo-stack container-failed
+	docker exec "$host" docker update --restart=unless-stopped "$victim" >/dev/null || fail 'cannot restore the restart policy'
+	log 'scenario: qdeploy restarted the killed container and the finding ended'
+
+	step 'a container that turns unhealthy is restarted by qdeploy'
+	docker exec "$host" touch /opt/stacks/demo-stack/data/break-once || fail 'cannot break the health of demo-stack'
+	wait_for 'the webhook for the unhealthy container' 240 hook_has /notify container-failed '\"stack\":\"demo-stack\"' '\"kind\":\"unhealthy\"'
+	wait_for 'the finding container-failed in status' 60 has_finding demo-stack unhealthy
+	wait_for 'the webhook for the recovered container' 360 hook_has /notify recovered '\"stack\":\"demo-stack\"' '\"kind\":\"unhealthy\"' '\"restarted\":true'
+	wait_for 'the finding to end' 60 no_finding demo-stack container-failed
+	stack_healthy demo-stack || fail 'demo-stack is not healthy after the repair'
+	if docker exec "$host" test -e /opt/stacks/demo-stack/data/break-once; then fail 'the restart did not clear the break'; fi
 	out=$(qd notify remove mon) || fail "notify remove failed: $out"
-	log 'scenario: the container recovered and the finding ended'
+	log 'scenario: the unhealthy container was restarted by qdeploy and recovered'
+}
+
+# repair_text prints the repair line of a stack in qdeploy status.
+repair_text() {
+	stack_field "$1" repair
+}
+
+repair_first_attempt() {
+	repair_text repair-demo | grep -q '^1 of 3 attempts, next '
+}
+
+repair_halted() {
+	repair_text "$1" | grep -q '^halted since '
+}
+
+# scenario_repair_start adds the stack repair-demo and breaks it for good: its health check fails while the file
+# data/break exists, which a restart does not remove. qdeploy restarts it 1, 5 and 15 minutes after the failure
+# began and then halts. The delays run in real time; scenario_repair_end checks the outcome at the end of the
+# run, so they overlap with the other scenarios.
+scenario_repair_start() {
+	step 'the stack repair-demo is deployed and a channel for recovery-failed is added'
+	as_admin 'cd ~/stacks && git pull -q --ff-only && mkdir repair-demo'
+	cat <<EOF | as_admin 'cat >"$HOME"/stacks/repair-demo/compose.yaml'
+services:
+  app:
+    image: registry.$domain/demo/app:1.0.0
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: repair-demo
+    volumes:
+      - ./data:/data
+EOF
+	as_admin 'cd ~/stacks && cp demo-stack/.gitignore repair-demo/.gitignore && git add -A &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Add the repair-demo stack" && git push -q origin main'
+	restart_service
+	wait_for 'the first run of repair-demo' 240 stack_settled repair-demo succeeded
+	wait_for 'repair-demo healthy' 60 stack_healthy repair-demo
+	out=$(qd_in "$hook_url
+$hook_signing_value
+" notify add rep --type webhook --events recovered,recovery-failed) || fail "notify add rep failed: $out"
+	[ -z "$(repair_text repair-demo)" ] || fail "a healthy stack shows a repair: $(repair_text repair-demo)"
+
+	step 'repair-demo turns unhealthy for good; the first attempt shows in status'
+	docker exec "$host" touch /opt/stacks/repair-demo/data/break || fail 'cannot break repair-demo'
+	repair_demo_broken=$(date +%s)
+	wait_for 'the finding container-failed of repair-demo' 240 has_finding repair-demo container-failed
+	wait_for 'the first repair attempt' 240 repair_first_attempt
+	log "scenario: repair-demo $(repair_text repair-demo)"
+}
+
+# scenario_repair_end waits until qdeploy gave up on repair-demo and proves that the halt is shown, reported
+# once and released by resume; then it fixes the stack and removes it from the repository.
+scenario_repair_end() {
+	step 'after three attempts the repair is halted, shown in status and the TUI, and reported once'
+	wait_for 'the repair of repair-demo to halt' 1800 repair_halted repair-demo
+	log "scenario: repair-demo halted after $(($(date +%s) - repair_demo_broken)) seconds: $(repair_text repair-demo)"
+	repair_text repair-demo | grep -q 'after 3 of 3 attempts' || fail "status does not name the attempts: $(repair_text repair-demo)"
+	wait_for 'the webhook for the failed recovery' 60 hook_has /notify recovery-failed '\"stack\":\"repair-demo\"' '\"attempts\":3'
+	sleep 35
+	[ "$(docker exec "$prefix-hooks" cat /data/requests.jsonl | grep -F '"path":"/notify"' | grep -F '"X-Qdeploy-Event":"recovery-failed"' | grep -cF '\"stack\":\"repair-demo\"')" = 1 ] ||
+		fail 'recovery-failed was not sent exactly once'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait 'repair-demo' 30
+	tui_wait 'halted' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+
+	step 'resume releases the halted repair and prints no pause time'
+	docker exec "$host" rm -f /opt/stacks/repair-demo/data/break
+	out=$(qd --output json stack resume repair-demo) || fail "stack resume failed: $out"
+	printf '%s' "$out" | grep -q '"repair": *"released"' || fail "resume does not say that the repair was released: $out"
+	if printf '%s' "$out" | grep -q '0001-01-01\|paused_since'; then fail "resume prints a pause time: $out"; fi
+	if repair_halted repair-demo; then fail "status still shows the repair as halted: $(repair_text repair-demo)"; fi
+	if qd stack resume repair-demo >/dev/null; then fail 'a second resume succeeded'; fi
+
+	step 'repair-demo is healthy again and leaves the repository'
+	wait_for 'repair-demo healthy' 120 stack_healthy repair-demo
+	wait_for 'the finding of repair-demo to end' 120 no_finding repair-demo container-failed
+	out=$(qd notify remove rep) || fail "notify remove rep failed: $out"
+	as_admin 'cd ~/stacks && git pull -q --ff-only && git rm -r -q repair-demo &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Remove the repair-demo stack" && git push -q origin main'
+	log 'scenario: resume released the repair; repair-demo is fixed and removed'
 }
 
 # selfupdate_field prints one top-level field of qdeploy update status, run without root.
@@ -2038,6 +2146,9 @@ scenario_tui() {
 	log_secret=not-a-real-secret-e2e
 	ctname=$(docker exec "$host" docker ps --filter label=com.docker.compose.project=demo-stack --format '{{.Names}}' | head -n 1)
 	[ -n "$ctname" ] || fail 'no container of demo-stack runs for the log of the interface'
+	# A container that runs for minutes has scrolled its start line out of the view; a restart writes a new one.
+	docker exec "$host" docker restart "$ctname" >/dev/null || fail 'cannot restart the container for the log of the interface'
+	wait_for 'demo-stack healthy' 60 stack_healthy demo-stack
 	tui_send Escape
 	tui_send 5
 	tui_wait 'own stack demo-stack' 15

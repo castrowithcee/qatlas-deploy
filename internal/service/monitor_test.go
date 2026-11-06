@@ -505,6 +505,28 @@ func TestMonitorFailureShownInStatus(t *testing.T) {
 	}
 }
 
+func TestRepairShownInStatus(t *testing.T) {
+	last := time.Date(2026, 5, 4, 3, 2, 1, 0, time.UTC)
+	next := last.Add(5 * time.Minute)
+	snap := engine.Snapshot{State: engine.State{Stacks: map[string]engine.StackState{"web": {
+		Deployed: strings.Repeat("a", 40), Repair: &engine.Repair{Attempts: 1, Last: last, Next: next},
+	}}}}
+	want := control.RepairInfo{Attempts: 1, Max: engine.MaxRepairAttempts, Last: last, Next: next}
+	if r := stackStatuses(snap)[0].Repair; r == nil || *r != want {
+		t.Fatalf("repair = %+v, want %+v", r, want)
+	}
+	halted := last.Add(time.Minute)
+	snap.State.Stacks["web"] = engine.StackState{Repair: &engine.Repair{Attempts: 3, Last: last, Halted: &engine.Hold{Since: halted}}}
+	r := stackStatuses(snap)[0].Repair
+	if r == nil || r.Halted == nil || !r.Halted.Since.Equal(halted) || r.Attempts != 3 || !r.Next.IsZero() {
+		t.Fatalf("halted repair = %+v", r)
+	}
+	snap.State.Stacks["web"] = engine.StackState{}
+	if r := stackStatuses(snap)[0].Repair; r != nil {
+		t.Fatalf("repair without repair state = %+v", r)
+	}
+}
+
 func TestMonitorStopMarkSurvivesRestartAndEndsWithTheContainer(t *testing.T) {
 	r := newMonRig(t)
 	app, db := ctr("1", "app"), ctr("2", "db")

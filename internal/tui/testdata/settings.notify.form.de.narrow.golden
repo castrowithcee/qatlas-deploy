@@ -13,11 +13,11 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
 > Ereignisse | >[x] succeeded  [ ] failed              |
              |  [ ] rolled-back  [ ] rollback-failed   |
              |  [ ] container-failed  [ ] recovered    |
+             |  [ ] recovery-failed                    |
              |  [ ] update-available                   |
              #=========================================#
              Leertaste hakt an; nichts angehakt heißt   
              alle                                       
-                                                        
                                                         
                                                         
 space Umschalten  F2 Speichern  esc verwerfen           

@@ -102,7 +102,12 @@ func registerRunCommands(r *control.Registry, eng *sourceSet, version string, st
 				}
 				return nil, errors.New("the engine state cannot be written")
 			}
-			return control.ResumeResult{Stack: printable(a.Stack), Pause: pauseInfo(p)}, nil
+			res := control.ResumeResult{Stack: printable(a.Stack)}
+			if !p.Time.IsZero() {
+				info := pauseInfo(p)
+				res.Pause = &info
+			}
+			return res, nil
 		},
 		control.PauseCommand:   holdHandler(eng.SetPause, true),
 		control.UnpauseCommand: holdHandler(eng.SetPause, false),
@@ -226,6 +231,12 @@ func stackStatuses(snap engine.Snapshot) []control.StackStatus {
 			}
 			item.Findings = append(item.Findings, control.FindingInfo{Kind: engine.FindingContainerFailed, Detail: printable(detail)})
 			item.Failure = &control.FailureInfo{Kind: printable(f.Kind), Container: printable(f.Container), Since: f.Since}
+		}
+		if r := s.Repair; r != nil {
+			item.Repair = &control.RepairInfo{Attempts: r.Attempts, Max: engine.MaxRepairAttempts, Last: r.Last, Next: r.Next}
+			if r.Halted != nil {
+				item.Repair.Halted = &control.HoldInfo{Since: r.Halted.Since}
+			}
 		}
 		res = append(res, item)
 	}

@@ -11,7 +11,7 @@ qdeploy  maintenance window closed                                              
          +-------------------------------------------------------------------------------------------------------------+
          #=============================================================================================================#
 > Events | >[x] succeeded  [ ] failed  [ ] rolled-back  [ ] rollback-failed  [ ] container-failed  [ ] recovered       |
-         |  [ ] update-available                                                                                       |
+         |  [ ] recovery-failed  [ ] update-available                                                                  |
          #=============================================================================================================#
          space ticks; none ticked means all                                                                             
                                                                                                                         
