@@ -134,3 +134,11 @@ func TestGoldenSettingsNotifyTestQuestion(t *testing.T) {
 func TestGoldenSettingsNotifyRemoveQuestion(t *testing.T) {
 	goldenScreens(t, "settings.notify.remove", settingsRows, settingsBackend, seq(toNotify, keys("down", "x"))...)
 }
+
+func TestGoldenSettingsDiscardQuestion(t *testing.T) {
+	goldenScreens(t, "settings.discard", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("esc"))...)
+}
+
+func TestGoldenDetailDiscardQuestion(t *testing.T) {
+	goldenScreens(t, "detail.discard", detailRows, settingsBackend, seq(toSecretForm, typed("SERVICE_TOKEN"), keys("down"), typed(hiddenA), keys("esc"))...)
+}

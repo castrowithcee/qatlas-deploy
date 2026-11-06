@@ -186,6 +186,9 @@ const (
 	textWhatWindow            kittui.TextID = "what.window"
 	textAskNotifyAdd          kittui.TextID = "ask.notifyadd"
 	textWhatNotifyAdd         kittui.TextID = "what.notifyadd"
+	textTitleDiscard          kittui.TextID = "title.discard"
+	textAskDiscard            kittui.TextID = "ask.discard"
+	textWhatDiscard           kittui.TextID = "what.discard"
 )
 
 func settingsEnglish() map[kittui.TextID]string {
@@ -371,6 +374,9 @@ func settingsEnglish() map[kittui.TextID]string {
 		textWhatWindow:            "The running service follows at once.",
 		textAskNotifyAdd:          "Add the channel %s (%s)?",
 		textWhatNotifyAdd:         "The service stores the secret parts and never shows them again.",
+		textTitleDiscard:          "Discard the changes",
+		textAskDiscard:            "Discard the changes to this form?",
+		textWhatDiscard:           "The changes you made here are lost.",
 	}
 }
 
@@ -557,5 +563,8 @@ func settingsGerman() map[kittui.TextID]string {
 		textWhatWindow:            "Der laufende Dienst folgt sofort.",
 		textAskNotifyAdd:          "Den Kanal %s (%s) anlegen?",
 		textWhatNotifyAdd:         "Der Dienst speichert die geheimen Teile und zeigt sie nie wieder.",
+		textTitleDiscard:          "Änderungen verwerfen",
+		textAskDiscard:            "Die Änderungen an diesem Formular verwerfen?",
+		textWhatDiscard:           "Die Änderungen, die Sie hier gemacht haben, gehen verloren.",
 	}
 }

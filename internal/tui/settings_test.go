@@ -469,7 +469,7 @@ func TestChannelFormsRefuseWhatTheServiceWouldRefuse(t *testing.T) {
 	send(m, typed("Bad Name")...)
 	send(m, "f2")
 	contains(t, m, "1 to 32 characters")
-	send(m, "esc", "a")
+	send(m, "esc", "y", "a")
 	send(m, typed("hook")...)
 	send(m, "down", "right", "f2", "f2") // slack without a URL
 	contains(t, m, "4 to 8192")
@@ -477,7 +477,7 @@ func TestChannelFormsRefuseWhatTheServiceWouldRefuse(t *testing.T) {
 		t.Fatal("a refused channel went on")
 	}
 	// A password without a user is refused for smtp.
-	send(m, "esc", "a")
+	send(m, "esc", "y", "a")
 	send(m, typed("mail")...)
 	send(m, "down", "right", "right", "right", "f2")
 	send(m, typed("mail.example.test")...)
