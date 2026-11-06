@@ -308,8 +308,10 @@ func TestOnlyAConfirmedKeyTriggersAnAction(t *testing.T) {
 	b := demoBackend()
 	m := newActionModel(t, b)
 	m.Update(tickMsg{})
-	m.Update(tea.MouseWheelMsg{})
-	m.Update(tea.MouseClickMsg{X: 3, Y: 5})
+	m.mouseOn = true
+	m.render()
+	m.Update(tea.MouseWheelMsg{X: 3, Y: 5, Button: tea.MouseWheelDown})
+	m.Update(tea.MouseClickMsg{X: 3, Y: 5, Button: tea.MouseLeft})
 	send(m, "u", "d", "p", "i", "g", "c", "esc", "enter", "r")
 	if got := b.actions(); len(got) != 0 {
 		t.Fatalf("calls = %v", got)

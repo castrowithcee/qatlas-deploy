@@ -57,6 +57,9 @@ func newTUICommand(state *notRunning) *cobra.Command {
 			"the changelog, and a newer major version is flagged as not installed automatically. A failed stack does\n" +
 			"not stop the others; the result lists every stack, the stacks that failed stay ticked, and l opens the\n" +
 			"log of the run an action started, or the Runs list when it started several. One action runs at a time.\n\n" +
+			"The mouse works too: click a tab, a key in the header or footer, or a row, and turn the wheel to scroll.\n" +
+			"A click does what the key does, so every action still asks first. Set mouse: false in the preferences\n" +
+			"file to switch it off (default on).\n\n" +
 			"It needs a terminal on both standard input and output and the running service; only root may use the\n" +
 			"service channel, so run it with sudo. Without a running service it ends with exit code 3 before it draws\n" +
 			"anything. Device-local preferences are read from ~/.qatlas/qdeploy/tui.yaml; a missing file means\n" +

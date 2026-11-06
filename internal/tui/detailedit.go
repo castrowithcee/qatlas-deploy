@@ -206,7 +206,7 @@ func (m *Model) picked(id kittui.ItemID) tea.Cmd {
 func (m *Model) pickView(width, height int) string {
 	p := m.pick
 	head := m.heading(p.title, width) + "\n\n"
-	view, _ := p.list.View(m.styles, width, max(height-2, 1))
+	view := m.listView(p.list, width, max(height-2, 1), 2)
 	return head + view
 }
 

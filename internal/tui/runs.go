@@ -351,11 +351,11 @@ func (m *Model) runsView(width, height int) string {
 		return m.logPane(width, height)
 	}
 	if !m.runsOnly {
-		view, _ := m.runsList.View(m.styles, width, height)
-		return view
+		return m.listView(m.runsList, width, height, 0)
 	}
 	note := m.note(m.text.Lookup(textRunsOnly, m.chosenName()), width)
-	view, _ := m.runsList.View(m.styles, width, max(height-strings.Count(note, "\n")-1, 1))
+	rows := strings.Count(note, "\n") + 1
+	view := m.listView(m.runsList, width, max(height-rows, 1), rows)
 	return note + "\n" + view
 }
 
