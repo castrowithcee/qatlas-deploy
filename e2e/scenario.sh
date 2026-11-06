@@ -1812,6 +1812,8 @@ scenario_tui() {
 	tui_send u
 	tui_wait 'Update 2 stacks?' 15
 	tui_wait '  demo-pinned' 15
+	# The question offers yes only once the changelogs of both stacks are read; an earlier y is ignored.
+	tui_wait 'y yes, do it' 60
 	log 'scenario: update question of two stacks:'
 	tui_excerpt 'Update 2 stacks' 14
 	[ "$(stack_images demo-paused)" = "$image:1.0.0" ] && [ "$(stack_images demo-pinned)" = "$image:1.0.0" ] ||
