@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -35,14 +36,14 @@ const (
 
 // RevertStack creates, without touching the working copy or its index, a commit on top of the base ref (see
 // RemoteHead) that restores the folder stack to its state in the
-// commit deployed. The stack must be a single top-level folder name; deployed and failed are full lowercase
-// commit ids and reason is a short note (sanitized and bounded here). It returns the new commit id and does
-// not move any ref.
+// commit deployed. The stack must be a single top-level folder name or RootStack, which restores the whole
+// tree but the settings folder; deployed and failed are full lowercase commit ids and reason is a short note
+// (sanitized and bounded here). It returns the new commit id and does not move any ref.
 //
 // ErrRevertConflict is returned if the stack differs between the base ref and failed, and
 // ErrNothingToRevert if it already equals its state in deployed; in both cases nothing is created.
 func (r *Repo) RevertStack(ctx context.Context, stack, deployed, failed, reason string) (string, error) {
-	if checkRepoPath(stack) != nil || !stackNameRe.MatchString(stack) || stack == ".git" {
+	if stack != RootStack && (checkRepoPath(stack) != nil || !stackNameRe.MatchString(stack) || stack == ".git") {
 		return "", errors.New("the stack must be a single folder name")
 	}
 	if !hexRe.MatchString(deployed) || !hexRe.MatchString(failed) {
@@ -76,8 +77,12 @@ func (r *Repo) RevertStack(ctx context.Context, stack, deployed, failed, reason 
 		return "", ErrNothingToRevert
 	}
 
-	ids, err := r.run(ctx, true, maxStdout, "--literal-pathspecs", "rev-list", "--reverse", "--max-count="+fmt.Sprint(maxListedIDs+1),
-		deployed+".."+failed, "--", stack)
+	// The pathspecs of the root stack are fixed text, so only they use pathspec magic.
+	specs := []string{"--literal-pathspecs", "rev-list", "--reverse", "--max-count=" + fmt.Sprint(maxListedIDs+1), deployed + ".." + failed, "--", stack}
+	if stack == RootStack {
+		specs = append(specs[1:], ":(exclude)"+rootSettings)
+	}
+	ids, err := r.run(ctx, true, maxStdout, specs...)
 	if err != nil {
 		return "", fmt.Errorf("rev-list failed: %w", err)
 	}
@@ -100,11 +105,20 @@ func (r *Repo) RevertStack(ctx context.Context, stack, deployed, failed, reason 
 		}
 		return strings.TrimSpace(out), nil
 	}
-	if _, err := git("read-tree", base); err != nil {
+	// The index starts as keep, and path in it is replaced by entry. The root stack is the tree of deployed with
+	// the settings folder of the base ref.
+	keep, path, entry := base, stack, atDeployed
+	if stack == RootStack {
+		keep, path = deployed, rootSettings
+		if entry, err = r.stackEntry(ctx, base, rootSettings); err != nil {
+			return "", err
+		}
+	}
+	if _, err := git("read-tree", keep); err != nil {
 		return "", err
 	}
 	// Not "git rm --cached": that refuses entries that differ from HEAD.
-	listed, err := git("ls-files", "-z", "--cached", "--", stack)
+	listed, err := git("ls-files", "-z", "--cached", "--", path)
 	if err != nil {
 		return "", err
 	}
@@ -117,13 +131,13 @@ func (r *Repo) RevertStack(ctx context.Context, stack, deployed, failed, reason 
 		}
 		paths = paths[n:]
 	}
-	if atDeployed != "" {
-		mode, rest, _ := strings.Cut(atDeployed, " ")
+	if entry != "" {
+		mode, rest, _ := strings.Cut(entry, " ")
 		kind, id, _ := strings.Cut(rest, " ")
 		if kind == "tree" {
-			_, err = git("read-tree", "--prefix="+stack+"/", id)
+			_, err = git("read-tree", "--prefix="+path+"/", id)
 		} else {
-			_, err = git("update-index", "--add", "--cacheinfo", mode+","+id+","+stack)
+			_, err = git("update-index", "--add", "--cacheinfo", mode+","+id+","+path)
 		}
 		if err != nil {
 			return "", err
@@ -144,7 +158,20 @@ func (r *Repo) RevertStack(ctx context.Context, stack, deployed, failed, reason 
 }
 
 // stackEntry returns the tree entry ("mode type id") of the top-level path stack in commit, empty if absent.
+// For RootStack it returns every top-level entry but the settings folder, with names, as one comparable text.
 func (r *Repo) stackEntry(ctx context.Context, commit, stack string) (string, error) {
+	if stack == RootStack {
+		out, err := r.run(ctx, true, maxStdout, "ls-tree", "-z", commit)
+		if err != nil {
+			return "", fmt.Errorf("ls-tree failed: %w", err)
+		}
+		entries := strings.Split(out, "\x00")
+		entries = slices.DeleteFunc(entries, func(e string) bool {
+			_, name, _ := strings.Cut(e, "\t")
+			return e == "" || name == rootSettings
+		})
+		return strings.Join(entries, "\x00"), nil
+	}
 	out, err := r.run(ctx, true, maxErrorText, "--literal-pathspecs", "ls-tree", "-z", commit, "--", stack)
 	if err != nil {
 		return "", fmt.Errorf("ls-tree failed: %w", err)
@@ -155,6 +182,9 @@ func (r *Repo) stackEntry(ctx context.Context, commit, stack string) (string, er
 
 func revertMessage(stack, deployed string, ids []string, reason string) string {
 	var b strings.Builder
+	if stack == RootStack {
+		stack = "the stack folder"
+	}
 	b.WriteString("Revert " + stack + " to " + deployed[:12] + "\n")
 	if len(ids) > 0 {
 		b.WriteString("\nReverted commits:\n")

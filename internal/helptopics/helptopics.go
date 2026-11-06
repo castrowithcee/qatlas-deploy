@@ -78,6 +78,7 @@ const sourcesTopic = `A host can deploy from several stack folders, each a sourc
 Sources:
 - qdeploy repo set <ssh-url> --dir <path> binds a further folder next to those bound earlier; a bound folder is never rebound to another URL, and folders may not lie inside each other (see qdeploy help repository).
 - The id of a source comes from its path and never changes: /opt/stacks becomes opt-stacks, /srv/services/stacks becomes srv-services-stacks.
+- Each subfolder of a source with a compose file is a stack. When the root of the source holds a compose file, found as in a subfolder, the source is exactly one stack instead: the whole folder except .qatlas/, named by its Compose project, else by the folder's name. Its subfolders are then part of it, and those with a compose file of their own get the finding ignored-stack-folder.
 - Every remote source has its own deploy key: qdeploy key generate --dir <path> before qdeploy repo set (see qdeploy help credentials).
 - A source whose fetch or poll fails keeps its state; the other sources go on. qdeploy status shows each source with its last poll, error and commits, and each stack with its source.
 - The maintenance window and qdeploy stack updates cover the stacks of every source.
@@ -193,6 +194,7 @@ Findings (rule ID, severity):
 - secrets-env-not-ignored (warning): .gitignore does not cover secrets.env
 - tracked-data (warning): git tracks files below data/
 - old-rules-file (warning): the stack folder holds a qdeploy.yaml, which is no longer read; set the stack settings instead and delete it
+- ignored-stack-folder (warning): a subfolder holds a compose file but is part of the one stack whose compose file is in the root of the stack folder
 
 A finding is an error only when the stack cannot be deployed or a secret would reach a remote; everything else is a warning or only part of the functions. The exit code is 1 when there is at least one error.
 
