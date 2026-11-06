@@ -56,7 +56,8 @@ func (m *Model) openForm(f *settingsForm) tea.Cmd {
 }
 
 func (m *Model) newSettingsForm(kind formKind, title kittui.TextID, fields []kittui.FormField) *settingsForm {
-	form, err := kittui.NewForm(kittui.FormSpec{Fields: fields, Keys: formKeys()}, m.keys, m.text)
+	form, err := kittui.NewForm(kittui.FormSpec{Fields: fields, Keys: formKeys(), Buttons: []kittui.FormButton{
+		{Action: actSave, Label: textKeySave, Primary: true}, {Action: actBack, Label: kittui.TextKeyDiscard}}}, m.keys, m.text)
 	if err != nil {
 		m.failure = m.text.Lookup(kittui.TextError, err.Error())
 		return nil
@@ -407,23 +408,38 @@ func (m *Model) submitNotifyDetail(f *settingsForm, v map[kittui.FieldID]kittui.
 	return nil
 }
 
-// formKey hands a key to the open form. Back ends the form; nothing is kept of it.
+// formKey hands a key to the open form.
 func (m *Model) formKey(msg tea.KeyPressMsg) tea.Cmd {
 	f := m.set.form
-	if act, handled := f.form.Update(msg); handled {
-		if act == actSave {
-			return m.submitForm()
-		}
+	act, handled := f.form.Update(msg)
+	switch {
+	case act == actSave && handled:
+		return m.submitForm()
+	case act == actBack:
+		return m.discardForm()
+	case handled:
 		return nil
 	}
-	if id, ok := m.keys.Match(msg, f.form.Input()); ok {
-		switch id {
-		case actForceQuit:
-			return tea.Quit
-		case actBack:
+	if id, ok := m.keys.Match(msg, f.form.Input()); ok && id == actForceQuit {
+		return tea.Quit
+	}
+	return nil
+}
+
+// discardForm ends the form; nothing is kept of it. A form with changes asks first and stays open until the
+// answer, the question names no value.
+func (m *Model) discardForm() tea.Cmd {
+	f := m.set.form
+	if !f.form.Changed() {
+		m.set.form = nil
+		return nil
+	}
+	m.ask(textTitleDiscard, m.text.Lookup(textAskDiscard), m.text.Lookup(textWhatDiscard), nil, true, func() tea.Cmd {
+		if m.set.form == f {
 			m.set.form = nil
 		}
-	}
+		return nil
+	})
 	return nil
 }
 
