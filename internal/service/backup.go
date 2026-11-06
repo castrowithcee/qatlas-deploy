@@ -10,7 +10,6 @@ import (
 
 	"github.com/castrowithcee/qatlas-deploy/internal/backup"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
-	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -38,7 +37,7 @@ func (l backupLog) Printf(format string, args ...any) {
 	l.log.Info("backup", "stack", l.stack, "detail", fmt.Sprintf(format, args...))
 }
 
-func registerBackupCommands(r *control.Registry, eng *engine.Engine, backups Backups, redact func(string) string, register func(stacks.Stack), log *slog.Logger) error {
+func registerBackupCommands(r *control.Registry, eng *sourceSet, backups Backups, redact func(string) string, register func(stacks.Stack), log *slog.Logger) error {
 	answer := func(err error) error {
 		switch {
 		case errors.Is(err, backup.ErrNoRules):

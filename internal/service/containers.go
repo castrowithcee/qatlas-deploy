@@ -17,7 +17,6 @@ import (
 	"github.com/castrowithcee/qatlas-kit/redact"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
-	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
@@ -51,7 +50,7 @@ type containerService struct {
 	stackDirs func() map[string]string
 	now       func() time.Time
 	log       *slog.Logger
-	eng       *engine.Engine
+	eng       *sourceSet
 	// wait bounds how long a start or restart waits for the container to be ready.
 	wait time.Duration
 	// secrets redacts stack secret values that Compose interpolated into container text.
@@ -61,7 +60,7 @@ type containerService struct {
 // text prepares engine text for an answer: secret values are redacted, then control characters masked.
 func (s *containerService) text(v string) string { return maskControl(s.secrets.Apply(v)) }
 
-func registerContainerCommands(r *control.Registry, repo *repoService, eng *engine.Engine, secrets *redact.Redactor, d Docker, wait time.Duration, log *slog.Logger) error {
+func registerContainerCommands(r *control.Registry, repo *repoService, eng *sourceSet, secrets *redact.Redactor, d Docker, wait time.Duration, log *slog.Logger) error {
 	if wait <= 0 {
 		wait = containerReadyWait
 	}
@@ -83,25 +82,27 @@ func registerContainerCommands(r *control.Registry, repo *repoService, eng *engi
 	return nil
 }
 
-// stackDirs maps the stack names of the working copy to their folders. Without a binding or a readable
-// working copy it is empty, so nothing counts as own: the narrower reading. It takes no lock.
+// stackDirs maps the names of the stacks that own their name to their folders; onStack sees every stack of
+// every source. Without a source or a readable working copy it is empty, so nothing counts as own: the
+// narrower reading. A working copy that cannot be read contributes nothing. It takes no lock.
 func (s *repoService) stackDirs(log *slog.Logger, onStack func(stacks.Stack)) map[string]string {
-	c, err := s.bound()
-	if err != nil {
+	srcs := s.set.sources()
+	if len(srcs) == 0 {
 		return nil
 	}
-	list, err := stacks.Load(c.Dir)
-	if err != nil {
-		log.Warn("stack folders cannot be read; no container counts as own")
-		return nil
+	r := s.set.resolve()
+	if r.readable < len(srcs) {
+		log.Warn("a stack folder cannot be read; none of its containers counts as own")
 	}
-	dirs := make(map[string]string, len(list))
-	for _, st := range list {
+	for _, ref := range r.all {
 		if onStack != nil {
-			onStack(st)
+			onStack(ref.st)
 		}
-		if abs, err := filepath.Abs(st.Dir); err == nil && st.Dir != "" {
-			dirs[st.Name] = abs
+	}
+	dirs := make(map[string]string, len(r.owned))
+	for _, ref := range r.owned {
+		if abs, err := filepath.Abs(ref.st.Dir); err == nil && ref.st.Dir != "" {
+			dirs[ref.st.Name] = abs
 		}
 	}
 	return dirs

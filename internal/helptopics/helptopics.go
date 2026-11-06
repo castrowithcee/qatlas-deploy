@@ -78,7 +78,7 @@ Binding:
 - qdeploy repo set <ssh-url> --dir <path>: the URL is user@host:path or ssh://[user@]host[:port]/path; --dir names the stack folder, is required and has no default
 - On first contact the host key and its SHA256 fingerprint are shown. At a terminal you confirm it by answering the question (default no). Without a terminal, pass the expected fingerprint: --fingerprint SHA256:...
 - Compare the fingerprint with the one the git platform publishes before you confirm it.
-- The stack folder is any absolute path, for example on another disk; each host chooses its own. It must be empty or already a clone of the same URL. A repository bound earlier is not replaced.
+- The stack folder is any absolute path, for example on another disk; each host chooses its own. It must be empty or already a clone of the same URL. Another folder becomes a further stack folder next to the earlier ones, with its own deploy key from qdeploy key generate --dir <path>; a bound folder is never rebound to another URL.
 - A folder that does not exist is created only after you confirmed its exact path: answer the question at a terminal, or pass --create without one. It gets the owner qdeploy:qdeploy and mode 0755. Neither the installer, the service nor an update creates a stack folder.
 - The service runs sandboxed and may write only where the systemd drop-in /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf allows it. repo set adds the folder there as ReadWritePaths=-<path> (entries are only ever added), reloads systemd and restarts the service once. A bound folder without that entry, as after an update from an older release, is added when you next run qdeploy as root.
 - The same steps are offered by sudo qdeploy in the Settings area.

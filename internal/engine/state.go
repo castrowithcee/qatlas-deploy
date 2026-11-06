@@ -54,6 +54,9 @@ const (
 	// FindingProjectRenamed is a deployed stack whose folder now has another project name, on both names: the
 	// new name gets no automatic run, since the old project is not stopped; a manual run decides.
 	FindingProjectRenamed = "project-renamed"
+	// FindingNameCollision is a stack whose name a stack of another source already uses: the one deployed
+	// first, or else the one of the source bound first, keeps the name; this one is never deployed.
+	FindingNameCollision = "name-collision"
 	// FindingContainerFailed is not stored with the findings of a poll; status derives it from StackState.Failure.
 	FindingContainerFailed = "container-failed"
 )

@@ -311,3 +311,38 @@ func TestValue(t *testing.T) {
 		t.Fatalf("Value(../x) = %v", err)
 	}
 }
+
+func TestEachSourceKeyIsItsOwn(t *testing.T) {
+	s, dir, _ := openStore(t)
+	name := SourceKey("srv-more-stacks")
+	first, err := s.GenerateKey(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.GenerateNamedKey(name, false)
+	if err != nil || second.Fingerprint == first.Fingerprint {
+		t.Fatalf("second key: %+v, %v", second, err)
+	}
+	if got := mode(t, filepath.Join(dir, name)); got != 0o600 {
+		t.Fatalf("mode = %v", got)
+	}
+	if shown, err := s.ShowNamedKey(name); err != nil || shown != second || s.NamedKeyPath(name) != filepath.Join(dir, name) {
+		t.Fatalf("show: %+v, %v", shown, err)
+	}
+	if _, err := s.GenerateNamedKey(name, false); !errors.Is(err, ErrKeyExists) {
+		t.Fatalf("second generate: %v", err)
+	}
+	for _, bad := range []string{"deploy-key-", "deploy-key-a/b", "../deploy-key", "credentials", "deploy-keyx"} {
+		if _, err := s.GenerateNamedKey(bad, false); !errors.Is(err, ErrInvalidName) {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	var again []string
+	if _, err := Open(dir, func(v ...string) { again = append(again, v...) }); err != nil {
+		t.Fatal(err)
+	}
+	private, _ := os.ReadFile(filepath.Join(dir, name))
+	if !contains(again, strings.TrimSpace(string(private))) {
+		t.Fatal("the private text of the source key is not registered")
+	}
+}

@@ -143,7 +143,7 @@ func failureOf(err error) error {
 			NextStep: "Bind the stacks repository with 'qdeploy repo set <ssh-url>'.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeRepoBound:
 		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
-			NextStep: "Run 'qdeploy repo set' with the URL and directory already bound, or remove the service's stacks-repo.json while the service is stopped.",
+			NextStep: "Run 'qdeploy repo set' with the URL already bound to that folder, or bind the repository to another folder with --dir.",
 			Cause:    err}
 	case errors.As(err, &remote) && remote.Code == control.CodeHostKey:
 		return &cli.Failure{Code: output.CodeAuth, Message: remote.Message,

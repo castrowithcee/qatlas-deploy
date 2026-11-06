@@ -37,6 +37,14 @@ func start(t *testing.T) *harness { return startWith(t, nil) }
 
 func startWith(t *testing.T, dep engine.Deployer, opts ...func(*service.Config)) *harness {
 	t.Helper()
+	h := newHarness(t)
+	h.run(dep, opts...)
+	return h
+}
+
+// newHarness prepares a harness whose service is not running yet.
+func newHarness(t *testing.T) *harness {
+	t.Helper()
 	h := &harness{t: t, state: filepath.Join(t.TempDir(), "state"), git: servicetest.New(), srv: hostkeytest.Start(t), logs: &lockedBuffer{}}
 	h.git.Files = servicetest.Stacks()
 	h.url = h.srv.URL()
@@ -44,6 +52,13 @@ func startWith(t *testing.T, dep engine.Deployer, opts ...func(*service.Config))
 	if err := os.Mkdir(h.dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	return h
+}
+
+// run starts the service of the harness and waits for its channel.
+func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
+	t := h.t
+	t.Helper()
 	ep := channeltest.Endpoint(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -77,7 +92,6 @@ func startWith(t *testing.T, dep engine.Deployer, opts ...func(*service.Config))
 		defer cl.Close()
 		return cl.Call(context.Background(), command, args, result)
 	}
-	return h
 }
 
 func (h *harness) withKey() {
@@ -169,7 +183,7 @@ func TestSetRefusesAWrongFingerprint(t *testing.T) {
 	if h.knownHosts() != "" || h.git.Clones() != 0 {
 		t.Fatal("a refused set pinned a key or cloned")
 	}
-	if _, err := os.Lstat(filepath.Join(h.state, "stacks-repo.json")); err == nil {
+	if _, err := os.Lstat(filepath.Join(h.state, "sources.json")); err == nil {
 		t.Fatal("a refused set stored a configuration")
 	}
 	wantCode(t, errOf(h.set("")), control.CodeInvalid)
@@ -232,13 +246,13 @@ func TestSetRefusesANonEmptyForeignDirectory(t *testing.T) {
 	}
 }
 
-func TestSetRefusesAnotherBinding(t *testing.T) {
+func TestSetRefusesAnotherURLForABoundFolder(t *testing.T) {
 	h := start(t)
 	h.withKey()
 	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	h.dir += "-other"
+	h.url = strings.Replace(h.url, "/stacks.git", "/other.git", 1)
 	wantCode(t, errOf(h.set(h.srv.Key().Fingerprint)), control.CodeRepoBound)
 }
 
@@ -278,15 +292,15 @@ func TestSetNamesAFolderTheServiceCannotWrite(t *testing.T) {
 
 func TestBoundDirReadsTheBinding(t *testing.T) {
 	h := start(t)
-	if _, ok := service.BoundDir(h.state); ok {
-		t.Fatal("a folder is bound before any set")
+	if dirs := service.BoundDirs(h.state); len(dirs) != 0 {
+		t.Fatalf("folders bound before any set: %v", dirs)
 	}
 	h.withKey()
 	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	if dir, ok := service.BoundDir(h.state); !ok || dir != h.dir {
-		t.Fatalf("BoundDir = %q, %v; want %q", dir, ok, h.dir)
+	if dirs := service.BoundDirs(h.state); len(dirs) != 1 || dirs[0] != h.dir {
+		t.Fatalf("BoundDirs = %v; want %q", dirs, h.dir)
 	}
 }
 
@@ -374,7 +388,7 @@ func errOf(_ control.RepoSetResult, err error) error { return err }
 func TestEngineStartsPollingAfterRepoSet(t *testing.T) {
 	h := start(t)
 	h.withKey()
-	statePath := filepath.Join(h.state, "deploy", "state.json")
+	statePath := filepath.Join(h.state, "sources", sourceID(h.dir), "deploy", "state.json")
 	time.Sleep(5 * time.Millisecond)
 	if _, err := os.Stat(statePath); err == nil {
 		t.Fatal("engine state written without a binding")
@@ -510,3 +524,6 @@ func TestCheckReducesRepoTextToPrintable(t *testing.T) {
 		t.Fatalf("report = %+v", res.Stacks)
 	}
 }
+
+// sourceID is the id the service derives from a stack folder.
+func sourceID(dir string) string { return strings.ReplaceAll(strings.TrimPrefix(dir, "/"), "/", "-") }

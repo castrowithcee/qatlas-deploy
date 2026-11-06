@@ -13,7 +13,7 @@ import (
 )
 
 // registerSettingsCommands registers stack.settings.get and stack.settings.set.
-func registerSettingsCommands(r *control.Registry, eng *engine.Engine, redact func(string) string, log *slog.Logger) error {
+func registerSettingsCommands(r *control.Registry, eng *sourceSet, redact func(string) string, log *slog.Logger) error {
 	commands := map[string]control.Handler{
 		control.StackSettingsGetCommand: func(ctx context.Context, raw json.RawMessage) (any, error) {
 			var a control.StackSettingsArgs

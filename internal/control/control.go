@@ -70,6 +70,7 @@ const (
 	CodePinned         = "pinned"
 	CodeStackStopped   = "stack-stopped"
 	CodeStackAction    = "stack-action-failed"
+	CodeNameCollision  = "name-collision"
 
 	CodeNoBackups     = "no-backups"
 	CodeNoBackupRules = "no-backup-rules"
@@ -461,8 +462,15 @@ const (
 )
 
 // KeyGenerateArgs are the arguments of KeyGenerateCommand. An existing key is replaced only if Replace is set.
+// Dir names the stack folder the key is for; empty means the default key.
 type KeyGenerateArgs struct {
-	Replace bool `json:"replace"`
+	Replace bool   `json:"replace"`
+	Dir     string `json:"dir,omitempty"`
+}
+
+// KeyShowArgs are the arguments of KeyShowCommand; Dir as in KeyGenerateArgs.
+type KeyShowArgs struct {
+	Dir string `json:"dir,omitempty"`
 }
 
 // KeyResult answers KeyGenerateCommand and KeyShowCommand with the public part of the deploy key.
@@ -535,13 +543,26 @@ type RepoSetResult struct {
 	Cloned      bool   `json:"cloned"`
 }
 
-// RepoFetchResult answers RepoFetchCommand. UpdatesAvailable says the fetched remote branch differs from the
-// working copy's HEAD; the working copy itself is not touched.
+// RepoFetchResult answers RepoFetchCommand. Sources has one entry per stack folder, in the order they were
+// bound; Dir, Head, RemoteHead and UpdatesAvailable repeat the first entry. The command fails only when no
+// source could be fetched.
 type RepoFetchResult struct {
+	Dir              string            `json:"dir"`
+	Head             string            `json:"head"`
+	RemoteHead       string            `json:"remote_head"`
+	UpdatesAvailable bool              `json:"updates_available"`
+	Sources          []RepoFetchSource `json:"sources"`
+}
+
+// RepoFetchSource is the fetch of one stack folder. UpdatesAvailable says the fetched remote branch differs
+// from the working copy's HEAD; the working copy itself is not touched. Error says why the fetch failed.
+type RepoFetchSource struct {
+	ID               string `json:"id"`
 	Dir              string `json:"dir"`
-	Head             string `json:"head"`
-	RemoteHead       string `json:"remote_head"`
+	Head             string `json:"head,omitempty"`
+	RemoteHead       string `json:"remote_head,omitempty"`
 	UpdatesAvailable bool   `json:"updates_available"`
+	Error            string `json:"error,omitempty"`
 }
 
 // StacksResult answers StacksListCommand.

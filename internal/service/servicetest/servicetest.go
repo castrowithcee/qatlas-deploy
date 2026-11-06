@@ -33,14 +33,17 @@ type Git struct {
 	// RevertErr is what RevertStack answers; nil means gitrepo.ErrNothingToRevert. Use SetRevertErr.
 	RevertErr error
 
-	mu      sync.Mutex
-	gate    chan struct{} // set by BlockFetch
-	entered chan struct{}
-	origins map[string]string
-	clones  int
-	last    gitrepo.Config
-	commits map[string]fakeCommit
-	pushed  []string
+	mu        sync.Mutex
+	gate      chan struct{} // set by BlockFetch
+	entered   chan struct{}
+	origins   map[string]string
+	clones    int
+	last      gitrepo.Config
+	configs   map[string]gitrepo.Config
+	fetchErrs map[string]error
+	fetches   map[string]int
+	commits   map[string]fakeCommit
+	pushed    []string
 }
 
 // fakeCommit is a commit CommitFile made: the file it changes and its message.
@@ -51,7 +54,40 @@ type fakeCommit struct {
 
 // New returns a fake with a fixed commit id.
 func New() *Git {
-	return &Git{Head: "0123456789abcdef0123456789abcdef01234567", origins: map[string]string{}}
+	return &Git{Head: "0123456789abcdef0123456789abcdef01234567", origins: map[string]string{},
+		configs: map[string]gitrepo.Config{}, fetchErrs: map[string]error{}, fetches: map[string]int{}}
+}
+
+// SetFiles replaces the files the next clones write.
+func (g *Git) SetFiles(files map[string]string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.Files = files
+}
+
+// SetFetchErrFor makes the fetches of the working copy at dir fail with err, or follow FetchErr again for nil.
+func (g *Git) SetFetchErrFor(dir string, err error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err == nil {
+		delete(g.fetchErrs, dir)
+		return
+	}
+	g.fetchErrs[dir] = err
+}
+
+// Fetches is the number of fetches of the working copy at dir.
+func (g *Git) Fetches(dir string) int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.fetches[dir]
+}
+
+// ConfigFor is the gitrepo configuration of the latest call for the working copy at dir.
+func (g *Git) ConfigFor(dir string) gitrepo.Config {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.configs[dir]
 }
 
 // SetFetchErr and SetRemote change the fake while a service is running; the service polls in the background,
@@ -119,7 +155,7 @@ func (g *Git) SetOrigin(dir, url string) {
 func (g *Git) Clone(_ context.Context, cfg gitrepo.Config, url, dir string) (service.WorkingCopy, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.last = cfg
+	g.last, g.configs[dir] = cfg, cfg
 	if g.CloneErr != nil {
 		return nil, g.CloneErr
 	}
@@ -144,7 +180,7 @@ func (g *Git) Clone(_ context.Context, cfg gitrepo.Config, url, dir string) (ser
 func (g *Git) Open(cfg gitrepo.Config, dir string) (service.WorkingCopy, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.last = cfg
+	g.last, g.configs[dir] = cfg, cfg
 	return &copyOf{g: g, dir: dir}, nil
 }
 
@@ -170,6 +206,10 @@ func (c *copyOf) Fetch(ctx context.Context) error {
 	}
 	c.g.mu.Lock()
 	defer c.g.mu.Unlock()
+	c.g.fetches[c.dir]++
+	if err, ok := c.g.fetchErrs[c.dir]; ok {
+		return err
+	}
 	return c.g.FetchErr
 }
 

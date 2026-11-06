@@ -13,7 +13,7 @@ import (
 
 // registerStackActionCommands registers stack.start, stack.stop and stack.restart. Only stacks of the working
 // copy are accepted; anything else is answered as no such stack.
-func registerStackActionCommands(r *control.Registry, eng *engine.Engine, redact func(string) string, log *slog.Logger) error {
+func registerStackActionCommands(r *control.Registry, eng *sourceSet, redact func(string) string, log *slog.Logger) error {
 	handler := func(action string) control.Handler {
 		return func(ctx context.Context, raw json.RawMessage) (any, error) {
 			var a control.StackActionArgs

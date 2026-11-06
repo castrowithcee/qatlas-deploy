@@ -259,26 +259,31 @@ func (h folderHost) restart(ctx context.Context, notice io.Writer) error {
 	return nil
 }
 
-// repairBound grants the already bound stack folder when the drop-in lacks it, as after an installation that
-// predates the drop-in. Without root, a binding or a missing entry it does nothing.
+// repairBound grants the already bound stack folders when the drop-in lacks them, as after an installation
+// that predates the drop-in. Without root, a binding or a missing entry it does nothing.
 func (h folderHost) repairBound(ctx context.Context, notice io.Writer) error {
 	if h.euid() != 0 {
 		return nil
 	}
-	dir, ok := service.BoundDir(stateDir())
-	if !ok {
+	granted := false
+	for _, dir := range service.BoundDirs(stateDir()) {
+		data, err := os.ReadFile(h.dropIn())
+		if err == nil && hasEntry(string(data), dir) {
+			continue
+		}
+		_, _ = fmt.Fprintf(notice, "Notice: the bound stack folder %s has no write grant for the service yet.\n", dir)
+		added, err := h.addToDropIn(dir)
+		if err != nil {
+			return err
+		}
+		if added {
+			_, _ = fmt.Fprintf(notice, "Granted the service write access to %s in %s.\n", dir, h.dropIn())
+			granted = true
+		}
+	}
+	if !granted {
 		return nil
 	}
-	data, err := os.ReadFile(h.dropIn())
-	if err == nil && hasEntry(string(data), dir) {
-		return nil
-	}
-	_, _ = fmt.Fprintf(notice, "Notice: the bound stack folder %s has no write grant for the service yet.\n", dir)
-	added, err := h.addToDropIn(dir)
-	if err != nil || !added {
-		return err
-	}
-	_, _ = fmt.Fprintf(notice, "Granted the service write access to %s in %s.\n", dir, h.dropIn())
 	return h.tryRestart(ctx, notice)
 }
 

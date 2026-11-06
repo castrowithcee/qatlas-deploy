@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,20 +43,22 @@ func runsAnswer(err error) error {
 		return control.NewError(control.CodeStackStopped, "the stack was stopped through qdeploy; start it with start first")
 	case errors.Is(err, engine.ErrNoSuchRun):
 		return control.NewError(control.CodeNoSuchRun, "no such run")
+	case errors.Is(err, engine.ErrNameCollision):
+		return control.NewError(control.CodeNameCollision, "another stack folder already uses the name of this stack; it is not deployed")
 	case errors.Is(err, engine.ErrBusy):
 		return control.NewError(control.CodeBusy, "the working copy is busy with an update or a rollback; try again")
 	}
 	return err
 }
 
-func registerRunCommands(r *control.Registry, eng *engine.Engine, version string, started time.Time, window func() *control.WindowResult) error {
+func registerRunCommands(r *control.Registry, eng *sourceSet, version string, started time.Time, window func() *control.WindowResult) error {
 	commands := map[string]control.Handler{
 		control.StatusCommand: func(context.Context, json.RawMessage) (any, error) {
-			snap, err := eng.Snapshot()
+			snaps, err := eng.snapshots()
 			if err != nil {
 				return nil, errors.New("the engine state cannot be read")
 			}
-			return control.StatusResult{Version: version, StartedAt: started, Engine: engineStatus(snap), Window: window()}, nil
+			return control.StatusResult{Version: version, StartedAt: started, Engine: engineStatus(snaps), Window: window()}, nil
 		},
 		control.DeployCommand: func(ctx context.Context, raw json.RawMessage) (any, error) {
 			var a control.DeployArgs
@@ -147,12 +150,25 @@ func holdHandler(set func(context.Context, string, bool) (bool, error), on bool)
 	}
 }
 
-func engineStatus(snap engine.Snapshot) control.EngineStatus {
-	st := snap.State
-	res := control.EngineStatus{
-		LastPoll: st.LastPoll, PollError: printable(st.PollError), Note: printable(st.Note),
-		Head: printable(st.Head), RemoteHead: printable(st.RemoteHead), Stacks: []control.StackStatus{},
+// engineStatus reports the stacks of every source, by name and for one name by source; the poll fields are
+// those of the source bound first.
+func engineStatus(snaps []sourceSnapshot) control.EngineStatus {
+	res := control.EngineStatus{Stacks: []control.StackStatus{}}
+	if len(snaps) > 0 {
+		st := snaps[0].snap.State
+		res.LastPoll, res.PollError, res.Note = st.LastPoll, printable(st.PollError), printable(st.Note)
+		res.Head, res.RemoteHead = printable(st.Head), printable(st.RemoteHead)
 	}
+	for _, ss := range snaps {
+		res.Stacks = append(res.Stacks, stackStatuses(ss.snap)...)
+	}
+	slices.SortStableFunc(res.Stacks, func(a, b control.StackStatus) int { return cmp.Compare(a.Name, b.Name) })
+	return res
+}
+
+func stackStatuses(snap engine.Snapshot) []control.StackStatus {
+	st := snap.State
+	var res []control.StackStatus
 	names := make([]string, 0, len(st.Stacks))
 	for n := range st.Stacks {
 		names = append(names, n)
@@ -204,7 +220,7 @@ func engineStatus(snap engine.Snapshot) control.EngineStatus {
 			item.Findings = append(item.Findings, control.FindingInfo{Kind: engine.FindingContainerFailed, Detail: printable(detail)})
 			item.Failure = &control.FailureInfo{Kind: printable(f.Kind), Container: printable(f.Container), Since: f.Since}
 		}
-		res.Stacks = append(res.Stacks, item)
+		res = append(res, item)
 	}
 	return res
 }

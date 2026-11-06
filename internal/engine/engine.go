@@ -64,6 +64,8 @@ var (
 	ErrPaused       = errors.New("the stack is paused after a failed rollback")
 	ErrNotPaused    = errors.New("the stack is not paused")
 	ErrPinned       = errors.New("the stack is pinned")
+	// ErrNameCollision is a stack whose name a stack of another source uses; it is never deployed.
+	ErrNameCollision = errors.New("another stack folder already uses the name of this stack")
 	// ErrBusy means a command gave up waiting for the working-copy lock, which an update's commit and push or a
 	// rollback's revert may hold for minutes.
 	ErrBusy = errors.New("the working copy is busy; try again")
@@ -89,10 +91,28 @@ type WorkingCopy interface {
 	Push(ctx context.Context, commit string) error
 }
 
-// Binding is the working copy to watch and the directory it lives in.
+// Binding is the working copy to watch and the directory it lives in. Blocked, when set, maps the names of the
+// stacks in it that another source already uses to the reason: such a stack gets a name-collision finding and
+// no run. It is asked after the stack list is read, so it can judge the list as the engine sees it.
 type Binding struct {
-	Dir  string
-	Copy WorkingCopy
+	Dir     string
+	Copy    WorkingCopy
+	Blocked func() map[string]string
+}
+
+func (b Binding) blockedNames() map[string]string {
+	if b.Blocked == nil {
+		return nil
+	}
+	return b.Blocked()
+}
+
+// blocked refuses a stack whose name another source uses.
+func (b Binding) blocked(name string) error {
+	if _, ok := b.blockedNames()[name]; ok {
+		return ErrNameCollision
+	}
+	return nil
 }
 
 // Deployer carries out the steps of a run on one stack. A run calls Stop, Backup, Pull, Up and Check in this
@@ -374,6 +394,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 	if err != nil {
 		return res, err
 	}
+	blocked := b.blockedNames()
 	folders := &diffCache{ctx: ctx, copy: b.Copy, memo: map[[2]string][]string{}}
 
 	type verdict struct {
@@ -408,6 +429,11 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 	for _, st := range list {
 		old := snap.Stacks[st.Name]
 		v := verdict{folder: folderField(st)}
+		if detail, ok := blocked[st.Name]; ok {
+			v.findings = []Finding{{Kind: FindingNameCollision, Detail: e.text(detail)}}
+			verdicts[st.Name] = v
+			continue
+		}
 		changedAtHead, errHead := folders.changed(old.Deployed, head, st.Folder)
 		changedAtRemote := changedAtHead
 		var errRemote error
@@ -730,6 +756,9 @@ func (e *Engine) Trigger(ctx context.Context, name string) (RunInfo, error) {
 		if st.Err != nil {
 			return RunInfo{}, fmt.Errorf("%w: %s", ErrUnreadable, e.text(st.Err.Error()))
 		}
+		if err := b.blocked(name); err != nil {
+			return RunInfo{}, err
+		}
 		return e.start(b, st, head, TriggerManual)
 	}
 	return RunInfo{}, ErrUnknownStack
@@ -1004,6 +1033,9 @@ func (e *Engine) WithStack(ctx context.Context, name, label string,
 			return ErrUnknownStack
 		case list[i].Err != nil:
 			return fmt.Errorf("%w: %s", ErrUnreadable, e.text(list[i].Err.Error()))
+		}
+		if err := b.blocked(name); err != nil {
+			return err
 		}
 		st = list[i]
 		release, err = e.claim(name, label)

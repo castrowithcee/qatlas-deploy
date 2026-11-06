@@ -1,7 +1,7 @@
 package service
 
 import (
-	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,16 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"unicode"
 
-	"github.com/castrowithcee/qatlas-kit/configfile"
-
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
-	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
 	"github.com/castrowithcee/qatlas-deploy/internal/hostkey"
 	"github.com/castrowithcee/qatlas-deploy/internal/stackcheck"
@@ -27,9 +25,7 @@ import (
 )
 
 const (
-	repoConfigFile = "stacks-repo.json"
 	knownHostsFile = "known_hosts"
-	repoConfigVer  = 1
 	maxErrorChars  = 300
 )
 
@@ -66,41 +62,10 @@ func (realGit) Open(cfg gitrepo.Config, dir string) (WorkingCopy, error) {
 	return gitrepo.Open(cfg, dir)
 }
 
-// repoConfig is the persisted binding to the stacks repository.
-type repoConfig struct {
-	Version int    `json:"version"`
-	URL     string `json:"url"`
-	Dir     string `json:"dir"`
-}
-
 var plainPath = regexp.MustCompile(`^/[A-Za-z0-9_./@+-]+$`)
-
-func validateRepoConfig(c repoConfig) error {
-	if c.Version != repoConfigVer {
-		return fmt.Errorf("unsupported version %d", c.Version)
-	}
-	if err := gitrepo.ValidateURL(c.URL); err != nil {
-		return err
-	}
-	return checkDirShape(c.Dir)
-}
 
 // ValidateStackDir reports whether dir has the shape the service accepts for a stack folder.
 func ValidateStackDir(dir string) error { return checkDirShape(dir) }
-
-// BoundDir returns the stack folder of the binding stored in stateDir; ok is false when none is bound or the
-// binding cannot be read.
-func BoundDir(stateDir string) (dir string, ok bool) {
-	data, err := os.ReadFile(filepath.Join(stateDir, repoConfigFile))
-	if err != nil {
-		return "", false
-	}
-	c, err := repoCodec.Decode(data)
-	if err != nil || checkDirShape(c.Dir) != nil {
-		return "", false
-	}
-	return c.Dir, true
-}
 
 func checkDirShape(dir string) error {
 	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir || dir == "/" || !plainPath.MatchString(dir) {
@@ -109,83 +74,25 @@ func checkDirShape(dir string) error {
 	return nil
 }
 
-var repoCodec = configfile.Codec[repoConfig]{
-	Validate: validateRepoConfig,
-	Encode:   func(c repoConfig) ([]byte, error) { return json.MarshalIndent(c, "", "  ") },
-	Decode: func(b []byte) (repoConfig, error) {
-		var c repoConfig
-		dec := json.NewDecoder(bytes.NewReader(b))
-		dec.DisallowUnknownFields()
-		err := dec.Decode(&c)
-		return c, err
-	},
-}
-
 type repoService struct {
-	// mu is the working-copy lock, shared with the engine (engine.Config.Lock): it serializes moving and
-	// evaluating the working copy and guards the check and pin of host keys. refs is the ref lock
-	// (engine.Config.Refs): it serializes fetches and updates of the remote-tracking ref. Whoever needs both
-	// takes mu first. Reading the binding needs neither: it is replaced as a whole.
-	mu       sync.Mutex
-	refs     sync.Mutex
+	// setMu serializes binding commands; hostMu guards the check and pin of host keys. Reading the sources
+	// needs neither: the file is replaced as a whole.
+	setMu    sync.Mutex
+	hostMu   sync.Mutex
 	stateDir string
 	keys     *credentials.Store
-	cfg      *configfile.Store[repoConfig]
-	git      Git
-	// onBound is called after a binding was stored, with mu held; it must not block.
-	onBound func()
-	// stopped tells whether the engine holds the stopped mark of a stack; nil before the engine exists.
+	set      *sourceSet
+	// stopped tells whether the engine holds the stopped mark of a stack.
 	stopped func(name string) *control.HoldInfo
 	// probe reads the host key of a server; tests replace it.
 	probe func(ctx context.Context, host, port string) (hostkey.Key, error)
 }
 
-func newRepoService(stateDir string, keys *credentials.Store, git Git) (*repoService, error) {
-	store, err := configfile.NewStore(filepath.Join(stateDir, repoConfigFile), repoCodec)
-	if err != nil {
-		return nil, err
-	}
-	if git == nil {
-		git = realGit{}
-	}
-	return &repoService{stateDir: stateDir, keys: keys, cfg: store, git: git, probe: hostkey.Probe}, nil
+func newRepoService(stateDir string, keys *credentials.Store, set *sourceSet) *repoService {
+	return &repoService{stateDir: stateDir, keys: keys, set: set, probe: hostkey.Probe}
 }
 
 func (s *repoService) knownHosts() string { return filepath.Join(s.stateDir, knownHostsFile) }
-
-func (s *repoService) gitConfig() gitrepo.Config {
-	return gitrepo.Config{KeyFile: s.keys.KeyPath(), KnownHosts: s.knownHosts()}
-}
-
-// bound returns the persisted binding, or the fixed answer that none exists.
-func (s *repoService) bound() (repoConfig, error) {
-	c, _, err := s.cfg.LoadVersioned()
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return repoConfig{}, control.NewError(control.CodeNoRepo, "no stacks repository is bound")
-	case err != nil:
-		return repoConfig{}, errors.New("the stacks repository configuration cannot be read")
-	}
-	return c, nil
-}
-
-// engineSource is the engine's view of the binding: read again in every poll, so a binding made later by
-// "repo set" is picked up. The engine takes mu and refs itself around its use of the working copy.
-func (s *repoService) engineSource() (engine.Binding, error) {
-	c, err := s.bound()
-	var ce *control.Error
-	if errors.As(err, &ce) && ce.Code == control.CodeNoRepo {
-		return engine.Binding{}, engine.ErrNoRepo
-	}
-	if err != nil {
-		return engine.Binding{}, err
-	}
-	wc, err := s.git.Open(s.gitConfig(), c.Dir)
-	if err != nil {
-		return engine.Binding{}, err
-	}
-	return engine.Binding{Dir: c.Dir, Copy: wc}, nil
-}
 
 func targetOf(rawURL string) (host, port string, err error) {
 	host, port, err = gitrepo.SSHTarget(rawURL)
@@ -208,9 +115,9 @@ func (s *repoService) handleProbe(ctx context.Context, raw json.RawMessage) (any
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
+	s.hostMu.Lock()
 	state, err := hostkey.Check(s.knownHosts(), host, port, key)
-	s.mu.Unlock()
+	s.hostMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -258,21 +165,34 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 		return nil, err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, err := s.keys.ShowKey(); err != nil {
-		return nil, answerOf(err)
+	s.setMu.Lock()
+	defer s.setMu.Unlock()
+	conf, rev, err := s.set.load()
+	if err != nil {
+		return nil, err
 	}
-	existing, rev, err := s.cfg.LoadVersioned()
+	var src sourceConfig
+	existing := s.set.byPath(a.Dir)
 	switch {
-	case err == nil:
-		if existing.URL != a.URL || existing.Dir != a.Dir {
-			return nil, control.NewError(control.CodeRepoBound,
-				"a stacks repository is already bound; a different binding is not accepted")
-		}
-	case errors.Is(err, fs.ErrNotExist):
+	case existing != nil && existing.conf.URL != a.URL:
+		return nil, control.NewError(control.CodeRepoBound,
+			"the stack folder is already bound to another repository; a different binding is not accepted")
+	case existing != nil:
+		src = existing.conf
+		// The working copy is the engine's to move; it stays where it is while it is looked at.
+		existing.mu.Lock()
+		defer existing.mu.Unlock()
 	default:
-		return nil, errors.New("the stacks repository configuration cannot be read")
+		if src, err = newSourceConfig(conf, a.URL, a.Dir); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := s.keys.ShowNamedKey(src.Key); err != nil {
+		if errors.Is(err, credentials.ErrNoKey) {
+			return nil, control.NewError(control.CodeNotFound, fmt.Sprintf(
+				"no deploy key exists for stack folder %s; run 'qdeploy key generate --dir %s' and enter it in the git platform", a.Dir, a.Dir))
+		}
+		return nil, answerOf(err)
 	}
 
 	// The key is read again here: only a key the operator confirmed is ever pinned.
@@ -284,14 +204,17 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 		return nil, control.NewError(control.CodeHostKey,
 			"the host key presented now is not the confirmed one; nothing was stored")
 	}
-	if err := hostkey.Pin(s.knownHosts(), host, port, key); err != nil {
+	s.hostMu.Lock()
+	err = hostkey.Pin(s.knownHosts(), host, port, key)
+	s.hostMu.Unlock()
+	if err != nil {
 		if errors.Is(err, hostkey.ErrConflict) {
 			return nil, changedKeyError(host, port)
 		}
 		return nil, err
 	}
 
-	gc := s.gitConfig()
+	gc := s.set.gitConfig(src)
 	cloned := false
 	wc, err := s.existingClone(ctx, gc, a)
 	if err != nil {
@@ -301,7 +224,7 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 		if err := checkWritableFolder(a.Dir); err != nil {
 			return nil, err
 		}
-		wc, err = s.git.Clone(ctx, gc, a.URL, a.Dir)
+		wc, err = s.set.git.Clone(ctx, gc, a.URL, a.Dir)
 		if err != nil {
 			return nil, gitFailure(err)
 		}
@@ -311,11 +234,10 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 	if err != nil {
 		return nil, gitFailure(err)
 	}
-	if _, err := s.cfg.SaveIfUnchanged(repoConfig{Version: repoConfigVer, URL: a.URL, Dir: a.Dir}, rev); err != nil {
-		return nil, errors.New("the stacks repository configuration cannot be written")
-	}
-	if s.onBound != nil {
-		s.onBound()
+	if existing != nil {
+		existing.eng.Wake()
+	} else if _, err := s.set.add(src, conf, rev); err != nil {
+		return nil, err
 	}
 	return control.RepoSetResult{URL: a.URL, Dir: a.Dir, Fingerprint: key.Fingerprint, Head: head, Cloned: cloned}, nil
 }
@@ -362,7 +284,7 @@ func (s *repoService) existingClone(ctx context.Context, gc gitrepo.Config, a co
 		return nil, nil
 	}
 	notClone := control.NewError(control.CodeInvalid, "the directory is not empty and not a clone of this repository")
-	wc, err := s.git.Open(gc, a.Dir)
+	wc, err := s.set.git.Open(gc, a.Dir)
 	if err != nil {
 		return nil, notClone
 	}
@@ -386,29 +308,64 @@ func (s *repoService) handleFetch(ctx context.Context, raw json.RawMessage) (any
 	if err := decodeArgs(raw, &none); err != nil {
 		return nil, err
 	}
-	c, err := s.bound()
-	if err != nil {
-		return nil, err
+	srcs := s.set.sources()
+	if len(srcs) == 0 {
+		return nil, control.NewError(control.CodeNoRepo, "no stacks repository is bound")
 	}
-	wc, err := s.git.Open(s.gitConfig(), c.Dir)
+	res := control.RepoFetchResult{Sources: make([]control.RepoFetchSource, 0, len(srcs))}
+	var firstErr error
+	failed := 0
+	// A source that cannot be fetched is reported in its entry; the others are fetched all the same.
+	for _, src := range srcs {
+		item, err := s.fetch(ctx, src)
+		if err != nil {
+			failed++
+			firstErr = cmp.Or(firstErr, err)
+			var ce *control.Error
+			if errors.As(err, &ce) {
+				item.Error = ce.Message
+			} else {
+				item.Error = "the working copy cannot be fetched"
+			}
+		}
+		res.Sources = append(res.Sources, item)
+	}
+	if failed == len(srcs) {
+		return nil, firstErr
+	}
+	first := res.Sources[0]
+	res.Dir, res.Head, res.RemoteHead, res.UpdatesAvailable = first.Dir, first.Head, first.RemoteHead, first.UpdatesAvailable
+	return res, nil
+}
+
+func (s *repoService) fetch(ctx context.Context, src *source) (control.RepoFetchSource, error) {
+	item := control.RepoFetchSource{ID: src.conf.ID, Dir: src.conf.Path}
+	wc, err := s.set.git.Open(s.set.gitConfig(src.conf), src.conf.Path)
 	if err != nil {
-		return nil, gitFailure(err)
+		return item, gitFailure(err)
 	}
 	// The ref lock alone: a fetch moves no working copy, so nobody waits for it but other fetches and pushes.
-	s.refs.Lock()
-	defer s.refs.Unlock()
+	src.refs.Lock()
+	defer src.refs.Unlock()
 	if err := wc.Fetch(ctx); err != nil {
-		return nil, gitFailure(err)
+		return item, gitFailure(err)
 	}
-	head, err := wc.Head(ctx)
-	if err != nil {
-		return nil, gitFailure(err)
+	if item.Head, err = wc.Head(ctx); err != nil {
+		return item, gitFailure(err)
 	}
-	remote, err := wc.RemoteHead(ctx)
-	if err != nil {
-		return nil, gitFailure(err)
+	if item.RemoteHead, err = wc.RemoteHead(ctx); err != nil {
+		return item, gitFailure(err)
 	}
-	return control.RepoFetchResult{Dir: c.Dir, Head: head, RemoteHead: remote, UpdatesAvailable: head != remote}, nil
+	item.UpdatesAvailable = item.Head != item.RemoteHead
+	return item, nil
+}
+
+// firstDir is the stack folder of the source bound first.
+func (s *repoService) firstDir() string {
+	if srcs := s.set.sources(); len(srcs) > 0 {
+		return srcs[0].conf.Path
+	}
+	return ""
 }
 
 func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any, error) {
@@ -416,27 +373,26 @@ func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any,
 	if err := decodeArgs(raw, &none); err != nil {
 		return nil, err
 	}
-	c, err := s.bound()
+	_, r, err := s.set.ownedStacks()
 	if err != nil {
 		return nil, err
 	}
-	list, err := stacks.Load(c.Dir)
-	if err != nil {
-		return nil, control.NewError(control.CodeNoRepo, "the working copy cannot be read; run 'qdeploy repo set' again")
-	}
-	res := control.StacksResult{Dir: c.Dir, Stacks: make([]control.StackInfo, 0, len(list))}
+	res := control.StacksResult{Dir: s.firstDir(), Stacks: make([]control.StackInfo, 0, len(r.all))}
 	// Everything below comes from the working copy and may reach a terminal: it is reduced to printable text.
-	for _, st := range list {
+	for _, ref := range sortedRefs(r.all) {
+		st := ref.st
 		info := control.StackInfo{Name: printable(st.Name), Folder: printable(st.Folder), Update: st.UpdateMode(), Images: []control.ImageInfo{}, Findings: len(st.Findings)}
 		for _, img := range st.Images {
 			info.Images = append(info.Images, control.ImageInfo{
 				Service: printable(img.Service), Image: printable(img.Image), Var: printable(img.Var), Version: printable(img.Value),
 			})
 		}
-		if st.Err != nil {
+		switch detail, blocked := r.blocked[ref.src][st.Name]; {
+		case blocked:
+			info.Error = printable(detail)
+		case st.Err != nil:
 			info.Error = printable(st.Err.Error())
-		}
-		if s.stopped != nil {
+		case s.stopped != nil:
 			info.Stopped = s.stopped(st.Name)
 		}
 		res.Stacks = append(res.Stacks, info)
@@ -444,42 +400,52 @@ func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any,
 	return res, nil
 }
 
+// sortedRefs orders stacks by name and, for one name, by source.
+func sortedRefs(refs []stackRef) []stackRef {
+	out := slices.Clone(refs)
+	slices.SortStableFunc(out, func(a, b stackRef) int { return cmp.Compare(a.st.Name, b.st.Name) })
+	return out
+}
+
 func (s *repoService) handleCheck(ctx context.Context, raw json.RawMessage) (any, error) {
 	var a control.StacksCheckArgs
 	if err := decodeArgs(raw, &a); err != nil {
 		return nil, err
 	}
-	c, err := s.bound()
+	_, r, err := s.set.ownedStacks()
 	if err != nil {
 		return nil, err
 	}
-	list, err := stacks.Load(c.Dir)
-	if err != nil {
-		return nil, control.NewError(control.CodeNoRepo, "the working copy cannot be read; run 'qdeploy repo set' again")
-	}
-	if a.Stack != "" {
-		var one []stacks.Stack
-		for _, st := range list {
-			if st.Name == a.Stack {
-				one = append(one, st)
-			}
+	bySource := map[*source][]stacks.Stack{}
+	var order []*source
+	for _, ref := range r.all {
+		if a.Stack != "" && ref.st.Name != a.Stack {
+			continue
 		}
-		if len(one) == 0 {
-			return nil, control.NewError(control.CodeNotFound, "no such stack in the working copy")
+		if _, ok := bySource[ref.src]; !ok {
+			order = append(order, ref.src)
 		}
-		list = one
+		bySource[ref.src] = append(bySource[ref.src], ref.st)
 	}
-	cfg := s.gitConfig()
-	wc, err := s.git.Open(cfg, c.Dir)
-	if err != nil {
-		return nil, gitFailure(err)
+	if a.Stack != "" && len(order) == 0 {
+		return nil, control.NewError(control.CodeNotFound, "no such stack in the working copy")
 	}
-	// Only the local mode has no remote a versioned secret could reach.
-	reports, err := stackcheck.Check(ctx, list, wc, !cfg.Local)
-	if err != nil {
-		return nil, gitFailure(err)
+	var reports []stackcheck.Report
+	for _, src := range order {
+		cfg := s.set.gitConfig(src.conf)
+		wc, err := s.set.git.Open(cfg, src.conf.Path)
+		if err != nil {
+			return nil, gitFailure(err)
+		}
+		// Only the local mode has no remote a versioned secret could reach.
+		reps, err := stackcheck.Check(ctx, bySource[src], wc, !cfg.Local)
+		if err != nil {
+			return nil, gitFailure(err)
+		}
+		reports = append(reports, reps...)
 	}
-	res := control.StacksCheckResult{Dir: c.Dir, Stacks: make([]control.StackReport, 0, len(reports))}
+	slices.SortStableFunc(reports, func(a, b stackcheck.Report) int { return cmp.Compare(a.Stack, b.Stack) })
+	res := control.StacksCheckResult{Dir: s.firstDir(), Stacks: make([]control.StackReport, 0, len(reports))}
 	// Everything below comes from the working copy and may reach a terminal: it is reduced to printable text.
 	for _, r := range reports {
 		rep := control.StackReport{Stack: printable(r.Stack), Functions: make([]control.StackFunction, 0, len(r.Functions)),
