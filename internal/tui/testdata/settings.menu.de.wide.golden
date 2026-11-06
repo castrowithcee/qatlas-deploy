@@ -3,7 +3,7 @@ qdeploy  Wartungsfenster zu                                                     
 ------------------------------------------------------------------------------------------------------------------------
   EINSTELLUNG         INHALT                                                                                            
 > Stacks-Repository   Repository binden, Hostschlüssel bestätigen, abrufen                                              
-  Deploy-Schlüssel    Schlüssel für die Git-Plattform zeigen oder erzeugen                                              
+  Deploy-Schlüssel    Schlüssel für die Git-Plattform hinterlegen oder erzeugen                                         
   Zugangsdaten        Registry-Logins und GitHub-Token                                                                  
   Wartungsfenster     wann Updates laufen                                                                               
   Benachrichtigungen  Kanäle für Webhook, Slack, Telegram und E-Mail                                                    
