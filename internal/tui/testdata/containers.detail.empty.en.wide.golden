@@ -37,4 +37,4 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-esc back  o log  r reload  1-5 area  q quit                                                               up/down scroll
+esc back  o log  S start  X stop  Z restart  r reload  1-5 area  q quit                                   up/down scroll

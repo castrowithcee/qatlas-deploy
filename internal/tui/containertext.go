@@ -49,6 +49,36 @@ const (
 	textErrDockerTimeout     kittui.TextID = "error.dockertimeout"
 	textErrContainersSlow    kittui.TextID = "error.containersslow"
 
+	textCtKindOwn     kittui.TextID = "ct.kind.own"
+	textCtKindForeign kittui.TextID = "ct.kind.foreign"
+
+	textAskCtStart     kittui.TextID = "ask.ctstart"
+	textAskCtStop      kittui.TextID = "ask.ctstop"
+	textAskCtRestart   kittui.TextID = "ask.ctrestart"
+	textWhatCtStart    kittui.TextID = "what.ctstart"
+	textWhatCtStop     kittui.TextID = "what.ctstop"
+	textWhatCtStopOwn  kittui.TextID = "what.ctstopown"
+	textWhatCtRestart  kittui.TextID = "what.ctrestart"
+	textCtStateBefore  kittui.TextID = "ct.act.statebefore"
+	textCtStateAfter   kittui.TextID = "ct.act.stateafter"
+	textDoneCtStart    kittui.TextID = "done.ctstart"
+	textDoneCtStop     kittui.TextID = "done.ctstop"
+	textDoneCtRestart  kittui.TextID = "done.ctrestart"
+	textDoneCtNotReady kittui.TextID = "done.ctnotready"
+	textSummaryNoteCt  kittui.TextID = "summary.notect"
+
+	textCtNotReadyExited     kittui.TextID = "ct.notready.exited"
+	textCtNotReadyRestarting kittui.TextID = "ct.notready.restarting"
+	textCtNotReadyNotRunning kittui.TextID = "ct.notready.notrunning"
+	textCtNotReadyUnhealthy  kittui.TextID = "ct.notready.unhealthy"
+	textCtNotReadyStarting   kittui.TextID = "ct.notready.starting"
+
+	textErrCtGone        kittui.TextID = "error.ctact.gone"
+	textErrCtUnreachable kittui.TextID = "error.ctact.unreachable"
+	textErrCtPermission  kittui.TextID = "error.ctact.permission"
+	textErrCtEngineSlow  kittui.TextID = "error.ctact.engineslow"
+	textErrCtSlow        kittui.TextID = "error.ctact.slow"
+
 	textCtLogStack    kittui.TextID = "ct.log.stack"
 	textErrCtLogGone  kittui.TextID = "error.ctlog.gone"
 	textErrCtLogStack kittui.TextID = "error.ctlog.stack"
@@ -100,6 +130,36 @@ func containerEnglish() map[kittui.TextID]string {
 		textErrDockerPermission:  "the service may not use the container engine; give its user access to the engine socket, then press {reload}",
 		textErrDockerTimeout:     "the container engine did not answer in time; check that it is healthy, then press {reload}",
 		textErrContainersSlow:    "the service did not answer in time; the next refresh tries again",
+
+		textCtKindOwn:     "own stack %s",
+		textCtKindForeign: "foreign project %s",
+
+		textAskCtStart:     "Start container %s (%s)?",
+		textAskCtStop:      "Stop container %s (%s)?",
+		textAskCtRestart:   "Restart container %s (%s)?",
+		textWhatCtStart:    "Starts the container and waits up to a minute until it runs and, if it has a health check, is healthy. A container that already runs is left as it is.",
+		textWhatCtStop:     "Signals the container to end and kills it after %d seconds. Whatever it serves is unavailable until it is started again. A container that is already stopped is left as it is.",
+		textWhatCtStopOwn:  "Signals the container to end and kills it after %d seconds. Whatever it serves is unavailable until it is started again. The stack is not marked as stopped: a run of the stack (deploy, update or the maintenance window) can start the container again.",
+		textWhatCtRestart:  "Stops the container as stop does, starts it again and waits up to a minute until it runs and, if it has a health check, is healthy. Whatever it serves is unavailable meanwhile.",
+		textCtStateBefore:  "State: %s",
+		textCtStateAfter:   "State afterwards: %s",
+		textDoneCtStart:    "started",
+		textDoneCtStop:     "stopped",
+		textDoneCtRestart:  "restarted",
+		textDoneCtNotReady: "%s, but the container is not ready: %s",
+		textSummaryNoteCt:  "The result for the container.",
+
+		textCtNotReadyExited:     "it exited",
+		textCtNotReadyRestarting: "it keeps restarting",
+		textCtNotReadyNotRunning: "it is not running",
+		textCtNotReadyUnhealthy:  "its health check fails",
+		textCtNotReadyStarting:   "its health check has not passed yet",
+
+		textErrCtGone:        "this container no longer exists",
+		textErrCtUnreachable: "the container engine is not reachable; start it and try again",
+		textErrCtPermission:  "the service may not use the container engine; give its user access to the engine socket",
+		textErrCtEngineSlow:  "the container engine did not answer in time; check the state of the container before you try again",
+		textErrCtSlow:        "the service did not answer in time; check the state of the container before you try again",
 
 		textCtLogStack:    "all containers",
 		textErrCtLogGone:  "this container no longer exists; press {back} to leave the log",
@@ -153,6 +213,36 @@ func containerGerman() map[kittui.TextID]string {
 		textErrDockerPermission:  "der Dienst darf die Container-Engine nicht nutzen; gib seinem Benutzer Zugriff auf den Socket der Engine und drücke dann {reload}",
 		textErrDockerTimeout:     "die Container-Engine hat nicht rechtzeitig geantwortet; prüfe ihren Zustand und drücke dann {reload}",
 		textErrContainersSlow:    "der Dienst hat nicht rechtzeitig geantwortet; die nächste Aktualisierung versucht es erneut",
+
+		textCtKindOwn:     "eigener Stack %s",
+		textCtKindForeign: "fremdes Projekt %s",
+
+		textAskCtStart:     "Container %s (%s) starten (start)?",
+		textAskCtStop:      "Container %s (%s) stoppen (stop)?",
+		textAskCtRestart:   "Container %s (%s) neu starten (restart)?",
+		textWhatCtStart:    "Startet den Container und wartet bis zu eine Minute, bis er läuft und, falls er einen Health-Check hat, gesund ist. Ein Container, der schon läuft, bleibt unverändert.",
+		textWhatCtStop:     "Signalisiert dem Container das Ende und beendet ihn nach %d Sekunden gewaltsam. Was er bereitstellt, ist nicht erreichbar, bis er wieder gestartet wird. Ein bereits gestoppter Container bleibt unverändert.",
+		textWhatCtStopOwn:  "Signalisiert dem Container das Ende und beendet ihn nach %d Sekunden gewaltsam. Was er bereitstellt, ist nicht erreichbar, bis er wieder gestartet wird. Der Stack wird nicht als gestoppt markiert: ein Lauf des Stacks (deploy, update oder das Wartungsfenster) kann den Container wieder starten.",
+		textWhatCtRestart:  "Stoppt den Container wie stop, startet ihn wieder und wartet bis zu eine Minute, bis er läuft und, falls er einen Health-Check hat, gesund ist. Was er bereitstellt, ist solange nicht erreichbar.",
+		textCtStateBefore:  "Zustand: %s",
+		textCtStateAfter:   "Zustand danach: %s",
+		textDoneCtStart:    "gestartet",
+		textDoneCtStop:     "gestoppt",
+		textDoneCtRestart:  "neu gestartet",
+		textDoneCtNotReady: "%s, aber der Container ist nicht bereit: %s",
+		textSummaryNoteCt:  "Das Ergebnis für den Container.",
+
+		textCtNotReadyExited:     "er wurde beendet",
+		textCtNotReadyRestarting: "er startet dauernd neu",
+		textCtNotReadyNotRunning: "er läuft nicht",
+		textCtNotReadyUnhealthy:  "sein Health-Check schlägt fehl",
+		textCtNotReadyStarting:   "sein Health-Check ist noch nicht bestanden",
+
+		textErrCtGone:        "diesen Container gibt es nicht mehr",
+		textErrCtUnreachable: "die Container-Engine ist nicht erreichbar; starte sie und versuche es erneut",
+		textErrCtPermission:  "der Dienst darf die Container-Engine nicht nutzen; gib seinem Benutzer Zugriff auf den Socket der Engine",
+		textErrCtEngineSlow:  "die Container-Engine hat nicht rechtzeitig geantwortet; prüfe den Zustand des Containers, bevor du es erneut versuchst",
+		textErrCtSlow:        "der Dienst hat nicht rechtzeitig geantwortet; prüfe den Zustand des Containers, bevor du es erneut versuchst",
 
 		textCtLogStack:    "alle Container",
 		textErrCtLogGone:  "diesen Container gibt es nicht mehr; verlasse das Log mit {back}",

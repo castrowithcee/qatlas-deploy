@@ -27,6 +27,9 @@ type containerState struct {
 	err             error
 	// gen separates the refresh timer of the current visit to the area from those of earlier visits.
 	gen int
+	// actGen separates the answer of the detail read before a question from an older one; readGen separates the
+	// answer of the list read that follows an action from a read that began before it.
+	actGen, readGen int
 }
 
 // containerView is the detail of one container, opened from the list.
@@ -42,6 +45,7 @@ type containerView struct {
 }
 
 type containersMsg struct {
+	gen int
 	res control.ContainerListResult
 	err error
 }
@@ -165,14 +169,17 @@ func (m *Model) readContainers() tea.Cmd {
 		return nil
 	}
 	m.ct.loading = true
-	ctx, b := m.ctx, m.backend
+	ctx, b, gen := m.ctx, m.backend, m.ct.readGen
 	return func() tea.Msg {
 		res, err := b.Containers(ctx)
-		return containersMsg{res: res, err: err}
+		return containersMsg{gen: gen, res: res, err: err}
 	}
 }
 
 func (m *Model) applyContainers(msg containersMsg) {
+	if msg.gen != m.ct.readGen {
+		return
+	}
 	m.ct.loading = false
 	if msg.err != nil {
 		m.ct.err = msg.err

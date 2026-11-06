@@ -54,6 +54,11 @@ type Backend interface {
 	StackStart(ctx context.Context, stack string) (control.StackActionResult, error)
 	StackStop(ctx context.Context, stack string) (control.StackActionResult, error)
 	StackRestart(ctx context.Context, stack string) (control.StackActionResult, error)
+	// ContainerStart, ContainerStop and ContainerRestart act on one container, named by its ID, and return when
+	// the service is done; a start or restart waits for the container to be ready.
+	ContainerStart(ctx context.Context, id string) (control.ContainerActionResult, error)
+	ContainerStop(ctx context.Context, id string) (control.ContainerActionResult, error)
+	ContainerRestart(ctx context.Context, id string) (control.ContainerActionResult, error)
 
 	// The settings calls. Reads are free; the others the interface makes only after a confirmation. None of
 	// the results carries a stored secret.
@@ -214,6 +219,23 @@ func (b *ChannelBackend) StackStop(ctx context.Context, stack string) (control.S
 
 func (b *ChannelBackend) StackRestart(ctx context.Context, stack string) (control.StackActionResult, error) {
 	return b.stackAction(ctx, control.StackRestartCommand, stack)
+}
+
+func (b *ChannelBackend) containerAction(ctx context.Context, command, id string) (res control.ContainerActionResult, err error) {
+	err = client.Do(ctx, b.endpoint, control.ContainerActionTimeout+client.CallTimeout, command, control.ContainerActionArgs{Name: id}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) ContainerStart(ctx context.Context, id string) (control.ContainerActionResult, error) {
+	return b.containerAction(ctx, control.ContainerStartCommand, id)
+}
+
+func (b *ChannelBackend) ContainerStop(ctx context.Context, id string) (control.ContainerActionResult, error) {
+	return b.containerAction(ctx, control.ContainerStopCommand, id)
+}
+
+func (b *ChannelBackend) ContainerRestart(ctx context.Context, id string) (control.ContainerActionResult, error) {
+	return b.containerAction(ctx, control.ContainerRestartCommand, id)
 }
 
 func (b *ChannelBackend) RepoProbe(ctx context.Context, url string) (res control.RepoProbeResult, err error) {

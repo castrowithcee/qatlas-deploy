@@ -20,5 +20,5 @@ qdeploy  maintenance window closed                          [esc] back  [?] help
                                                                                 
                                                                                 
                                                                                 
-                                                                                
-enter details  / search  o log  r reload  1-5 area  q quit   up/down choose  1/6
+enter details  / search  o log  S start  X stop  Z restart  r reload  1-5 area  
+q quit                                                       up/down choose  1/6

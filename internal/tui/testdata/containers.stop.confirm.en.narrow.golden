@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                          [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]              
+--------------------------------------------------------------------------------
+    NAME               STATE       IMAGE                      UPTIME  RESTARTS  
+  v # foreign project legacy-blog (2)                                           
+    legacy-blog-db-1   stopped     example.invalid/db:15      -       0         
+    lega#= stop =======================================================#        
+  v # fo| ! Stop container demo-stack-app-1 (own stack demo-stack)?    |        
+    wiki|                                                              |        
+  v # ow| Signals the container to end and kills it after 10 seconds.  |        
+>   demo| Whatever it serves is unavailable until it is started again. |        
+    demo| The stack is not marked as stopped: a run of the stack       |        
+  v # si| (deploy, update or the maintenance window) can start the     |        
+    exam| container again.                                             |        
+        | State: ok (running)                                          |        
+        |                                                              |        
+        | [ yes, do it ]  > cancel <                                   |        
+        | y yes, do it  n/esc/enter cancel                             |        
+        #==============================================================#        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                             4/6

@@ -20,5 +20,5 @@ qdeploy  maintenance window closed                          [esc] back  [?] help
   Networks                                                                      
     demo-stack_default 172.18.0.2                                               
                                                                                 
-  Labels                                                                        
-esc back  o log  r reload  1-5 area  q quit                up/down scroll  20/26
+esc back  o log  S start  X stop  Z restart  r reload  1-5 area  q quit         
+                                                           up/down scroll  19/26

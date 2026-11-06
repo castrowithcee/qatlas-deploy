@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                          [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]              
+--------------------------------------------------------------------------------
+  restart finished: 0 ok, 1 failed                                              
+                                                                                
+  demo-stack-app-1  failed                                                      
+    restarted, but the container is not ready: its health check fails           
+    State afterwards: stopped (exited)                                          
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+n/esc/enter close                                                 up/down scroll
