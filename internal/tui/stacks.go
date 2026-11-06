@@ -292,10 +292,11 @@ func stackColumns(t kittui.Translator, tones map[string]kittui.TextStyle) []kitt
 	return []kittui.Column{
 		{Title: textColStack},
 		{Title: textColCurrent},
-		{Title: textColAvailable, Short: short(textAvailError, textAvailErrorS)},
+		{Title: textColAvailable, Short: short(textAvailError, textAvailErrorS, textAvailNotComparable, textAvailNotComparableS)},
 		{Title: textColMode, Optional: true},
 		{Title: textColState, Tone: tone, Short: short(textStateRollbackPause, textStateRollbackPauseS,
-			textStateCtrFailed, textStateCtrFailedS, textStatePending, textStatePendingS, textStateNotDeployed, textStateNotDeployedS)},
+			textStateCtrFailed, textStateCtrFailedS, textStatePending, textStatePendingS, textStateNotDeployed, textStateNotDeployedS,
+			textStateUnreadable, textStateUnreadableS, textStateNeedsDirs, textStateNeedsDirsS, textStateFailed, textStateFailedS)},
 		{Title: textColLastRun, Optional: true, Tone: tone},
 		{Title: textColFindings, Flex: true, Tone: tone},
 	}
