@@ -43,10 +43,13 @@ func newTUICommand(state *notRunning) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Open the terminal interface",
-		Long: "tui opens the terminal interface. It has three areas, switched with 1 to 3: Stacks lists every stack with its\n" +
-			"current and available version, update mode, state, last run and findings; Stack detail shows the chosen\n" +
-			"stack with its image versions, changelog, backups and last runs; Runs lists the runs, and enter opens the\n" +
-			"log of a run, which follows a run in progress. ? opens the help, r reads the service again, q quits.\n\n" +
+		Long: "tui opens the terminal interface. It has five areas, switched with 1 to 5, or with tab and the left and right keys\n" +
+			"(tab moves the focus between the tab line and the content, left and right then switch the area):\n" +
+			"Stacks lists every stack with its current and available version, update mode, state, last run and\n" +
+			"findings; Stack detail shows the chosen stack with its image versions, changelog, backups and last runs;\n" +
+			"Runs lists the runs, and enter opens the log of a run, which follows a run in progress; Settings holds\n" +
+			"the host configuration; Containers lists every container of the host. ? opens the help, r reads the\n" +
+			"service again, q quits.\n\n" +
 			"In Stacks the keys act on the stack under the cursor, or on the stacks ticked with space, one stack\n" +
 			"after another: u update, d deploy, p pause, P unpause, i pin, I unpin, g resume (only for a stack paused\n" +
 			"after a failed rollback) and c asking the registries now about all stacks. Every action first asks:\n" +

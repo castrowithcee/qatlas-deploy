@@ -2046,6 +2046,43 @@ scenario_tui() {
 	tui_send Escape
 	log "scenario: the Containers area and the stack detail opened the log of $ctname and of demo-stack, with a period and a search; the secret stayed masked"
 
+	step 'Tab focuses the tab line, Right and Left switch the area without digits, and Tab leads back to the content'
+	tui_send Escape
+	# An earlier step left a run log open in Runs; close it so Runs shows its list.
+	tui_send 3
+	tui_send Escape
+	tui_wait 'STARTED' 10
+	tui_send 1
+	tui_wait '1 Stacks' 10
+	# The tab line has the focus while the footer offers "next area"; the area shows in its content: the
+	# Stacks list has the CURRENT column, Stack detail a "mode" row (or the hint that no stack is chosen),
+	# Runs the STARTED column.
+	tui_send Tab
+	tui_wait 'next area' 10
+	tui_has 'CURRENT' || fail "the Stacks area is not shown with the focus on the tab line: $(tui_screen)"
+	tui_send Right
+	i=0
+	until tui_screen | grep -qE '^ +(mode +|No stack chosen)'; do
+		i=$((i + 1))
+		[ "$i" -lt 40 ] || fail "Right did not show the Stack detail area: $(tui_screen)"
+		sleep 0.25
+	done
+	tui_send Right
+	tui_wait 'STARTED' 10
+	tui_send Left
+	i=0
+	until tui_screen | grep -qE '^ +(mode +|No stack chosen)'; do
+		i=$((i + 1))
+		[ "$i" -lt 40 ] || fail "Left did not lead back to the Stack detail area: $(tui_screen)"
+		sleep 0.25
+	done
+	tui_has 'next area' || fail "the tab line lost the focus while switching: $(tui_screen)"
+	tui_send Tab
+	sleep 0.5
+	tui_has 'next area' && fail "Tab does not lead back to the content: $(tui_screen)"
+	tui_screen | grep -qE '^ +(mode +|No stack chosen)' || fail "the area changed with Tab: $(tui_screen)"
+	log 'scenario: Tab, Right and Left switched the area without digits and Tab led back to the content'
+
 	step 'q ends the interface with exit code 0'
 	tui_send Escape
 	tui_send 1

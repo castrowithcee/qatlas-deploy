@@ -90,15 +90,17 @@ type Model struct {
 	loc     *time.Location
 	now     func() time.Time
 
-	themes          *kittui.ThemeSet
-	theme           string
-	profile         kittui.ColorProfile
-	charset         kittui.CharsetMode
-	terminal        kittui.TerminalColors
-	haveFG, haveBG  bool
-	styles          kittui.Styles
-	width, height   int
-	area            kittui.AreaID
+	themes         *kittui.ThemeSet
+	theme          string
+	profile        kittui.ColorProfile
+	charset        kittui.CharsetMode
+	terminal       kittui.TerminalColors
+	haveFG, haveBG bool
+	styles         kittui.Styles
+	width, height  int
+	area           kittui.AreaID
+	// zone is the focus zone the person chose; focus falls back to the content zone when the screen has no such zone.
+	zone            kittui.FocusZone
 	list            *kittui.List
 	tones           map[string]kittui.TextStyle
 	rows            map[kittui.ItemID]stackRow
@@ -459,6 +461,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	}
 	if id, ok := m.keys.Match(msg, focus); ok {
+		if cmd, handled := m.navKey(id, msg, focus); handled {
+			return cmd
+		}
 		switch id {
 		case actQuit, actForceQuit:
 			return tea.Quit
@@ -467,11 +472,6 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		case actReload:
 			return m.reloadAll()
-		case actArea:
-			if i := slices.Index(areaKeys, kittui.KeyName(msg)); i >= 0 {
-				return m.enter(areas()[i].ID)
-			}
-			return nil
 		case actStackOnly:
 			if m.area == areaRuns && !m.log.open {
 				m.toggleStackOnly()
@@ -586,6 +586,7 @@ func (m *Model) reloadAll() tea.Cmd {
 
 // enter shows an area and starts what that area reads on its own.
 func (m *Model) enter(area kittui.AreaID) tea.Cmd {
+	m.setZone(kittui.ZoneRows)
 	if m.clog.open && area != m.clog.area {
 		m.closeContainerLog()
 	}
@@ -604,6 +605,79 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 		return m.loadPage(false)
 	}
 	return nil
+}
+
+// zones are the focus zones of the screen in their fixed order: the tab line and the content.
+func (m *Model) zones() []kittui.FocusZone {
+	switch {
+	case (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil:
+		return []kittui.FocusZone{kittui.ZoneForm}
+	case m.clogShown():
+	case m.area == areaDetail && m.pick == nil,
+		m.area == areaContainers && m.ctv.open,
+		m.area == areaSettings && m.set.activeList() == nil && m.set.page != "":
+		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneDetail}
+	}
+	return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneRows}
+}
+
+// focus is the zone that has the focus: the chosen one, or the content when the screen has no such zone.
+func (m *Model) focus() kittui.FocusZone {
+	zones := m.zones()
+	if slices.Contains(zones, m.zone) {
+		return m.zone
+	}
+	return zones[len(zones)-1]
+}
+
+// setZone moves the focus; a list shows its marked row as focused only outside the tab line.
+func (m *Model) setZone(z kittui.FocusZone) {
+	m.zone = z
+	lists := []*kittui.List{m.list, m.runsList, m.ctList}
+	if m.set != nil {
+		lists = append(lists, m.set.menu, m.set.credList, m.set.notifyList)
+	}
+	if m.pick != nil {
+		lists = append(lists, m.pick.list)
+	}
+	for _, l := range lists {
+		if l != nil {
+			l.SetFocused(z != kittui.ZoneTabs)
+		}
+	}
+}
+
+// navKey handles the keys that switch the area or the focus zone, for every screen alike. The zone keys
+// leave text input and forms to their own handling.
+func (m *Model) navKey(id kittui.ActionID, msg tea.KeyPressMsg, focus kittui.InputFocus) (tea.Cmd, bool) {
+	if id == actArea {
+		if i := slices.Index(areaKeys, kittui.KeyName(msg)); i >= 0 {
+			return m.enter(areas()[i].ID), true
+		}
+		return nil, true
+	}
+	if focus != kittui.InputNavigation {
+		return nil, false
+	}
+	zones, cur := m.zones(), m.focus()
+	tabs := cur == kittui.ZoneTabs
+	switch {
+	case id == actNext, tabs && (id == actDown || id == actEnter):
+		m.setZone(kittui.CycleZone(zones, cur, 1))
+	case id == actPrev:
+		m.setZone(kittui.CycleZone(zones, cur, -1))
+	case tabs && (id == actLeft || id == actRight):
+		step := 1
+		if id == actLeft {
+			step = -1
+		}
+		cmd := m.enter(kittui.StepArea(areas(), m.area, step))
+		m.setZone(kittui.ZoneTabs) // the arrows keep the focus on the tab line so they can go on
+		return cmd, true
+	default:
+		return nil, false
+	}
+	return nil, true
 }
 
 // open shows the stack id in the detail area.
@@ -642,6 +716,11 @@ func (m *Model) footer() []kittui.Hint {
 		{Action: actReload, Label: kittui.TextKeyReload, Priority: 2},
 		{Action: actArea, Label: textKeyArea, Priority: 3},
 		{Action: actQuit, Label: kittui.TextKeyQuit, Priority: 1},
+	}
+	if m.focus() == kittui.ZoneTabs {
+		common = append([]kittui.Hint{{Action: actLeft, Label: textKeyPrevArea, Priority: 3},
+			{Action: actRight, Label: textKeyNextArea, Priority: 3},
+			{Action: actNext, Label: textKeyZone, Priority: 3}}, common...)
 	}
 	switch {
 	case m.clogShown():
@@ -701,6 +780,9 @@ func scrollHints() []kittui.Hint {
 // helpScreen are the keys the help lists for the screen it was opened from.
 func (m *Model) helpScreen() []kittui.Hint {
 	hints := m.footer()
+	if m.focus() != kittui.ZoneTabs && m.zones()[0] != kittui.ZoneForm {
+		hints = append(hints, kittui.Hint{Action: actNext, Label: textKeyZone, Priority: 3})
+	}
 	if m.area == areaStacks && len(m.rows) > 0 {
 		hints = append(hints, m.moreActionHints()...)
 	}
@@ -785,7 +867,7 @@ func (m *Model) frameSpec() kittui.FrameSpec {
 	spec := kittui.FrameSpec{
 		Width: m.width, Height: m.height, Product: productName, Status: m.marks(),
 		HeaderKeys: []kittui.Hint{{Action: actHelp, Label: kittui.TextKeyHelp}},
-		Areas:      areas(), ActiveArea: m.area, Focus: kittui.ZoneRows, Input: m.input(),
+		Areas:      areas(), ActiveArea: m.area, Focus: m.focus(), Input: m.input(),
 		Message: m.message(), Footer: m.footer(),
 	}
 	switch {
