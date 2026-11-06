@@ -73,13 +73,14 @@ type config struct {
 	loc      *time.Location
 	now      func() time.Time // clock of the log filter; nil takes time.Now
 	warnings []string
+	mouse    bool // the mouse preference
 }
 
 // tickMsg starts a periodic refresh.
 type tickMsg struct{}
 
 // Model is the state of the interface. An action reaches the service only after the person confirmed it; the
-// periodic refresh and the mouse never trigger one.
+// periodic refresh never triggers one, and a click only presses the key it stands for.
 type Model struct {
 	ctx     context.Context
 	backend Backend
@@ -146,6 +147,10 @@ type Model struct {
 	makeDirs func(datadir.Request) (datadir.Result, error)
 	help     *kittui.Help
 	helpOpen bool
+	// mouseOn is the mouse preference; it may change while the interface runs. mouseMap holds the click targets
+	// of the frame drawn last.
+	mouseOn  bool
+	mouseMap *kittui.MouseMap
 }
 
 func newModel(c config) (*Model, error) {
@@ -166,7 +171,7 @@ func newModel(c config) (*Model, error) {
 		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
 		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick,
 		ctTones: map[string]kittui.TextStyle{}, ctNames: map[kittui.ItemID]string{},
-		euid: defaultEuid, makeDirs: defaultMakeDirs}
+		euid: defaultEuid, makeDirs: defaultMakeDirs, mouseOn: c.mouse}
 	if m.ctx == nil {
 		m.ctx = context.Background()
 	}
@@ -304,9 +309,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case tea.KeyPressMsg:
-		cmd := m.key(msg)
-		m.refeedFilteredLog()
-		return m, cmd
+		return m, m.press(msg)
+	case tea.MouseMsg:
+		return m, m.mouse(msg)
 	}
 	return m, nil
 }
@@ -895,11 +900,15 @@ func (m *Model) frameSpec() kittui.FrameSpec {
 func (m *Model) View() tea.View {
 	v := tea.NewView(m.render())
 	v.AltScreen = true
+	if m.mouseOn {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
 	return v
 }
 
 // render draws the whole screen in the size of the terminal.
 func (m *Model) render() string {
+	m.mouseMap = nil
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
@@ -925,37 +934,48 @@ func (m *Model) render() string {
 	if scrolls {
 		spec.Position = m.scrollNote
 	}
-	view, _ := m.frame.Render(m.styles, spec)
+	view, targets := m.frame.Render(m.styles, spec)
+	if m.modal != nil {
+		// Nothing of the screen beneath takes a click while a question or a sheet is open.
+		targets = nil
+	}
 	if m.modal != nil && !m.modal.sheet() {
-		if over, _, ok := m.modal.dialog.Overlay(m.styles, view, m.width, m.height, room); ok {
-			view = over
+		if over, ot, ok := m.modal.dialog.Overlay(m.styles, view, m.width, m.height, room); ok {
+			view, targets = over, ot
 		} else {
 			spec.Footer, spec.Input, spec.Position, spec.Back = m.modal.dialog.Hints(), kittui.InputNavigation, "", nil
 			room = m.frame.Workspace(spec)
-			spec.Workspace, _ = m.modal.dialog.View(m.styles, room.Width, room.Height)
+			var wt []kittui.Target
+			spec.Workspace, wt = m.modal.dialog.View(m.styles, room.Width, room.Height)
 			view, _ = m.frame.Render(m.styles, spec)
+			targets = kittui.OffsetTargets(wt, room.X, room.Y)
 		}
 	}
 	if lv := m.filteringLogView(); lv != nil {
-		if over, _, ok := lv.ModalOverlay(m.styles, view, m.width, m.height, room); ok {
-			view = over
+		if over, ot, ok := lv.ModalOverlay(m.styles, view, m.width, m.height, room); ok {
+			view, targets = over, ot
 		} else {
 			spec.Footer, spec.Input, spec.Position, spec.Back = lv.Hints(), lv.Input(), "", nil
 			room = m.frame.Workspace(spec)
-			spec.Workspace, _ = lv.ModalView(m.styles, room.Width, room.Height)
+			var wt []kittui.Target
+			spec.Workspace, wt = lv.ModalView(m.styles, room.Width, room.Height)
 			view, _ = m.frame.Render(m.styles, spec)
+			targets = kittui.OffsetTargets(wt, room.X, room.Y)
 		}
 	}
 	if m.helpOpen {
-		if over, _, ok := m.help.Overlay(m.styles, view, m.width, m.height, room); ok {
-			view = over
+		if over, ot, ok := m.help.Overlay(m.styles, view, m.width, m.height, room); ok {
+			view, targets = over, ot
 		} else {
 			spec.Footer, spec.Input, spec.Position, spec.Back = m.help.Hints(), kittui.InputNavigation, "", nil
 			room = m.frame.Workspace(spec)
-			spec.Workspace, _ = m.help.View(m.styles, room.Width, room.Height)
+			var wt []kittui.Target
+			spec.Workspace, wt = m.help.View(m.styles, room.Width, room.Height)
 			view, _ = m.frame.Render(m.styles, spec)
+			targets = kittui.OffsetTargets(wt, room.X, room.Y)
 		}
 	}
+	m.setMouse(targets)
 	return m.styles.Paint(view, m.width, m.height)
 }
 
