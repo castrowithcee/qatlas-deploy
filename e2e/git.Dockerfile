@@ -1,6 +1,6 @@
 # Git platform: SSH access limited to git-shell with a key (account git, and qdeploy as a second name for it so
-# the service reaches the repository by a URL without a user part), bare repositories under /srv/git, one seeded demo
-# stacks repository.
+# the service reaches the repository by a URL without a user part), bare repositories under /srv/git, two seeded demo
+# stacks repositories.
 FROM debian:12-slim
 
 RUN apt-get update \
@@ -16,6 +16,7 @@ RUN apt-get update \
 
 COPY git-sshd.conf /etc/ssh/sshd_config.d/qdeploye2e.conf
 COPY demo-stacks /usr/local/share/demo-stacks
+COPY demo-stacks-second /usr/local/share/demo-stacks-second
 COPY git-entrypoint.sh /usr/local/bin/git-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/git-entrypoint.sh"]

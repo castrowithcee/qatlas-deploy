@@ -6,6 +6,8 @@
 # stacks, deploy a new commit, show the available image versions per update ceiling without changing anything,
 # roll back a commit with a failing healthcheck (data restored from the run's backup, revert commit on the
 # remote), leave a stack whose rollback fails stopped and paused until resume, and refuse a changed host key of the git server.
+# A second section takes over an installation of the earlier single binding as the first source and binds a second
+# repository: its own stack is deployed, a stack named like one of the first source is reported and never deployed.
 # Version updates with qdeploy stack update follow: qdeploy stack settings set commits and pushes the settings of a
 # stack without a run, and they act on the next update: one direct step, a stepwise major jump and a jump whose
 # middle step fails. The maintenance window follows on a real, short window: a stack in automatic mode is updated
@@ -1173,7 +1175,96 @@ scenario_stacks_repo() {
 	step 'the original host key works again'
 	qd repo fetch >/dev/null || fail 'repo fetch fails after the host keys were restored'
 
+	scenario_sources
+
 	scenario_tui_setup
+}
+
+# flat_field prints one flat field of qdeploy status by its full name (empty when it is absent).
+flat_field() {
+	qd --output json status | sed -n "s/.*\"$1\": *\"\\([^\"]*\\)\".*/\\1/p"
+}
+
+collision_seen() {
+	flat_field source.opt-stacks2.stack.demo-stack.findings | grep -q name-collision
+}
+
+# scenario_sources proves the service with several stack folders. An installation bound to one repository by an
+# earlier version is represented by the state layout that version left (stacks-repo.json, the engine state in
+# deploy/), made from the current one while the service is stopped; the start must take it over with state and
+# deploy key. Then a second repository becomes a second source: its own stack is deployed, a stack named like one of
+# the first source is reported with name-collision and never deployed.
+scenario_sources() {
+	state=/var/lib/qdeploy
+	url2=git.$domain:stacks2.git
+
+	step 'an installation of the earlier single binding is taken over with its state and deploy key'
+	key_before=$(qd --output json key show | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')
+	deployed_before=$(stack_field demo-stack deployed)
+	run_before=$(stack_field demo-stack last_run)
+	images_before=$(stack_images demo-stack)
+	[ -n "$key_before" ] && [ -n "$deployed_before" ] && [ -n "$run_before" ] || fail 'the first source has no key, deployment or run to carry over'
+	docker exec "$host" systemctl stop qdeploy || fail 'cannot stop the qdeploy service'
+	url1=$(docker exec "$host" sed -n 's/.*"url": *"\([^"]*\)".*/\1/p' "$state/sources.json")
+	[ "$url1" = "$url" ] || fail "sources.json does not bind $url: $url1"
+	docker exec "$host" test -d "$state/sources/opt-stacks/deploy" || fail 'the engine state of the first source is not below sources/opt-stacks/deploy'
+	docker exec "$host" sh -ec "
+		mv $state/sources/opt-stacks/deploy $state/deploy
+		rmdir $state/sources/opt-stacks $state/sources
+		rm $state/sources.json
+		printf '{\"version\":1,\"url\":\"$url1\",\"dir\":\"/opt/stacks\"}' >$state/stacks-repo.json
+		chown qdeploy:qdeploy $state/stacks-repo.json && chmod 600 $state/stacks-repo.json" || fail 'cannot lay out the earlier state'
+	docker exec "$host" systemctl start qdeploy || fail 'cannot start the qdeploy service on the earlier state'
+	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'
+	wait_for 'the qdeploy service to answer' 20 qd status
+	wait_for 'the poll of the taken-over source' 60 poll_done
+	if docker exec "$host" test -e "$state/stacks-repo.json"; then fail 'the old binding file is still the binding'; fi
+	if docker exec "$host" test -e "$state/deploy"; then fail 'the engine state was not moved'; fi
+	docker exec "$host" test -d "$state/sources/opt-stacks/deploy" || fail 'the engine state is not below sources/opt-stacks'
+	docker exec "$host" grep -q '"key": *"deploy-key"' "$state/sources.json" || fail "the first source does not keep the deploy key: $(docker exec "$host" cat "$state/sources.json")"
+	[ "$(qd --output json key show | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')" = "$key_before" ] || fail 'the deploy key changed with the takeover'
+	[ "$(flat_field source.opt-stacks.path)" = /opt/stacks ] || fail "status does not show the first source: $(qd --output json status)"
+	[ "$(stack_field demo-stack source)" = opt-stacks ] || fail "demo-stack is not listed with its source: $(qd --output json status)"
+	[ "$(stack_field demo-stack deployed)" = "$deployed_before" ] || fail 'the deployed commit of demo-stack was lost with the takeover'
+	[ "$(stack_field demo-stack last_run)" = "$run_before" ] || fail 'the takeover started a run of demo-stack'
+	qd repo fetch >/dev/null || fail 'repo fetch fails with the taken-over key'
+	log 'scenario: the single binding became the source opt-stacks with its state and key'
+
+	step 'a second repository is bound as a second source with its own deploy key'
+	out=$(qd --output json key generate --dir /opt/stacks2) || fail "key generate --dir failed: $out"
+	pub2=$(printf '%s\n' "$out" | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')
+	case $pub2 in ssh-ed25519\ *) ;; *) fail "no public key in: $out" ;; esac
+	[ "$pub2" != "$key_before" ] || fail 'the second source got the key of the first'
+	[ "$(qd --output json key show --dir /opt/stacks2 | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')" = "$pub2" ] || fail 'key show --dir differs from key generate --dir'
+	[ "$(qd --output json key show | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')" = "$key_before" ] || fail 'a key for another folder replaced the key of the first source'
+	printf '%s\n' "$pub2" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+	out=$(qd --output json repo set "$url2" --dir /opt/stacks2 --create --fingerprint "$(git_ed25519_fingerprint)") || fail "repo set for the second source failed: $out"
+	printf '%s' "$out" | grep -q '"cloned": *true' || fail "repo set did not clone the second source: $out"
+	docker exec "$host" test -f /opt/stacks2/demo-second/compose.yaml || fail 'the clone is missing in /opt/stacks2'
+	docker exec "$host" grep -qx 'ReadWritePaths=-/opt/stacks2' /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf || fail 'the drop-in does not grant /opt/stacks2'
+	wait_for 'the qdeploy service to answer' 30 qd status
+	[ "$(flat_field source.opt-stacks2.path)" = /opt/stacks2 ] || fail "status does not show the second source: $(qd --output json status)"
+
+	step 'the own stack of the second source is deployed'
+	wait_for 'the first run of demo-second' 180 stack_settled demo-second succeeded
+	[ "$(stack_images demo-second)" = "registry.$domain/demo/app:1.0.0" ] || fail "demo-second does not run the image 1.0.0: $(stack_images demo-second)"
+	[ "$(stack_field demo-second source)" = opt-stacks2 ] || fail "demo-second is not listed with its source: $(qd --output json status)"
+	out=$(qd --output json stack list) || fail "stack list failed: $out"
+	printf '%s' "$out" | grep -q 'opt-stacks2' || fail "stack list does not show the source of demo-second: $out"
+
+	step 'a stack named like one of the first source is reported with name-collision and never deployed'
+	wait_for 'the finding name-collision' 60 collision_seen
+	[ "$(flat_field source.opt-stacks2.stack.demo-stack.source)" = opt-stacks2 ] || fail "the blocked entry has no source: $(qd --output json status)"
+	[ -z "$(flat_field source.opt-stacks2.stack.demo-stack.deployed)" ] || fail 'the blocked stack was deployed'
+	[ -z "$(flat_field source.opt-stacks2.stack.demo-stack.last_run)" ] || fail 'the blocked stack has a run'
+	[ "$(stack_field demo-stack source)" = opt-stacks ] || fail 'the stack of the first source lost its name'
+	[ "$(stack_field demo-stack deployed)" = "$deployed_before" ] || fail 'the stack of the first source changed'
+	[ "$(stack_images demo-stack)" = "$images_before" ] || fail "demo-stack changed its image: $(stack_images demo-stack) instead of $images_before"
+	if docker exec "$host" docker ps -a --format '{{.Names}}' --filter label=com.docker.compose.project=demo-stack | grep -q . &&
+		docker exec "$host" docker ps -a --filter label=com.docker.compose.project=demo-stack --format '{{.Image}}' | grep -q ':2.0.0$'; then
+		fail 'a container of the duplicate demo-stack runs'
+	fi
+	log 'scenario: second source deployed demo-second; its demo-stack is blocked by name-collision'
 }
 
 # scenario_containers proves that qdeploy container list and show tell the three kinds apart on the host: the
@@ -2040,7 +2131,7 @@ first_setup_reset() {
 	docker exec "$host" sh -ec '
 		for c in $(docker ps -aq --filter label=com.docker.compose.project); do docker rm -f -v "$c" >/dev/null; done
 		for v in $(docker volume ls -q --filter label=com.docker.compose.project); do docker volume rm "$v" >/dev/null; done
-		find /opt/stacks /var/lib/qdeploy -mindepth 1 -delete' || fail 'cannot reset the state of the service'
+		find /opt/stacks /opt/stacks2 /var/lib/qdeploy -mindepth 1 -delete' || fail 'cannot reset the state of the service'
 	docker exec "$host" systemctl start qdeploy ||
 		fail 'cannot start the fresh qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'

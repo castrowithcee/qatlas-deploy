@@ -173,7 +173,7 @@ ENV
 build_images() {
 	log 'building the fakes'
 	(cd "$root" && CGO_ENABLED=0 go build -tags e2efakes -trimpath -o "$work/ctx/fakes" ./e2e/fakes)
-	cp -r "$here/demo-stacks" "$here/git-sshd.conf" "$here/git-entrypoint.sh" "$work/ctx/"
+	cp -r "$here/demo-stacks" "$here/demo-stacks-second" "$here/git-sshd.conf" "$here/git-entrypoint.sh" "$work/ctx/"
 
 	log 'building the images (the simulated host takes a while on the first run)'
 	docker build -q --label "$label" -t "$prefix-fakes:latest" -f "$here/fakes.Dockerfile" "$work/ctx" >/dev/null
