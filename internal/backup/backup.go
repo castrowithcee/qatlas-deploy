@@ -623,3 +623,5 @@ func (b runBackups) Restore(ctx context.Context, st stacks.Stack, id string, log
 	_, err := b.m.Restore(ctx, st, id, log)
 	return err
 }
+
+func (b runBackups) Exists(st stacks.Stack, id string) (bool, error) { return b.m.Exists(st.Name, id) }

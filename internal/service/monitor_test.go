@@ -25,6 +25,31 @@ type monEngine struct {
 	stackRestarts int
 	// onRestart runs inside an attempt, as the restart would.
 	onRestart func()
+	// rollbacks are the updates rolled back, rollbackErr the refusal of RollbackUpdate.
+	rollbacks   []string
+	rollbackErr error
+	now         func() time.Time
+}
+
+// RollbackUpdate mirrors the engine: it refuses as Repair does and without the observation, otherwise the run
+// ends at once with the update rolled back and the observation gone.
+func (e *monEngine) RollbackUpdate(_ context.Context, stack, commit string, f engine.Failure) (engine.RunInfo, error) {
+	if e.rollbackErr != nil {
+		return engine.RunInfo{}, e.rollbackErr
+	}
+	if _, busy := e.active[stack]; busy {
+		return engine.RunInfo{}, engine.ErrRunActive
+	}
+	cur := e.states[stack]
+	if o := cur.Observe; o == nil || o.Commit != commit {
+		return engine.RunInfo{}, engine.ErrNoObservation
+	}
+	e.rollbacks = append(e.rollbacks, commit)
+	cur.Observe = nil
+	cur.LastRun = &engine.RunRecord{ID: "20260504T030000Z-0000abcd", Stack: stack, Trigger: engine.TriggerObserve,
+		Result: engine.ResultRolledBack, Started: e.now()}
+	e.states[stack] = cur
+	return engine.RunInfo{ID: cur.LastRun.ID, Stack: stack, Commit: commit}, nil
 }
 
 // Repair mirrors the engine: a busy slot refuses, an unrepairable stack refuses, otherwise the record is stored

@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSettingsAreFoundByProjectName(t *testing.T) {
@@ -133,6 +134,7 @@ update:
   mode: automatic
   ceiling: minor
   major: stepwise
+  observe: 60
   tags:
     APP_VERSION: ^1
     DEMO_VERSION: ^[0-9]+\.[0-9]+$
@@ -180,9 +182,52 @@ func TestEncodeSettingsWritesTheDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "version: 1\nupdate:\n  mode: manual\n  ceiling: minor\n  major: stepwise\nbackup:\n  paths:\n    - data\n" +
+	want := "version: 1\nupdate:\n  mode: manual\n  ceiling: minor\n  major: stepwise\n  observe: 60\nbackup:\n  paths:\n    - data\n" +
 		"  retention:\n    keep: 7\ncheck:\n  containers: true\n"
 	if string(data) != want {
 		t.Fatalf("encoded:\n%s", data)
 	}
+}
+
+func TestUpdateObserveSetting(t *testing.T) {
+	for _, c := range []struct {
+		body string
+		want time.Duration
+	}{
+		{"version: 1\n", DefaultObserveMinutes * time.Minute},
+		{"version: 1\nupdate: {mode: automatic}\n", time.Hour},
+		{"version: 1\nupdate: {observe: 0}\n", 0},
+		{"version: 1\nupdate: {observe: 1440}\n", 24 * time.Hour},
+		{`{"version":1,"update":{"observe":15}}`, 15 * time.Minute},
+	} {
+		r, err := ParseSettings([]byte(c.body))
+		if err != nil || r.Update.Observe != c.want {
+			t.Fatalf("%q: observe %v, err %v", c.body, r, err)
+		}
+		back, err := ParseSettings(mustEncode(t, r))
+		if err != nil || back.Update.Observe != c.want || *r.Settings().Update.Observe != int(c.want/time.Minute) {
+			t.Fatalf("%q: round trip %v, %v", c.body, back, err)
+		}
+	}
+	for _, body := range []string{"version: 1\nupdate: {observe: -1}\n", "version: 1\nupdate: {observe: soon}\n"} {
+		if _, err := ParseSettings([]byte(body)); err == nil {
+			t.Fatalf("%q was accepted", body)
+		}
+	}
+	if _, err := ParseSettings([]byte("version: 1\nupdate: {observe: 1441}\n")); err == nil ||
+		!strings.Contains(err.Error(), "update.observe: must be minutes from 0 to 1440") {
+		t.Fatalf("bound: %v", err)
+	}
+	if (Stack{}).ObserveTime() != time.Hour {
+		t.Fatal("a stack without settings has no default observation time")
+	}
+}
+
+func mustEncode(t *testing.T, r *Rules) []byte {
+	t.Helper()
+	data, err := EncodeSettings(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

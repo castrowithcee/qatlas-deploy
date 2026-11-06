@@ -19,6 +19,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -140,6 +141,14 @@ func (s Stack) UpdateMode() string {
 		return ModeNone
 	}
 	return s.Rules.Update.Mode
+}
+
+// ObserveTime is the observation time after an update of the stack, the default for a stack without settings.
+func (s Stack) ObserveTime() time.Duration {
+	if s.Rules == nil {
+		return DefaultObserveMinutes * time.Minute
+	}
+	return s.Rules.Update.Observe
 }
 
 // Load reads every stack below dir. When the root of dir holds a compose file, dir is one root stack and its

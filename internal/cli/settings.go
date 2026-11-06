@@ -179,6 +179,9 @@ func settingsOutput(format output.Format, s control.StackSettings) []output.Fiel
 		add("update.mode", u.Mode)
 		add("update.ceiling", u.Ceiling)
 		add("update.major", u.Major)
+		if u.Observe != nil {
+			add("update.observe", *u.Observe)
+		}
 		byKey("update.tags", u.Tags)
 		byKey("update.changelog", u.Changelog)
 	}

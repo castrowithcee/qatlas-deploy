@@ -221,6 +221,19 @@ func readMeta(dir, stack, id string) (Meta, error) {
 	return meta, nil
 }
 
+// Exists tells whether the stack has the backup id with valid metadata; an incomplete one counts as missing.
+func (m *Manager) Exists(stack, id string) (bool, error) {
+	dir, err := m.backupDir(stack, id)
+	switch {
+	case errors.Is(err, ErrNoSuchBackup):
+		return false, nil
+	case err != nil:
+		return false, err
+	}
+	_, err = readMeta(dir, stack, id)
+	return err == nil, nil
+}
+
 // List returns the backups of a stack, newest first. A directory without valid metadata is listed as
 // incomplete; a stack without backups has none.
 func (m *Manager) List(stack string) ([]Meta, error) {

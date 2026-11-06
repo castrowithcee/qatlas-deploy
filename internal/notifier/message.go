@@ -27,6 +27,8 @@ type Event struct {
 	Restarted bool
 	// Attempts is how many restarts did not help, for EventRecoveryFailed.
 	Attempts int
+	// Cause is one of the Cause constants or empty.
+	Cause string
 }
 
 // Item is one image variable with an available version.
@@ -51,6 +53,7 @@ type body struct {
 	At        string `json:"at,omitempty"`
 	Restarted bool   `json:"restarted,omitempty"`
 	Attempts  int    `json:"attempts,omitempty"`
+	Cause     string `json:"cause,omitempty"`
 }
 
 const shortCommit = 12
@@ -77,6 +80,13 @@ func nameSuffix(name string) string {
 		return ""
 	}
 	return " " + name
+}
+
+func restarts(n int) string {
+	if n == 1 {
+		return "1 restart"
+	}
+	return strconv.Itoa(n) + " restarts"
 }
 
 func failurePhrase(kind string) string {
@@ -106,11 +116,21 @@ func Message(ev Event) kitnotify.Message {
 		text = append(text, "Run "+ev.Run+" failed at commit "+short(ev.Commit)+".")
 	case EventRolledBack:
 		subject = "Stack " + ev.Stack + " rolled back"
+		if ev.Cause == CauseObservation {
+			text = append(text, "Stack "+ev.Stack+" failed in the observation time after its update to commit "+short(ev.Commit)+
+				"; run "+ev.Run+" rolled the update back.")
+			break
+		}
 		text = append(text, "Run "+ev.Run+" failed at commit "+short(ev.Commit)+" and the stack was rolled back.")
 	case EventRollbackFailed:
 		subject = "Stack " + ev.Stack + ": rollback failed"
-		text = append(text, "Run "+ev.Run+" failed at commit "+short(ev.Commit)+" and the rollback failed too.",
-			"The stack is stopped and gets no further runs until an operator acts.")
+		if ev.Cause == CauseObservation {
+			text = append(text, "Stack "+ev.Stack+" failed in the observation time after its update to commit "+short(ev.Commit)+
+				"; run "+ev.Run+" could not roll the update back.")
+		} else {
+			text = append(text, "Run "+ev.Run+" failed at commit "+short(ev.Commit)+" and the rollback failed too.")
+		}
+		text = append(text, "The stack is stopped and gets no further runs until an operator acts.")
 	case EventContainerFailed:
 		subject = "Stack " + ev.Stack + ": " + noun(ev.Kind) + nameSuffix(ev.Container) + " failed (" + ev.Kind + ")"
 		text = append(text, noun(ev.Kind)+nameSuffix(ev.Container)+" of stack "+ev.Stack+" "+failurePhrase(ev.Kind)+".",
@@ -125,8 +145,12 @@ func Message(ev Event) kitnotify.Message {
 	case EventRecoveryFailed:
 		subject = "Stack " + ev.Stack + ": " + noun(ev.Kind) + nameSuffix(ev.Container) + " not repaired"
 		text = append(text, noun(ev.Kind)+nameSuffix(ev.Container)+" of stack "+ev.Stack+" "+failurePhrase(ev.Kind)+
-			" and "+strconv.Itoa(ev.Attempts)+" restarts did not fix it.",
-			"No further restart is made until an operator resumes the stack.", "Failed since: "+utc(ev.Since))
+			" and "+restarts(ev.Attempts)+" did not fix it.")
+		if ev.Cause == CauseBackupMissing {
+			text = append(text, "It failed in the observation time after its update, but the update was not rolled back: "+
+				"the backup of the update is missing. Nothing was changed.")
+		}
+		text = append(text, "No further restart is made until an operator resumes the stack.", "Failed since: "+utc(ev.Since))
 	case EventUpdateAvailable:
 		subject = "Update available for stack " + ev.Stack
 		for _, it := range ev.Items {
@@ -142,7 +166,7 @@ func Message(ev Event) kitnotify.Message {
 	if ev.Error != "" {
 		text = append(text, "Error: "+ev.Error)
 	}
-	b := body{Event: ev.Type, Stack: ev.Stack, Run: ev.Run, Commit: ev.Commit, Error: ev.Error, Items: ev.Items}
+	b := body{Event: ev.Type, Stack: ev.Stack, Run: ev.Run, Commit: ev.Commit, Error: ev.Error, Items: ev.Items, Cause: ev.Cause}
 	switch ev.Type {
 	case EventContainerFailed, EventRecovered, EventRecoveryFailed:
 		b.Kind, b.Container, b.Since = ev.Kind, ev.Container, utc(ev.Since)
