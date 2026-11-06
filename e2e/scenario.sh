@@ -1180,6 +1180,8 @@ scenario_stacks_repo() {
 
 	scenario_sources
 
+	scenario_root_source
+
 	scenario_tui_setup
 }
 
@@ -1268,6 +1270,79 @@ scenario_sources() {
 		fail 'a container of the duplicate demo-stack runs'
 	fi
 	log 'scenario: second source deployed demo-second; its demo-stack is blocked by name-collision'
+}
+
+# source_stack_count prints how many stacks status lists for the source $1.
+source_stack_count() {
+	qd --output json status | grep -c "\"stack\\.[^.]*\\.source\": *\"$1\"" || true
+}
+
+# root_commit changes a file of the admin clone of the third repository and pushes it as a new commit.
+root_commit() {
+	as_admin "cd ~/stacks3 && git pull -q --ff-only && sed -i '$2' $1 &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am '$3' && git push -q origin main"
+}
+
+# scenario_root_source proves a stack folder whose root holds the compose file: the whole folder is exactly one
+# stack, a subfolder with a compose file of its own is only reported, a version change by commit is deployed and
+# a failing one is rolled back with a revert commit of the whole folder.
+scenario_root_source() {
+	url3=git.$domain:stacks3.git
+	image=registry.$domain/demo/app
+
+	step 'a third repository with its compose file in the root is bound as one more source'
+	out=$(qd --output json key generate --dir /opt/stacks3) || fail "key generate --dir failed: $out"
+	pub3=$(printf '%s\n' "$out" | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')
+	case $pub3 in ssh-ed25519\ *) ;; *) fail "no public key in: $out" ;; esac
+	printf '%s\n' "$pub3" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+	out=$(qd --output json repo set "$url3" --dir /opt/stacks3 --create --fingerprint "$(git_ed25519_fingerprint)") || fail "repo set for the third source failed: $out"
+	printf '%s' "$out" | grep -q '"cloned": *true' || fail "repo set did not clone the third source: $out"
+	docker exec "$host" test -f /opt/stacks3/compose.yaml || fail 'the clone in /opt/stacks3 has no compose file in its root'
+
+	step 'the root of the source is deployed as exactly one stack; its subfolder is no stack'
+	wait_for 'the first run of demo-root' 180 stack_settled demo-root succeeded
+	[ "$(source_stack_count opt-stacks3)" = 1 ] || fail "the third source is not exactly one stack: $(qd --output json status)"
+	[ "$(stack_field demo-root source)" = opt-stacks3 ] || fail "demo-root is not listed with its source: $(qd --output json status)"
+	[ -z "$(stack_field demo-extra source)" ] || fail 'the subfolder with a compose file is a stack'
+	[ "$(stack_images demo-root)" = "$image:1.0.0" ] || fail "demo-root does not run the image 1.0.0: $(stack_images demo-root)"
+	[ "$(docker exec "$host" docker ps --filter label=com.docker.compose.project=demo-root --format '{{.Label "com.docker.compose.project.working_dir"}}')" = /opt/stacks3 ] ||
+		fail 'demo-root does not run from the root of the source'
+	[ -z "$(stack_images demo-extra)" ] || fail 'a container of the subfolder runs'
+	out=$(qd --output json stack check demo-root) || fail "stack check of demo-root failed: $out"
+	printf '%s' "$out" | jq -e '.errors == 0 and ([.stacks[].findings[] | select(.rule == "ignored-stack-folder")] | length) == 1' >/dev/null ||
+		fail "stack check does not report ignored-stack-folder once: $out"
+	as_admin "rm -rf ~/stacks3 && git clone -q $url3 ~/stacks3" || fail 'cannot clone the third repository as admin'
+
+	step 'a version change by commit is deployed'
+	prev=$(newest_run demo-root)
+	root_commit .env 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=1.1.0/' 'Update demo-root to 1.1.0'
+	good_root=$(as_admin 'cd ~/stacks3 && git rev-parse HEAD')
+	restart_service
+	run=$(next_run demo-root "$prev") || fail 'no run of demo-root started for the version change'
+	wait_for "the run $run" 240 run_finished demo-root "$run"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run of the version change did not succeed: $(qd stack log "$run")"
+	[ "$(stack_field demo-root deployed)" = "$good_root" ] || fail "demo-root is not recorded as deployed at $good_root"
+	[ "$(stack_images demo-root)" = "$image:1.1.0" ] || fail "demo-root does not run 1.1.0: $(stack_images demo-root)"
+
+	step 'a failing version is rolled back and the revert commit restores the whole folder'
+	prev=$run
+	root_commit .env 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=2.0.0/; s/^DEMO_HEALTH=.*/DEMO_HEALTH=fail/' 'Update demo-root to 2.0.0 with a broken healthcheck'
+	bad_root=$(as_admin 'cd ~/stacks3 && git rev-parse HEAD')
+	restart_service
+	run=$(next_run demo-root "$prev") || fail 'no run of demo-root started for the failing commit'
+	wait_for "the run $run" 240 run_finished demo-root "$run"
+	run_log=$(qd stack log "$run")
+	printf '%s' "$run_log" | grep -q ' result rolled-back' || fail "the run did not end rolled-back: $run_log"
+	revert=$(as_admin 'cd ~/stacks3 && git pull -q --ff-only && git rev-parse HEAD')
+	[ "$revert" != "$bad_root" ] || fail 'no revert commit reached the remote branch'
+	meta=$(as_admin "cd ~/stacks3 && git log -1 --format='%an|%ae|%s|%P' $revert")
+	[ "$meta" = "qdeploy|qdeploy@localhost.invalid|Revert the stack folder to $(printf '%s' "$good_root" | cut -c 1-12)|$bad_root" ] ||
+		fail "the revert commit has the wrong author, subject or parent: $meta"
+	[ "$(as_admin "cd ~/stacks3 && git rev-parse $revert^{tree}")" = "$(as_admin "cd ~/stacks3 && git rev-parse $good_root^{tree}")" ] ||
+		fail 'the revert commit does not restore the whole folder'
+	[ "$(stack_field demo-root deployed)" = "$revert" ] || fail "demo-root is not recorded as deployed at the revert commit $revert"
+	[ "$(stack_images demo-root)" = "$image:1.1.0" ] || fail "demo-root does not run the previous image 1.1.0: $(stack_images demo-root)"
+	log "scenario: demo-root, the root of /opt/stacks3, deployed 1.1.0 and rolled back 2.0.0 with the revert $revert"
 }
 
 # scenario_containers proves that qdeploy container list and show tell the three kinds apart on the host: the
@@ -2266,7 +2341,7 @@ first_setup_reset() {
 	docker exec "$host" sh -ec '
 		for c in $(docker ps -aq --filter label=com.docker.compose.project); do docker rm -f -v "$c" >/dev/null; done
 		for v in $(docker volume ls -q --filter label=com.docker.compose.project); do docker volume rm "$v" >/dev/null; done
-		find /opt/stacks /opt/stacks2 /var/lib/qdeploy -mindepth 1 -delete' || fail 'cannot reset the state of the service'
+		find /opt/stacks /opt/stacks2 /opt/stacks3 /var/lib/qdeploy -mindepth 1 -delete' || fail 'cannot reset the state of the service'
 	docker exec "$host" systemctl start qdeploy ||
 		fail 'cannot start the fresh qdeploy service'
 	wait_for 'the qdeploy service channel' 20 docker exec "$host" sh -c 'ls /run/qdeploy | grep -q sock'

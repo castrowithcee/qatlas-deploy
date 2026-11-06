@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -32,7 +33,12 @@ const (
 
 	// SettingsDir holds the settings of the stacks, one file per stack, relative to the repository root. Only
 	// the service writes it; see SettingsPath.
-	SettingsDir = ".qatlas/qdeploy"
+	SettingsDir = SettingsTop + "/qdeploy"
+	// SettingsTop is the top-level folder of SettingsDir. It belongs to no stack, not even to a root stack.
+	SettingsTop = ".qatlas"
+	// RootFolder is the Folder of a root stack: the root of the stacks repository holds a compose file, so the
+	// whole repository except SettingsTop is this one stack.
+	RootFolder = "."
 	// OldRulesFile is the rule file a stack folder held before the settings moved to SettingsDir. It is not
 	// read; Stack.OldRulesFile reports it.
 	OldRulesFile = "qdeploy.yaml"
@@ -42,15 +48,18 @@ const (
 // SettingsPath is the settings file of the stack called name, relative to the repository root.
 func SettingsPath(name string) string { return SettingsDir + "/" + name + ".yaml" }
 
-// Stack is one top-level folder of the working copy that holds a compose file.
+// Stack is one top-level folder of the working copy that holds a compose file, or the whole working copy when
+// its root holds one (a root stack, Folder RootFolder).
 type Stack struct {
 	// Name is the effective Compose project name and identifies the stack in state, backups, runs and the
-	// command line. Until it is resolved, and for a stack that fails before, it is the folder name.
+	// command line. Until it is resolved, and for a stack that fails before, it is the folder name, for a root
+	// stack the name of the repository directory.
 	Name string
 	// NameDerived says Name is what Compose itself derives from the files and env files qdeploy passes, so the
 	// command line needs no --project-name for it. It is false for a stack whose .env cannot be read.
 	NameDerived bool
-	// Folder is the directory name below the stacks repository root; every path and git pathspec uses it.
+	// Folder is the directory name below the stacks repository root, or RootFolder; every path and git pathspec
+	// uses it, see RepoPath.
 	Folder string
 	// Dir is the stack folder inside the working copy.
 	Dir string
@@ -69,6 +78,9 @@ type Stack struct {
 	Rules *Rules
 	// OldRulesFile says the stack folder holds a qdeploy.yaml, which is no longer read.
 	OldRulesFile bool
+	// Ignored lists, for a root stack, the sorted subfolders that hold a compose file of their own; they are
+	// part of the root stack and not read as stacks.
+	Ignored []string
 	// EnvErr is set when .env cannot be parsed by qdeploy but the stack can still be deployed, because Compose
 	// reads .env itself: the stack is deploy-only and never updated. Env then holds only the lines that parse,
 	// and Images and Findings stay empty.
@@ -119,6 +131,9 @@ func (e *ComposeFileError) Error() string {
 	return fmt.Sprintf("%s: COMPOSE_FILE entry %q: %s", envFile, p.Entry, p.Reason)
 }
 
+// RepoPath is the path rel below the stack folder as a path from the repository root.
+func (s Stack) RepoPath(rel string) string { return path.Join(s.Folder, rel) }
+
 // UpdateMode reports how the stack is updated: ModeNone without rules.
 func (s Stack) UpdateMode() string {
 	if s.Rules == nil {
@@ -127,21 +142,28 @@ func (s Stack) UpdateMode() string {
 	return s.Rules.Update.Mode
 }
 
-// Load reads every stack below dir. Hidden folders, symlinked folders and folders without a compose file are
-// skipped. It fails only when dir itself cannot be read or holds more than MaxStacks stack folders; a stack
-// that cannot be read comes back with Err set.
+// Load reads every stack below dir. When the root of dir holds a compose file, dir is one root stack and its
+// subfolders are not read as stacks. Otherwise every subfolder with a compose file is a stack; hidden
+// folders, symlinked folders and folders without a compose file are skipped. It fails only when dir itself
+// cannot be read or holds more than MaxStacks stack folders; a stack that cannot be read comes back with Err
+// set.
 func Load(dir string) ([]Stack, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("read stacks directory: %w", err)
 	}
+	settings := func(project string) (*Rules, error) { return readSettings(dir, project) }
+	if s, ok := loadStack(dir, RootFolder, settings); ok && isRootStack(dir, s) {
+		s.Ignored = ignoredFolders(dir, entries)
+		return []Stack{s}, nil
+	}
 	var stacks []Stack
 	for _, e := range entries {
 		name := e.Name()
-		if strings.HasPrefix(name, ".") || !e.IsDir() {
-			continue // e.IsDir is false for symlinks: a link is never followed out of the working copy
+		if !isStackDir(e) {
+			continue
 		}
-		s, ok := loadStack(dir, name, func(project string) (*Rules, error) { return readSettings(dir, project) })
+		s, ok := loadStack(dir, name, settings)
 		if !ok {
 			continue
 		}
@@ -163,6 +185,37 @@ func Load(dir string) ([]Stack, error) {
 	return stacks, nil
 }
 
+// isStackDir reports whether the entry of the repository root may be a stack folder.
+func isStackDir(e os.DirEntry) bool {
+	// e.IsDir is false for symlinks: a link is never followed out of the working copy.
+	return !strings.HasPrefix(e.Name(), ".") && e.IsDir()
+}
+
+// isRootStack reports whether s, read from the root of dir, is a stack. The root's own compose files count, or
+// those of its settings when they exist there; a root that holds none, broken or not, keeps the subfolder
+// layout, so settings or a broken .env meant for a subfolder stack never hide the other stacks.
+func isRootStack(dir string, s Stack) bool {
+	return len(s.ComposeFiles) > 0 || hasAnyCompose(dir) || s.Env["COMPOSE_FILE"] != ""
+}
+
+// ignoredFolders lists the subfolders of a root stack that would be stacks of their own, found as Load finds
+// stacks but without settings, at most MaxStacks.
+func ignoredFolders(dir string, entries []os.DirEntry) []string {
+	var out []string
+	for _, e := range entries {
+		if len(out) == MaxStacks {
+			break
+		}
+		if !isStackDir(e) {
+			continue
+		}
+		if _, ok := loadStack(dir, e.Name(), func(string) (*Rules, error) { return nil, nil }); ok {
+			out = append(out, e.Name())
+		}
+	}
+	return out
+}
+
 var defaultComposeNames = []string{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"}
 
 // WithSettings reads the stack in folder below root as Load does, with rules in place of the settings it has.
@@ -181,7 +234,16 @@ func WithSettings(root, folder string, rules *Rules) (s Stack, ok bool) {
 // the stack another name make it unreadable, so the name never depends on the settings.
 func loadStack(root, folder string, settingsOf func(name string) (*Rules, error)) (Stack, bool) {
 	dir := filepath.Join(root, folder)
-	s := Stack{Name: folder, Folder: folder, Dir: dir, Env: map[string]string{}}
+	label := folder
+	if folder == RootFolder {
+		// A root stack is named after its directory, as Compose names a project without a name.
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			abs = dir
+		}
+		label = filepath.Base(abs)
+	}
+	s := Stack{Name: label, Folder: folder, Dir: dir, Env: map[string]string{}}
 	fail := func(err error) (Stack, bool) {
 		s.Err = fmt.Errorf("stack %s: %w", s.Name, err)
 		return s, true
@@ -197,7 +259,7 @@ func loadStack(root, folder string, settingsOf func(name string) (*Rules, error)
 		s.EnvErr = err
 	case err != nil:
 		// Without .env the project name is unknown; the folder name stands in to find settings.
-		if hasAnyCompose(dir) || hasSettings(settingsOf, folder) {
+		if hasAnyCompose(dir) || hasSettings(settingsOf, label) {
 			return fail(err)
 		}
 		return s, false
@@ -209,7 +271,7 @@ func loadStack(root, folder string, settingsOf func(name string) (*Rules, error)
 	own, ownErr := composeFiles(dir, env, nil)
 	base, nameErr := "", ownErr
 	if ownErr == nil || env["COMPOSE_PROJECT_NAME"] != "" {
-		base, nameErr = nameOf(dir, folder, env, own)
+		base, nameErr = nameOf(dir, label, env, own)
 	}
 	if nameErr != nil {
 		if ownErr == nil && len(own) == 0 {
@@ -246,7 +308,7 @@ func loadStack(root, folder string, settingsOf func(name string) (*Rules, error)
 	name := base
 	if !slices.Equal(files, own) {
 		var err error
-		if name, err = nameOf(dir, folder, env, files); err != nil {
+		if name, err = nameOf(dir, label, env, files); err != nil {
 			return fail(err)
 		}
 		if name != base {

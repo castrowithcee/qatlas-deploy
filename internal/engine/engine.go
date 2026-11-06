@@ -646,26 +646,32 @@ func normalize(s State) State {
 // classify maps the local changes to the stack folders they lie in. Changes to <stack>/secrets.env and below
 // <stack>/data/ are the host's own and count as neither, and so are untracked files below a bind mount of the
 // stack in list (Stack.BindMounts); a changed tracked file there still counts. dirty is true when any other
-// change exists, also outside every stack.
+// change exists, also outside every stack. A root stack in list holds every path but those below
+// stacks.SettingsTop.
 func classify(changes []gitrepo.Change, list []stacks.Stack) (byStack map[string][]string, dirty bool) {
 	mounts := map[string][]string{}
+	root := false
 	for _, st := range list {
 		mounts[st.Folder] = st.BindMounts
+		root = root || st.Folder == stacks.RootFolder
 	}
 	byStack = map[string][]string{}
 	for _, c := range changes {
-		top, rel, nested := strings.Cut(c.Path, "/")
-		if nested && (rel == "secrets.env" || strings.HasPrefix(rel, "data/")) {
+		folder, rel, inStack := strings.Cut(c.Path, "/")
+		if root {
+			folder, rel, inStack = stacks.RootFolder, c.Path, folder != stacks.SettingsTop
+		}
+		if inStack && (rel == "secrets.env" || strings.HasPrefix(rel, "data/")) {
 			continue
 		}
-		if nested && c.Code == "??" && slices.ContainsFunc(mounts[top], func(m string) bool {
+		if inStack && c.Code == "??" && slices.ContainsFunc(mounts[folder], func(m string) bool {
 			return rel == m || strings.HasPrefix(rel, m+"/")
 		}) {
 			continue
 		}
 		dirty = true
-		if nested {
-			byStack[top] = append(byStack[top], c.Path)
+		if inStack {
+			byStack[folder] = append(byStack[folder], c.Path)
 		}
 	}
 	return byStack, dirty

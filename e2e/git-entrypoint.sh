@@ -26,5 +26,7 @@ seed_repo() {
 seed_repo stacks /usr/local/share/demo-stacks
 # A second repository for the second stack folder: one stack named like one of the first, one of its own.
 seed_repo stacks2 /usr/local/share/demo-stacks-second
+# A third repository whose root holds the compose file: the whole folder is one stack.
+seed_repo stacks3 /usr/local/share/demo-stacks-root
 
 exec /usr/sbin/sshd -D -e

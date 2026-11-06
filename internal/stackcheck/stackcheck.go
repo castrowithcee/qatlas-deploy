@@ -38,6 +38,7 @@ const (
 	RuleUnknownRulesVar    = "unknown-rules-variable"
 	RuleOldRulesFile       = "old-rules-file"
 	RuleUnreadableStack    = "unreadable-stack"
+	RuleIgnoredFolder      = "ignored-stack-folder"
 )
 
 // Functions, in the order of a report.
@@ -78,7 +79,8 @@ type Report struct {
 
 // Git is what the check needs to know about the repository. Both calls only read.
 type Git interface {
-	// TrackedFiles lists the tracked files below the top-level folder dir, as paths from the repository root.
+	// TrackedFiles lists the tracked files below the top-level folder dir, or of the whole repository for
+	// stacks.RootFolder, as paths from the repository root.
 	TrackedFiles(ctx context.Context, dir string) ([]string, error)
 	// IsIgnored reports whether the ignore rules cover path, a path from the repository root.
 	IsIgnored(ctx context.Context, path string) (bool, error)
@@ -116,6 +118,11 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git, remote bool) (Repo
 			"Set the stack settings in the qdeploy TUI or with 'qdeploy stack settings set "+s.Name+" --file <file>', then delete "+
 				stacks.OldRulesFile+" from the stack folder.")
 	}
+	for _, f := range s.Ignored {
+		add(RuleIgnoredFolder, SeverityWarning,
+			"the folder "+f+" holds a compose file but is not a stack of its own: the root of the stack folder holds a compose file, so the whole folder is one stack",
+			"To deploy "+f+" as a stack of its own, move the compose files of the root into a subfolder; otherwise nothing needs to change.")
+	}
 
 	keys, secretsExist, secretsErr := stacks.SecretKeys(s.Dir)
 	if secretsErr != nil {
@@ -141,7 +148,7 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git, remote bool) (Repo
 	if err != nil {
 		return Report{}, err
 	}
-	secretsPath, dataPrefix := s.Folder+"/"+stacks.SecretsFile, s.Folder+"/data/"
+	secretsPath, dataPrefix := s.RepoPath(stacks.SecretsFile), s.RepoPath("data")+"/"
 	var data []string
 	for _, p := range tracked {
 		switch {
@@ -153,7 +160,7 @@ func checkStack(ctx context.Context, s stacks.Stack, git Git, remote bool) (Repo
 			add(RuleTrackedSecretsEnv, severity, cause,
 				"Run 'git rm --cached "+stacks.SecretsFile+"' in the stack folder, commit, add secrets.env to .gitignore, and rotate every secret that was committed.")
 		case strings.HasPrefix(p, dataPrefix):
-			data = append(data, strings.TrimPrefix(p, s.Folder+"/"))
+			data = append(data, "data/"+strings.TrimPrefix(p, dataPrefix))
 		}
 	}
 	if len(data) > 0 {
