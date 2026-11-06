@@ -174,11 +174,7 @@ acc_first_setup() {
 	step 'Settings: the deploy key is generated and registered on the git server'
 	tui_page 1
 	tui_wait 'No deploy key yet' 10
-	tui_send G
-	tui_wait 'Generate the deploy key?' 10
-	tui_send y
-	tui_wait 'The deploy key is generated' 30
-	tui_send Enter
+	tui_key_generate
 	tui_wait 'Add this public key' 10
 	pub=$(tui_screen | grep -o 'ssh-ed25519 [A-Za-z0-9+/=]*' | head -n 1)
 	[ -n "$pub" ] || fail "the public key is not on the screen: $(tui_screen)"
