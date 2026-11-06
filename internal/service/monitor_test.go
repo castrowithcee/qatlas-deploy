@@ -20,6 +20,52 @@ type monEngine struct {
 	states map[string]engine.StackState
 	active map[string]string
 	err    error
+	// repairs are the attempts made; stackRestarts counts those that restarted the whole stack.
+	repairs       []engine.Repair
+	stackRestarts int
+	// onRestart runs inside an attempt, as the restart would.
+	onRestart func()
+}
+
+// Repair mirrors the engine: a busy slot refuses, an unrepairable stack refuses, otherwise the record is stored
+// before the restart.
+func (e *monEngine) Repair(ctx context.Context, stack string, rec engine.Repair, restart func(context.Context) error) (bool, error) {
+	if _, busy := e.active[stack]; busy {
+		return false, engine.ErrRunActive
+	}
+	cur, ok := e.states[stack]
+	if !ok || cur.Deployed == "" || cur.Removed || cur.Stopped != nil || cur.Paused != nil || cur.OperatorPause != nil ||
+		(cur.Repair != nil && cur.Repair.Halted != nil) {
+		return false, engine.ErrNotRepairable
+	}
+	cur.Repair = &rec
+	e.states[stack] = cur
+	e.repairs = append(e.repairs, rec)
+	if e.onRestart != nil {
+		e.onRestart()
+	}
+	if restart == nil {
+		e.stackRestarts++
+		return true, nil
+	}
+	return true, restart(ctx)
+}
+
+func (e *monEngine) RecordRepair(stack string, rec *engine.Repair) (bool, error) {
+	if e.err != nil {
+		return false, e.err
+	}
+	cur, ok := e.states[stack]
+	if !ok || (cur.Repair != nil && cur.Repair.Halted != nil) {
+		return false, nil
+	}
+	if rec != nil {
+		c := *rec
+		rec = &c
+	}
+	cur.Repair = rec
+	e.states[stack] = cur
+	return true, nil
 }
 
 func (e *monEngine) Snapshot() (engine.Snapshot, error) {
@@ -67,9 +113,20 @@ type monDocker struct {
 	Docker
 	list []docker.Container
 	err  error
+	// restarted are the container IDs restarted, in order.
+	restarted []string
 }
 
 func (d *monDocker) List(context.Context) ([]docker.Container, error) { return d.list, d.err }
+
+func (d *monDocker) Restart(_ context.Context, ref string, _ time.Duration) error {
+	d.restarted = append(d.restarted, ref)
+	return nil
+}
+
+func (d *monDocker) WaitHealthy(_ context.Context, refs []string, _ docker.WaitOptions) ([]docker.WaitResult, error) {
+	return nil, nil
+}
 
 type monClock struct{ now time.Time }
 
@@ -125,9 +182,10 @@ func (r *monRig) restart() {
 
 func (r *monRig) failedEvents() (failed, recovered int) {
 	for _, ev := range r.events {
-		if ev.Recovered {
+		switch {
+		case ev.Recovered:
 			recovered++
-		} else {
+		case !ev.Halted:
 			failed++
 		}
 	}
@@ -349,6 +407,9 @@ func TestMonitorSkipsWhatItMustNotEvaluate(t *testing.T) {
 			r.wantEvents(0, 0)
 			if r.eng.states["web"].Failure != nil {
 				t.Fatalf("failure stored: %+v", r.eng.states["web"].Failure)
+			}
+			if len(r.eng.repairs) != 0 || len(r.dock.restarted) != 0 {
+				t.Fatalf("repaired: %+v %v", r.eng.repairs, r.dock.restarted)
 			}
 		})
 	}

@@ -665,6 +665,14 @@ func (s *sourceSet) RecordMonitor(name string, failure *engine.Failure, services
 	return routedErr(s, name, func(e *engine.Engine) error { return e.RecordMonitor(name, failure, services) })
 }
 
+func (s *sourceSet) Repair(ctx context.Context, name string, rec engine.Repair, restart func(ctx context.Context) error) (bool, error) {
+	return routed(s, name, func(e *engine.Engine) (bool, error) { return e.Repair(ctx, name, rec, restart) })
+}
+
+func (s *sourceSet) RecordRepair(name string, rec *engine.Repair) (bool, error) {
+	return routed(s, name, func(e *engine.Engine) (bool, error) { return e.RecordRepair(name, rec) })
+}
+
 func (s *sourceSet) WindowEligibility(name string) (engine.WindowVerdict, error) {
 	return routed(s, name, func(e *engine.Engine) (engine.WindowVerdict, error) { return e.WindowEligibility(name) })
 }

@@ -993,6 +993,7 @@ const (
 	NotifyEventRollbackFailed  = "rollback-failed"
 	NotifyEventContainerFailed = "container-failed"
 	NotifyEventRecovered       = "recovered"
+	NotifyEventRecoveryFailed  = "recovery-failed"
 	NotifyEventUpdateAvailable = "update-available"
 )
 

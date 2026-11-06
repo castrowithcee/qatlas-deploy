@@ -174,3 +174,24 @@ func TestFailedDeliveryNeverLogsTheCredential(t *testing.T) {
 		t.Fatalf("log = %s", out)
 	}
 }
+
+func TestMonitorRepairEventsReachTheirChannels(t *testing.T) {
+	e := newNoticeEnv(t)
+	n := e.start(t)
+	e.add(t, n, "ops", "recovery-failed", "recovered")
+	since := time.Date(2026, 5, 4, 3, 0, 0, 0, time.UTC)
+	n.monitorEvent(MonitorEvent{Stack: "web", Kind: engine.FailureExited, Container: "web-app-1", Since: since, Time: since})
+	n.monitorEvent(MonitorEvent{Stack: "web", Kind: engine.FailureExited, Container: "web-app-1", Halted: true, Attempts: 3,
+		Since: since, Time: since.Add(22 * time.Minute)})
+	n.monitorEvent(MonitorEvent{Stack: "web", Kind: engine.FailureExited, Container: "web-app-1", Recovered: true, Restarted: true,
+		Since: since, Time: since.Add(2 * time.Minute)})
+	e.await(t, 2)
+	n.close()
+	if got := e.count(); got != 2 {
+		t.Fatalf("receiver saw %d requests, want 2", got)
+	}
+	if !strings.Contains(e.bodies[0], `"event":"recovery-failed"`) || !strings.Contains(e.bodies[0], `"attempts":3`) ||
+		!strings.Contains(e.bodies[1], `"event":"recovered"`) || !strings.Contains(e.bodies[1], `"restarted":true`) {
+		t.Fatalf("bodies = %q", e.bodies)
+	}
+}
