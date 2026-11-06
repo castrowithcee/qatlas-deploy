@@ -381,6 +381,11 @@ func (md *modal) scroll(id kittui.ActionID) {
 	md.top = max(min(md.top, md.total-md.rows), 0)
 }
 
+// wheel scrolls a sheet by the notches of the wheel and stops at both ends.
+func (md *modal) wheel(steps int) {
+	md.top = max(min(md.top+steps*kittui.WheelTextLines, md.total-md.rows), 0)
+}
+
 func (m *Model) answer(answer kittui.ActionID) tea.Cmd {
 	md := m.modal
 	m.modal = nil

@@ -16,6 +16,10 @@ import (
 func (m *Model) setMouse(targets []kittui.Target) {
 	in := m.input()
 	on := in == kittui.InputNavigation || in == kittui.InputText && m.formShown()
+	if m.modal != nil {
+		// The dialog decides, not the form behind it: its own text input takes no click.
+		on = m.modal.dialog.Input() == kittui.InputNavigation
+	}
 	m.mouseMap = kittui.NewMouseMap(targets, m.mouseOn && on)
 }
 
@@ -75,17 +79,23 @@ func (m *Model) partAt(x, y int) (mousePart, bool) {
 	return mousePart{}, false
 }
 
-// overlayOpen reports whether a question or the period form covers the screen. Their targets are the only
-// ones in the map then, and they are not acted on yet. The help is the exception, see helpMouse.
+// overlayOpen reports whether the period form covers the screen. Its targets are the only ones in the map
+// then, and they are not acted on yet. A question or sheet has modalMouse, the help helpMouse.
 func (m *Model) overlayOpen() bool {
-	return m.modal != nil || m.filteringLogView() != nil
+	return m.filteringLogView() != nil
 }
 
 // mouse acts on one mouse event. Every click is turned into the key press it stands for and takes the way of
 // that key, so the mouse can never do more than a key does.
 func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 	res := m.mouseMap.Handle(msg)
-	if !res.Handled || m.overlayOpen() {
+	if !res.Handled {
+		return nil
+	}
+	if m.modal != nil {
+		return m.modalMouse(res)
+	}
+	if m.overlayOpen() {
 		return nil
 	}
 	if m.helpOpen {
@@ -129,6 +139,37 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// modalMouse is the mouse while a question or sheet is open: only the answers of its dialog take clicks, and
+// the wheel scrolls a sheet, never the screen behind. An answer takes the way of its key.
+func (m *Model) modalMouse(res kittui.MouseResult) tea.Cmd {
+	md := m.modal
+	if res.WheelSteps != 0 {
+		if md.sheet() {
+			md.wheel(res.WheelSteps)
+		}
+		return nil
+	}
+	if answer, _ := md.dialog.Click(res); answer != "" {
+		m.notice, m.result = "", ""
+		return m.answer(answer)
+	}
+	return nil
+}
+
+// answerTargets are the targets of ts that give an answer of the dialog; the rest of a frame behind a
+// question takes no click.
+func answerTargets(d *kittui.Dialog, ts []kittui.Target) []kittui.Target {
+	var out []kittui.Target
+	for _, h := range d.Hints() {
+		for _, t := range ts {
+			if t.Action == h.Action {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
 }
 
 // formTakesMouse reports whether form is the open form and takes input now, as for the keyboard.

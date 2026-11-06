@@ -945,9 +945,14 @@ func (m *Model) render() string {
 		spec.Position = m.scrollNote
 	}
 	view, targets := m.frame.Render(m.styles, spec)
+	frameTargets := targets
 	if m.modal != nil {
-		// Nothing of the screen beneath takes a click while a question or a sheet is open.
+		// Nothing of the screen beneath takes a click while a question or a sheet is open; a sheet keeps the
+		// answers of its footer.
 		targets = nil
+		if m.modal.sheet() {
+			targets = answerTargets(m.modal.dialog, frameTargets)
+		}
 	}
 	if m.modal != nil && !m.modal.sheet() {
 		if over, ot, ok := m.modal.dialog.Overlay(m.styles, view, m.width, m.height, room); ok {
@@ -957,8 +962,9 @@ func (m *Model) render() string {
 			room = m.frame.Workspace(spec)
 			var wt []kittui.Target
 			spec.Workspace, wt = m.modal.dialog.View(m.styles, room.Width, room.Height)
-			view, _ = m.frame.Render(m.styles, spec)
-			targets = kittui.OffsetTargets(wt, room.X, room.Y)
+			var ft []kittui.Target
+			view, ft = m.frame.Render(m.styles, spec)
+			targets = append(kittui.OffsetTargets(wt, room.X, room.Y), answerTargets(m.modal.dialog, ft)...)
 		}
 	}
 	if lv := m.filteringLogView(); lv != nil {
