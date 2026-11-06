@@ -20,18 +20,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Format
-        run: |
-          unformatted="$(gofmt -l .)"
-          if [ -n "$unformatted" ]; then
-            echo "gofmt reports unformatted files:"
-            echo "$unformatted"
-            exit 1
-          fi
-      - name: Vet
-        run: go vet ./...
+      - name: Install just
+        run: sudo apt-get update -q && sudo apt-get install -y -q just
+      - name: Dependencies
+        run: go mod download
       - name: Test
-        run: go test -count=1 ./...
+        env:
+          TEST_SLOTS: "1"
+          TEST_JOBS: "4"
+          TEST_CPU: "400%"
+          TEST_MEM: "8G"
+          TEST_TIMEOUT: "15m"
+        run: just test
       - name: Build
         run: |
           GOOS=linux GOARCH=amd64 go build -o /dev/null .

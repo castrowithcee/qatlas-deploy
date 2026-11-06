@@ -2,7 +2,8 @@
 # End-to-end environment: a simulated Linux host (systemd + Docker) with a local git platform (SSH, push), an
 # OCI registry with demo image tags, a GitHub releases fake, a webhook receiver and a mail server (STARTTLS on port 587).
 #
-#   e2e/run.sh up                 build everything and start the environment
+#   e2e/run.sh deps               pull and build the base images; the only command that needs the internet
+#   e2e/run.sh up                 build everything and start the environment, without the internet
 #   e2e/run.sh down               remove every container, network, volume, image and temp directory it made
 #   e2e/run.sh status             show the environment and the registry tags
 #   e2e/run.sh exec [-u user] <command...>   run a command on the simulated host (default user e2e-admin)
@@ -11,6 +12,7 @@
 #   e2e/run.sh messages           print the e-mails the mail server recorded (JSON lines)
 #   e2e/run.sh scenario           run the scenario once after up (see e2e/scenario.sh)
 #   e2e/run.sh acceptance         run the acceptance scenario once after up, on a fresh host (see e2e/acceptance.sh)
+#   e2e/run.sh check <scenario|acceptance>   up, run it, down, also when interrupted
 #
 # On the host, e2e-admin reaches the stacks repo with: git clone git.qdeploye2e.test:stacks.git
 # The registry is registry.qdeploye2e.test (image demo/app, tags 1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0
@@ -28,7 +30,9 @@
 # picks an instance explicitly, for example to remove the leftovers of a checkout that is gone.
 # Instance n names everything qdeploye2e<n>-* and labels it qdeploy.e2e=<n>; down touches only what carries both,
 # so it never reaches another instance. The host names *.qdeploye2e.test are aliases inside the instance's own
-# network. Nothing is published on the machine's ports. Set E2E_KEEP_ON_FAIL=1 to keep a failed environment for
+# internal network, which has no way out; only skopeo reaches the internet, for acceptance. Nothing is published
+# on the machine's ports. down keeps the base images of deps. TEST_CPU (systemd format, 100% is one core) and
+# TEST_MEM, when set, limit the simulated host container. Set E2E_KEEP_ON_FAIL=1 to keep a failed environment for
 # inspection.
 # Needs docker (rootless is fine), go, openssl, ssh-keygen.
 set -eu
@@ -54,6 +58,9 @@ linuxserver/bookstack:26.09.1|26.10.0'
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 tmp_base=${TMPDIR:-/tmp}
+# Base images of deps, tagged by the content of their Dockerfile, so a change there needs deps again.
+base_tag=$(sha256sum "$here/base.Dockerfile" | cut -c 1-12)
+base_from='debian:12 debian:12-slim registry:2'
 # Fixed, not under TMPDIR: every caller of the same Docker daemon must see the same claims.
 claims=/tmp/$base-instances
 
@@ -187,6 +194,38 @@ down() {
 	log "clean: nothing with the prefix $prefix remains; instance $instance is free"
 }
 
+base_image() {
+	printf '%s-base-%s:%s\n' "$base" "$1" "$base_tag"
+}
+
+deps() {
+	log 'pulling and building the base images (needs the internet)'
+	for image in $base_from; do
+		docker pull -q "$image" >/dev/null || fail "pulling $image failed"
+	done
+	for target in host git skopeo; do
+		docker build -q --target "$target" -t "$(base_image "$target")" - <"$here/base.Dockerfile" >/dev/null ||
+			fail "building the base image $target failed"
+	done
+	log "base images ready: $(for t in host git skopeo; do base_image "$t"; done | tr '\n' ' ')"
+}
+
+require_base() {
+	for image in $base_from $(base_image host) $(base_image git) $(base_image skopeo); do
+		docker image inspect "$image" >/dev/null 2>&1 || fail "the base image $image is missing; run: e2e/run.sh deps"
+	done
+}
+
+# host_limits prints the docker run options that hold the simulated host to the test budget of the run.
+host_limits() {
+	if [ -n "${TEST_CPU:-}" ]; then
+		printf -- '--cpus %s ' "$(awk -v p="${TEST_CPU%\%}" 'BEGIN { printf "%g", p / 100 }')"
+	fi
+	if [ -n "${TEST_MEM:-}" ]; then
+		printf -- '--memory %s --memory-swap %s ' "$TEST_MEM" "$TEST_MEM"
+	fi
+}
+
 make_keys_and_certs() {
 	mkdir -p "$work/keys" "$work/ctx/certs" "$work/ctx/releases"
 	# One key pair for the administrator on the simulated host; the git platform accepts only this public key.
@@ -234,16 +273,17 @@ build_images() {
 	(cd "$root" && CGO_ENABLED=0 go build -tags e2efakes -trimpath -o "$work/ctx/fakes" ./e2e/fakes)
 	cp -r "$here/demo-stacks" "$here/demo-stacks-second" "$here/git-sshd.conf" "$here/git-entrypoint.sh" "$work/ctx/"
 
-	log 'building the images (the simulated host takes a while on the first run)'
-	docker build -q --label "$label" -t "$prefix-fakes:latest" -f "$here/fakes.Dockerfile" "$work/ctx" >/dev/null
-	docker build -q --label "$label" -t "$prefix-registry:latest" -f "$here/registry.Dockerfile" "$work/ctx" >/dev/null
-	docker build -q --label "$label" -t "$prefix-git:latest" -f "$here/git.Dockerfile" "$work/ctx" >/dev/null
-	docker build -q --label "$label" -t "$prefix-skopeo:latest" -f "$here/skopeo.Dockerfile" "$work/ctx" >/dev/null
-	docker build -q --label "$label" -t "$prefix-host:latest" - <"$here/host.Dockerfile" >/dev/null
+	log 'building the images'
+	# --network none: a build that still needs the internet fails here instead of depending on it.
+	for name in fakes registry git skopeo; do
+		case $name in git | skopeo) set -- --build-arg BASE="$(base_image "$name")" ;; *) set -- ;; esac
+		docker build -q --network none --label "$label" -t "$prefix-$name:latest" "$@" \
+			-f "$here/$name.Dockerfile" "$work/ctx" >/dev/null || fail "building the image $name failed"
+	done
 }
 
 start_services() {
-	docker network create --label "$label" "$net" >/dev/null
+	docker network create --internal --label "$label" "$net" >/dev/null
 	docker volume create --label "$label" "$prefix-docker" >/dev/null
 	docker volume create --label "$label" "$prefix-containerd" >/dev/null
 	docker volume create --label "$label" "$prefix-registry" >/dev/null
@@ -262,9 +302,9 @@ start_services() {
 		"$prefix-fakes:latest" releases >/dev/null
 
 	docker run -d --name "$host" --label "$label" --hostname "$hostname_" --network "$net" \
-		--privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock \
+		--privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock $(host_limits) \
 		-v "$prefix-docker:/var/lib/docker" -v "$prefix-containerd:/var/lib/containerd" \
-		"$prefix-host:latest" >/dev/null
+		"$(base_image host)" >/dev/null
 }
 
 wait_for() {
@@ -336,9 +376,11 @@ backup_helper_ref() {
 copy_image() {
 	from=$1 to=$2
 	shift 2
-	docker run --rm --label "$label" --name "$prefix-skopeo" --network "$net" "$prefix-skopeo:latest" \
-		skopeo copy "$@" "docker://$from" "docker://registry.$domain/$to" >/dev/null ||
-		fail "copying $from failed"
+	docker create --rm --label "$label" --name "$prefix-skopeo" --network "$net" "$prefix-skopeo:latest" \
+		skopeo copy "$@" "docker://$from" "docker://registry.$domain/$to" >/dev/null
+	# The test network is internal; only skopeo gets a way out, to reach the source registry.
+	docker network connect bridge "$prefix-skopeo"
+	docker start -a "$prefix-skopeo" >/dev/null || fail "copying $from failed"
 }
 
 # push_real_images fills the registry with the real images of the stacks n8n and bookstack and with the
@@ -429,6 +471,7 @@ up() {
 	for tool in docker go jq openssl ssh-keygen; do
 		command -v "$tool" >/dev/null 2>&1 || fail "$tool is required"
 	done
+	require_base
 	n=$(held)
 	if [ -n "$n" ]; then use_instance "$n"; else claim; fi
 	log "instance $instance for $root"
@@ -468,6 +511,18 @@ status() {
 	printf 'test values: %s\n' "$work/testenv"
 }
 
+# check runs up, the scenario $1 and down in one go; down also runs when the run is interrupted or times out.
+check() {
+	case ${1:-} in scenario | acceptance) ;; *) fail 'check needs scenario or acceptance' ;; esac
+	"$0" up || exit 1
+	trap '"$0" down; exit 143' HUP INT TERM
+	rc=0
+	"$0" "$1" || rc=$?
+	trap - HUP INT TERM
+	"$0" down || [ "$rc" -ne 0 ] || rc=1
+	exit "$rc"
+}
+
 main() {
 	cmd=${1:-}
 	[ $# -eq 0 ] || shift
@@ -477,6 +532,8 @@ main() {
 		;;
 	esac
 	case $cmd in
+	deps) deps ;;
+	check) check "$@" ;;
 	up) up ;;
 	down)
 		if pick; then down; else log "this checkout holds no instance; nothing to remove"; fi
@@ -521,7 +578,7 @@ main() {
 		exec docker exec -i -u "$user" "$host" "$@"
 		;;
 	*)
-		sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'
 		[ -z "$cmd" ] || exit 2
 		;;
 	esac

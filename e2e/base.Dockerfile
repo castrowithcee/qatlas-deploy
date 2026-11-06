@@ -1,5 +1,8 @@
+# Base images of the e2e environment: everything that needs the internet to build. e2e/run.sh deps builds one
+# image per target, tagged by the hash of this file; up builds on them without network.
+
 # Simulated Linux host: systemd as init, Docker CE, and the tools an administrator expects.
-FROM debian:12
+FROM debian:12 AS host
 
 ENV container=docker DEBIAN_FRONTEND=noninteractive
 
@@ -29,3 +32,26 @@ RUN useradd --create-home --shell /bin/bash --groups sudo e2e-admin \
 # has shared mounts, which systemd needs to pass credentials to a service (LoadCredentialEncrypted).
 STOPSIGNAL SIGRTMIN+3
 CMD ["/bin/sh", "-c", "mount --make-rshared / && exec /sbin/init"]
+
+# Git platform: SSH access limited to git-shell with a key (account git, and qdeploy as a second name for it so
+# the service reaches the repository by a URL without a user part), bare repositories under /srv/git.
+FROM debian:12-slim AS git
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends git openssh-server \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& mkdir -p /run/sshd /srv/git \
+	&& useradd --home-dir /srv/git --shell /usr/bin/git-shell git \
+	&& usermod -p '*' git \
+	&& useradd -o -u "$(id -u git)" -g git --home-dir /srv/git --no-create-home --shell /usr/bin/git-shell qdeploy \
+	&& usermod -p '*' qdeploy \
+	&& mkdir -p /srv/git/.ssh \
+	&& chown -R git:git /srv/git
+
+# Copies real images from the internet into the test registry for the acceptance scenario (skopeo talks to
+# registries directly, so the machine's Docker daemon never stores them).
+FROM debian:12-slim AS skopeo
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends skopeo ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*

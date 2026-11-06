@@ -1,0 +1,56 @@
+#!/bin/sh
+# Runs a test command within the host test budget: slot lock, CPU/RAM limits, offline, timeout.
+# Usage: [TEST_KIND=e2e] [TEST_NET=1] scripts/test-run <command> [args...]
+set -eu
+
+load() {
+	[ -f "$1" ] || return 0
+	while IFS='=' read -r k v || [ -n "$k" ]; do
+		case $k in TEST_*) ;; *) continue ;; esac
+		case $k in *[!A-Z0-9_]*) continue ;; esac
+		# Values already set (environment, earlier file) win.
+		eval "[ -n \"\${$k+x}\" ] || $k=\$v"
+	done <"$1"
+}
+load "${XDG_CONFIG_HOME:-$HOME/.config}/test-budget.env"
+load /etc/test-budget.env
+
+[ -n "${TEST_SLOTS+x}" ] || echo "test-run: no host budget found, using fallback values" >&2
+: "${TEST_SLOTS:=1}" "${TEST_JOBS:=2}" "${TEST_CPU:=200%}" "${TEST_MEM:=2G}" \
+	"${TEST_TIMEOUT:=15m}" "${TEST_TIMEOUT_E2E:=45m}" \
+	"${TEST_LOCK_DIR:=${XDG_RUNTIME_DIR:-/tmp}/test-slots}"
+# E2E runs that build a system get their own timeout; their containers read TEST_CPU and TEST_MEM.
+[ "${TEST_KIND:-}" != e2e ] || TEST_TIMEOUT=$TEST_TIMEOUT_E2E
+export TEST_CPU TEST_MEM
+export TEST_JOBS GOMAXPROCS="$TEST_JOBS"
+
+# Offline unless TEST_NET=1 (test-ext): no downloads, HTTP clients hit a dead proxy.
+if [ "${TEST_NET:-0}" != 1 ]; then
+	export GOPROXY=off GOTOOLCHAIN=local
+	export HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 \
+		http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 \
+		NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
+fi
+export TZ=UTC
+
+# Host slot: wait until one of TEST_SLOTS locks is free; released automatically on exit.
+if command -v flock >/dev/null 2>&1; then
+	mkdir -p "$TEST_LOCK_DIR"
+	while :; do
+		i=1
+		while [ "$i" -le "$TEST_SLOTS" ]; do
+			exec 9>>"$TEST_LOCK_DIR/slot-$i.lock"
+			if flock -n 9; then break 2; fi
+			i=$((i + 1))
+		done
+		sleep 2
+	done
+fi
+
+# Hard limits where a systemd user manager is reachable, low priority everywhere.
+if systemd-run --user --scope --quiet true >/dev/null 2>&1; then
+	set -- systemd-run --user --scope --quiet -p CPUQuota="$TEST_CPU" \
+		-p MemoryMax="$TEST_MEM" -p MemorySwapMax=0 -- "$@"
+fi
+if command -v ionice >/dev/null 2>&1; then set -- ionice -c2 -n7 "$@"; fi
+exec timeout -k 30s "$TEST_TIMEOUT" nice -n 10 "$@"
