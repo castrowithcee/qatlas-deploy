@@ -15,12 +15,13 @@
 # On the host, e2e-admin reaches the stacks repo with: git clone git.qdeploye2e.test:stacks.git
 # The registry is registry.qdeploye2e.test (image demo/app, tags 1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0
 # 5.0.0); a demo container turns unhealthy with DEMO_HEALTH=fail, and the image 4.0.0 is always unhealthy.
-# It also holds two versions each of the real images of the stacks n8n and bookstack (n8nio/n8n,
-# linuxserver/bookstack, library/mariadb), copied from the internet by skopeo. The newer test tags
+# For the acceptance scenario only, it also holds two versions each of the real images of the stacks n8n and
+# bookstack (n8nio/n8n, linuxserver/bookstack, library/mariadb), copied from the internet by skopeo when
+# acceptance starts; up and scenario need no internet. The newer test tags
 # n8nio/n8n:2.48.0 and linuxserver/bookstack:26.10.0, derived images whose healthcheck always fails, are pushed
 # only by the acceptance scenario, after its successful update, so the update ceiling cannot reach them earlier.
-# The registry is also the Docker Hub mirror of the host's Docker daemon, and holds busybox by the digest of
-# the default backup helper image, so qdeploy runs a backup there without --backup-image.
+# The registry is also the Docker Hub mirror of the host's Docker daemon; for acceptance it holds busybox by the
+# digest of the default backup helper image, so qdeploy runs a backup there without --backup-image.
 #
 # Up to four instances run side by side. up takes a free one (1-4), or waits until one is free, and holds it for
 # the checkout it runs from until down; every other command acts on the instance of that checkout. E2E_INSTANCE=<n>
@@ -371,7 +372,7 @@ push_broken_images() {
 	docker exec "$host" rm -rf /tmp/broken-image
 }
 
-# registry_entries lists "<path>:<tag>" of every real image in the registry after up.
+# registry_entries lists "<path>:<tag>" of every real image push_real_images copies.
 registry_entries() {
 	printf '%s\n' "$real_images" | while IFS='|' read -r _ to; do
 		printf '%s\n' "$to"
@@ -402,6 +403,17 @@ check_services() {
 	for tag in $tags; do
 		printf '%s' "$got" | grep -q "\"$tag\"" || fail "the registry does not list the tag $tag"
 	done
+	[ "$(http_code -X POST -d '{"check":true}' "https://hooks.$domain/hook")" = 204 ] ||
+		fail 'the webhook receiver does not accept a request'
+	docker exec "$host" curl -fsS "https://hooks.$domain/_e2e/requests" | grep -q '"check\\":true' ||
+		fail 'the webhook receiver did not record the request'
+	docker exec -u "$admin" "$host" ssh -o BatchMode=yes "git.$domain" 2>&1 | grep -qi 'interactive git shell is not enabled' ||
+		fail 'the git server does not answer over SSH'
+}
+
+# prepare_real_images copies the real images into the registry and checks that the host reaches them.
+prepare_real_images() {
+	push_real_images
 	for entry in $(registry_entries); do
 		got=$(docker exec "$host" curl -fsS "https://registry.$domain/v2/${entry%:*}/tags/list") ||
 			fail "the registry does not list ${entry%:*}"
@@ -411,12 +423,6 @@ check_services() {
 	ref=$(backup_helper_ref)
 	docker exec "$host" docker pull -q "$ref" >/dev/null || fail "the host cannot pull $ref through the registry mirror"
 	docker exec "$host" docker rmi "$ref" >/dev/null
-	[ "$(http_code -X POST -d '{"check":true}' "https://hooks.$domain/hook")" = 204 ] ||
-		fail 'the webhook receiver does not accept a request'
-	docker exec "$host" curl -fsS "https://hooks.$domain/_e2e/requests" | grep -q '"check\\":true' ||
-		fail 'the webhook receiver did not record the request'
-	docker exec -u "$admin" "$host" ssh -o BatchMode=yes "git.$domain" 2>&1 | grep -qi 'interactive git shell is not enabled' ||
-		fail 'the git server does not answer over SSH'
 }
 
 up() {
@@ -444,7 +450,6 @@ up() {
 	start_services
 	prepare_host
 	push_images
-	push_real_images
 	load_backup_helper
 	check_services
 	done_=1
@@ -498,6 +503,7 @@ main() {
 		require_up
 		. "$here/scenario.sh"
 		. "$here/acceptance.sh"
+		prepare_real_images
 		run_acceptance
 		;;
 	exec)
