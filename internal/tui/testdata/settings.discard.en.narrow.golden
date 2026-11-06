@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+  1 2 3 [4 Settings] 5                                  
+--------------------------------------------------------
+  Bind the stacks repository                            
+                                                        
+            #==========================================#
+> SSH URL   | git@example.test:ops/stacks.git_         |
+            #==========================================#
+            user@host:path or                           
+  #= Discard the changes ============================#  
+  | ! Discard the changes to this form?              |-+
+  |                                                  | |
+  | The changes you made here are lost.              |-+
+  |                                                  |  
+  | [ yes, do it ]  > cancel <                       |  
+  | y yes, do it  n/esc/enter cancel                 |  
+  #==================================================#  
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+[ F2 save ]  [ esc discard ]                            
+                                                        

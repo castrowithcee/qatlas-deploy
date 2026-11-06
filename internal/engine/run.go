@@ -318,13 +318,13 @@ func (r *run) versioned(ctx context.Context, rel string) (bool, error) {
 		return false, nil
 	}
 	if !r.trackedOK {
-		files, err := l.TrackedFiles(ctx, r.st.Name)
+		files, err := l.TrackedFiles(ctx, r.st.Folder)
 		if err != nil {
 			return false, err
 		}
 		r.tracked, r.trackedOK = files, true
 	}
-	p := r.st.Name + "/" + rel
+	p := r.st.RepoPath(rel)
 	for _, f := range r.tracked {
 		if f == p || strings.HasPrefix(f, p+"/") {
 			return true, nil

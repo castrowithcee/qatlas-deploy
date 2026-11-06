@@ -630,9 +630,9 @@ type StacksResult struct {
 	Stacks []StackInfo `json:"stacks"`
 }
 
-// StackDir returns the folder of the listed stack name as a path below its stack folder (SourceDir, else Dir);
-// false when the list does not hold the stack, only holds it with a Collision, or its folder is not a single
-// plain name.
+// StackDir returns the folder of the listed stack name as a path below its stack folder (SourceDir, else Dir),
+// the stack folder itself for a root stack (Folder "."); false when the list does not hold the stack, only
+// holds it with a Collision, or its folder is not a single plain name.
 func (r StacksResult) StackDir(name string) (string, bool) {
 	for _, s := range r.Stacks {
 		if s.Name != name || s.Collision != "" {
@@ -640,7 +640,7 @@ func (r StacksResult) StackDir(name string) (string, bool) {
 		}
 		root := cmp.Or(s.SourceDir, r.Dir)
 		f := s.Folder
-		if root == "" || f == "" || f == "." || f == ".." || strings.ContainsAny(f, "/\\\x00") {
+		if root == "" || f == "" || f == ".." || strings.ContainsAny(f, "/\\\x00") {
 			return "", false
 		}
 		return filepath.Join(root, f), true
@@ -651,7 +651,8 @@ func (r StacksResult) StackDir(name string) (string, bool) {
 // StackInfo describes one stack of the working copy. Error is set when the stack cannot be read.
 type StackInfo struct {
 	Name string `json:"name"`
-	// Folder is the directory of the stack below Dir; it differs from Name when the Compose file names the project.
+	// Folder is the directory of the stack below Dir, "." for a root stack that is the whole stack folder; it
+	// differs from Name when the Compose file names the project.
 	Folder   string      `json:"folder"`
 	Update   string      `json:"update"`
 	Images   []ImageInfo `json:"images"`

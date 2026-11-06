@@ -29,6 +29,14 @@ const (
 
 const fixedPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+const (
+	// RootStack names the stack of a working copy whose root is the stack: every path but those below
+	// rootSettings.
+	RootStack = "."
+	// rootSettings is the top-level folder of qdeploy's stack settings; it belongs to no stack.
+	rootSettings = ".qatlas"
+)
+
 var (
 	// ErrOutputLimit means git printed more than the layer accepts; the process was killed.
 	ErrOutputLimit = errors.New("git output exceeds the limit")
@@ -203,12 +211,16 @@ func (r *Repo) Status(ctx context.Context) ([]Change, error) {
 }
 
 // TrackedFiles returns the sorted paths of the files git tracks below the folder dir, relative to the working
-// copy root. The index is read; the working copy is not touched.
+// copy root; dir RootStack lists every tracked file. The index is read; the working copy is not touched.
 func (r *Repo) TrackedFiles(ctx context.Context, dir string) ([]string, error) {
 	if err := checkRepoPath(dir); err != nil {
 		return nil, err
 	}
-	out, err := r.run(ctx, true, maxStdout, "--literal-pathspecs", "ls-files", "-z", "--full-name", "--", dir+"/")
+	spec := dir + "/"
+	if dir == RootStack {
+		spec = RootStack
+	}
+	out, err := r.run(ctx, true, maxStdout, "--literal-pathspecs", "ls-files", "-z", "--full-name", "--", spec)
 	if err != nil {
 		return nil, fmt.Errorf("ls-files failed: %w", err)
 	}
@@ -249,7 +261,8 @@ func checkRepoPath(p string) error {
 }
 
 // ChangedFolders returns the sorted top-level folders that differ between the commits from and to, each given
-// as a full commit id. Files in the repository root do not count.
+// as a full commit id. Files in the repository root count only for RootStack, which is listed when any path
+// outside rootSettings differs.
 func (r *Repo) ChangedFolders(ctx context.Context, from, to string) ([]string, error) {
 	if !hexRe.MatchString(from) || !hexRe.MatchString(to) {
 		return nil, errors.New("commits must be full lowercase commit ids")
@@ -260,7 +273,11 @@ func (r *Repo) ChangedFolders(ctx context.Context, from, to string) ([]string, e
 	}
 	set := map[string]bool{}
 	for _, p := range strings.Split(out, "\x00") {
-		if top, _, nested := strings.Cut(p, "/"); nested && top != "" {
+		top, _, nested := strings.Cut(p, "/")
+		if top != "" && top != rootSettings {
+			set[RootStack] = true
+		}
+		if nested && top != "" {
 			set[top] = true
 		}
 	}

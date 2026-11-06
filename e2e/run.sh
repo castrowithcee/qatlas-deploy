@@ -271,7 +271,7 @@ ENV
 build_images() {
 	log 'building the fakes'
 	(cd "$root" && CGO_ENABLED=0 go build -tags e2efakes -trimpath -o "$work/ctx/fakes" ./e2e/fakes)
-	cp -r "$here/demo-stacks" "$here/demo-stacks-second" "$here/git-sshd.conf" "$here/git-entrypoint.sh" "$work/ctx/"
+	cp -r "$here/demo-stacks" "$here/demo-stacks-second" "$here/demo-stacks-root" "$here/git-sshd.conf" "$here/git-entrypoint.sh" "$work/ctx/"
 
 	log 'building the images'
 	# --network none: a build that still needs the internet fails here instead of depending on it.

@@ -317,7 +317,7 @@ func (c *copyOf) TrackedFiles(_ context.Context, dir string) ([]string, error) {
 	defer c.g.mu.Unlock()
 	var out []string
 	for _, p := range c.g.Tracked {
-		if strings.HasPrefix(p, dir+"/") {
+		if dir == "." || strings.HasPrefix(p, dir+"/") {
 			out = append(out, p)
 		}
 	}

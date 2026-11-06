@@ -20,11 +20,11 @@ qdeploy  Wartungsfenster zu                 [esc] Zurück
                     [!] Der Benutzer ist nötig und      
                     enthält keinen Doppelpunkt. -       
                     Korrigiere das Feld.                
-                    +----------------------------------+
-  Token             | leer                             |
-                    +----------------------------------+
-                    [!] Nötig ist ein Wert von 4 bis    
-                    8192 Zeichen ohne Steuerzeichen. -  
-                    Korrigiere das Feld.                
+  ~                                                     
+                                                        
+                                                        
+                                                        
+                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                     
 F2 Speichern  esc verwerfen                             
                tab Nächstes Feld  shift+tab Voriges Feld
