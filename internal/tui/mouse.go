@@ -11,9 +11,17 @@ import (
 )
 
 // setMouse replaces the map with the targets of the frame just drawn. The map is off while a key or text is
-// captured and while the preference is off; a nil map acts on nothing.
+// captured and while the preference is off; a nil map acts on nothing. An open form is the exception for
+// text: its fields are the targets, and the input filter keeps mouse reports out of them.
 func (m *Model) setMouse(targets []kittui.Target) {
-	m.mouseMap = kittui.NewMouseMap(targets, m.mouseOn && m.input() == kittui.InputNavigation)
+	in := m.input()
+	on := in == kittui.InputNavigation || in == kittui.InputText && m.formShown()
+	m.mouseMap = kittui.NewMouseMap(targets, m.mouseOn && on)
+}
+
+// formShown reports whether a form of the Settings area or of the detail is open.
+func (m *Model) formShown() bool {
+	return (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil
 }
 
 // mousePart is a widget of the workspace that takes clicks and the wheel itself: a list or a log view, with
@@ -22,6 +30,7 @@ type mousePart struct {
 	rect    kittui.Rect
 	list    *kittui.List
 	log     *kittui.LogView
+	form    *kittui.Form
 	targets []kittui.Target
 }
 
@@ -31,6 +40,11 @@ func (m *Model) listView(list *kittui.List, width, height, y int) string {
 	view, targets := list.View(m.styles, width, height)
 	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, list: list, targets: targets})
 	return view
+}
+
+// formPart registers the form drawn at row y of the workspace with its targets.
+func (m *Model) formPart(form *kittui.Form, targets []kittui.Target, width, height, y int) {
+	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, form: form, targets: targets})
 }
 
 // logPart registers the log view drawn at row y of the workspace for the wheel. Its buttons stay unregistered.
@@ -86,11 +100,20 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 				p.list.Wheel(res.WheelSteps)
 			case p.log != nil:
 				p.log.Wheel(res.WheelSteps)
+			case p.form != nil && m.formTakesMouse(p.form):
+				p.form.Wheel(res.WheelSteps)
 			}
 		}
 	case res.Item != "":
-		if p, ok := m.partAt(at.X, at.Y); ok && p.list != nil {
-			return m.rowClick(p.list, res)
+		if p, ok := m.partAt(at.X, at.Y); ok {
+			switch {
+			case p.list != nil:
+				return m.rowClick(p.list, res)
+			case p.form != nil && m.formTakesMouse(p.form):
+				act, handled := p.form.Click(res)
+				cmd, _ := m.formAct(act, handled)
+				return cmd
+			}
 		}
 	case res.Area != "":
 		if i := slices.IndexFunc(areas(), func(a kittui.Area) bool { return a.ID == res.Area }); i >= 0 && i < len(areaKeys) {
@@ -106,6 +129,11 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// formTakesMouse reports whether form is the open form and takes input now, as for the keyboard.
+func (m *Model) formTakesMouse(form *kittui.Form) bool {
+	return m.formShown() && m.set.form.form == form && !m.set.busy && m.modal == nil
 }
 
 // rowClick marks the clicked row and gives the rows the focus. A second click on the marked row opens it by

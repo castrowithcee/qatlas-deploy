@@ -412,18 +412,24 @@ func (m *Model) submitNotifyDetail(f *settingsForm, v map[kittui.FieldID]kittui.
 func (m *Model) formKey(msg tea.KeyPressMsg) tea.Cmd {
 	f := m.set.form
 	act, handled := f.form.Update(msg)
-	switch {
-	case act == actSave && handled:
-		return m.submitForm()
-	case act == actBack:
-		return m.discardForm()
-	case handled:
-		return nil
+	if cmd, done := m.formAct(act, handled); done {
+		return cmd
 	}
 	if id, ok := m.keys.Match(msg, f.form.Input()); ok && id == actForceQuit {
 		return tea.Quit
 	}
 	return nil
+}
+
+// formAct runs what a key or a click of the form reported; done is false where the form did not take it.
+func (m *Model) formAct(act kittui.ActionID, handled bool) (cmd tea.Cmd, done bool) {
+	switch {
+	case act == actSave && handled:
+		return m.submitForm(), true
+	case act == actBack:
+		return m.discardForm(), true
+	}
+	return nil, handled
 }
 
 // discardForm ends the form; nothing is kept of it. A form with changes asks first and stays open until the
