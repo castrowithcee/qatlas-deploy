@@ -2,6 +2,9 @@ package service_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/pem"
 	"errors"
 	"log/slog"
 	"net"
@@ -527,3 +530,26 @@ func TestCheckReducesRepoTextToPrintable(t *testing.T) {
 
 // sourceID is the id the service derives from a stack folder.
 func sourceID(dir string) string { return strings.ReplaceAll(strings.TrimPrefix(dir, "/"), "/", "-") }
+
+func TestSetAcceptsAStoredRSAKey(t *testing.T) {
+	h := start(t)
+	if err := h.call(control.KeySetCommand, control.KeySetArgs{Key: rsaKeyPEM(t)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := h.set(h.srv.Key().Fingerprint); err != nil || !res.Cloned {
+		t.Fatalf("set = %+v, %v", res, err)
+	}
+}
+
+func rsaKeyPEM(t *testing.T) string {
+	t.Helper()
+	k, err := rsa.GenerateKey(rand.Reader, 3072)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := ssh.MarshalPrivateKey(k, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(pem.EncodeToMemory(block))
+}

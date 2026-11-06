@@ -67,9 +67,12 @@ type Backend interface {
 	RepoProbe(ctx context.Context, url string) (control.RepoProbeResult, error)
 	RepoSet(ctx context.Context, args control.RepoSetArgs) (control.RepoSetResult, error)
 	RepoFetch(ctx context.Context) (control.RepoFetchResult, error)
-	KeyShow(ctx context.Context) (control.KeyResult, error)
-	// KeyGenerate never replaces an existing key: the interface offers no replacement.
-	KeyGenerate(ctx context.Context) (control.KeyResult, error)
+	// The key calls take the stack folder the key is for; empty is the default key, the one of the folder bound
+	// first. KeyGenerate and KeySet keep an existing key and refuse unless replace is set.
+	KeyShow(ctx context.Context, dir string) (control.KeyResult, error)
+	KeyGenerate(ctx context.Context, dir string, replace bool) (control.KeyResult, error)
+	// KeySet stores the private key text as the deploy key; the text is never logged or shown.
+	KeySet(ctx context.Context, dir, key string, replace bool) (control.KeyResult, error)
 	Credentials(ctx context.Context) (control.CredentialListResult, error)
 	CredentialSet(ctx context.Context, name, value string) error
 	CredentialDelete(ctx context.Context, name string) error
@@ -253,13 +256,18 @@ func (b *ChannelBackend) RepoFetch(ctx context.Context) (res control.RepoFetchRe
 	return res, err
 }
 
-func (b *ChannelBackend) KeyShow(ctx context.Context) (res control.KeyResult, err error) {
-	err = b.call(ctx, control.KeyShowCommand, nil, &res)
+func (b *ChannelBackend) KeyShow(ctx context.Context, dir string) (res control.KeyResult, err error) {
+	err = b.call(ctx, control.KeyShowCommand, control.KeyShowArgs{Dir: dir}, &res)
 	return res, err
 }
 
-func (b *ChannelBackend) KeyGenerate(ctx context.Context) (res control.KeyResult, err error) {
-	err = b.call(ctx, control.KeyGenerateCommand, control.KeyGenerateArgs{}, &res)
+func (b *ChannelBackend) KeyGenerate(ctx context.Context, dir string, replace bool) (res control.KeyResult, err error) {
+	err = b.call(ctx, control.KeyGenerateCommand, control.KeyGenerateArgs{Replace: replace, Dir: dir}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) KeySet(ctx context.Context, dir, key string, replace bool) (res control.KeyResult, err error) {
+	err = b.call(ctx, control.KeySetCommand, control.KeySetArgs{Key: key, Replace: replace, Dir: dir}, &res)
 	return res, err
 }
 

@@ -493,7 +493,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			if cmd, ok := m.openContainerLogs(); ok {
 				return cmd
 			}
-		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
+		case actBind, actFetch, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
 			switch m.area {
 			case areaSettings:
 				if cmd, handled := m.settingsAction(id); handled {
