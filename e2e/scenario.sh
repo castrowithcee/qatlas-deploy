@@ -2125,10 +2125,17 @@ scenario_tui() {
 		sleep 0.2
 	done
 	tui_send o
+	tui_wait 'demo tick' 10
+	# The log opens following at its end, so an older container shows its start line, the only one with the
+	# secret, only after Home. Home reaches it while it lies within the 500 lines read first (a container up to
+	# about 16 minutes old), which covers one scenario run.
+	tui_send Home
 	tui_wait 'demo started' 10
+	tui_screen | grep -qF 'token=[redacted]' || fail "the start line in the log of $ctname shows no masked token: $(tui_screen)"
+	tui_has "$log_secret" && fail "the log of $ctname shows the secret: $(tui_screen)"
+	tui_send End
 	# The demo app writes "demo tick" every 2 seconds: a line that comes in while the log is open was followed.
 	tui_wait 'demo tick' 10
-	tui_has "$log_secret" && fail "the log of $ctname shows the secret: $(tui_screen)"
 	tui_send T Right Tab BSpace BSpace BSpace
 	tui_type 1
 	tui_send Tab Right F2
@@ -2150,8 +2157,11 @@ scenario_tui() {
 	tui_cursor_to demo-stack
 	tui_send Enter
 	tui_send o
+	tui_wait 'demo tick' 10
+	tui_send Home
 	tui_wait 'demo started' 10
 	tui_screen | grep -q "$ctname .*demo started" || fail "the stack log does not name the container: $(tui_screen)"
+	tui_screen | grep -qF 'token=[redacted]' || fail "the start line in the log of demo-stack shows no masked token: $(tui_screen)"
 	tui_has "$log_secret" && fail "the log of demo-stack shows the secret: $(tui_screen)"
 	tui_send Escape
 	tui_send Escape
