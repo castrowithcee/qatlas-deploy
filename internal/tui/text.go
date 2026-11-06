@@ -68,6 +68,8 @@ const (
 	textStateRollbackPauseS kittui.TextID = "state.rollbackpause.short"
 	textStatePendingS       kittui.TextID = "state.pending.short"
 	textStateCtrFailedS     kittui.TextID = "state.containerfailed.short"
+	textStateRepairHalted   kittui.TextID = "state.repairhalted"
+	textStateRepairHaltedS  kittui.TextID = "state.repairhalted.short"
 	textStateNotDeployedS   kittui.TextID = "state.notdeployed.short"
 	textAvailErrorS         kittui.TextID = "avail.error.short"
 	textStateUnreadableS    kittui.TextID = "state.unreadable.short"
@@ -252,6 +254,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textStatePaused:         "paused",
 			textStatePinned:         "pinned",
 			textStateCtrFailed:      "container failed",
+			textStateRepairHalted:   "repair halted",
 			textStateFailed:         "failed",
 			textStatePending:        "pending",
 			textStateDeployed:       "deployed",
@@ -259,6 +262,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textStateRollbackPauseS: "rollback",
 			textStatePendingS:       "pending",
 			textStateCtrFailedS:     "down",
+			textStateRepairHaltedS:  "halted",
 			textStateNotDeployedS:   "new",
 
 			textResultSucceeded:      "succeeded",
@@ -365,7 +369,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textWhatUnpause: "The maintenance window may run the stack again.",
 			textWhatPin:     "The maintenance window and update leave the image versions of the stack as they are until you unpin it.",
 			textWhatUnpin:   "The maintenance window and update may change the image versions of the stack again.",
-			textWhatResume:  "Clears the pause a failed rollback left on the stack and starts nothing; the stack runs again on a new commit or a deploy.",
+			textWhatResume:  "Clears the pause a failed rollback left on the stack or the halt of its automatic repair and starts nothing; a paused stack runs again on a new commit or a deploy, a released repair acts on the next failure.",
 			textWhatCheck:   "Asks the registries for newer image versions now. This can take minutes and changes nothing in the stacks.",
 			textWhatStart:   "Starts the existing containers of the stack, removes the stopped mark and checks the stack. It creates no containers; a stack that was never deployed needs a deploy.",
 			textWhatStop:    "Stops the containers of the stack without removing them. The stack stays stopped until it is started: commits, the maintenance window and updates leave it out.",
@@ -373,7 +377,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 
 			textActionBusy:         "Another action is still running. Wait until it has finished.",
 			textActionNoStack:      "Choose a stack first.",
-			textActionNotResumable: "%s is not paused after a rollback; resume applies only to such a stack.",
+			textActionNotResumable: "%s is neither paused after a rollback nor halted in its repair; resume applies only to such a stack.",
 			textActionStopped:      "%s is stopped; restart does not apply. Start it first.",
 			textErrStackStopped:    "the stack is stopped; start it instead of restarting it",
 			textErrRunActive:       "a run of the stack is active; try again when it has finished",
@@ -400,7 +404,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textDoneUnpause:   "no longer paused",
 			textDonePin:       "pinned",
 			textDoneUnpin:     "no longer pinned",
-			textDoneResume:    "pause cleared, nothing started",
+			textDoneResume:    "pause or repair halt cleared, nothing started",
 			textDoneUnchanged: "%s (it already was, nothing changed)",
 			textDoneCheck:     "%d stacks: %d with an update available, %d could not be checked",
 			textDoneStart:     "started, the stopped mark is removed",
@@ -443,6 +447,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textStatePaused:         "pausiert",
 			textStatePinned:         "gepinnt",
 			textStateCtrFailed:      "Container ausgefallen",
+			textStateRepairHalted:   "Reparatur angehalten",
 			textStateFailed:         "fehlgeschlagen",
 			textStatePending:        "ausstehend",
 			textStateDeployed:       "deployt",
@@ -450,6 +455,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textStateRollbackPauseS: "Rollback",
 			textStatePendingS:       "offen",
 			textStateCtrFailedS:     "Ausfall",
+			textStateRepairHaltedS:  "angehalten",
 			textStateNotDeployedS:   "neu",
 
 			textResultSucceeded:      "erfolgreich",
@@ -545,7 +551,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textAskUnpause:  "Pause von %s aufheben (unpause)?",
 			textAskPin:      "%s pinnen?",
 			textAskUnpin:    "Pin von %s aufheben (unpin)?",
-			textAskResume:   "Pause von %s nach dem Rollback aufheben (resume)?",
+			textAskResume:   "Pause nach Rollback von %s aufheben oder angehaltene Reparatur freigeben (resume)?",
 			textAskCheck:    "Die Registries jetzt für %s abfragen?",
 			textAskStart:    "%s starten (start)?",
 			textAskStop:     "%s stoppen (stop) und gestoppt lassen, bis er gestartet wird?",
@@ -556,7 +562,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textWhatUnpause: "Das Wartungsfenster darf den Stack wieder ausführen.",
 			textWhatPin:     "Wartungsfenster und update lassen die Image-Versionen des Stacks unverändert, bis du den Pin aufhebst.",
 			textWhatUnpin:   "Wartungsfenster und update dürfen die Image-Versionen des Stacks wieder ändern.",
-			textWhatResume:  "Hebt die Pause auf, die ein fehlgeschlagener Rollback hinterlassen hat, und startet nichts; der Stack läuft bei einem neuen Commit oder per deploy wieder.",
+			textWhatResume:  "Hebt die Pause auf, die ein fehlgeschlagener Rollback hinterlassen hat, oder gibt die angehaltene automatische Reparatur frei und startet nichts; ein pausierter Stack läuft bei einem neuen Commit oder per deploy wieder, eine freigegebene Reparatur greift beim nächsten Ausfall.",
 			textWhatCheck:   "Fragt die Registries jetzt nach neueren Image-Versionen. Das kann Minuten dauern und ändert nichts an den Stacks.",
 			textWhatStart:   "Startet die vorhandenen Container des Stacks, hebt die Markierung „gestoppt“ auf und prüft den Stack. Es entstehen keine neuen Container; ein nie ausgerollter Stack braucht ein deploy.",
 			textWhatStop:    "Stoppt die Container des Stacks, ohne sie zu entfernen. Der Stack bleibt gestoppt, bis er gestartet wird: Commits, das Wartungsfenster und Updates lassen ihn aus.",
@@ -564,7 +570,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 
 			textActionBusy:         "Eine andere Aktion läuft noch. Warte, bis sie fertig ist.",
 			textActionNoStack:      "Wähle zuerst einen Stack.",
-			textActionNotResumable: "%s ist nicht nach einem Rollback pausiert; resume gilt nur für einen solchen Stack.",
+			textActionNotResumable: "%s ist weder nach einem Rollback pausiert noch in der Reparatur angehalten; resume gilt nur für einen solchen Stack.",
 			textActionStopped:      "%s ist gestoppt; restart gilt dafür nicht. Starte ihn zuerst.",
 			textErrStackStopped:    "der Stack ist gestoppt; starte ihn, statt ihn neu zu starten",
 			textErrRunActive:       "ein Lauf des Stacks ist aktiv; versuche es nach seinem Ende erneut",
@@ -591,7 +597,7 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textDoneUnpause:   "nicht mehr pausiert",
 			textDonePin:       "gepinnt",
 			textDoneUnpin:     "nicht mehr gepinnt",
-			textDoneResume:    "Pause aufgehoben, nichts gestartet",
+			textDoneResume:    "Pause aufgehoben oder Reparatur freigegeben, nichts gestartet",
 			textDoneUnchanged: "%s (war bereits so, nichts geändert)",
 			textDoneCheck:     "%d Stacks: %d mit verfügbarem Update, %d nicht prüfbar",
 			textDoneStart:     "gestartet, die Markierung „gestoppt“ ist aufgehoben",

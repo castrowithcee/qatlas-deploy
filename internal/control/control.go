@@ -251,6 +251,18 @@ type StackStatus struct {
 	Stopped *HoldInfo `json:"stopped,omitempty"`
 	// Failure is the container failure the monitoring found; it is cleared when the monitoring finds it recovered.
 	Failure *FailureInfo `json:"failure,omitempty"`
+	// Repair is the state of the automatic repair of a failure; nil when there is none.
+	Repair *RepairInfo `json:"repair,omitempty"`
+}
+
+// RepairInfo is the state of the automatic repair: the attempts made of Max, when the last was made and the
+// next is due (zero when none is due), and since when the repair is halted after Max failed attempts.
+type RepairInfo struct {
+	Attempts int       `json:"attempts"`
+	Max      int       `json:"max"`
+	Last     time.Time `json:"last,omitzero"`
+	Next     time.Time `json:"next,omitzero"`
+	Halted   *HoldInfo `json:"halted,omitempty"`
 }
 
 // FailureInfo is a failure of a stack's containers: exited, unhealthy, restart-loop or missing, the container
@@ -446,10 +458,11 @@ type ResumeArgs struct {
 	Stack string `json:"stack"`
 }
 
-// ResumeResult answers ResumeCommand with the pause that was cleared.
+// ResumeResult answers ResumeCommand with the pause that was cleared, nil when only the halt of the repair was
+// cleared.
 type ResumeResult struct {
-	Stack string    `json:"stack"`
-	Pause PauseInfo `json:"pause"`
+	Stack string     `json:"stack"`
+	Pause *PauseInfo `json:"pause,omitempty"`
 }
 
 // DeployArgs are the arguments of DeployCommand.
@@ -1003,6 +1016,7 @@ const (
 	NotifyEventRollbackFailed  = "rollback-failed"
 	NotifyEventContainerFailed = "container-failed"
 	NotifyEventRecovered       = "recovered"
+	NotifyEventRecoveryFailed  = "recovery-failed"
 	NotifyEventUpdateAvailable = "update-available"
 )
 

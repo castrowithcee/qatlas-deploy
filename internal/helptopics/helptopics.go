@@ -35,7 +35,7 @@ Commands:
 - qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has; the stack is named by its Compose project (see qdeploy help stack-capabilities), and for a stack with the finding project-renamed this decides to start the new project, next to the old one, which keeps running (run with sudo)
 - qdeploy stack runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy stack log <run>: print the log of a run (run with sudo)
-- qdeploy stack resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
+- qdeploy stack resume <stack>: clear the pause a failed rollback left on a stack, and release a halted automatic repair; it starts no run (run with sudo)
 - qdeploy stack pause|unpause <stack>: keep the maintenance window from running a stack, or lift that; unrelated to the pause of a failed rollback (run with sudo)
 - qdeploy stack pin|unpin <stack>: hold the image versions of a stack, so the maintenance window and qdeploy stack update leave them alone, or release them (run with sudo)
 - qdeploy stack start|stop|restart <stack> [--yes]: start, stop or restart the containers of a stack after a question; a stop keeps the stack stopped against new commits and the maintenance window until a start, and qdeploy status and stack list show it (run with sudo; see qdeploy help containers)
@@ -234,11 +234,12 @@ Events (--events takes a comma list; without it a new channel receives all; a st
 - rolled-back: a run failed and the stack was rolled back to the previous state
 - rollback-failed: a run failed and the rollback failed too; the stack is stopped and paused
 - container-failed: the failure monitor found a container of an own stack failed (see qdeploy help containers); one message per failure with stack, kind, container and the time since which it failed
-- recovered: that failure ended; names the same container and how long it lasted
+- recovered: that failure ended; names the same container and how long it lasted, and whether qdeploy restarted it
+- recovery-failed: three repair attempts did not end the failure (see qdeploy help containers); sent once, names stack, kind, container, the time since which it failed and the number of attempts
 - update-available: a newer image version was found for a stack in manual mode, once per version
 
 Channel types and settings:
-- webhook: posts JSON (event, stack, run, commit, error, items; for container-failed and recovered kind, container, since and, on recovered, at) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
+- webhook: posts JSON (event, stack, run, commit, error, items; for container-failed, recovered and recovery-failed also kind, container and since; recovered and recovery-failed also at; recovered also restarted, recovery-failed also attempts) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
 - slack: posts text to an incoming-webhook URL.
 - telegram: sends text to a chat; needs --chat-id, and --base-url for a Bot API server of your own.
 - smtp: sends an e-mail; needs --host, --from and --to (comma list or repeated); --port (default 587 with starttls, 465 with tls), --security starttls (default) or tls, and --user for a login. The connection is always encrypted.
@@ -278,6 +279,7 @@ Failure monitor: every 30 seconds the service checks the containers of own stack
 - unhealthy: its health check has been failing for more than 60 seconds
 - restart-loop: its restart count rose by 3 or more within 5 minutes
 - missing: a service that was running at the last good reading is gone
-Nothing is checked while a run or an action of the stack is active, nor for stopped (qdeploy stack stop), paused (either pause) and foreign stacks. A container stopped with qdeploy container stop is no failure. The monitor only reports; it never acts on a container.
+Nothing is checked while a run or an action of the stack is active, nor for stopped (qdeploy stack stop), paused (either pause) and foreign stacks. A container stopped with qdeploy container stop is no failure.
+Repair: the monitor also repairs a failure by restarts, each under the run slot of the stack. Attempt 1 comes one minute after the failure began and restarts the failed containers; attempts 2 and 3 come 5 and 15 minutes after the previous one and restart the stack. If the failure persists after the third, the repair is halted: qdeploy status shows "repair" as halted, recovery-failed is sent once and no further attempt is made until qdeploy stack resume releases it. The attempts count until the stack has run an hour without a failure. Stopped (qdeploy stack stop), paused (either pause) and foreign stacks are not repaired; a stop or pause ends a repair under way, its count stays.
 
 Environment: only the names of the variables are shown, never their values.`

@@ -285,6 +285,11 @@ func (m *Model) summaryLines(r stackRow, width int) []string {
 	if failure != nil {
 		labelWidth = max(labelWidth, lipgloss.Width(failLabel))
 	}
+	repair := m.repairOf(r.name)
+	repairLabel := kittui.Escape(m.text.Lookup(textDetailRepair))
+	if repair != nil {
+		labelWidth = max(labelWidth, lipgloss.Width(repairLabel))
+	}
 	row := func(label string, style kittui.TextStyle, value string) string {
 		return "  " + m.styles.Render(kittui.StyleHint, kittui.Pad(label, labelWidth)) + "  " +
 			m.styles.Render(style, m.styles.Truncate(kittui.Escape(value), max(width-labelWidth-4, 1)))
@@ -296,7 +301,33 @@ func (m *Model) summaryLines(r stackRow, width int) []string {
 	if failure != nil {
 		out = append(out, row(failLabel, kittui.StyleFail, m.failureText(*failure)))
 	}
+	if repair != nil {
+		style, text := m.repairText(*repair)
+		out = append(out, row(repairLabel, style, text))
+	}
 	return out
+}
+
+// repairOf is the automatic repair the status reports for a stack, nil when it reports none.
+func (m *Model) repairOf(stack string) *control.RepairInfo {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name == stack && control.Primary(m.snap.status.Engine.Stacks, i) {
+			return st.Repair
+		}
+	}
+	return nil
+}
+
+// repairText is the repair state as one line: halted, or the attempts made and the next one due.
+func (m *Model) repairText(r control.RepairInfo) (kittui.TextStyle, string) {
+	t := m.text
+	switch {
+	case r.Halted != nil:
+		return kittui.StyleFail, t.Lookup(textRepairHalted, r.Halted.Since.In(m.loc).Format(lastRunLayout), r.Attempts, r.Max)
+	case !r.Next.IsZero():
+		return kittui.StyleWarn, t.Lookup(textRepairNext, r.Attempts, r.Max, r.Next.In(m.loc).Format(lastRunLayout))
+	}
+	return kittui.StyleWarn, t.Lookup(textRepairAttempts, r.Attempts, r.Max)
 }
 
 // failureOf is the container failure the status reports for a stack, nil when it reports none.

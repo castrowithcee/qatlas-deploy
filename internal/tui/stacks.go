@@ -73,6 +73,7 @@ const (
 	stateNeedsDirs
 	statePinned
 	stateContainerFailed
+	stateRepairHalted
 	statePaused
 	stateStopped
 	stateRemoved
@@ -215,6 +216,8 @@ func stateOf(st control.StackStatus) stackState {
 		return statePaused
 	case st.Pinned != nil:
 		return statePinned
+	case st.Repair != nil && st.Repair.Halted != nil:
+		return stateRepairHalted
 	case st.Failure != nil:
 		return stateContainerFailed
 	case slices.ContainsFunc(st.Findings, func(f control.FindingInfo) bool { return f.Kind == findingDataDirMissing }):
@@ -301,7 +304,7 @@ func stackColumns(t kittui.Translator, tones map[string]kittui.TextStyle) []kitt
 		{Title: textColAvailable, Short: short(textAvailError, textAvailErrorS, textAvailNotComparable, textAvailNotComparableS)},
 		{Title: textColMode, Optional: true},
 		{Title: textColState, Tone: tone, Short: short(textStateRollbackPause, textStateRollbackPauseS,
-			textStateCtrFailed, textStateCtrFailedS, textStatePending, textStatePendingS, textStateNotDeployed, textStateNotDeployedS,
+			textStateCtrFailed, textStateCtrFailedS, textStateRepairHalted, textStateRepairHaltedS, textStatePending, textStatePendingS, textStateNotDeployed, textStateNotDeployedS,
 			textStateUnreadable, textStateUnreadableS, textStateNeedsDirs, textStateNeedsDirsS, textStateFailed, textStateFailedS)},
 		{Title: textColLastRun, Optional: true, Tone: tone},
 		{Title: textColFindings, Flex: true, Tone: tone},
@@ -311,16 +314,16 @@ func stackColumns(t kittui.Translator, tones map[string]kittui.TextStyle) []kitt
 var stateTexts = map[stackState]kittui.TextID{
 	stateRunning: textStateRunning, stateRollbackPause: textStateRollbackPause, stateUnreadable: textStateUnreadable,
 	stateRemoved: textStateRemoved, stateStopped: textStateStopped, statePaused: textStatePaused, statePinned: textStatePinned,
-	stateContainerFailed: textStateCtrFailed,
-	stateFailed:          textStateFailed, statePending: textStatePending, stateDeployed: textStateDeployed,
+	stateContainerFailed: textStateCtrFailed, stateRepairHalted: textStateRepairHalted,
+	stateFailed: textStateFailed, statePending: textStatePending, stateDeployed: textStateDeployed,
 	stateNotDeployed: textStateNotDeployed, stateNeedsDirs: textStateNeedsDirs,
 }
 
 var stateTones = map[stackState]kittui.TextStyle{
 	stateRunning: kittui.StyleActive, stateRollbackPause: kittui.StyleFail, stateUnreadable: kittui.StyleFail,
 	stateRemoved: kittui.StyleHint, stateStopped: kittui.StyleWarn, statePaused: kittui.StyleWarn, statePinned: kittui.StyleWarn,
-	stateContainerFailed: kittui.StyleFail,
-	stateFailed:          kittui.StyleFail, statePending: kittui.StyleWarn, stateDeployed: kittui.StyleOK,
+	stateContainerFailed: kittui.StyleFail, stateRepairHalted: kittui.StyleFail,
+	stateFailed: kittui.StyleFail, statePending: kittui.StyleWarn, stateDeployed: kittui.StyleOK,
 	stateNotDeployed: kittui.StyleHint, stateNeedsDirs: kittui.StyleWarn,
 }
 

@@ -13,7 +13,8 @@ import (
 // runDemoApp is the application inside the demo images in the test registry. It answers GET / with its name
 // and version and GET /health with 200, or with 500 when DEMO_HEALTH=fail, which is how a stack is made
 // to turn unhealthy. It writes a start line (with its DEMO_SECRET, so the log tests can prove that the value is
-// masked), a line to stderr and a tick line every two seconds to its log.
+// masked), a line to stderr and a tick line every two seconds to its log. A file /data/break keeps /health at
+// 500 until it is removed; /data/break-once does the same until the app starts again, so a restart ends it.
 func runDemoApp() error {
 	name, version := env("DEMO_NAME", "demo"), env("DEMO_VERSION", "unknown")
 	fmt.Printf("demo started name=%s version=%s token=%s\n", name, version, os.Getenv("DEMO_SECRET"))
@@ -23,10 +24,13 @@ func runDemoApp() error {
 			fmt.Println("demo tick")
 		}
 	}()
+	_ = os.Remove("/data/break-once")
 	healthy := env("DEMO_HEALTH", "ok") != "fail"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		if !healthy {
+		_, broken := os.Stat("/data/break")
+		_, brokenOnce := os.Stat("/data/break-once")
+		if !healthy || broken == nil || brokenOnce == nil {
 			http.Error(w, "unhealthy", http.StatusInternalServerError)
 			return
 		}

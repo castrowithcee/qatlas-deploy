@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-kit/configfile"
 
@@ -179,5 +180,21 @@ func TestUnreadableSourceKeepsItsDeployedNames(t *testing.T) {
 func TestCollisionFindingIsTheSameForEngineAndClients(t *testing.T) {
 	if engine.FindingNameCollision != control.FindingNameCollision {
 		t.Fatalf("engine %q, control %q", engine.FindingNameCollision, control.FindingNameCollision)
+	}
+}
+
+func TestRepairRecordGoesToTheSourceOfTheStack(t *testing.T) {
+	set := twoSources(t, map[string]string{
+		"second": `{"schema":1,"stacks":{"web":{"deployed":"0123456789abcdef0123456789abcdef01234567"}}}`,
+	})
+	at := time.Date(2026, 5, 4, 3, 0, 0, 0, time.UTC)
+	if stored, err := set.RecordRepair("web", &engine.Repair{Attempts: 1, Last: at}); err != nil || !stored {
+		t.Fatalf("record = %v %v", stored, err)
+	}
+	srcs := set.sources()
+	first, _, _ := srcs[0].eng.Stack("web")
+	second, _, _ := srcs[1].eng.Stack("web")
+	if first.Repair != nil || second.Repair == nil || second.Repair.Attempts != 1 {
+		t.Fatalf("first %+v, second %+v", first.Repair, second.Repair)
 	}
 }

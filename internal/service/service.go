@@ -67,8 +67,8 @@ type Config struct {
 	Notify notify.Options
 	// MonitorInterval is the time between container readings of the failure monitor; zero means 30 seconds.
 	MonitorInterval time.Duration
-	// OnMonitorEvent, when set, is told every failed and recovered transition of an own stack's containers. It
-	// runs in the monitor's goroutine and must return quickly.
+	// OnMonitorEvent, when set, is told every failed and recovered transition of an own stack's containers and
+	// every halted repair. It runs in the monitor's goroutine and must return quickly.
 	OnMonitorEvent func(MonitorEvent)
 	// OnUpdateAvailable, when set, is told every stack in manual mode the maintenance window found an update
 	// for. It runs in the window's goroutine and must return quickly.
