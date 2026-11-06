@@ -122,7 +122,7 @@ func TestCloneFetchStatusChangedFolders(t *testing.T) {
 		t.Fatal("fetch updated the working copy")
 	}
 	folders, err := r.ChangedFolders(ctx, head, next)
-	if err != nil || !slices.Equal(folders, []string{"web"}) {
+	if err != nil || !slices.Equal(folders, []string{RootStack, "web"}) {
 		t.Fatalf("ChangedFolders = %v, %v", folders, err)
 	}
 	if folders, _ := r.ChangedFolders(ctx, head, head); len(folders) != 0 {

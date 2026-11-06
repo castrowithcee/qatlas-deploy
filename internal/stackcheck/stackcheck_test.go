@@ -20,7 +20,7 @@ type fakeGit struct {
 func (g fakeGit) TrackedFiles(_ context.Context, dir string) ([]string, error) {
 	var out []string
 	for _, p := range g.tracked {
-		if strings.HasPrefix(p, dir+"/") {
+		if dir == stacks.RootFolder || strings.HasPrefix(p, dir+"/") {
 			out = append(out, p)
 		}
 	}

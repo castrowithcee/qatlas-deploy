@@ -121,3 +121,10 @@ func TestStackDirUsesTheSourceOfTheHoldingStack(t *testing.T) {
 		t.Fatalf("web = %q, %v", got, ok)
 	}
 }
+
+func TestStackDirOfARootStackIsTheStackFolder(t *testing.T) {
+	r := StacksResult{Stacks: []StackInfo{{Name: "demo-root", Folder: ".", SourceDir: "/srv/demo-root"}}}
+	if got, ok := r.StackDir("demo-root"); !ok || got != "/srv/demo-root" {
+		t.Fatalf("StackDir(demo-root) = %q, %v", got, ok)
+	}
+}

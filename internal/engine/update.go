@@ -282,7 +282,7 @@ func (r *run) advance(ctx context.Context) error {
 		if err := r.unchangedOnBranch(ctx); err != nil {
 			return err
 		}
-		c, err := wc.CommitFile(ctx, r.st.Folder+"/"+envName, edit, message)
+		c, err := wc.CommitFile(ctx, r.st.RepoPath(envName), edit, message)
 		if err != nil {
 			return fmt.Errorf("commit: %w", err)
 		}
