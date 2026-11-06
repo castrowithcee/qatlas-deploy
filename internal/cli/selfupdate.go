@@ -70,11 +70,12 @@ func (h selfUpdateHost) client() *selfupdate.Client {
 			}
 			return fmt.Sprintf("%s_%s_linux_%s.tar.gz", programName, v, runtime.GOARCH)
 		},
-		UserAgent:   programName + "/" + version,
-		Namespace:   release.Namespace,
-		TrustedKeys: h.keys(),
-		ProgramName: programName,
-		Companions:  h.companions,
+		UserAgent:      programName + "/" + version,
+		Namespace:      release.Namespace,
+		SignatureAsset: release.SignatureAsset,
+		TrustedKeys:    h.keys(),
+		ProgramName:    programName,
+		Companions:     h.companions,
 	}
 }
 

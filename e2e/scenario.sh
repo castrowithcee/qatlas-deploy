@@ -23,6 +23,9 @@
 # backup through the interface and proves that no masked value shows anywhere. At the very end the installed
 # program updates itself to a newer signed test release and refuses tampered ones. Sourced by run.sh scenario.
 
+# signature_asset is the name of the release file with the signature; it must match release.SignatureAsset.
+signature_asset=checksums.txt.sig
+
 as_admin() {
 	docker exec -i -u "$admin" "$host" sh -ec "$*"
 }
@@ -130,7 +133,7 @@ release_build() {
 	rel_signers=$(realpath --relative-to="$root" "$dir/allowed-signers")
 	(cd "$root" && SOURCE_DATE_EPOCH=1700000000 GOFLAGS="${GOFLAGS:+$GOFLAGS }-overlay=$dir/overlay.json" \
 		go run github.com/castrowithcee/qatlas-kit/cmd/releasebuild -config "$dir/release.json" -program qdeploy \
-		-namespace qdeploy-release -allowed-signers "$rel_signers" \
+		-namespace qdeploy-release -signature-asset "$signature_asset" -allowed-signers "$rel_signers" \
 		-releases-url https://github.com/castrowithcee/qatlas-deploy/releases -version "$tag" -out "$work/releases/$tag" >/dev/null) ||
 		fail "cannot build the test release $tag"
 	(cd "$work/releases/$tag" && ssh-keygen -q -Y sign -f "$work/keys/release" -n qdeploy-release checksums.txt) ||
@@ -1658,7 +1661,7 @@ scenario_selfupdate() {
 	rm -rf "$bad"
 	cp -r "$good" "$bad"
 	ssh-keygen -q -t ed25519 -N '' -C "$prefix-unknown-key" -f "$work/keys/unknown"
-	rm -f "$bad/checksums.txt.sig"
+	rm -f "$bad/$signature_asset"
 	(cd "$bad" && ssh-keygen -q -Y sign -f "$work/keys/unknown" -n qdeploy-release checksums.txt)
 	release_publish v0.3.0 "$bad"
 	refuse_update v0.3.0
