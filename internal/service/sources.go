@@ -649,6 +649,10 @@ func (s *sourceSet) StackSettings(ctx context.Context, name string) (*stacks.Rul
 	return routed(s, name, func(e *engine.Engine) (*stacks.Rules, error) { return e.StackSettings(ctx, name) })
 }
 
+func (s *sourceSet) RemoveSettings(ctx context.Context, name string) (string, error) {
+	return routed(s, name, func(e *engine.Engine) (string, error) { return e.RemoveSettings(ctx, name) })
+}
+
 func (s *sourceSet) SetSettings(ctx context.Context, name string, rules *stacks.Rules) (string, error) {
 	return routed(s, name, func(e *engine.Engine) (string, error) { return e.SetSettings(ctx, name, rules) })
 }

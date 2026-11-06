@@ -81,7 +81,13 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 		"secrets":       func() error { _, err := b.Secrets(ctx, "demo-stack"); return err },
 		"secretset":     func() error { _, err := b.SecretSet(ctx, "demo-stack", "BACKEND_TEST", "example-value"); return err },
 		"secretdelete":  func() error { _, err := b.SecretDelete(ctx, "demo-stack", "BACKEND_TEST"); return err },
-		"restore":       func() error { _, err := b.BackupRestore(ctx, "demo-stack", "20261023T031000Z-4567cdef"); return err },
+		"settings":      func() error { _, err := b.StackSettings(ctx, "demo-stack"); return err },
+		"settingsset": func() error {
+			_, err := b.StackSettingsSet(ctx, "demo-stack", control.StackSettings{Version: 1})
+			return err
+		},
+		"settingsremove": func() error { _, err := b.StackSettingsRemove(ctx, "demo-stack"); return err },
+		"restore":        func() error { _, err := b.BackupRestore(ctx, "demo-stack", "20261023T031000Z-4567cdef"); return err },
 	}
 	for name, call := range calls {
 		var remote *control.Error

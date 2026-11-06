@@ -144,3 +144,41 @@ func TestCommitFileCreatesAMissingFile(t *testing.T) {
 		t.Fatalf("err = %v, want ErrUnchanged", err)
 	}
 }
+
+func TestCommitFileRemovesAFile(t *testing.T) {
+	ctx := context.Background()
+	f := newRemote(t)
+	r, _ := cloneFixture(t, f)
+	path := ".qatlas/qdeploy/web.yaml"
+	create := func(old []byte) ([]byte, error) { return []byte("version: 1\n"), nil }
+	id, err := r.CommitFile(ctx, path, create, "qdeploy: settings of web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Push(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.FastForward(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	remove := func(old []byte) ([]byte, error) { return nil, nil }
+	del, err := r.CommitFile(ctx, path, remove, "qdeploy: remove settings of web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := fixtureGit(t, r.dir, "diff", "--name-status", id, del); d != "D\t"+path {
+		t.Fatalf("diff = %q", d)
+	}
+	if err := r.Push(ctx, del); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.FastForward(ctx, del); err != nil {
+		t.Fatal(err)
+	}
+	if st := fixtureGit(t, r.dir, "status", "--porcelain"); st != "" {
+		t.Fatalf("status = %q", st)
+	}
+	if _, err := r.CommitFile(ctx, path, remove, "m"); !errors.Is(err, ErrUnchanged) {
+		t.Fatalf("remove of a missing file: %v, want ErrUnchanged", err)
+	}
+}

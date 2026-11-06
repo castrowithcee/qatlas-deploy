@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-// ErrUnchanged means the edit of CommitFile returned the content the file already has; nothing was created.
+// ErrUnchanged means the edit of CommitFile returned the content the file already has, or nil for a file that
+// does not exist; nothing was created.
 var ErrUnchanged = errors.New("the edit does not change the file")
 
 const maxMessageRunes = 200
@@ -18,7 +19,8 @@ const maxMessageRunes = 200
 // CommitFile creates, without touching the working copy or its index, a commit on top of the base ref (see
 // RemoteHead) that differs from it only in the file path: its content becomes what edit returns for the content
 // the file has there. A file that exists there must be a regular file, and its mode is kept; a missing one is
-// created as a regular, non-executable file, and edit gets nil. message is one line, sanitized and bounded
+// created as a regular, non-executable file, and edit gets nil. An edit that returns nil content removes the
+// file. message is one line, sanitized and bounded
 // here. It returns the new commit id and does not move any ref.
 func (r *Repo) CommitFile(ctx context.Context, path string, edit func(old []byte) ([]byte, error), message string) (string, error) {
 	if checkRepoPath(path) != nil || strings.Contains("/"+path+"/", "/.git/") {
@@ -55,7 +57,7 @@ func (r *Repo) CommitFile(ctx context.Context, path string, edit func(old []byte
 	if err != nil {
 		return "", err
 	}
-	if old != nil && bytes.Equal(content, old) {
+	if (content != nil && old != nil && bytes.Equal(content, old)) || (content == nil && old == nil) {
 		return "", ErrUnchanged
 	}
 
@@ -80,16 +82,22 @@ func (r *Repo) CommitFile(ctx context.Context, path string, edit func(old []byte
 		}
 		return strings.TrimSpace(out), nil
 	}
-	// --no-filters: the bytes are stored as given, whatever the attributes of the repository say.
-	id, err := git("hash-object", "-w", "--no-filters", "--", file)
-	if err != nil {
-		return "", err
-	}
 	if _, err := git("read-tree", base); err != nil {
 		return "", err
 	}
-	if _, err := git("update-index", "--add", "--cacheinfo", mode+","+id+","+path); err != nil {
-		return "", err
+	if content == nil {
+		if _, err := git("update-index", "--force-remove", "--", path); err != nil {
+			return "", err
+		}
+	} else {
+		// --no-filters: the bytes are stored as given, whatever the attributes of the repository say.
+		id, err := git("hash-object", "-w", "--no-filters", "--", file)
+		if err != nil {
+			return "", err
+		}
+		if _, err := git("update-index", "--add", "--cacheinfo", mode+","+id+","+path); err != nil {
+			return "", err
+		}
 	}
 	tree, err := git("write-tree")
 	if err != nil {

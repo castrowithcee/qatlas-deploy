@@ -142,7 +142,7 @@ func (f *fakeCopy) CommitFile(_ context.Context, path string, edit func([]byte) 
 	if err != nil {
 		return "", err
 	}
-	if old != nil && bytes.Equal(old, content) {
+	if (content != nil && old != nil && bytes.Equal(old, content)) || (content == nil && old == nil) {
 		return "", gitrepo.ErrUnchanged
 	}
 	f.mu.Lock()
@@ -229,6 +229,12 @@ func (f *fakeCopy) FastForward(_ context.Context, to string) error {
 func (f *fakeCopy) moveTo(c string) error {
 	f.head = c
 	for path, body := range f.files[f.head] {
+		if body == nil {
+			if err := os.Remove(filepath.Join(f.dir, path)); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			continue
+		}
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(f.dir, path)), 0o755); err != nil {
 			return err
 		}

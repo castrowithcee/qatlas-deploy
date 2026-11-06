@@ -245,6 +245,13 @@ func (c *copyOf) FastForward(_ context.Context, to string) error {
 		return nil
 	}
 	p := filepath.Join(c.dir, filepath.FromSlash(fc.path))
+	if fc.content == nil {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		c.g.Head = to
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
@@ -276,7 +283,7 @@ func (c *copyOf) CommitFile(_ context.Context, path string, edit func([]byte) ([
 	if err != nil {
 		return "", err
 	}
-	if old != nil && bytes.Equal(old, content) {
+	if (content != nil && old != nil && bytes.Equal(old, content)) || (content == nil && old == nil) {
 		return "", gitrepo.ErrUnchanged
 	}
 	c.g.mu.Lock()

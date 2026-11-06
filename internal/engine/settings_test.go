@@ -153,3 +153,81 @@ func TestSetSettingsWaitsForRunsAndAnswersBusy(t *testing.T) {
 		t.Fatalf("set after the run: %v", err)
 	}
 }
+
+func TestRemoveSettingsCommitsTheDeletionAndLeavesDeployOnly(t *testing.T) {
+	r := newRig(t, "web")
+	r.deployAll()
+	ctx := context.Background()
+	if _, err := r.eng.SetSettings(ctx, "web", rulesOf(t, automaticSettings)); err != nil {
+		t.Fatal(err)
+	}
+	c, err := r.eng.RemoveSettings(ctx, "web")
+	if err != nil || c != commit(2002) {
+		t.Fatalf("remove = %q, %v", c, err)
+	}
+	last := r.copy.commits[len(r.copy.commits)-1]
+	if last.Path != ".qatlas/qdeploy/web.yaml" || last.Message != "qdeploy: remove settings of web" || last.Old == nil || last.New != nil {
+		t.Fatalf("commit = %+v", last)
+	}
+	if !slices.Equal(r.copy.pushed, []string{commit(2001), c}) || r.copy.ffTo[len(r.copy.ffTo)-1] != c {
+		t.Fatalf("pushed %v, fast-forwarded to %v", r.copy.pushed, r.copy.ffTo)
+	}
+	if _, err := os.Stat(filepath.Join(r.wc, ".qatlas", "qdeploy", "web.yaml")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the settings file is still there: %v", err)
+	}
+	if got, err := r.eng.StackSettings(ctx, "web"); err != nil || got != nil {
+		t.Fatalf("settings after = %+v, %v", got, err)
+	}
+
+	// Without a file there is nothing to remove and nothing is committed.
+	n := len(r.copy.commits)
+	if _, err := r.eng.RemoveSettings(ctx, "web"); !errors.Is(err, ErrNoSettings) {
+		t.Fatalf("second remove: %v", err)
+	}
+	if len(r.copy.commits) != n || len(r.copy.pushed) != 2 {
+		t.Fatalf("commits %d, pushes %v", len(r.copy.commits), r.copy.pushed)
+	}
+}
+
+func TestRemoveSettingsRefusals(t *testing.T) {
+	r := newRig(t, "web")
+	r.deployAll()
+	ctx := context.Background()
+	if _, err := r.eng.RemoveSettings(ctx, "nope"); !errors.Is(err, ErrUnknownStack) {
+		t.Errorf("unknown stack: %v", err)
+	}
+	r.copy.set(func(f *fakeCopy) { f.changes = []gitrepo.Change{{Path: "README.md"}} })
+	if _, err := r.eng.RemoveSettings(ctx, "web"); !errors.Is(err, ErrCopyChanges) {
+		t.Errorf("local changes: %v", err)
+	}
+	if len(r.copy.commits) != 0 || len(r.copy.pushed) != 0 {
+		t.Fatalf("commits %d, pushes %v", len(r.copy.commits), r.copy.pushed)
+	}
+}
+
+func TestRemoveSettingsRemovesBrokenSettingsAndRetriesARejectedPush(t *testing.T) {
+	r := newRig(t, "web")
+	writeSettings(t, r.wc, "web", "version: 1\nupdate:\n  mode: sometimes\n")
+	r.copy.set(func(f *fakeCopy) { f.pushErrs = []error{gitrepo.ErrPushRejected} })
+	c, err := r.eng.RemoveSettings(context.Background(), "web")
+	if err != nil || len(r.copy.commits) != 2 || c != commit(2002) {
+		t.Fatalf("remove = %q, %v, commits %d", c, err, len(r.copy.commits))
+	}
+	if got, err := r.eng.StackSettings(context.Background(), "web"); err != nil || got != nil {
+		t.Fatalf("settings after = %+v, %v", got, err)
+	}
+}
+
+func TestRemoveSettingsInLocalModeCommitsLocally(t *testing.T) {
+	r := localRig(t, func(r *rig) { writeSettings(t, r.wc, "web", automaticSettings) })
+	c, err := r.eng.RemoveSettings(context.Background(), "web")
+	if err != nil || c != commit(2001) {
+		t.Fatalf("remove = %q, %v", c, err)
+	}
+	if r.copy.head != c {
+		t.Fatalf("head = %s, want %s", r.copy.head, c)
+	}
+	if _, err := os.Stat(filepath.Join(r.wc, ".qatlas", "qdeploy", "web.yaml")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the settings file is still there: %v", err)
+	}
+}

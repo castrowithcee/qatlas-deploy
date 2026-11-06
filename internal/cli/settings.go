@@ -35,11 +35,11 @@ const settingsFields = "The settings are one object with these members, each opt
 func newSettingsCommand(program *cobracli.Program, state *notRunning) *cobra.Command {
 	show := &cobra.Command{
 		Use:   "settings <stack>",
-		Short: "Show or replace the settings of a stack: update, backup, check and compose files",
+		Short: "Show, replace or remove the settings of a stack: update, backup, check and compose files",
 		Long: "settings shows the settings of the stack with every default written out. The service keeps them in\n" +
 			"the stacks repository and changes them only on request, from the TUI or with 'qdeploy stack settings\n" +
-			"set'; they are not edited by hand. --output json gives the object 'qdeploy stack settings set' takes as\n" +
-			"its settings member.\n\n" + settingsFields,
+			"set' and 'remove'; they are not edited by hand. --output json gives the object 'qdeploy stack\n" +
+			"settings set' takes as its settings member.\n\n" + settingsFields,
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return usageFailure("settings takes exactly one stack", "Run 'qdeploy stack settings <stack>'; 'qdeploy stack list' names the stacks.")
@@ -96,8 +96,32 @@ func newSettingsCommand(program *cobracli.Program, state *notRunning) *cobra.Com
 			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: fields})
 		},
 	}
+	remove := &cobra.Command{
+		Use:   "remove <stack>",
+		Short: "Remove the settings of a stack, so it is only deployed",
+		Long: "remove deletes the settings of the stack: the service commits the removal of its settings file to the\n" +
+			"stacks repository, pushes the commit and moves the working copy to it; the deploy key needs write\n" +
+			"access to the branch. It waits until no run is active. Afterwards the stack is deployed but never\n" +
+			"updated, and its backup, check and compose settings are gone with the rest. A stack without\n" +
+			"settings is reported and nothing is committed.",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return usageFailure("settings remove takes exactly one stack", "Run 'qdeploy stack settings remove <stack>'; 'qdeploy stack list' names the stacks.")
+			}
+			return nil
+		},
+		RunE: func(c *cobra.Command, args []string) error {
+			var res control.StackSettingsRemoveResult
+			if err := remoteCall(c, state, control.StackSettingsTimeout, control.StackSettingsRemoveCommand,
+				control.StackSettingsArgs{Stack: args[0]}, &res); err != nil {
+				return err
+			}
+			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: []output.Field{
+				{Name: "stack", Value: res.Stack}, {Name: "removed", Value: true}, {Name: "commit", Value: res.Commit}}})
+		},
+	}
 	set.Flags().StringVar(&file, "file", "", "the settings as YAML or JSON; - reads standard input")
-	show.AddCommand(set)
+	show.AddCommand(set, remove)
 	return show
 }
 

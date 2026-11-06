@@ -109,7 +109,7 @@ Afterwards:
 
 const stackSettingsTopic = `The settings of a stack say how qdeploy updates, backs up and checks it. They live in the stacks repository as .qatlas/qdeploy/<stack>.yaml in its root, one file per stack, named by the stack's Compose project name. A stack without settings is deployed but never updated.
 
-The settings are shown and changed only in the terminal interface or with qdeploy stack settings <stack> and qdeploy stack settings set <stack>; nobody edits the file by hand. qdeploy checks them against the stack, writes the file, commits it and pushes the commit. A settings commit does not touch the stack folder and starts no run; the settings act on the next update or deploy. The file is read as data only: unknown fields, a missing version, or a path that is absolute or leaves the stack folder are rejected.
+The settings are shown and changed only in the terminal interface or with qdeploy stack settings <stack>, qdeploy stack settings set <stack> and qdeploy stack settings remove <stack>; nobody edits the file by hand. The stack detail of the terminal interface sets update and check; remove deletes the settings file by a commit, with all its sections, and leaves the stack deployed but never updated. A stack without settings is reported and nothing is committed. qdeploy checks them against the stack, writes the file, commits it and pushes the commit. A settings commit does not touch the stack folder and starts no run; the settings act on the next update or deploy. The file is read as data only: unknown fields, a missing version, or a path that is absolute or leaves the stack folder are rejected.
 
 Fields (all optional except version):
 - version: 1

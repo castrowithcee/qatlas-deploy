@@ -73,6 +73,7 @@ const (
 	CodeStackStopped   = "stack-stopped"
 	CodeStackAction    = "stack-action-failed"
 	CodeNameCollision  = "name-collision"
+	CodeNoSettings     = "no-settings"
 
 	CodeNoBackups     = "no-backups"
 	CodeNoBackupRules = "no-backup-rules"
@@ -352,11 +353,16 @@ const (
 	StackSettingsSetCommand = "stack.settings.set"
 )
 
+// StackSettingsRemoveCommand removes the settings of a stack: a commit that deletes its settings file, pushed
+// and followed like the commit of StackSettingsSetCommand and with the same timeout. Afterwards the stack is
+// deployed but never updated. A stack without settings answers CodeNoSettings and nothing is committed.
+const StackSettingsRemoveCommand = "stack.settings.remove"
+
 // StackSettingsTimeout is how long a client should wait for StackSettingsSetCommand: the wait for the
 // working copy, then a fetch and a push, twice when the branch moved meanwhile.
 const StackSettingsTimeout = 3 * time.Minute
 
-// StackSettingsArgs are the arguments of StackSettingsGetCommand.
+// StackSettingsArgs are the arguments of StackSettingsGetCommand and StackSettingsRemoveCommand.
 type StackSettingsArgs struct {
 	Stack string `json:"stack"`
 }
@@ -365,6 +371,12 @@ type StackSettingsArgs struct {
 type StackSettingsSetArgs struct {
 	Stack    string        `json:"stack"`
 	Settings StackSettings `json:"settings"`
+}
+
+// StackSettingsRemoveResult answers StackSettingsRemoveCommand with the commit that removed the settings file.
+type StackSettingsRemoveResult struct {
+	Stack  string `json:"stack"`
+	Commit string `json:"commit"`
 }
 
 // StackSettingsResult answers StackSettingsGetCommand. Settings is absent for a stack without settings, which

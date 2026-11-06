@@ -132,3 +132,39 @@ func TestStackSettingsSetRefusals(t *testing.T) {
 		t.Fatalf("settings were written: %v", err)
 	}
 }
+
+func TestStackSettingsRemove(t *testing.T) {
+	e := startSettingsService(t)
+	file := filepath.Join(e.dir, filepath.FromSlash(servicetest.Settings("demo-stack")))
+	code, out, stderr := run(t, "stack", "settings", "remove", "demo-stack", "--output", "json")
+	if got := objectOf(t, out); code != 0 || got["stack"] != "demo-stack" || got["removed"] != true || got["commit"] == nil {
+		t.Fatalf("remove: %d %q %s", code, out, stderr)
+	}
+	if p := e.git.Pushed(); !slices.Equal(p, []string{"qdeploy: remove settings of demo-stack"}) {
+		t.Fatalf("pushed = %v", p)
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatalf("settings file: %v", err)
+	}
+	code, out, _ = run(t, "stack", "settings", "demo-stack", "--output", "json")
+	if got := objectOf(t, out); code != 0 || got["configured"] != false || got["settings"] != nil {
+		t.Fatalf("show after remove: %d %v", code, got)
+	}
+
+	// A stack without settings is reported and nothing is committed.
+	for _, name := range []string{"demo-stack", "plain-stack"} {
+		code, out, stderr = run(t, "stack", "settings", "remove", name)
+		if code == 0 || out != "" || !strings.Contains(stderr, "no settings") || !strings.Contains(stderr, "Nothing to remove") {
+			t.Fatalf("%s again: %d %q %q", name, code, out, stderr)
+		}
+	}
+	if code, _, stderr := run(t, "stack", "settings", "remove", "missing-stack"); code == 0 || !strings.Contains(stderr, "no such stack") {
+		t.Fatalf("missing: %d %q", code, stderr)
+	}
+	if code, _, _ := run(t, "stack", "settings", "remove"); code != 2 {
+		t.Fatalf("no stack: %d", code)
+	}
+	if p := e.git.Pushed(); len(p) != 1 {
+		t.Fatalf("pushed = %v", p)
+	}
+}
