@@ -247,6 +247,8 @@ func (m *Model) containerLogPane(width, height int) string {
 	case !l.loaded:
 		lines = append(lines, m.line(2, kittui.StyleHint, m.text.Lookup(textLogLoading), width))
 	}
-	view, _ := l.view.View(m.styles, width, max(height-len(lines), 1))
+	room := max(height-len(lines), 1)
+	view, _ := l.view.View(m.styles, width, room)
+	m.logPart(l.view, width, room, len(lines))
 	return strings.Join(lines, "\n") + "\n" + view
 }

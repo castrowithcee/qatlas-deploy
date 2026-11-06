@@ -617,8 +617,7 @@ func (m *Model) settingsView(width, height int) string {
 		return m.formView(width, height)
 	}
 	if s.page == "" {
-		view, _ := s.menu.View(m.styles, width, height)
-		return view
+		return m.listView(s.menu, width, height, 0)
 	}
 	title := m.heading(pageTitle(s.page), width)
 	if list := s.activeList(); list != nil {
@@ -627,7 +626,7 @@ func (m *Model) settingsView(width, height int) string {
 		if p := s.pagePart(s.page); p != nil && (!p.loaded || p.err != nil) {
 			return strings.Join(append(lines, m.partLines(*p, width)...), "\n")
 		}
-		view, _ := list.View(m.styles, width, room)
+		view := m.listView(list, width, room, len(lines))
 		return strings.Join(lines, "\n") + "\n" + view
 	}
 	lines := append([]string{title, ""}, m.pageLines(width)...)

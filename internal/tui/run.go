@@ -45,7 +45,7 @@ func Run(opts Options) error {
 	profile := kittui.DetectColorProfile(opts.Out, env)
 	m, err := newModel(config{ctx: ctx, backend: opts.Backend, folders: opts.Folders, lang: uiprefs.Language(opts.Prefs.Language),
 		theme: opts.Prefs.Theme, profile: profile, charset: kittui.DetectCharsetMode(env),
-		start: kittui.AreaID(opts.Prefs.Start), loc: time.Local, warnings: opts.PrefsWarnings})
+		start: kittui.AreaID(opts.Prefs.Start), loc: time.Local, warnings: opts.PrefsWarnings, mouse: opts.Prefs.MouseEnabled})
 	if err != nil {
 		return err
 	}

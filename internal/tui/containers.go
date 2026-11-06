@@ -249,8 +249,7 @@ func (m *Model) containersView(width, height int) string {
 	case !m.ct.loaded:
 		return m.note(m.text.Lookup(textCtLoading), width)
 	}
-	view, _ := m.ctList.View(m.styles, width, height)
-	return view
+	return m.listView(m.ctList, width, height, 0)
 }
 
 func (m *Model) containerDetailView(width, height int) string {
