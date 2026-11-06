@@ -67,6 +67,10 @@ const (
 	textStateCtrFailedS     kittui.TextID = "state.containerfailed.short"
 	textStateNotDeployedS   kittui.TextID = "state.notdeployed.short"
 	textAvailErrorS         kittui.TextID = "avail.error.short"
+	textStateUnreadableS    kittui.TextID = "state.unreadable.short"
+	textStateNeedsDirsS     kittui.TextID = "state.needsdirs.short"
+	textStateFailedS        kittui.TextID = "state.failed.short"
+	textAvailNotComparableS kittui.TextID = "avail.notcomparable.short"
 
 	textHeaderRefreshing  kittui.TextID = "header.refreshing"
 	textHeaderWindowOpen  kittui.TextID = "header.windowopen"
@@ -254,12 +258,16 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textResultRolledBack:     "rolled back",
 			textResultRollbackFailed: "rollback failed",
 
-			textAvailNotChecked:    "unchecked",
-			textAvailUpToDate:      "up to date",
-			textAvailMajor:         "%s (major)",
-			textAvailError:         "check failed",
-			textAvailNotComparable: "not comparable",
-			textAvailErrorS:        "error",
+			textAvailNotChecked:     "unchecked",
+			textAvailUpToDate:       "up to date",
+			textAvailMajor:          "%s (major)",
+			textAvailError:          "check failed",
+			textAvailNotComparable:  "not comparable",
+			textAvailErrorS:         "error",
+			textStateUnreadableS:    "broken",
+			textStateNeedsDirsS:     "no dirs",
+			textStateFailedS:        "failed",
+			textAvailNotComparableS: "n/a",
 
 			textFindingsNone:         "none",
 			textFindingsErrorsOne:    "%d error",
@@ -438,12 +446,16 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textResultRolledBack:     "zurückgerollt",
 			textResultRollbackFailed: "Rollback fehlgeschlagen",
 
-			textAvailNotChecked:    "ungeprüft",
-			textAvailUpToDate:      "aktuell",
-			textAvailMajor:         "%s (Major)",
-			textAvailError:         "Prüfung fehlgeschlagen",
-			textAvailNotComparable: "nicht vergleichbar",
-			textAvailErrorS:        "Fehler",
+			textAvailNotChecked:     "ungeprüft",
+			textAvailUpToDate:       "aktuell",
+			textAvailMajor:          "%s (Major)",
+			textAvailError:          "Prüfung fehlgeschlagen",
+			textAvailNotComparable:  "nicht vergleichbar",
+			textAvailErrorS:         "Fehler",
+			textStateUnreadableS:    "unlesbar",
+			textStateNeedsDirsS:     "Ordner",
+			textStateFailedS:        "Fehler",
+			textAvailNotComparableS: "n. v.",
 
 			textFindingsNone:         "keine",
 			textFindingsErrorsOne:    "%d Fehler",
