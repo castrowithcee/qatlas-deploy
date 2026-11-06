@@ -9,12 +9,13 @@ permissions: {}
 
 jobs:
   release:
-    uses: castrowithcee/qatlas-kit/.github/workflows/release.yml@44f3d6ee35ac2fac84e6c477f4d5c7fcce3e7327 # v0.5.0
+    uses: castrowithcee/qatlas-kit/.github/workflows/release.yml@22175dcfe29eb8966c9c6ea83d6af384a92d18a0 # v0.13.0
     permissions:
       contents: write
     with:
       program: qdeploy
       namespace: qdeploy-release
+      signature-asset: checksums.txt.sig
       environment: release
     secrets:
       RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
