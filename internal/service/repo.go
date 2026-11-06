@@ -190,7 +190,7 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 	if _, err := s.keys.ShowNamedKey(src.Key); err != nil {
 		if errors.Is(err, credentials.ErrNoKey) {
 			return nil, control.NewError(control.CodeNotFound, fmt.Sprintf(
-				"no deploy key exists for stack folder %s; run 'qdeploy key generate --dir %s' and enter it in the git platform", a.Dir, a.Dir))
+				"no deploy key exists for stack folder %s; run 'qdeploy key generate --dir %s' (or 'qdeploy key set --dir %s' to store one you have) and enter it in the git platform", a.Dir, a.Dir, a.Dir))
 		}
 		return nil, answerOf(err)
 	}

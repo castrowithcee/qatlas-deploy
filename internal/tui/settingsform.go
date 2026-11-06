@@ -38,6 +38,8 @@ type settingsForm struct {
 	// dirs and stackDir are the missing directories and the stack folder a data directory form is about.
 	dirs     []control.DirInfo
 	stackDir string
+	// keyLabel is the stack folder named in the confirmation of a key; stackDir is the Dir to send.
+	keyLabel string
 }
 
 // problem shows a problem without a field above the form.
@@ -179,6 +181,10 @@ func (m *Model) submitForm() tea.Cmd {
 		return m.submitSecret(f, text("key"), v["value"].Text)
 	case formDataDirs:
 		return m.submitDataDirs(f, text("owner"), text("mode"))
+	case formKeyChoice:
+		return m.submitKeyChoice(f, v)
+	case formKeyStore:
+		return m.submitKeyStore(f, v)
 	}
 	return nil
 }

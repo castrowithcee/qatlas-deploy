@@ -33,8 +33,11 @@ type fakeBackend struct {
 	holds      map[string]control.HoldResult
 
 	// The settings: what the service holds. A key name of errs such as "probe:" fails that call.
-	probe   control.RepoProbeResult
-	key     *control.KeyResult
+	probe control.RepoProbeResult
+	key   *control.KeyResult
+	// dirKeys are the keys of the other stack folders; keyArgs records every generate and set call.
+	dirKeys map[string]control.KeyResult
+	keyArgs []control.KeySetArgs
 	creds   []control.CredentialInfo
 	window  control.WindowResult
 	notify  []control.NotifyChannelInfo
@@ -455,31 +458,72 @@ func (f *fakeBackend) RepoFetch(context.Context) (control.RepoFetchResult, error
 	return control.RepoFetchResult{Dir: stackDir, Head: commitA, RemoteHead: commitB, UpdatesAvailable: true}, nil
 }
 
-func (f *fakeBackend) KeyShow(context.Context) (control.KeyResult, error) {
-	f.count("keyshow")
-	if err := f.fail("keyshow", ""); err != nil {
-		return control.KeyResult{}, err
+// keySlot is the stored key of a stack folder: key for the default one, dirKeys for the others. The caller
+// holds f.mu.
+func (f *fakeBackend) keySlot(dir string) *control.KeyResult {
+	if dir == "" {
+		return f.key
 	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.key == nil {
-		return control.KeyResult{}, control.NewError(control.CodeNotFound, "no deploy key exists")
+	if k, ok := f.dirKeys[dir]; ok {
+		return &k
 	}
-	return *f.key, nil
+	return nil
 }
 
-func (f *fakeBackend) KeyGenerate(context.Context) (control.KeyResult, error) {
-	if err := f.act("keygen", ""); err != nil {
+func (f *fakeBackend) putKey(dir string, k control.KeyResult) {
+	if dir == "" {
+		f.key = &k
+		return
+	}
+	if f.dirKeys == nil {
+		f.dirKeys = map[string]control.KeyResult{}
+	}
+	f.dirKeys[dir] = k
+}
+
+func (f *fakeBackend) KeyShow(_ context.Context, dir string) (control.KeyResult, error) {
+	f.count("keyshow")
+	if err := f.fail("keyshow", dir); err != nil {
 		return control.KeyResult{}, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.key != nil {
+	if k := f.keySlot(dir); k != nil {
+		return *k, nil
+	}
+	return control.KeyResult{}, control.NewError(control.CodeNotFound, "no deploy key exists")
+}
+
+func (f *fakeBackend) KeyGenerate(_ context.Context, dir string, replace bool) (control.KeyResult, error) {
+	if err := f.act("keygen", dir); err != nil {
+		return control.KeyResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.keyArgs = append(f.keyArgs, control.KeySetArgs{Replace: replace, Dir: dir})
+	if f.keySlot(dir) != nil && !replace {
 		return control.KeyResult{}, control.NewError(control.CodeKeyExists, "a deploy key already exists")
 	}
-	f.key = &control.KeyResult{PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTestsOnly qdeploy",
+	k := control.KeyResult{PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTestsOnly qdeploy",
 		Fingerprint: "SHA256:ExampleKeyFingerprintForTestsOnly000000000"}
-	return *f.key, nil
+	f.putKey(dir, k)
+	return k, nil
+}
+
+func (f *fakeBackend) KeySet(_ context.Context, dir, key string, replace bool) (control.KeyResult, error) {
+	if err := f.act("keyset", dir); err != nil {
+		return control.KeyResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.keyArgs = append(f.keyArgs, control.KeySetArgs{Key: key, Replace: replace, Dir: dir})
+	if f.keySlot(dir) != nil && !replace {
+		return control.KeyResult{}, control.NewError(control.CodeKeyExists, "a deploy key already exists")
+	}
+	k := control.KeyResult{PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIStoredKeyForTestsOnly stored",
+		Fingerprint: "SHA256:StoredKeyFingerprintForTestsOnly000000000"}
+	f.putKey(dir, k)
+	return k, nil
 }
 
 func (f *fakeBackend) Credentials(context.Context) (control.CredentialListResult, error) {

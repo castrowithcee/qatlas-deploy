@@ -89,6 +89,7 @@ const (
 	opRepoSet
 	opFetch
 	opKeyGenerate
+	opKeySet
 	opCredSet
 	opCredDelete
 	opWindowSet
@@ -181,7 +182,7 @@ func (m *Model) loadPage(force bool) tea.Cmd {
 	}
 	switch page {
 	case pageKey:
-		return read(&s.key, func() (any, error) { return b.KeyShow(ctx) })
+		return read(&s.key, func() (any, error) { return b.KeyShow(ctx, "") })
 	case pageCreds:
 		return read(&s.creds, func() (any, error) { return b.Credentials(ctx) })
 	case pageWindow:
@@ -329,8 +330,8 @@ func (m *Model) settingsAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 		return m.openForm(m.repoForm()), true
 	case id == actFetch && s.page == pageRepo:
 		return m.askFetch(), true
-	case id == actGenerate && s.page == pageKey:
-		return m.askGenerate(), true
+	case id == actEdit && s.page == pageKey:
+		return m.openKeyForm(), true
 	case id == actAdd && s.page == pageCreds:
 		return m.openForm(m.credentialForm()), true
 	case id == actRemove && s.page == pageCreds:
@@ -394,8 +395,19 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		done(text, t.Lookup(textDetailHead, short(res.Head)), t.Lookup(textDetailRemote, short(res.RemoteHead)))
 		cmds = append(cmds, m.reloadNow())
 	case control.KeyResult:
-		s.key.loaded, s.noKey, s.keyRes = true, false, res
-		done(t.Lookup(textDoneGenerated), res.Fingerprint)
+		// The page shows the default key only; the key of another stack folder is shown in the answer alone.
+		if msg.name == "" {
+			s.key.loaded, s.noKey, s.keyRes = true, false, res
+		}
+		text := textDoneKeySet
+		if msg.op == opKeyGenerate {
+			text = textDoneGenerated
+		}
+		done(t.Lookup(text), t.Lookup(textDetailFingerprint, res.Fingerprint),
+			t.Lookup(textDetailPublicKey, kittui.Escape(strings.TrimSpace(res.PublicKey))))
+	case keyExists:
+		m.ask(textTitleKey, t.Lookup(textAskKeyReplace), t.Lookup(textWhatKeyReplace), res.details, true, res.replace)
+		return nil
 	case control.WindowResult:
 		s.window.loaded, s.windowRes = true, res
 		done(t.Lookup(textDoneWindow))
@@ -439,6 +451,10 @@ func (m *Model) settingFailed(msg settingMsg) tea.Cmd {
 	s := m.set
 	text := m.serviceText(msg.err)
 	if s.form != nil {
+		if p, ok := m.keyProblem(s.form, msg); ok {
+			s.form.problems(p)
+			return nil
+		}
 		s.form.problem(text, m.text.Lookup(textFormRetry))
 		return nil
 	}
@@ -496,21 +512,6 @@ func (m *Model) tell(title kittui.TextID, text string, details []string) {
 func (m *Model) askFetch() tea.Cmd {
 	m.ask(textPageRepo, m.text.Lookup(textAskFetch), m.text.Lookup(textWhatFetch), nil, false, func() tea.Cmd {
 		return m.writeCall(opFetch, "", func(b Backend) (any, error) { return b.RepoFetch(m.ctx) })
-	})
-	return nil
-}
-
-func (m *Model) askGenerate() tea.Cmd {
-	s := m.set
-	if !s.key.loaded {
-		return nil
-	}
-	if !s.noKey {
-		m.warn(m.text.Lookup(textKeyExists))
-		return nil
-	}
-	m.ask(textPageKey, m.text.Lookup(textAskGenerate), m.text.Lookup(textWhatGenerate), nil, false, func() tea.Cmd {
-		return m.writeCall(opKeyGenerate, "", func(b Backend) (any, error) { return b.KeyGenerate(m.ctx) })
 	})
 	return nil
 }
@@ -591,9 +592,7 @@ func (m *Model) settingsFooter(common, nav []kittui.Hint) []kittui.Hint {
 	case pageRepo:
 		own = []kittui.Hint{{Action: actBind, Label: textKeyBind, Priority: 3}, {Action: actFetch, Label: textKeyFetch, Priority: 3}}
 	case pageKey:
-		if s.noKey {
-			own = []kittui.Hint{{Action: actGenerate, Label: textKeyGenerate, Priority: 3}}
-		}
+		own = []kittui.Hint{{Action: actEdit, Label: textKeySetKey, Priority: 3}}
 	case pageCreds:
 		own = []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}, {Action: actRemove, Label: textKeyRemove, Priority: 3}}
 	case pageWindow:

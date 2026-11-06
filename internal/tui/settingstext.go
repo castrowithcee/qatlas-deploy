@@ -11,7 +11,6 @@ const (
 	textKeySave               kittui.TextID = "key.save"
 	textKeyBind               kittui.TextID = "key.bind"
 	textKeyFetch              kittui.TextID = "key.fetch"
-	textKeyGenerate           kittui.TextID = "key.generate"
 	textKeyAdd                kittui.TextID = "key.add"
 	textKeyRemove             kittui.TextID = "key.remove"
 	textKeyEdit               kittui.TextID = "key.edit"
@@ -56,12 +55,9 @@ const (
 	textFormFix               kittui.TextID = "form.fix"
 	textYes                   kittui.TextID = "yes"
 	textNo                    kittui.TextID = "no"
-	textKeyExists             kittui.TextID = "key.exists"
 	textChooseOne             kittui.TextID = "choose.one"
 	textAskFetch              kittui.TextID = "ask.fetch"
 	textWhatFetch             kittui.TextID = "what.fetch"
-	textAskGenerate           kittui.TextID = "ask.generate"
-	textWhatGenerate          kittui.TextID = "what.generate"
 	textAskCredDelete         kittui.TextID = "ask.creddelete"
 	textWhatCredDelete        kittui.TextID = "what.creddelete"
 	textAskNotifyRemove       kittui.TextID = "ask.notifyremove"
@@ -200,7 +196,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textKeySave:               "save",
 		textKeyBind:               "bind",
 		textKeyFetch:              "fetch now",
-		textKeyGenerate:           "generate key",
 		textKeyAdd:                "add",
 		textKeyRemove:             "remove",
 		textKeyEdit:               "edit",
@@ -220,7 +215,7 @@ func settingsEnglish() map[kittui.TextID]string {
 		textPageWindow:            "Maintenance window",
 		textPageNotify:            "Notifications",
 		textAboutRepo:             "bind the repository, confirm its host key, fetch",
-		textAboutKey:              "show or generate the key for the git platform",
+		textAboutKey:              "store or generate the key for the git platform",
 		textAboutCreds:            "registry logins and the GitHub token",
 		textAboutWindow:           "when updates run",
 		textAboutNotify:           "webhook, Slack, Telegram and e-mail channels",
@@ -234,7 +229,7 @@ func settingsEnglish() map[kittui.TextID]string {
 		textDetailCloned:          "cloned now: %s",
 		textDoneFetchedCurrent:    "Fetched; the working copy is up to date.",
 		textDoneFetchedNew:        "Fetched; the remote has newer commits.",
-		textDoneGenerated:         "The deploy key is generated. Its fingerprint:",
+		textDoneGenerated:         "The deploy key is generated.",
 		textDoneWindow:            "The maintenance window is changed.",
 		textDoneAdded:             "The channel %s is added.",
 		textDoneTested:            "The test message through %s was delivered.",
@@ -245,12 +240,9 @@ func settingsEnglish() map[kittui.TextID]string {
 		textFormFix:               "Correct the field.",
 		textYes:                   "yes",
 		textNo:                    "no",
-		textKeyExists:             "A deploy key exists already; replacing it is only possible with 'qdeploy key generate --replace'.",
 		textChooseOne:             "Choose an entry first.",
 		textAskFetch:              "Fetch the stacks repository now?",
 		textWhatFetch:             "Updates the remote-tracking branch; the working copy stays as it is.",
-		textAskGenerate:           "Generate the deploy key?",
-		textWhatGenerate:          "The service creates an Ed25519 key. Its private part never leaves the service.",
 		textAskCredDelete:         "Delete the credential %s?",
 		textWhatCredDelete:        "Without it qdeploy works anonymously for this service. The value cannot be recovered.",
 		textAskNotifyRemove:       "Remove the channel %s?",
@@ -272,7 +264,7 @@ func settingsEnglish() map[kittui.TextID]string {
 		textDetailStacks:          "stacks: %d",
 		textDetailPollError:       "poll failed: %s",
 		textRepoRebind:            "{bind} binds a repository, {fetch} fetches new commits now.",
-		textKeyNone:               "No deploy key yet. Press {generate} to create one.",
+		textKeyNone:               "No deploy key yet. Press {edit} to store or generate one.",
 		textKeyCopy:               "Add this public key as a deploy key on the git platform:",
 		textDetailDays:            "days: %s",
 		textWeekdayMon:            "Mon",
@@ -390,7 +382,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textKeySave:               "speichern",
 		textKeyBind:               "binden",
 		textKeyFetch:              "jetzt abrufen",
-		textKeyGenerate:           "Schlüssel erzeugen",
 		textKeyAdd:                "hinzufügen",
 		textKeyRemove:             "entfernen",
 		textKeyEdit:               "ändern",
@@ -410,7 +401,7 @@ func settingsGerman() map[kittui.TextID]string {
 		textPageWindow:            "Wartungsfenster",
 		textPageNotify:            "Benachrichtigungen",
 		textAboutRepo:             "Repository binden, Hostschlüssel bestätigen, abrufen",
-		textAboutKey:              "Schlüssel für die Git-Plattform zeigen oder erzeugen",
+		textAboutKey:              "Schlüssel für die Git-Plattform hinterlegen oder erzeugen",
 		textAboutCreds:            "Registry-Logins und GitHub-Token",
 		textAboutWindow:           "wann Updates laufen",
 		textAboutNotify:           "Kanäle für Webhook, Slack, Telegram und E-Mail",
@@ -424,7 +415,7 @@ func settingsGerman() map[kittui.TextID]string {
 		textDetailCloned:          "jetzt geklont: %s",
 		textDoneFetchedCurrent:    "Abgerufen; die Arbeitskopie ist aktuell.",
 		textDoneFetchedNew:        "Abgerufen; das Remote hat neuere Commits.",
-		textDoneGenerated:         "Der Deploy-Schlüssel ist erzeugt. Sein Fingerabdruck:",
+		textDoneGenerated:         "Der Deploy-Schlüssel ist erzeugt.",
 		textDoneWindow:            "Das Wartungsfenster ist geändert.",
 		textDoneAdded:             "Der Kanal %s ist angelegt.",
 		textDoneTested:            "Die Testnachricht über %s wurde zugestellt.",
@@ -435,12 +426,9 @@ func settingsGerman() map[kittui.TextID]string {
 		textFormFix:               "Korrigiere das Feld.",
 		textYes:                   "ja",
 		textNo:                    "nein",
-		textKeyExists:             "Ein Deploy-Schlüssel existiert bereits; ersetzen geht nur mit 'qdeploy key generate --replace'.",
 		textChooseOne:             "Wähle zuerst einen Eintrag.",
 		textAskFetch:              "Das Stacks-Repository jetzt abrufen?",
 		textWhatFetch:             "Aktualisiert den Remote-Zweig; die Arbeitskopie bleibt unverändert.",
-		textAskGenerate:           "Den Deploy-Schlüssel erzeugen?",
-		textWhatGenerate:          "Der Dienst erzeugt einen Ed25519-Schlüssel. Der private Teil verlässt den Dienst nie.",
 		textAskCredDelete:         "Die Zugangsdaten %s löschen?",
 		textWhatCredDelete:        "Ohne sie arbeitet qdeploy bei diesem Dienst anonym. Der Wert ist nicht wiederherstellbar.",
 		textAskNotifyRemove:       "Den Kanal %s entfernen?",
@@ -462,7 +450,7 @@ func settingsGerman() map[kittui.TextID]string {
 		textDetailStacks:          "Stacks: %d",
 		textDetailPollError:       "Abruf fehlgeschlagen: %s",
 		textRepoRebind:            "{bind} bindet ein Repository, {fetch} ruft neue Commits jetzt ab.",
-		textKeyNone:               "Noch kein Deploy-Schlüssel. {generate} erzeugt einen.",
+		textKeyNone:               "Noch kein Deploy-Schlüssel. {edit} hinterlegt oder erzeugt einen.",
 		textKeyCopy:               "Trage diesen öffentlichen Schlüssel als Deploy-Key bei der Git-Plattform ein:",
 		textDetailDays:            "Tage: %s",
 		textWeekdayMon:            "Mo",

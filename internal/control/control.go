@@ -514,6 +514,7 @@ type LogResult struct {
 const (
 	KeyGenerateCommand      = "key.generate"
 	KeyShowCommand          = "key.show"
+	KeySetCommand           = "key.set"
 	CredentialSetCommand    = "credential.set"
 	CredentialListCommand   = "credential.list"
 	CredentialDeleteCommand = "credential.delete"
@@ -526,12 +527,20 @@ type KeyGenerateArgs struct {
 	Dir     string `json:"dir,omitempty"`
 }
 
+// KeySetArgs are the arguments of KeySetCommand: Key is the private key in OpenSSH format, the one place a
+// private key travels to the service. Replace and Dir as in KeyGenerateArgs.
+type KeySetArgs struct {
+	Key     string `json:"key"`
+	Replace bool   `json:"replace"`
+	Dir     string `json:"dir,omitempty"`
+}
+
 // KeyShowArgs are the arguments of KeyShowCommand; Dir as in KeyGenerateArgs.
 type KeyShowArgs struct {
 	Dir string `json:"dir,omitempty"`
 }
 
-// KeyResult answers KeyGenerateCommand and KeyShowCommand with the public part of the deploy key.
+// KeyResult answers KeyGenerateCommand, KeySetCommand and KeyShowCommand with the public part of the deploy key.
 type KeyResult struct {
 	PublicKey   string `json:"public_key"`
 	Fingerprint string `json:"fingerprint"`

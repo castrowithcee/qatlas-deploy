@@ -209,27 +209,21 @@ func TestRepoFetchAsksFirst(t *testing.T) {
 	contains(t, m, "newer commits")
 }
 
-func TestDeployKeyIsGeneratedOnceAndShown(t *testing.T) {
+func TestDeployKeyIsGeneratedFromTheFormAndShown(t *testing.T) {
 	b := settingsBackend()
 	m := newSettingsModel(t, b)
 	send(m, toKey...)
 	contains(t, m, "No deploy key yet")
-	send(m, "G", "n")
-	if len(b.actions()) != 0 {
-		t.Fatalf("calls %v", b.actions())
+	send(m, "e", "right", "esc", "y")
+	if m.set.form != nil || len(b.actions()) != 0 {
+		t.Fatalf("a discarded form acted: %v", b.actions())
 	}
-	send(m, "G", "y")
+	send(m, "e", "right", "f2")
 	if got := b.actions(); !slices.Equal(got, []string{"keygen:"}) {
 		t.Fatalf("calls = %v", got)
 	}
 	send(m, "enter")
 	contains(t, m, "ssh-ed25519 AAAAC3", "SHA256:ExampleKey")
-	// An existing key is never replaced from here.
-	send(m, "G")
-	if m.modal != nil || len(b.actions()) != 1 {
-		t.Fatalf("a second generate went on: %v", b.actions())
-	}
-	contains(t, m, "qdeploy key generate --replace")
 }
 
 func TestDeployKeyIsShownWhenOneExists(t *testing.T) {
