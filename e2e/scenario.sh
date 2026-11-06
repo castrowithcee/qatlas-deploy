@@ -1699,6 +1699,16 @@ tui_cursor_to() {
 	done
 }
 
+# tui_click presses and releases the left mouse button at the first cell of the text $1 on the screen, as a
+# terminal reports it (SGR, 1-based), and fails when the text is not on the screen. The text must lie where
+# only ASCII precedes it on its line.
+tui_click() {
+	cell=$(tui_screen | awk -v t="$1" 'i = index($0, t) { print i, NR; exit }')
+	[ -n "$cell" ] || fail "cannot click '$1', it is not on the screen: $(tui_screen)"
+	set -- $cell
+	tui_send -l "$(printf '\033[<0;%d;%dM\033[<0;%d;%dm' "$1" "$2" "$1" "$2")"
+}
+
 # tui_excerpt logs the lines of the screen from the first one containing $1, at most $2 lines.
 tui_excerpt() {
 	tui_screen | sed -n "/$1/,\$p" | head -n "$2" | sed 's/ *$//; s/^/e2e:   | /'
@@ -1725,6 +1735,20 @@ scenario_tui() {
 	for name in demo-stack demo-cache demo-paused demo-pinned; do tui_wait "$name" 30; done
 	tui_wait 'q quit' 10
 	log 'scenario: interface open, stacks listed'
+
+	step 'a click on a tab switches the area and a click on a stack row marks it'
+	tui_click '3 Runs'
+	tui_wait 'TRIGGER' 10
+	tui_click '1 Stacks'
+	tui_wait 'CURRENT' 10
+	tui_click 'demo-pinned'
+	i=0
+	until tui_screen | grep -q '^> .*\[.\] demo-pinned '; do
+		i=$((i + 1))
+		[ "$i" -lt 20 ] || fail "the click did not mark demo-pinned: $(tui_screen)"
+		sleep 0.25
+	done
+	log 'scenario: mouse clicks switched the area and marked a row'
 
 	step 'u asks first: the question shows the versions and the changelog, nothing changes yet'
 	head_before=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')

@@ -151,6 +151,9 @@ type Model struct {
 	// of the frame drawn last.
 	mouseOn  bool
 	mouseMap *kittui.MouseMap
+	// parts are the widgets the last workspace drawing registered, in workspace cells; mouseParts are those of
+	// the frame on the screen, in screen cells.
+	parts, mouseParts []mousePart
 }
 
 func newModel(c config) (*Model, error) {
@@ -908,7 +911,7 @@ func (m *Model) View() tea.View {
 
 // render draws the whole screen in the size of the terminal.
 func (m *Model) render() string {
-	m.mouseMap = nil
+	m.mouseMap, m.mouseParts = nil, nil
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
@@ -975,6 +978,11 @@ func (m *Model) render() string {
 			targets = kittui.OffsetTargets(wt, room.X, room.Y)
 		}
 	}
+	if m.modal == nil && m.filteringLogView() == nil && !m.helpOpen {
+		// The parts lie on top of the frame; the map puts elements above zones whatever their order.
+		pt, parts := m.partTargets(room)
+		targets, m.mouseParts = append(targets, pt...), parts
+	}
 	m.setMouse(targets)
 	return m.styles.Paint(view, m.width, m.height)
 }
@@ -1005,6 +1013,7 @@ func (m *Model) resizeView() string {
 
 // workspace draws the content of the active area in width by height cells.
 func (m *Model) workspace(width, height int) string {
+	m.parts = nil
 	if m.modal != nil && m.modal.sheet() {
 		return m.modalView(width, height)
 	}
@@ -1033,8 +1042,7 @@ func (m *Model) workspace(width, height int) string {
 	case areaRuns:
 		return m.runsView(width, height)
 	}
-	view, _ := m.list.View(m.styles, width, height)
-	return view
+	return m.listView(m.list, width, height, 0)
 }
 
 // note is a dimmed sentence wrapped into width cells and indented like the rows of a list.
