@@ -9,6 +9,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-kit/configfile"
 
+	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
 )
@@ -172,5 +173,11 @@ func TestUnreadableSourceKeepsItsDeployedNames(t *testing.T) {
 	}
 	if _, ok := r.blocked[srcs[1]]["web"]; !ok {
 		t.Fatalf("blocked = %v", r.blocked)
+	}
+}
+
+func TestCollisionFindingIsTheSameForEngineAndClients(t *testing.T) {
+	if engine.FindingNameCollision != control.FindingNameCollision {
+		t.Fatalf("engine %q, control %q", engine.FindingNameCollision, control.FindingNameCollision)
 	}
 }

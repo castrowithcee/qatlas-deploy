@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -40,13 +41,18 @@ func newStacksCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 				if s.Stopped != nil {
 					state = "stopped since " + s.Stopped.Since.UTC().Format(time.RFC3339)
 				}
+				errText := s.Error
+				if s.Collision != "" {
+					errText = strings.Join(slices.DeleteFunc([]string{s.Error, "name-collision: " + s.Collision},
+						func(p string) bool { return p == "" }), "; ")
+				}
 				rows = append(rows, output.Row{
-					"stack": s.Name, "state": state, "update": s.Update, "versions": strings.Join(versions, ", "),
-					"findings": int64(s.Findings), "error": s.Error,
+					"stack": s.Name, "source": s.Source, "state": state, "update": s.Update, "versions": strings.Join(versions, ", "),
+					"findings": int64(s.Findings), "error": errText,
 				})
 			}
 			return output.Encode(c.OutOrStdout(), program.Format(),
-				output.Collection{Columns: []string{"stack", "state", "update", "versions", "findings", "error"}, Rows: rows})
+				output.Collection{Columns: []string{"stack", "source", "state", "update", "versions", "findings", "error"}, Rows: rows})
 		},
 	}
 }

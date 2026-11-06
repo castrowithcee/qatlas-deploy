@@ -150,17 +150,24 @@ func holdHandler(set func(context.Context, string, bool) (bool, error), on bool)
 	}
 }
 
-// engineStatus reports the stacks of every source, by name and for one name by source; the poll fields are
-// those of the source bound first.
+// engineStatus reports every source and the stacks of every source, by name and for one name by source; the
+// top-level poll fields are those of the source bound first.
 func engineStatus(snaps []sourceSnapshot) control.EngineStatus {
-	res := control.EngineStatus{Stacks: []control.StackStatus{}}
-	if len(snaps) > 0 {
-		st := snaps[0].snap.State
-		res.LastPoll, res.PollError, res.Note = st.LastPoll, printable(st.PollError), printable(st.Note)
-		res.Head, res.RemoteHead = printable(st.Head), printable(st.RemoteHead)
-	}
+	res := control.EngineStatus{Sources: []control.SourceStatus{}, Stacks: []control.StackStatus{}}
 	for _, ss := range snaps {
-		res.Stacks = append(res.Stacks, stackStatuses(ss.snap)...)
+		st := ss.snap.State
+		res.Sources = append(res.Sources, control.SourceStatus{
+			ID: ss.conf.ID, Path: ss.conf.Path, Kind: ss.conf.Kind, LastPoll: st.LastPoll, PollError: printable(st.PollError),
+			Note: printable(st.Note), Head: printable(st.Head), RemoteHead: printable(st.RemoteHead),
+		})
+		for _, item := range stackStatuses(ss.snap) {
+			item.Source = ss.conf.ID
+			res.Stacks = append(res.Stacks, item)
+		}
+	}
+	if len(res.Sources) > 0 {
+		first := res.Sources[0]
+		res.LastPoll, res.PollError, res.Note, res.Head, res.RemoteHead = first.LastPoll, first.PollError, first.Note, first.Head, first.RemoteHead
 	}
 	slices.SortStableFunc(res.Stacks, func(a, b control.StackStatus) int { return cmp.Compare(a.Name, b.Name) })
 	return res

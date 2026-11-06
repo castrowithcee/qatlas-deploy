@@ -128,10 +128,13 @@ func buildRows(s snapshot) []stackRow {
 		return r
 	}
 	unreadable := map[string]bool{}
-	for _, st := range s.status.Engine.Stacks {
+	for i, st := range s.status.Engine.Stacks {
 		r := row(st.Name)
-		r.state = stateOf(st)
-		r.lastResult = st.LastRun
+		// Another source's entry of the name, such as one blocked by name-collision, adds only its findings.
+		if control.Primary(s.status.Engine.Stacks, i) {
+			r.state = stateOf(st)
+			r.lastResult = st.LastRun
+		}
 		for _, f := range st.Findings {
 			if !slices.Contains(stateFindings, f.Kind) {
 				r.errors++
@@ -139,6 +142,9 @@ func buildRows(s snapshot) []stackRow {
 		}
 	}
 	for _, si := range s.stacks.Stacks {
+		if si.Collision != "" {
+			continue
+		}
 		r := row(si.Name)
 		r.mode = si.Update
 		if si.Error != "" {

@@ -9,8 +9,9 @@ import "github.com/castrowithcee/qatlas-kit/helptopics"
 func All() []helptopics.Topic {
 	return []helptopics.Topic{
 		{Name: "qdeploy", Short: "What qdeploy is and what it is for", Text: overview},
-		{Name: "credentials", Short: "The deploy key and stored credentials", Text: credentialsTopic},
+		{Name: "credentials", Short: "The deploy keys and stored credentials", Text: credentialsTopic},
 		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
+		{Name: "sources", Short: "Several stack folders on one host: ids, deploy keys and unique stack names", Text: sourcesTopic},
 		{Name: "stack-capabilities", Short: "What qdeploy can do with a stack's files, and what qdeploy stack check reports", Text: stackCapabilitiesTopic},
 		{Name: "stack-settings", Short: "Stack settings", Text: stackSettingsTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
@@ -26,9 +27,9 @@ Commands:
 - qdeploy run: run the service in the foreground until it receives SIGTERM or SIGINT
 - qdeploy tui, or qdeploy without a command at a terminal: open the terminal interface with the areas Stacks, Stack detail, Runs, Settings and Containers; it shows each stack's versions, state, last run and findings, follows the log of a running run, and offers update, deploy, pause, pin, resume, start, stop and restart (a stopped stack shows as stopped) and the registry query on the cursor stack or on stacks ticked with space; the stack detail sets and deletes the stack's secrets (value hidden) and restores an older backup; Settings binds the repository, generates and shows the deploy key, sets credentials, changes the maintenance window and adds, tests and removes notification channels; Containers lists every container of the host by own stack, foreign project and single container with state and a detail, and reads again every 5 seconds while it is shown, and the stack detail lists the containers of its stack; o opens the output of the container on the cursor, or in the stack detail of all containers of the stack, which follows once a second and takes a period with T and a search with /; every change comes after a confirmation (run with sudo)
 - qdeploy status: show whether the service is running, its version and start time, the last poll and the state of each stack (run with sudo)
-- qdeploy key generate|show: create the SSH deploy key and show its public part (run with sudo)
-- qdeploy repo set <ssh-url> [--dir <path>]: bind the stacks repository, confirm its host key and clone it (run with sudo)
-- qdeploy repo fetch: fetch new commits without touching the working copy (run with sudo)
+- qdeploy key generate|show [--dir <path>]: create the SSH deploy key of a stack folder and show its public part (run with sudo)
+- qdeploy repo set <ssh-url> [--dir <path>]: bind a stacks repository to a stack folder, confirm its host key and clone it; a further folder becomes a further source (run with sudo; see qdeploy help sources)
+- qdeploy repo fetch: fetch new commits of every stack folder without touching the working copies (run with sudo)
 - qdeploy stack list: list the stacks of the working copy with image versions, update mode and whether the stack is stopped (run with sudo)
 - qdeploy stack check [stack]: show per stack of the working copy whether deploy, update, rollback with data, backup and the redaction of secrets work with its files, why not and what to change, and the findings; exit code 1 on errors (run with sudo; see qdeploy help stack-capabilities)
 - qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has; the stack is named by its Compose project (see qdeploy help stack-capabilities), and for a stack with the finding project-renamed this decides to start the new project, next to the old one, which keeps running (run with sudo)
@@ -56,11 +57,12 @@ Commands:
 
 const credentialsTopic = `The service keeps its own secrets in a private store that only the service user can read. The commands need sudo because they talk to the service over its root-only channel.
 
-Deploy key:
-- qdeploy key generate: create an Ed25519 key in the service and print its public part and SHA256 fingerprint
+Deploy keys:
+- Every remote stack folder has its own key, because a git platform accepts a deploy key in one repository only. The first folder uses the key without --dir; every further one needs its own before qdeploy repo set binds it.
+- qdeploy key generate [--dir <path>]: create an Ed25519 key in the service for the stack folder and print its public part and SHA256 fingerprint; the folder need not be bound yet
 - qdeploy key generate --replace: replace an existing key; without --replace an existing key is kept and the command refuses
-- qdeploy key show: print the public part again
-- Enter the public part as a deploy key in the git platform. The private key never leaves the service.
+- qdeploy key show [--dir <path>]: print the public part again
+- Enter the public part as a deploy key in the git platform of that folder's repository. The private key never leaves the service.
 
 Credentials:
 - qdeploy credential set <name>: store a registry token or notification credential; the value is read without echo at a terminal, or from standard input when piped, and never from an argument
@@ -70,6 +72,22 @@ Credentials:
 - Registry login for update checks: name the credential "registry." plus the registry host in lowercase with ':' written as '-' (Docker Hub: registry.docker.io), with the value <user>:<token>. Without such a credential the registry is asked anonymously.
 - GitHub token for changelogs: name the credential "github.com", with the token alone as value. It is sent only to the GitHub API and raises the rate limit; without it GitHub is asked anonymously.
 - A stored value is not shown again and is removed from the service's log output.`
+
+const sourcesTopic = `A host can deploy from several stack folders, each a source with its own clone, engine state, poll and deploy key. Commands on a stack need no source: a stack is named by its Compose project, and the service finds its folder.
+
+Sources:
+- qdeploy repo set <ssh-url> --dir <path> binds a further folder next to those bound earlier; a bound folder is never rebound to another URL, and folders may not lie inside each other (see qdeploy help repository).
+- The id of a source comes from its path and never changes: /opt/stacks becomes opt-stacks, /srv/services/stacks becomes srv-services-stacks.
+- Every remote source has its own deploy key: qdeploy key generate --dir <path> before qdeploy repo set (see qdeploy help credentials).
+- A source whose fetch or poll fails keeps its state; the other sources go on. qdeploy status shows each source with its last poll, error and commits, and each stack with its source.
+- The maintenance window and qdeploy stack updates cover the stacks of every source.
+
+Stack names:
+- Compose tells stacks apart only by project name, so a name is deployed from one source alone. When two sources list the same name, the stack already deployed keeps it, else the one of the source bound first; the other gets the finding name-collision and is never deployed until one of them gets another project name.
+- qdeploy status lists such a stack as source.<id>.stack.<name>; the stack that holds the name stays stack.<name>.
+
+Earlier installations:
+- A host bound to one repository by an earlier version keeps running: at its first start the service makes the binding its first source, moves the engine state below it and keeps the existing deploy key. Nothing needs to be done.`
 
 const repositoryTopic = `The service clones the stacks repository of the host over SSH with its own deploy key and checks the server with its own known_hosts file; the system's SSH configuration and known hosts are not used. Host key checking is always strict.
 

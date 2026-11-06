@@ -6,11 +6,13 @@ package control
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -178,20 +180,63 @@ type StatusResult struct {
 	Window *WindowResult `json:"window,omitempty"`
 }
 
-// EngineStatus is the engine's part of StatusResult. Stacks is empty while no repository is bound.
+// EngineStatus is the engine's part of StatusResult. Sources has every stack folder in the order they were
+// bound; LastPoll, PollError, Note, Head and RemoteHead repeat those of the first one. Stacks has the stacks
+// of every source by name, and for one name by source; both are empty while no repository is bound.
 type EngineStatus struct {
-	LastPoll   time.Time     `json:"last_poll,omitzero"`
-	PollError  string        `json:"poll_error,omitempty"`
-	Note       string        `json:"note,omitempty"`
-	Head       string        `json:"head,omitempty"`
-	RemoteHead string        `json:"remote_head,omitempty"`
-	Stacks     []StackStatus `json:"stacks"`
+	LastPoll   time.Time      `json:"last_poll,omitzero"`
+	PollError  string         `json:"poll_error,omitempty"`
+	Note       string         `json:"note,omitempty"`
+	Head       string         `json:"head,omitempty"`
+	RemoteHead string         `json:"remote_head,omitempty"`
+	Sources    []SourceStatus `json:"sources"`
+	Stacks     []StackStatus  `json:"stacks"`
 }
 
-// StackStatus is the engine's view of one stack. ActiveRun is the id of the run in progress, LastRun the
-// result of the last finished one. Paused is set while the stack gets no runs after a failed rollback.
+// SourceStatus is the state of one stack folder as of its last poll. PollError tells why the poll, its fetch
+// included, could not complete; Note why the working copy was not brought up to date.
+type SourceStatus struct {
+	ID         string    `json:"id"`
+	Path       string    `json:"path"`
+	Kind       string    `json:"kind"`
+	LastPoll   time.Time `json:"last_poll,omitzero"`
+	PollError  string    `json:"poll_error,omitempty"`
+	Note       string    `json:"note,omitempty"`
+	Head       string    `json:"head,omitempty"`
+	RemoteHead string    `json:"remote_head,omitempty"`
+}
+
+// FindingNameCollision is the finding of a stack whose name a stack of another source already uses; it is
+// never deployed.
+const FindingNameCollision = "name-collision"
+
+// Primary reports whether stacks[i] stands for its name: when several sources list a name, the entry that is
+// neither blocked by FindingNameCollision nor removed, else the first one not blocked, else the first.
+func Primary(stacks []StackStatus, i int) bool {
+	rank := func(s StackStatus) int {
+		switch {
+		case slices.ContainsFunc(s.Findings, func(f FindingInfo) bool { return f.Kind == FindingNameCollision }):
+			return 0
+		case s.Removed:
+			return 1
+		}
+		return 2
+	}
+	best := i
+	for j, s := range stacks {
+		if s.Name == stacks[i].Name && (rank(s) > rank(stacks[best]) || rank(s) == rank(stacks[best]) && j < best) {
+			best = j
+		}
+	}
+	return best == i
+}
+
+// StackStatus is the engine's view of one stack. Source is the id of the stack folder it comes from.
+// ActiveRun is the id of the run in progress, LastRun the result of the last finished one. Paused is set
+// while the stack gets no runs after a failed rollback.
 type StackStatus struct {
 	Name      string        `json:"name"`
+	Source    string        `json:"source"`
 	Deployed  string        `json:"deployed,omitempty"`
 	Pending   string        `json:"pending,omitempty"`
 	ActiveRun string        `json:"active_run,omitempty"`
@@ -565,24 +610,27 @@ type RepoFetchSource struct {
 	Error            string `json:"error,omitempty"`
 }
 
-// StacksResult answers StacksListCommand.
+// StacksResult answers StacksListCommand. Dir is the stack folder bound first; Stacks lists the stacks of
+// every stack folder by name, and for one name by source.
 type StacksResult struct {
 	Dir    string      `json:"dir"`
 	Stacks []StackInfo `json:"stacks"`
 }
 
-// StackDir returns the folder of the listed stack name as a path below Dir; false when the list does not hold
-// the stack or its folder is not a single plain name.
+// StackDir returns the folder of the listed stack name as a path below its stack folder (SourceDir, else Dir);
+// false when the list does not hold the stack, only holds it with a Collision, or its folder is not a single
+// plain name.
 func (r StacksResult) StackDir(name string) (string, bool) {
 	for _, s := range r.Stacks {
-		if s.Name != name {
+		if s.Name != name || s.Collision != "" {
 			continue
 		}
+		root := cmp.Or(s.SourceDir, r.Dir)
 		f := s.Folder
-		if r.Dir == "" || f == "" || f == "." || f == ".." || strings.ContainsAny(f, "/\\\x00") {
+		if root == "" || f == "" || f == "." || f == ".." || strings.ContainsAny(f, "/\\\x00") {
 			return "", false
 		}
-		return filepath.Join(r.Dir, f), true
+		return filepath.Join(root, f), true
 	}
 	return "", false
 }
@@ -598,6 +646,11 @@ type StackInfo struct {
 	Error    string      `json:"error,omitempty"`
 	// Stopped is set while the stack was stopped through qdeploy.
 	Stopped *HoldInfo `json:"stopped,omitempty"`
+	// Source and SourceDir are the id and the path of the stack folder the stack comes from.
+	Source    string `json:"source"`
+	SourceDir string `json:"source_dir"`
+	// Collision says why the stack is not deployed when another stack folder holds its name.
+	Collision string `json:"collision,omitempty"`
 }
 
 // ImageInfo is a service image whose tag is a variable; Version is empty when no value is set.
@@ -625,7 +678,9 @@ type StacksCheckResult struct {
 // StackReport is the check of one stack: the functions in the order deploy, update, rollback, backup, redact,
 // and the findings sorted by severity and rule.
 type StackReport struct {
-	Stack     string          `json:"stack"`
+	Stack string `json:"stack"`
+	// Source is the id of the stack folder the stack comes from.
+	Source    string          `json:"source"`
 	Functions []StackFunction `json:"functions"`
 	Findings  []CheckFinding  `json:"findings"`
 }

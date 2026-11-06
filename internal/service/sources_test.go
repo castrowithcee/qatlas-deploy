@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
+	"github.com/castrowithcee/qatlas-deploy/internal/service/servicetest"
 )
 
 const webCompose = "services:\n  app:\n    image: registry.example.test/demo/web:${WEB_VERSION}\n"
@@ -174,6 +176,16 @@ func TestFetchErrorOfOneSourceLeavesTheOther(t *testing.T) {
 	if !strings.Contains(st.Engine.PollError, "connection timed out") || len(stacksNamed(st, "demo-stack")) != 0 {
 		t.Fatalf("status of the failing source: %+v", st.Engine)
 	}
+	srcs := st.Engine.Sources
+	if len(srcs) != 2 || srcs[0].ID != sourceID(h.dir) || srcs[0].Path != h.dir || srcs[0].Kind != "remote" ||
+		!strings.Contains(srcs[0].PollError, "connection timed out") || srcs[0].PollError != st.Engine.PollError ||
+		srcs[1].ID != sourceID(dir) || srcs[1].Path != dir || srcs[1].PollError != "" || srcs[1].Head != h.git.Head ||
+		srcs[1].RemoteHead != h.git.Head || srcs[1].LastPoll.IsZero() {
+		t.Fatalf("sources = %+v", srcs)
+	}
+	if web := stacksNamed(st, "web-stack")[0]; web.Source != sourceID(dir) {
+		t.Fatalf("web-stack source = %q", web.Source)
+	}
 
 	var res control.RepoFetchResult
 	if err := h.call(control.RepoFetchCommand, nil, &res); err != nil {
@@ -190,7 +202,7 @@ func TestFetchErrorOfOneSourceLeavesTheOther(t *testing.T) {
 func TestNameCollisionKeepsTheDeployedStack(t *testing.T) {
 	d := &fakeDeployer{}
 	h := bound(t, d)
-	h.addSource(moreStacks(true))
+	dir := h.addSource(moreStacks(true))
 	st := h.waitStatus("the further source settles", func(st control.StatusResult) bool {
 		web := stacksNamed(st, "web-stack")
 		return len(web) == 1 && web[0].Deployed != "" && len(stacksNamed(st, "demo-stack")) == 2
@@ -203,6 +215,29 @@ func TestNameCollisionKeepsTheDeployedStack(t *testing.T) {
 	if blocked.Deployed != "" || blocked.Pending != "" || len(blocked.Findings) != 1 ||
 		blocked.Findings[0].Kind != "name-collision" || !strings.Contains(blocked.Findings[0].Detail, h.dir) {
 		t.Fatalf("the second stack of the name: %+v", blocked)
+	}
+	if owner.Source != sourceID(h.dir) || blocked.Source != sourceID(dir) || len(st.Engine.Sources) != 2 {
+		t.Fatalf("sources: owner %q, blocked %q, %+v", owner.Source, blocked.Source, st.Engine.Sources)
+	}
+	var list control.StacksResult
+	if err := h.call(control.StacksListCommand, nil, &list); err != nil {
+		t.Fatal(err)
+	}
+	var listed []control.StackInfo
+	for _, s := range list.Stacks {
+		if s.Name == "demo-stack" {
+			listed = append(listed, s)
+		}
+	}
+	if len(listed) != 2 || listed[0].Collision != "" || listed[0].Source != sourceID(h.dir) || listed[0].Error != "" ||
+		listed[1].Collision == "" || listed[1].Source != sourceID(dir) || listed[1].SourceDir != dir || listed[1].Error != "" {
+		t.Fatalf("listed demo-stack = %+v", listed)
+	}
+	if got, ok := list.StackDir("demo-stack"); !ok || got != filepath.Join(h.dir, "demo-stack") {
+		t.Fatalf("StackDir(demo-stack) = %q, %v", got, ok)
+	}
+	if got, ok := list.StackDir("web-stack"); !ok || got != filepath.Join(dir, "web-stack") {
+		t.Fatalf("StackDir(web-stack) = %q, %v", got, ok)
 	}
 	if calls := d.callsOf("demo-stack"); len(calls) != 1 {
 		t.Fatalf("demo-stack runs: %v", calls)
@@ -304,5 +339,36 @@ func writeFile(t *testing.T, path, body string) {
 	}
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The maintenance window covers the stacks of every source, each judged by the source it belongs to.
+func TestWindowUpdatesTheStacksOfEverySource(t *testing.T) {
+	dep := &sequentialDeployer{}
+	h, clock, _ := windowHarness(t, dep, nil)
+	h.addSource(map[string]string{
+		"web-stack/compose.yaml":          "services:\n  app:\n    image: registry.example.test/demo/app:${WEB_VERSION}\n",
+		"web-stack/.env":                  "WEB_VERSION=0.9.1\n",
+		servicetest.Settings("web-stack"): automaticRules,
+	})
+	h.waitStatus("web-stack deployed", func(st control.StatusResult) bool {
+		web := stacksNamed(st, "web-stack")
+		return len(web) == 1 && web[0].Deployed != "" && web[0].ActiveRun == ""
+	})
+	// The pin lies in the state of the first source; the window must find it there.
+	if err := h.call(control.PinCommand, control.HoldArgs{Stack: "demo-stack"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	dep.reset(nil)
+
+	openWindow(t, h, clock)
+	if got := h.git.Pushed(); !slices.Equal(got, []string{"Update web-stack WEB_VERSION from 0.9.1 to 0.9.2"}) {
+		t.Fatalf("pushed = %q", got)
+	}
+	if pulls, _ := dep.pulled(); !slices.Equal(pulls, []string{"web-stack"}) {
+		t.Fatalf("pulls = %v", pulls)
+	}
+	if s := storedUpdates(t, h, "web-stack"); s.Checked.IsZero() || s.Items[0].Current != "0.9.2" {
+		t.Fatalf("web-stack updates = %+v", s)
 	}
 }

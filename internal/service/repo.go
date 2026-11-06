@@ -381,18 +381,21 @@ func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any,
 	// Everything below comes from the working copy and may reach a terminal: it is reduced to printable text.
 	for _, ref := range sortedRefs(r.all) {
 		st := ref.st
-		info := control.StackInfo{Name: printable(st.Name), Folder: printable(st.Folder), Update: st.UpdateMode(), Images: []control.ImageInfo{}, Findings: len(st.Findings)}
+		info := control.StackInfo{Name: printable(st.Name), Folder: printable(st.Folder), Update: st.UpdateMode(), Images: []control.ImageInfo{},
+			Findings: len(st.Findings), Source: ref.src.conf.ID, SourceDir: ref.src.conf.Path}
 		for _, img := range st.Images {
 			info.Images = append(info.Images, control.ImageInfo{
 				Service: printable(img.Service), Image: printable(img.Image), Var: printable(img.Var), Version: printable(img.Value),
 			})
 		}
-		switch detail, blocked := r.blocked[ref.src][st.Name]; {
-		case blocked:
-			info.Error = printable(detail)
+		detail, blocked := r.blocked[ref.src][st.Name]
+		if blocked {
+			info.Collision = printable(detail)
+		}
+		switch {
 		case st.Err != nil:
 			info.Error = printable(st.Err.Error())
-		case s.stopped != nil:
+		case !blocked && s.stopped != nil:
 			info.Stopped = s.stopped(st.Name)
 		}
 		res.Stacks = append(res.Stacks, info)
@@ -430,7 +433,11 @@ func (s *repoService) handleCheck(ctx context.Context, raw json.RawMessage) (any
 	if a.Stack != "" && len(order) == 0 {
 		return nil, control.NewError(control.CodeNotFound, "no such stack in the working copy")
 	}
-	var reports []stackcheck.Report
+	type sourced struct {
+		stackcheck.Report
+		source string
+	}
+	var reports []sourced
 	for _, src := range order {
 		cfg := s.set.gitConfig(src.conf)
 		wc, err := s.set.git.Open(cfg, src.conf.Path)
@@ -442,13 +449,15 @@ func (s *repoService) handleCheck(ctx context.Context, raw json.RawMessage) (any
 		if err != nil {
 			return nil, gitFailure(err)
 		}
-		reports = append(reports, reps...)
+		for _, r := range reps {
+			reports = append(reports, sourced{r, src.conf.ID})
+		}
 	}
-	slices.SortStableFunc(reports, func(a, b stackcheck.Report) int { return cmp.Compare(a.Stack, b.Stack) })
+	slices.SortStableFunc(reports, func(a, b sourced) int { return cmp.Compare(a.Stack, b.Stack) })
 	res := control.StacksCheckResult{Dir: s.firstDir(), Stacks: make([]control.StackReport, 0, len(reports))}
 	// Everything below comes from the working copy and may reach a terminal: it is reduced to printable text.
 	for _, r := range reports {
-		rep := control.StackReport{Stack: printable(r.Stack), Functions: make([]control.StackFunction, 0, len(r.Functions)),
+		rep := control.StackReport{Stack: printable(r.Stack), Source: r.source, Functions: make([]control.StackFunction, 0, len(r.Functions)),
 			Findings: make([]control.CheckFinding, 0, len(r.Findings))}
 		for _, f := range r.Functions {
 			rep.Functions = append(rep.Functions, control.StackFunction{
