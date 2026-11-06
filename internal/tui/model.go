@@ -266,6 +266,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyContainers(msg)
 	case containerDetailMsg:
 		m.applyContainer(msg)
+	case ctReadMsg:
+		m.applyContainerRead(msg)
+	case ctDoneMsg:
+		return m, m.applyContainerDone(msg)
 	case refreshMsg:
 		m.apply(msg)
 		if m.stale {
@@ -504,6 +508,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			actStackStart, actStackStop, actStackRestart:
 			if m.area == areaStacks {
 				return m.beginAction(actionKinds[id])
+			}
+			if cmd, ok := m.containerAction(id); ok {
+				return cmd
 			}
 		case actBack:
 			switch m.area {
@@ -750,11 +757,11 @@ func (m *Model) footer() []kittui.Hint {
 		}
 		return append(append(m.detailHints(), common...), scroll...)
 	case m.area == areaContainers && m.ctv.open:
-		return append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}, containerLogsHint()},
-			common...), scrollHints()...)
+		return append(append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}, containerLogsHint()},
+			containerActionHints()...), common...), scrollHints()...)
 	case m.area == areaContainers:
 		if len(m.ctNames) > 0 {
-			common = append([]kittui.Hint{containerLogsHint()}, common...)
+			common = append(append([]kittui.Hint{containerLogsHint()}, containerActionHints()...), common...)
 		}
 		return m.listFooter(m.ctList, len(m.ctNames), textKeyDetails, common, nav)
 	case m.area == areaRuns && m.log.open:

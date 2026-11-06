@@ -1988,6 +1988,68 @@ scenario_tui() {
 	tui_send Escape
 	log "scenario: the Containers area and the stack detail opened the log of $ctname and of demo-stack, with a period and a search; the secret stayed masked"
 
+	step 'the Containers area stops, starts and restarts a foreign container after a confirmation and shows each new state without a further key press'
+	foreign=$prefix-foreign-tui
+	docker exec "$host" docker rm -f "$foreign" >/dev/null 2>&1 || true
+	docker exec "$host" docker run -d --name "$foreign" --label "$label" \
+		--label com.docker.compose.project=demo-foreign-tui "$image:1.0.0" >/dev/null ||
+		fail 'cannot start the foreign container for the container actions'
+	wait_for 'the foreign container' 30 health_is "$foreign" healthy
+	tui_send Escape
+	tui_send 5
+	tui_wait '5 Containers' 10
+	tui_wait 'foreign project demo-foreign-tui' 15
+	# ct_action presses the action key $1 on the row of $foreign (the group order depends on the language, so the
+	# cursor is found by name), confirms the question that starts with $2 and closes the result sheet of the
+	# command $3. The dialog wraps the question, so only its first words are matched whole.
+	ct_action() {
+		tui_send Home
+		i=0
+		until tui_screen | grep -q "^> .*$foreign "; do
+			i=$((i + 1))
+			[ "$i" -lt 40 ] || fail "the cursor of the Containers area does not reach $foreign: $(tui_screen)"
+			tui_send Down
+			sleep 0.2
+		done
+		tui_send "$1"
+		tui_wait "$2 container $foreign" 15
+		tui_has 'demo-foreign-tui)?' || fail "the question of $3 does not name the foreign project: $(tui_screen)"
+		tui_excerpt "$2 container $foreign" 10
+		tui_send y
+		tui_wait "$3 finished: 1 ok, 0 failed" 60
+		tui_has "$foreign" || fail "the result sheet of $3 does not name $foreign: $(tui_screen)"
+		tui_send Escape
+		tui_wait '5 Containers' 10
+	}
+	# ct_expect waits without a key press for the row of $foreign to show the state $1 and checks the engine state $2.
+	ct_expect() {
+		i=0
+		until tui_screen | grep -qE " $foreign +$1 "; do
+			i=$((i + 1))
+			[ "$i" -lt 20 ] || fail "the Containers area does not show $foreign as $1 after the action: $(tui_screen)"
+			sleep 1
+		done
+		engine=$(docker exec "$host" docker inspect -f '{{.State.Status}}' "$foreign")
+		[ "$engine" = "$2" ] || fail "docker shows $foreign as $engine, not $2: $(tui_screen)"
+	}
+	tui_screen | grep -qE " $foreign +ok " || fail "the Containers area does not show $foreign as ok before the stop: $(tui_screen)"
+
+	ct_action X Stop stop
+	ct_expect stopped exited
+	log "scenario: the stop through the Containers area left $foreign stopped in the list and exited in docker"
+
+	ct_action S Start start
+	ct_expect ok running
+	log "scenario: the start through the Containers area left $foreign ok in the list and running in docker"
+
+	started=$(docker exec "$host" docker inspect -f '{{.State.StartedAt}}' "$foreign")
+	ct_action Z Restart restart
+	ct_expect ok running
+	[ "$(docker exec "$host" docker inspect -f '{{.State.StartedAt}}' "$foreign")" != "$started" ] ||
+		fail "the restart did not restart $foreign: $(tui_screen)"
+	docker exec "$host" docker rm -f "$foreign" >/dev/null 2>&1
+	log "scenario: the restart through the Containers area left $foreign ok in the list and running in docker with a new start time"
+
 	step 'Tab focuses the tab line, Right and Left switch the area without digits, and Tab leads back to the content'
 	tui_send Escape
 	# An earlier step left a run log open in Runs; close it so Runs shows its list.

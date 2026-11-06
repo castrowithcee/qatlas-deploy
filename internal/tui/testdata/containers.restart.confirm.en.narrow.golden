@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                          [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]              
+--------------------------------------------------------------------------------
+    NAME               STATE       IMAGE                      UPTIME  RESTARTS  
+  v # foreign project legacy-blog (2)                                           
+    legacy-blog-db-1   stopped     example.invalid/db:15      -       0         
+    legacy-blog-web-1  ok          example.invalid/blog:2     5d1h    0         
+  v # fo#= restart ====================================================#        
+    wiki| ! Restart container example-cache (single container)?        |        
+  v # ow|                                                              |        
+    demo| Stops the container as stop does, starts it again and waits  |        
+    demo| up to a minute until it runs and, if it has a health check,  |        
+  v # si| is healthy. Whatever it serves is unavailable meanwhile.     |        
+>   exam| State: ok (running)                                          |        
+        |                                                              |        
+        | [ yes, do it ]  > cancel <                                   |        
+        | y yes, do it  n/esc/enter cancel                             |        
+        #==============================================================#        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                             6/6

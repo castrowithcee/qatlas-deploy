@@ -1,0 +1,40 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]                                                      
+------------------------------------------------------------------------------------------------------------------------
+    NAME               STATE       IMAGE                      UPTIME  RESTARTS                                          
+  v # foreign project legacy-blog (2)                                                                                   
+>   legacy-blog-db-1   stopped     example.invalid/db:15      -       0                                                 
+    legacy-blog-web-1  ok          example.invalid/blog:2     5d1h    0                                                 
+  v # foreign project wiki [conflict: name of a stack, other folder] (1)                                                
+    wiki-app-1         restarting  example.invalid/wiki:1     -       14                                                
+  v # own stack demo-stack (2)                                                                                          
+    demo-stack-app-1   ok          example.invalid/app:1.4.2  3h2m    0                                                 
+    demo-stack-db-1    unhealthy   example.invalid/db:16      1m      2                                                 
+  v # single containers (1)                                                                                             
+    example-cache      ok          example.invalid/cache:7    45s     0                                                 
+                                                                                                                        
+                            #= start ======================================================#                            
+                            | ! Start container legacy-blog-db-1 (foreign project legacy-  |                            
+                            |   blog)?                                                     |                            
+                            |                                                              |                            
+                            | Starts the container and waits up to a minute until it runs  |                            
+                            | and, if it has a health check, is healthy. A container that  |                            
+                            | already runs is left as it is.                               |                            
+                            | State: stopped (exited)                                      |                            
+                            |                                                              |                            
+                            | [ yes, do it ]  > cancel <                                   |                            
+                            | y yes, do it  n/esc/enter cancel                             |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                     1/6

@@ -54,6 +54,8 @@ type fakeBackend struct {
 	// name; errs "containers:" and "container:<name>" fail those calls.
 	containers       control.ContainerListResult
 	containerDetails map[string]control.ContainerDetail
+	// ctNotReady is the reason a start or restart answers with as NotReady; "" means ready.
+	ctNotReady string
 	// ctLogLines are all container log lines in time order, ctLogPage the most lines one answer holds (zero:
 	// no limit) and ctLogArgs the arguments of the calls made.
 	ctLogLines []control.ContainerLogLine
@@ -253,6 +255,44 @@ func (f *fakeBackend) StackStop(_ context.Context, stack string) (control.StackA
 
 func (f *fakeBackend) StackRestart(_ context.Context, stack string) (control.StackActionResult, error) {
 	return f.stackAction("restart", stack, false)
+}
+
+// containerAction records "<call>:<id>", where id is what the interface passed (the container ID), and answers
+// with the container as it is afterwards: running after a start or restart, exited after a stop.
+func (f *fakeBackend) containerAction(call, id string) (control.ContainerActionResult, error) {
+	if err := f.act(call, id); err != nil {
+		return control.ContainerActionResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	res := control.ContainerActionResult{}
+	for _, d := range f.containerDetails {
+		if d.ID == id || d.Name == id {
+			res.ContainerSummary, res.Kind = d.ContainerSummary, d.Kind
+		}
+	}
+	if call == "ctstop" {
+		res.State, res.EngineState, res.UptimeSeconds, res.Health = control.ContainerStopped, "exited", 0, ""
+		return res, nil
+	}
+	res.State, res.EngineState, res.UptimeSeconds = control.ContainerOK, "running", 2
+	res.NotReady = f.ctNotReady
+	if res.NotReady != "" {
+		res.State, res.EngineState = control.ContainerStopped, "exited"
+	}
+	return res, nil
+}
+
+func (f *fakeBackend) ContainerStart(_ context.Context, id string) (control.ContainerActionResult, error) {
+	return f.containerAction("ctstart", id)
+}
+
+func (f *fakeBackend) ContainerStop(_ context.Context, id string) (control.ContainerActionResult, error) {
+	return f.containerAction("ctstop", id)
+}
+
+func (f *fakeBackend) ContainerRestart(_ context.Context, id string) (control.ContainerActionResult, error) {
+	return f.containerAction("ctrestart", id)
 }
 
 func (f *fakeBackend) Window(context.Context) (control.WindowResult, error) {
