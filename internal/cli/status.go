@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -124,8 +125,23 @@ func engineFields(e control.EngineStatus) []output.Field {
 		if s.Stopped != nil {
 			out = append(out, output.Field{Name: p + "stopped", Value: "since " + s.Stopped.Since.UTC().Format(time.RFC3339)})
 		}
+		if r := s.Repair; r != nil {
+			out = append(out, output.Field{Name: p + "repair", Value: repairText(r)})
+		}
 	}
 	return out
+}
+
+// repairText is the repair state as one line: halted since when, or the attempts made and the next one due.
+func repairText(r *control.RepairInfo) string {
+	text := fmt.Sprintf("%d of %d attempts", r.Attempts, r.Max)
+	if r.Halted != nil {
+		return "halted since " + r.Halted.Since.UTC().Format(time.RFC3339) + " after " + text
+	}
+	if !r.Next.IsZero() {
+		text += ", next " + r.Next.UTC().Format(time.RFC3339)
+	}
+	return text
 }
 
 func call(ctx context.Context, ep localipc.ServiceEndpoint, command string, args, result any) error {

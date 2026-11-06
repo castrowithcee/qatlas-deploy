@@ -113,6 +113,7 @@ var notifyEvents = []struct {
 	{control.NotifyEventSucceeded, textEventSucceeded}, {control.NotifyEventFailed, textEventFailed},
 	{control.NotifyEventRolledBack, textEventRolledBack}, {control.NotifyEventRollbackFailed, textEventRollbackFailed},
 	{control.NotifyEventContainerFailed, textEventContainerFailed}, {control.NotifyEventRecovered, textEventRecovered},
+	{control.NotifyEventRecoveryFailed, textEventRecoveryFailed},
 	{control.NotifyEventUpdateAvailable, textEventUpdateAvailable},
 }
 

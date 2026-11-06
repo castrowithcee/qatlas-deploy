@@ -582,19 +582,27 @@ func (e *Engine) lockContext(ctx context.Context) error {
 	}
 }
 
-// Resume clears the pause of a stack and returns what it was. It starts no run: the failed commit stays
-// marked, so the stack runs again on a new commit or a manual trigger. ErrNotPaused when it is not paused.
+// Resume clears the pause of a stack after a failed rollback and the halt of its repair, and returns the pause,
+// zero when only the repair was halted. A cleared halt starts the repair afresh. It starts no run: the failed
+// commit stays marked, so the stack runs again on a new commit or a manual trigger. ErrNotPaused when neither
+// is set.
 func (e *Engine) Resume(name string) (Pause, error) {
 	var was Pause
 	err := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur, ok := s.Stacks[name]
-		if !ok || cur.Paused == nil {
+		halted := ok && cur.Repair != nil && cur.Repair.Halted != nil
+		if !ok || (cur.Paused == nil && !halted) {
 			return s, ErrNotPaused
 		}
-		was = *cur.Paused
-		cur.Paused = nil
-		cur.Findings = slices.DeleteFunc(cur.Findings, func(f Finding) bool { return f.Kind == FindingPaused })
+		if halted {
+			cur.Repair = nil
+		}
+		if cur.Paused != nil {
+			was = *cur.Paused
+			cur.Paused = nil
+			cur.Findings = slices.DeleteFunc(cur.Findings, func(f Finding) bool { return f.Kind == FindingPaused })
+		}
 		s.Stacks[name] = cur
 		return s, nil
 	})

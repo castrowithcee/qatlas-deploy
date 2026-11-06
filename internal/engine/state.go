@@ -132,6 +132,23 @@ type StackState struct {
 	// StoppedContainers are the IDs of containers stopped through qdeploy; the monitor does not report them
 	// until they run again or are gone.
 	StoppedContainers []string `json:"stopped_containers,omitempty"`
+	// Repair is the monitor's repair of the stack's failures by restarts; nil while none is planned or counts.
+	Repair *Repair `json:"repair,omitempty"`
+}
+
+// MaxRepairAttempts is how many restarts the monitor makes before it halts the repair of a stack.
+const MaxRepairAttempts = 3
+
+// Repair is how far the container monitor got in repairing a stack's failures by restarts. Attempts counts the
+// restarts since the stack last ran an hour without failure; Last is when the latest was made and Next when the
+// next is due, zero when none is due. StableSince is when the readings became clean again, zero while a failure
+// is detected. Halted is set when the restarts did not help: no restart is made until Resume clears it.
+type Repair struct {
+	Attempts    int       `json:"attempts,omitempty"`
+	Last        time.Time `json:"last,omitzero"`
+	Next        time.Time `json:"next,omitzero"`
+	StableSince time.Time `json:"stable_since,omitzero"`
+	Halted      *Hold     `json:"halted,omitempty"`
 }
 
 // MaxMonitorServices bounds Services.
@@ -342,6 +359,9 @@ func validateMonitor(st StackState) error {
 			return errors.New("invalid container id")
 		}
 	}
+	if r := st.Repair; r != nil && (r.Attempts < 0 || r.Attempts > MaxRepairAttempts || (r.Halted != nil && r.Halted.Since.IsZero())) {
+		return errors.New("invalid repair")
+	}
 	return nil
 }
 
@@ -429,6 +449,14 @@ func (s State) clone() State {
 		}
 		v.Services = append([]string(nil), v.Services...)
 		v.StoppedContainers = append([]string(nil), v.StoppedContainers...)
+		if v.Repair != nil {
+			r := *v.Repair
+			if r.Halted != nil {
+				h := *r.Halted
+				r.Halted = &h
+			}
+			v.Repair = &r
+		}
 		out.Stacks[k] = v
 	}
 	out.Runs = append([]RunRecord(nil), s.Runs...)

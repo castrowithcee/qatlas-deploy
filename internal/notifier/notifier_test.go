@@ -469,3 +469,42 @@ func TestChannelsWithoutTheMonitorEventsNeverGetThem(t *testing.T) {
 		t.Errorf("mon = %v", got)
 	}
 }
+
+func TestRepairMessagesTellOfTheRestart(t *testing.T) {
+	since := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	at := since.Add(2 * time.Minute)
+	rec := notifier.Message(notifier.Event{Type: notifier.EventRecovered, Stack: "web", Kind: "exited", Container: "web-app-1",
+		Since: since, Time: at, Restarted: true})
+	if !strings.Contains(rec.Text, "A restart by qdeploy fixed it.") {
+		t.Errorf("recovered text %q", rec.Text)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.JSON, &body); err != nil || body["restarted"] != true {
+		t.Errorf("recovered json = %s, %v", rec.JSON, err)
+	}
+	plain := notifier.Message(notifier.Event{Type: notifier.EventRecovered, Stack: "web", Kind: "exited", Since: since, Time: at})
+	body = nil
+	if err := json.Unmarshal(plain.JSON, &body); err != nil || body["restarted"] != nil || strings.Contains(plain.Text, "restart") {
+		t.Errorf("recovery without restart = %q, %s", plain.Text, plain.JSON)
+	}
+
+	failed := notifier.Message(notifier.Event{Type: notifier.EventRecoveryFailed, Stack: "web", Kind: "unhealthy",
+		Container: "web-app-1", Since: since, Time: at, Attempts: 3})
+	if failed.Event != "recovery-failed" || failed.Subject != "Stack web: Container web-app-1 not repaired" {
+		t.Errorf("recovery-failed = %q, %q", failed.Event, failed.Subject)
+	}
+	for _, want := range []string{"web-app-1 of stack web is unhealthy and 3 restarts did not fix it", "until an operator resumes",
+		"Failed since: 2026-03-01T10:00:00Z"} {
+		if !strings.Contains(failed.Text, want) {
+			t.Errorf("recovery-failed text %q lacks %q", failed.Text, want)
+		}
+	}
+	body = nil
+	if err := json.Unmarshal(failed.JSON, &body); err != nil || body["event"] != "recovery-failed" || body["kind"] != "unhealthy" ||
+		body["container"] != "web-app-1" || body["attempts"] != float64(3) || body["at"] != "2026-03-01T10:02:00Z" {
+		t.Errorf("recovery-failed json = %s, %v", failed.JSON, err)
+	}
+	if got, err := notifier.NormalizeEvents([]string{"recovery-failed"}); err != nil || !slices.Equal(got, []string{"recovery-failed"}) {
+		t.Errorf("select recovery-failed = %v, %v", got, err)
+	}
+}

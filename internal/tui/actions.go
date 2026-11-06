@@ -188,10 +188,10 @@ func (m *Model) beginAction(kind actionKind) tea.Cmd {
 		}
 	}
 	if kind == kindResume {
-		// Only a stack paused after a failed rollback is resumed; the narrower reading refuses the whole
-		// action rather than leaving a ticked stack out unseen.
+		// Only a stack paused after a failed rollback or halted in its repair is resumed; the narrower reading
+		// refuses the whole action rather than leaving a ticked stack out unseen.
 		for _, name := range p.stacks {
-			if r := m.rowNamed(name); r.state != stateRollbackPause {
+			if !m.resumable(name) {
 				m.warn(m.text.Lookup(textActionNotResumable, name))
 				return nil
 			}
@@ -216,6 +216,16 @@ func (m *Model) beginAction(kind actionKind) tea.Cmd {
 	}
 	m.modal = &modal{kind: modalAsk, dialog: dialog, plan: p}
 	return nil
+}
+
+// resumable reports whether the status shows a pause after a rollback or a halted repair for the stack.
+func (m *Model) resumable(name string) bool {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name == name && control.Primary(m.snap.status.Engine.Stacks, i) {
+			return st.Paused != nil || st.Repair != nil && st.Repair.Halted != nil
+		}
+	}
+	return false
 }
 
 func (m *Model) rowNamed(name string) stackRow {
@@ -658,7 +668,7 @@ func (m *Model) actionHints() []kittui.Hint {
 		{Action: actUpdate, Label: textKeyUpdate, Priority: 2},
 		{Action: actDeploy, Label: textKeyDeploy, Priority: 2},
 	}
-	if id, ok := m.list.Selected(); ok && m.rows[id].state == stateRollbackPause {
+	if id, ok := m.list.Selected(); ok && m.resumable(m.rows[id].name) {
 		hints = append(hints, kittui.Hint{Action: actResume, Label: textKeyResume, Priority: 2})
 	}
 	return hints
@@ -673,7 +683,7 @@ func (m *Model) moreActionHints() []kittui.Hint {
 		{Action: actStackStart, Label: textKeyStart}, {Action: actStackStop, Label: textKeyStop},
 		{Action: actStackRestart, Label: textKeyRestart},
 	}
-	if id, ok := m.list.Selected(); !ok || m.rows[id].state != stateRollbackPause {
+	if id, ok := m.list.Selected(); !ok || !m.resumable(m.rows[id].name) {
 		hints = append(hints, kittui.Hint{Action: actResume, Label: textKeyResume})
 	}
 	return hints
