@@ -53,12 +53,12 @@ func newFakeReleases(t *testing.T, signer ssh.Signer, tamper bool, tags ...strin
 			releasetest.File{Name: "bin/qdeploy", Body: []byte("new program " + tag)},
 			releasetest.File{Name: sysservice.UnitEntry("qdeploy"), Body: []byte("[Service]\n# unit " + tag + "\n")},
 			releasetest.File{Name: manEntry, Body: []byte(".TH QDEPLOY 1 " + tag + "\n")})
-		assets := releasetest.Release(t, signer, release.Namespace, map[string][]byte{name: archive})
+		assets := releasetest.Release(t, signer, release.Namespace, release.SignatureAsset, map[string][]byte{name: archive})
 		if tamper {
 			assets["checksums.txt"] = append(assets["checksums.txt"], '\n')
 		}
 		rel := fakeRelease{TagName: tag}
-		for _, n := range []string{name, "checksums.txt", "checksums.txt.sig"} {
+		for _, n := range []string{name, "checksums.txt", release.SignatureAsset} {
 			id++
 			rel.Assets = append(rel.Assets, fakeAsset{Name: n, URL: f.server.URL + apiRepo + "/releases/assets/" + strconv.Itoa(id)})
 			f.blobs[strconv.Itoa(id)] = assets[n]

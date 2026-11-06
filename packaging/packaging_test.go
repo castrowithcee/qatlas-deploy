@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-deploy/internal/release"
 	"github.com/castrowithcee/qatlas-kit/release/installer"
 	"github.com/castrowithcee/qatlas-kit/release/releasebuild"
 	"github.com/castrowithcee/qatlas-kit/sysservice"
@@ -114,13 +115,14 @@ func TestInstallerRendersTheSystemVariant(t *testing.T) {
 		t.Fatal(err)
 	}
 	script, err := installer.Shell(installer.Params{
-		Program:     program,
-		DisplayName: c.Installer.DisplayName,
-		ReleasesURL: "https://github.com/castrowithcee/qatlas-deploy/releases",
-		Namespace:   namespace,
-		TrustedKeys: keys,
-		Targets:     c.Targets,
-		NextStep:    c.Installer.NextStep,
+		Program:        program,
+		DisplayName:    c.Installer.DisplayName,
+		ReleasesURL:    "https://github.com/castrowithcee/qatlas-deploy/releases",
+		Namespace:      namespace,
+		SignatureAsset: release.SignatureAsset,
+		TrustedKeys:    keys,
+		Targets:        c.Targets,
+		NextStep:       c.Installer.NextStep,
 		Service: &installer.Service{
 			Groups:            c.Service.Groups,
 			AddInstallingUser: c.Service.AddInstallingUser,
