@@ -1,0 +1,14 @@
+qdeploy  maintenance window closed                                                                              [?] help
+> [1 Stacks]  2 Stack detail   3 Runs   4 Settings   5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+      STACK        CURRENT      AVAILABLE      MODE       STATE                  LAST RUN                     FINDINGS  
+> [ ] demo-stack   1.4.2        1.5.0          automatic  deployed               succeeded 10-30 14:02        1 warning 
+  [ ] mail-relay   3.1          up to date     manual     pending                succeeded 10-28 03:10        none      
+  [ ] old-tool     -            unchecked      -          removed                succeeded                    none      
+  [ ] photo-album  2.0.1        check failed   automatic  paused after rollback  rollback failed 10-29 03:10  1 error   
+  [ ] web-shop     5.2.0, 16.4  6.0.0 (major)  automatic  running                rolled back 10-30 12:00      none      
+  [ ] wiki         1.41.0       unchecked      none       pinned                 succeeded 10-27 03:10        2 warnings
+                                                                                                                        
+                                                                                                                        
+enter details  / search  space tick  u update  d deploy  left previous area  right next area  tab zone  r reload        
+1-5 area  q quit                                                                                     up/down choose  1/6

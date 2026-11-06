@@ -15,6 +15,9 @@ const (
 	textAreaRuns   kittui.TextID = "area.runs"
 
 	textKeyArea     kittui.TextID = "key.area"
+	textKeyZone     kittui.TextID = "key.zone"
+	textKeyPrevArea kittui.TextID = "key.prevarea"
+	textKeyNextArea kittui.TextID = "key.nextarea"
 	textKeyDetails  kittui.TextID = "key.details"
 	textFilterKeep  kittui.TextID = "filter.keep"
 	textFilterClear kittui.TextID = "filter.clear"
@@ -215,6 +218,9 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textAreaRuns:   "Runs",
 
 			textKeyArea:     "area",
+			textKeyZone:     "zone",
+			textKeyPrevArea: "previous area",
+			textKeyNextArea: "next area",
 			textKeyDetails:  "details",
 			textFilterKeep:  "keep filter",
 			textFilterClear: "clear filter",
@@ -399,6 +405,9 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textAreaRuns:   "Läufe",
 
 			textKeyArea:     "Bereich",
+			textKeyZone:     "Zone",
+			textKeyPrevArea: "voriger Bereich",
+			textKeyNextArea: "nächster Bereich",
 			textKeyDetails:  "Details",
 			textFilterKeep:  "Filter behalten",
 			textFilterClear: "Filter leeren",

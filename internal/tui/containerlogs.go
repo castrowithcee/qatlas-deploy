@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"time"
 
@@ -187,6 +186,9 @@ func (m *Model) containerLogKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if id, ok := m.keys.Match(msg, focus); ok {
+		if cmd, handled := m.navKey(id, msg, focus); handled {
+			return cmd
+		}
 		switch id {
 		case actQuit, actForceQuit:
 			return tea.Quit
@@ -195,11 +197,6 @@ func (m *Model) containerLogKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		case actReload:
 			return tea.Batch(m.reload(), m.reloadContainerLog(false))
-		case actArea:
-			if i := slices.Index(areaKeys, kittui.KeyName(msg)); i >= 0 {
-				return m.enter(areas()[i].ID)
-			}
-			return nil
 		case actBack:
 			if !l.view.Update(msg) {
 				m.closeContainerLog()
