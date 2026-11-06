@@ -28,13 +28,14 @@ func (m *Model) formShown() bool {
 	return (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil
 }
 
-// mousePart is a widget of the workspace that takes clicks and the wheel itself: a list or a log view, with
-// its place on the screen.
+// mousePart is a widget of the workspace that takes clicks and the wheel itself: a list, a log view, a form
+// or a scrolled text, with its place on the screen.
 type mousePart struct {
 	rect    kittui.Rect
 	list    *kittui.List
 	log     *kittui.LogView
 	form    *kittui.Form
+	scroll  func(steps int) // a scrolled text; it takes the wheel only
 	targets []kittui.Target
 }
 
@@ -51,9 +52,16 @@ func (m *Model) formPart(form *kittui.Form, targets []kittui.Target, width, heig
 	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, form: form, targets: targets})
 }
 
-// logPart registers the log view drawn at row y of the workspace for the wheel. Its buttons stay unregistered.
-func (m *Model) logPart(view *kittui.LogView, width, height, y int) {
-	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, log: view})
+// logPart registers the log view drawn at row y of the workspace with the targets its View returned: the
+// wheel scrolls it, and a click on a button takes the way of the key it stands for.
+func (m *Model) logPart(view *kittui.LogView, targets []kittui.Target, width, height, y int) {
+	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, log: view, targets: targets})
+}
+
+// textPart registers the scrolled text drawn at row y of the workspace for the wheel. The wheel moves the
+// text only; the focus stays where it is.
+func (m *Model) textPart(scroll func(steps int), width, height, y int) {
+	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, scroll: scroll})
 }
 
 // partTargets are the targets of the registered parts as the screen shows them, and the parts themselves
@@ -110,6 +118,8 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 				p.list.Wheel(res.WheelSteps)
 			case p.log != nil:
 				p.log.Wheel(res.WheelSteps)
+			case p.scroll != nil:
+				p.scroll(res.WheelSteps)
 			case p.form != nil && m.formTakesMouse(p.form):
 				p.form.Wheel(res.WheelSteps)
 			}

@@ -1878,6 +1878,18 @@ tui_click() {
 	tui_send -l "$(printf '\033[<0;%d;%dM\033[<0;%d;%dm' "$1" "$2" "$1" "$2")"
 }
 
+# tui_wheel turns the mouse wheel $2 notches ($1 is up or down) at the cell $3 (column), $4 (row), 1-based, as
+# a terminal reports it (SGR, buttons 64 and 65).
+tui_wheel() {
+	button=65
+	[ "$1" = up ] && button=64
+	n=0
+	while [ "$n" -lt "$2" ]; do
+		tui_send -l "$(printf '\033[<%d;%d;%dM' "$button" "$3" "$4")"
+		n=$((n + 1))
+	done
+}
+
 # tui_click_row clicks the stack $1 in the Stacks list and waits until the cursor marks it.
 tui_click_row() {
 	tui_click "$1"
@@ -1940,8 +1952,8 @@ scenario_tui() {
 	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$head_before" ] || fail 'the question already made a commit'
 	[ "$(stack_run_count demo-cache)" = "$runs_before" ] || fail 'the question already started a run'
 
-	step 'y runs the update; while it runs the Runs area lists the run and opens its log, which follows it'
-	tui_send y
+	step 'a click on the answer runs the update as y does; while it runs the Runs area lists the run and opens its log, which follows it'
+	tui_click 'yes, do it'
 	tui_send 3
 	# The list is read again on r. The run lasts a few seconds, long enough for a poll every 0.3 seconds.
 	i=0
@@ -1958,6 +1970,27 @@ scenario_tui() {
 	log 'scenario: live run log of the update:'
 	tui_excerpt 'demo-cache  ' 8
 	tui_wait 'update finished: 1 ok, 0 failed' 120
+
+	step 'the wheel scrolls the run log in a small window and the lines of its end come back'
+	tui_tmux resize-window -t qdtui -y 12
+	i=0
+	until tui_screen | grep -q 'update finished: 1 ok, 0 failed' && tui_screen | grep -q '^\[ L follow'; do
+		i=$((i + 1))
+		[ "$i" -lt 40 ] || fail "the run log does not show its end in the small window: $(tui_screen)"
+		sleep 0.25
+	done
+	tui_wheel up 3 10 6
+	i=0
+	while tui_has 'update finished: 1 ok, 0 failed'; do
+		i=$((i + 1))
+		[ "$i" -lt 20 ] || fail "the wheel did not scroll the run log up: $(tui_screen)"
+		sleep 0.25
+	done
+	tui_wheel down 10 10 6
+	tui_wait 'update finished: 1 ok, 0 failed' 10
+	tui_tmux resize-window -t qdtui -y 40
+	tui_wait 'q quit' 10
+	log 'scenario: the wheel scrolled the run log up and back down'
 
 	step 'l opens the log of the finished run; the update made one commit and the stack runs 1.1.0'
 	tui_send l
