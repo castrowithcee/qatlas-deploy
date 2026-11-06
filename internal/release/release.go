@@ -11,6 +11,9 @@ import (
 // Namespace is the SSHSIG namespace every release signature is made for.
 const Namespace = "qdeploy-release"
 
+// SignatureAsset is the name of the release file that holds the signature over checksums.txt.
+const SignatureAsset = "checksums.txt.sig"
+
 // trustedKeyLines lists the public keys that may sign a release, in authorized_keys format. A successor key
 // is added one release before a rotation so that installed programs already trust it. The list is fixed at
 // build time: nothing at run time extends or replaces it. It must match .github/release-allowed-signers.
