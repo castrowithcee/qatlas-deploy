@@ -1971,27 +1971,6 @@ scenario_tui() {
 	tui_excerpt 'demo-cache  ' 8
 	tui_wait 'update finished: 1 ok, 0 failed' 120
 
-	step 'the wheel scrolls the run log in a small window and the lines of its end come back'
-	tui_tmux resize-window -t qdtui -y 12
-	i=0
-	until tui_screen | grep -q 'update finished: 1 ok, 0 failed' && tui_screen | grep -q '^\[ L follow'; do
-		i=$((i + 1))
-		[ "$i" -lt 40 ] || fail "the run log does not show its end in the small window: $(tui_screen)"
-		sleep 0.25
-	done
-	tui_wheel up 3 10 6
-	i=0
-	while tui_has 'update finished: 1 ok, 0 failed'; do
-		i=$((i + 1))
-		[ "$i" -lt 20 ] || fail "the wheel did not scroll the run log up: $(tui_screen)"
-		sleep 0.25
-	done
-	tui_wheel down 10 10 6
-	tui_wait 'update finished: 1 ok, 0 failed' 10
-	tui_tmux resize-window -t qdtui -y 40
-	tui_wait 'q quit' 10
-	log 'scenario: the wheel scrolled the run log up and back down'
-
 	step 'l opens the log of the finished run; the update made one commit and the stack runs 1.1.0'
 	tui_send l
 	tui_wait 'result succeeded' 15
@@ -2007,6 +1986,29 @@ scenario_tui() {
 	[ "$(stack_images demo-cache)" = "$image:1.1.0" ] || fail "demo-cache does not run 1.1.0: $(stack_images demo-cache)"
 	stack_healthy demo-cache || fail 'demo-cache is not healthy after the update'
 	log "scenario: interface update of demo-cache: run $screen_run, demo-cache runs 1.1.0"
+
+	step 'the wheel scrolls the run log in a small window and the lines of its end come back'
+	tui_tmux resize-window -t qdtui -y 12
+	i=0
+	until tui_screen | grep -q "$screen_run"; do
+		i=$((i + 1))
+		[ "$i" -lt 40 ] || fail "the run log is not redrawn in the small window: $(tui_screen)"
+		sleep 0.25
+	done
+	tui_send End
+	tui_wait 'result succeeded' 10
+	tui_wheel up 3 10 6
+	i=0
+	while tui_has 'result succeeded'; do
+		i=$((i + 1))
+		[ "$i" -lt 20 ] || fail "the wheel did not scroll the run log up: $(tui_screen)"
+		sleep 0.25
+	done
+	tui_wheel down 10 10 6
+	tui_wait 'result succeeded' 10
+	tui_tmux resize-window -t qdtui -y 40
+	tui_wait "$screen_run" 10
+	log 'scenario: the wheel scrolled the run log up and back down'
 
 	step 'two ticked stacks are updated with one question, one after another'
 	head_before=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
