@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -907,8 +908,21 @@ func (m *Model) render() string {
 	}
 	spec := m.frameSpec()
 	room := m.frame.Workspace(spec)
+	scrolls := m.area == areaDetail || m.area == areaContainers && m.ctv.open || m.modal != nil && m.modal.sheet()
+	if scrolls && room.Height > 1 {
+		// Probe one row short, so the counter and the scroll position are known before the footer is sized.
+		m.workspace(room.Width, room.Height-1)
+		if _, total, ok := strings.Cut(m.scrollNote, "/"); ok {
+			if n, _ := strconv.Atoi(total); n > room.Height {
+				// The widest counter keeps the footer height the same while scrolling.
+				sized := spec
+				sized.Position = total + "/" + total
+				room = m.frame.Workspace(sized)
+			}
+		}
+	}
 	spec.Workspace = m.workspace(room.Width, room.Height)
-	if m.area == areaDetail || m.area == areaContainers && m.ctv.open || m.modal != nil && m.modal.sheet() {
+	if scrolls {
 		spec.Position = m.scrollNote
 	}
 	view, _ := m.frame.Render(m.styles, spec)
