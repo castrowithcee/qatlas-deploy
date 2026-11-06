@@ -1909,6 +1909,54 @@ scenario_tui() {
 	[ "$stopped_seen" = 1 ] || fail "the Containers area did not show $single as stopped within 20 seconds without a key press: $final_screen"
 	log "scenario: the Containers area followed $single from ok to stopped without a key press"
 
+	step 'the Containers area opens the log of a container, takes a period and a search, and the stack detail opens the log of its stack, both without the secret'
+	log_secret=not-a-real-secret-e2e
+	ctname=$(docker exec "$host" docker ps --filter label=com.docker.compose.project=demo-stack --format '{{.Names}}' | head -n 1)
+	[ -n "$ctname" ] || fail 'no container of demo-stack runs for the log of the interface'
+	tui_send Escape
+	tui_send 5
+	tui_wait 'own stack demo-stack' 15
+	tui_send Home
+	i=0
+	until tui_screen | grep -q "^> .*$ctname "; do
+		i=$((i + 1))
+		[ "$i" -lt 30 ] || fail "the cursor of the Containers area does not reach $ctname: $(tui_screen)"
+		tui_send Down
+		sleep 0.2
+	done
+	tui_send o
+	tui_wait 'demo started' 10
+	# The demo app writes "demo tick" every 2 seconds: a line that comes in while the log is open was followed.
+	tui_wait 'demo tick' 10
+	tui_has "$log_secret" && fail "the log of $ctname shows the secret: $(tui_screen)"
+	tui_send T Right Tab BSpace BSpace BSpace
+	tui_type 1
+	tui_send Tab Right F2
+	sleep 1
+	tui_wait 'demo tick' 10
+	tui_screen | grep -qE 'T (period: )?all' && fail "the log still shows no period after the choice: $(tui_screen)"
+	tui_send /
+	tui_type 'demo tick'
+	tui_send Enter
+	sleep 0.5
+	tui_wait 'demo tick' 10
+	tui_send Escape
+	tui_send Escape
+	tui_wait 'own stack demo-stack' 10
+	tui_has 'demo tick' && fail "the log is still open after Escape: $(tui_screen)"
+	tui_send Escape
+	tui_wait '1 Stacks' 10
+	tui_send Home
+	tui_cursor_to demo-stack
+	tui_send Enter
+	tui_send o
+	tui_wait 'demo started' 10
+	tui_screen | grep -q "$ctname .*demo started" || fail "the stack log does not name the container: $(tui_screen)"
+	tui_has "$log_secret" && fail "the log of demo-stack shows the secret: $(tui_screen)"
+	tui_send Escape
+	tui_send Escape
+	log "scenario: the Containers area and the stack detail opened the log of $ctname and of demo-stack, with a period and a search; the secret stayed masked"
+
 	step 'the Containers area stops, starts and restarts a foreign container after a confirmation and shows each new state without a further key press'
 	foreign=$prefix-foreign-tui
 	docker exec "$host" docker rm -f "$foreign" >/dev/null 2>&1 || true
@@ -1970,54 +2018,6 @@ scenario_tui() {
 		fail "the restart did not restart $foreign: $(tui_screen)"
 	docker exec "$host" docker rm -f "$foreign" >/dev/null 2>&1
 	log "scenario: the restart through the Containers area left $foreign ok in the list and running in docker with a new start time"
-
-	step 'the Containers area opens the log of a container, takes a period and a search, and the stack detail opens the log of its stack, both without the secret'
-	log_secret=not-a-real-secret-e2e
-	ctname=$(docker exec "$host" docker ps --filter label=com.docker.compose.project=demo-stack --format '{{.Names}}' | head -n 1)
-	[ -n "$ctname" ] || fail 'no container of demo-stack runs for the log of the interface'
-	tui_send Escape
-	tui_send 5
-	tui_wait 'own stack demo-stack' 15
-	tui_send Home
-	i=0
-	until tui_screen | grep -q "^> .*$ctname "; do
-		i=$((i + 1))
-		[ "$i" -lt 30 ] || fail "the cursor of the Containers area does not reach $ctname: $(tui_screen)"
-		tui_send Down
-		sleep 0.2
-	done
-	tui_send o
-	tui_wait 'demo started' 10
-	# The demo app writes "demo tick" every 2 seconds: a line that comes in while the log is open was followed.
-	tui_wait 'demo tick' 10
-	tui_has "$log_secret" && fail "the log of $ctname shows the secret: $(tui_screen)"
-	tui_send T Right Tab BSpace BSpace BSpace
-	tui_type 1
-	tui_send Tab Right F2
-	sleep 1
-	tui_wait 'demo tick' 10
-	tui_screen | grep -qE 'T (period: )?all' && fail "the log still shows no period after the choice: $(tui_screen)"
-	tui_send /
-	tui_type 'demo tick'
-	tui_send Enter
-	sleep 0.5
-	tui_wait 'demo tick' 10
-	tui_send Escape
-	tui_send Escape
-	tui_wait 'own stack demo-stack' 10
-	tui_has 'demo tick' && fail "the log is still open after Escape: $(tui_screen)"
-	tui_send Escape
-	tui_wait '1 Stacks' 10
-	tui_send Home
-	tui_cursor_to demo-stack
-	tui_send Enter
-	tui_send o
-	tui_wait 'demo started' 10
-	tui_screen | grep -q "$ctname .*demo started" || fail "the stack log does not name the container: $(tui_screen)"
-	tui_has "$log_secret" && fail "the log of demo-stack shows the secret: $(tui_screen)"
-	tui_send Escape
-	tui_send Escape
-	log "scenario: the Containers area and the stack detail opened the log of $ctname and of demo-stack, with a period and a search; the secret stayed masked"
 
 	step 'Tab focuses the tab line, Right and Left switch the area without digits, and Tab leads back to the content'
 	tui_send Escape
