@@ -1,0 +1,24 @@
+qdeploy                                                                [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container         
+--------------------------------------------------------------------------------
+      STACK                 VERSION         VERFÜGBAR      ZUSTAND   BEFUNDE    
+> [ ] a-running-media-srv   1.4.2           1.5.0          läuft     keine      
+  [ ] b-rollback-media-srv  2.0.1           aktuell        Rollback  keine      
+  [ ] c-unreadable-media    -               -              unlesbar  keine      
+  [ ] d-removed-media-srv   3.1             4.0.0 (Major)  entfernt  keine      
+  [ ] e-stopped-media-srv   1.0             Fehler         gestoppt  keine      
+  [ ] f-paused-media-srv    latest          n. v.          pausiert  keine      
+  [ ] g-pinned-media-srv    1.41.0, 16.4.2  ungeprüft      gepinnt   keine      
+  [ ] h-down-media-srv      1.41.0, 16.4.2  ungeprüft      Ausfall   keine      
+  [ ] i-failed-media-srv    1.41.0, 16.4.2  ungeprüft      Fehler    keine      
+  [ ] j-pending-media-srv   1.41.0, 16.4.2  ungeprüft      offen     keine      
+  [ ] k-deployed-media-srv  1.41.0, 16.4.2  ungeprüft      deployt   keine      
+  [ ] l-new-media-srv       1.41.0, 16.4.2  ungeprüft      neu       keine      
+  [ ] m-dirs-media-srv      1.41.0, 16.4.2  ungeprüft      Ordner    keine      
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+enter Details  / Suchen  space markieren  u update  d deploy  r Neu laden       
+1-5 Bereich  q Beenden                                   up/down Auswählen  1/13
