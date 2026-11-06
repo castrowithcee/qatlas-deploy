@@ -1182,6 +1182,8 @@ scenario_stacks_repo() {
 
 	scenario_root_source
 
+	scenario_key_set
+
 	scenario_tui_setup
 }
 
@@ -1343,6 +1345,117 @@ scenario_root_source() {
 	[ "$(stack_field demo-root deployed)" = "$revert" ] || fail "demo-root is not recorded as deployed at the revert commit $revert"
 	[ "$(stack_images demo-root)" = "$image:1.1.0" ] || fail "demo-root does not run the previous image 1.1.0: $(stack_images demo-root)"
 	log "scenario: demo-root, the root of /opt/stacks3, deployed 1.1.0 and rolled back 2.0.0 with the revert $revert"
+}
+
+# key_pub_field prints the public part (type and key, without comment) of the qdeploy key output $1.
+key_pub_field() {
+	printf '%s\n' "$1" | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p' | cut -d ' ' -f 1,2
+}
+
+# key_fp_field prints the fingerprint of the qdeploy key output $1.
+key_fp_field() {
+	printf '%s\n' "$1" | sed -n 's/.*"fingerprint": *"\([^"]*\)".*/\1/p'
+}
+
+# git_unregister_key removes the public key with the base64 part $1 from the authorized keys of the git server, so
+# a later fetch proves the replacement key.
+git_unregister_key() {
+	docker exec "$prefix-git" sh -ec 'grep -vF -- "$1" /srv/git/.ssh/authorized_keys >/tmp/ak.new || true
+		cat /tmp/ak.new >/srv/git/.ssh/authorized_keys && rm -f /tmp/ak.new' sh "$1"
+}
+
+# scenario_key_set proves that an existing key becomes the deploy key of a stack folder, through the command line
+# for /opt/stacks2 and through the interface for /opt/stacks3. Both folders have a generated key, so each store is
+# a replacement: it is refused without the confirmation (--replace, the answer n) and leaves the key unchanged.
+scenario_key_set() {
+	tui_log=$work/tui-key-screens.log
+	: >"$tui_log"
+	kdir=$(docker exec "$host" mktemp -d) || fail 'cannot create a directory for the test keys'
+	docker exec "$host" sh -ec "ssh-keygen -q -t ed25519 -N '' -C key-a-e2e -f $kdir/a && ssh-keygen -q -t ed25519 -N '' -C key-b-e2e -f $kdir/b" ||
+		fail 'cannot generate the test keys'
+	fp_a=$(docker exec "$host" ssh-keygen -lf "$kdir/a.pub" | cut -d ' ' -f 2)
+	fp_b=$(docker exec "$host" ssh-keygen -lf "$kdir/b.pub" | cut -d ' ' -f 2)
+	body_a=$(docker exec "$host" sed -n 2p "$kdir/a")
+	body_b=$(docker exec "$host" sed -n 2p "$kdir/b")
+	pub_a=$(docker exec "$host" cut -d ' ' -f 1,2 "$kdir/a.pub")
+	pub_b=$(docker exec "$host" cut -d ' ' -f 1,2 "$kdir/b.pub")
+	case $fp_a$fp_b in SHA256:*SHA256:*) ;; *) fail "no fingerprints of the test keys: $fp_a $fp_b" ;; esac
+	[ -n "$body_a" ] && [ -n "$body_b" ] || fail 'the test keys have no body line'
+
+	step 'key set stores an existing key for /opt/stacks2 only with --replace; a fetch over it succeeds'
+	show2=$(qd --output json key show --dir /opt/stacks2) || fail "key show --dir failed: $show2"
+	old2=$(key_pub_field "$show2")
+	out=$(qd_fails --output json key set --dir /opt/stacks2 --file "$kdir/a") || fail "key set replaced a key without --replace: $out"
+	printf '%s' "$out" | grep -q -- '--replace' || fail "the refusal does not name --replace: $out"
+	[ "$(key_pub_field "$(qd --output json key show --dir /opt/stacks2)")" = "$old2" ] || fail 'a refused key set changed the key'
+	out=$(qd --output json key set --dir /opt/stacks2 --file "$kdir/a" --replace) || fail "key set --replace failed: $out"
+	[ "$(key_fp_field "$out")" = "$fp_a" ] || fail "the fingerprint of the stored key differs from ssh-keygen: $out vs $fp_a"
+	[ "$(key_pub_field "$out")" = "$pub_a" ] || fail "the public key of the stored key differs from the test key: $out"
+	[ "$(key_fp_field "$(qd --output json key show --dir /opt/stacks2)")" = "$fp_a" ] || fail 'key show --dir does not show the stored key'
+	git_unregister_key "${old2#* }"
+	out=$(qd --output json repo fetch) || fail "repo fetch failed: $out"
+	printf '%s' "$out" | grep -q 'opt-stacks2.error' || fail "the old key is gone from the git server, yet opt-stacks2 fetched: $out"
+	printf '%s\n' "$pub_a" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+	out=$(qd --output json repo fetch) || fail "repo fetch failed: $out"
+	if printf '%s' "$out" | grep -q 'opt-stacks2.error'; then fail "opt-stacks2 does not fetch over the stored key: $out"; fi
+	log "scenario: key set stored the test key for /opt/stacks2 ($fp_a) and the fetch over it succeeds"
+
+	step 'the interface stores an existing key for /opt/stacks3 after the question; n keeps the key'
+	old3=$(key_pub_field "$(qd --output json key show --dir /opt/stacks3)")
+	fp_old3=$(key_fp_field "$(qd --output json key show --dir /opt/stacks3)")
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait '1 Stacks' 30
+	tui_page 1
+	tui_send e
+	tui_wait 'Stack folder' 10
+	tui_send Right Right
+	sleep 0.3
+	tui_has '/opt/stacks3' || fail "the form does not offer /opt/stacks3: $(tui_screen)"
+	tui_send F2
+	tui_wait 'Store the deploy key' 10
+	docker exec "$host" cat "$kdir/b" | docker exec -i -u "$admin" "$host" tmux -L qdtui load-buffer - || fail 'cannot load the test key into tmux'
+	tui_tmux paste-buffer -p -t qdtui || fail 'cannot paste the test key'
+	tui_wait '(hidden; lines: ' 10
+	tui_has "$body_b" && fail "the pasted private key is on the screen: $(tui_screen)"
+	tui_send F2
+	tui_wait 'Replace the existing deploy key?' 10
+	tui_send n
+	sleep 0.5
+	tui_has 'Store the deploy key' || fail "answering n closed the form: $(tui_screen)"
+	[ "$(key_fp_field "$(qd --output json key show --dir /opt/stacks3)")" = "$fp_old3" ] || fail 'the answer n changed the key of /opt/stacks3'
+	tui_send F2
+	tui_wait 'Replace the existing deploy key?' 10
+	tui_send y
+	tui_wait 'The deploy key is stored' 30
+	tui_wait "$fp_b" 10
+	tui_has "$body_b" && fail "the private key is on the screen: $(tui_screen)"
+	tui_send Enter
+	out=$(qd --output json key show --dir /opt/stacks3)
+	[ "$(key_fp_field "$out")" = "$fp_b" ] || fail "the key of /opt/stacks3 is not the stored key: $out vs $fp_b"
+	[ "$(key_pub_field "$out")" = "$pub_b" ] || fail "the public key of /opt/stacks3 differs from the test key: $out"
+	git_unregister_key "${old3#* }"
+	out=$(qd --output json repo fetch) || fail "repo fetch failed: $out"
+	printf '%s' "$out" | grep -q 'opt-stacks3.error' || fail "the old key is gone from the git server, yet opt-stacks3 fetched: $out"
+	printf '%s\n' "$pub_b" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+	out=$(qd --output json repo fetch) || fail "repo fetch failed: $out"
+	if printf '%s' "$out" | grep -q 'opt-stacks3.error'; then fail "opt-stacks3 does not fetch over the stored key: $out"; fi
+	tui_send Escape
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	log "scenario: the interface stored the test key for /opt/stacks3 ($fp_b) after the question and the fetch over it succeeds"
+
+	step 'no private test key shows on a captured screen, in the journal or in a key output'
+	[ "$(wc -l <"$tui_log")" -gt 40 ] || fail 'too few screens were captured to check'
+	journal_text=$(journal)
+	for body in "$body_a" "$body_b"; do
+		if grep -qF -- "$body" "$tui_log"; then fail 'a private test key shows on a captured screen'; fi
+		if printf '%s' "$journal_text" | grep -qF -- "$body"; then fail 'a private test key shows in the journal'; fi
+		if printf '%s' "$out$show2" | grep -qF -- "$body"; then fail 'a private test key shows in a key output'; fi
+	done
+	docker exec "$host" rm -rf "$kdir"
 }
 
 # scenario_containers proves that qdeploy container list and show tell the three kinds apart on the host: the
@@ -2333,6 +2446,18 @@ tui_page() {
 	tui_send Enter
 }
 
+# tui_key_generate runs the form of the Deploy key page for a service without a bound folder and chooses to
+# generate; the result dialog is closed.
+tui_key_generate() {
+	tui_send e
+	tui_wait 'store an existing key' 10
+	tui_send Right
+	sleep 0.3
+	tui_send F2
+	tui_wait 'The deploy key is generated' 30
+	tui_send Enter
+}
+
 # tui_pick_to moves the cursor of an open choice to the row that starts with the text $1.
 tui_pick_to() {
 	i=0
@@ -2402,11 +2527,7 @@ scenario_tui_setup() {
 	step 'Settings: the deploy key is generated and its public part shown'
 	tui_page 1
 	tui_wait 'No deploy key yet' 10
-	tui_send G
-	tui_wait 'Generate the deploy key?' 10
-	tui_send y
-	tui_wait 'The deploy key is generated' 30
-	tui_send Enter
+	tui_key_generate
 	tui_wait 'Add this public key' 10
 	pub=$(tui_screen | grep -o 'ssh-ed25519 [A-Za-z0-9+/=]*' | head -n 1)
 	[ -n "$pub" ] || fail "the public key is not on the screen: $(tui_screen)"

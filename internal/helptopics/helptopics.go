@@ -27,7 +27,7 @@ Commands:
 - qdeploy run: run the service in the foreground until it receives SIGTERM or SIGINT
 - qdeploy tui, or qdeploy without a command at a terminal: open the terminal interface with the areas Stacks, Stack detail, Runs, Settings and Containers; it shows each stack's versions, state, last run and findings, follows the log of a running run, and offers update, deploy, pause, pin, resume, start, stop and restart (a stopped stack shows as stopped) and the registry query on the cursor stack or on stacks ticked with space; the stack detail sets and deletes the stack's secrets (value hidden) and restores an older backup; Settings binds the repository, generates and shows the deploy key, sets credentials, changes the maintenance window and adds, tests and removes notification channels; Containers lists every container of the host by own stack, foreign project and single container with state and a detail, and reads again every 5 seconds while it is shown, and S, X and Z there start, stop and restart the container on the cursor or in the detail after a question, also a foreign or single one; the stack detail lists the containers of its stack; o opens the output of the container on the cursor, or in the stack detail of all containers of the stack, which follows once a second and takes a period with T and a search with /; every change comes after a confirmation (run with sudo)
 - qdeploy status: show whether the service is running, its version and start time, the last poll and the state of each stack (run with sudo)
-- qdeploy key generate|show [--dir <path>]: create the SSH deploy key of a stack folder and show its public part (run with sudo)
+- qdeploy key generate|set|show [--dir <path>]: create or store the SSH deploy key of a stack folder and show its public part (run with sudo)
 - qdeploy repo set <ssh-url> [--dir <path>]: bind a stacks repository to a stack folder, confirm its host key and clone it; a further folder becomes a further source (run with sudo; see qdeploy help sources)
 - qdeploy repo fetch: fetch new commits of every stack folder without touching the working copies (run with sudo)
 - qdeploy stack list: list the stacks of the working copy with image versions, update mode and whether the stack is stopped (run with sudo)
@@ -61,6 +61,7 @@ Deploy keys:
 - Every remote stack folder has its own key, because a git platform accepts a deploy key in one repository only. The first folder uses the key without --dir; every further one needs its own before qdeploy repo set binds it.
 - qdeploy key generate [--dir <path>]: create an Ed25519 key in the service for the stack folder and print its public part and SHA256 fingerprint; the folder need not be bound yet
 - qdeploy key generate --replace: replace an existing key; without --replace an existing key is kept and the command refuses
+- qdeploy key set [--dir <path>] [--file <path>]: store an existing key, for example from a password manager, instead of generating one; paste it at the prompt (hidden, ends with the END line), pipe it on standard input, or name a key file. It must be an OpenSSH private key without passphrase, Ed25519 or RSA of at least 3072 bits, at most 16 KiB. It prints the public part like generate; --replace replaces an existing key.
 - qdeploy key show [--dir <path>]: print the public part again
 - Enter the public part as a deploy key in the git platform of that folder's repository. The private key never leaves the service.
 
@@ -79,7 +80,7 @@ Sources:
 - qdeploy repo set <ssh-url> --dir <path> binds a further folder next to those bound earlier; a bound folder is never rebound to another URL, and folders may not lie inside each other (see qdeploy help repository).
 - The id of a source comes from its path and never changes: /opt/stacks becomes opt-stacks, /srv/services/stacks becomes srv-services-stacks.
 - Each subfolder of a source with a compose file is a stack. When the root of the source holds a compose file, found as in a subfolder, the source is exactly one stack instead: the whole folder except .qatlas/, named by its Compose project, else by the folder's name. Its subfolders are then part of it, and those with a compose file of their own get the finding ignored-stack-folder.
-- Every remote source has its own deploy key: qdeploy key generate --dir <path> before qdeploy repo set (see qdeploy help credentials).
+- Every remote source has its own deploy key: qdeploy key generate --dir <path> or qdeploy key set --dir <path> before qdeploy repo set (see qdeploy help credentials).
 - A source whose fetch or poll fails keeps its state; the other sources go on. qdeploy status shows each source with its last poll, error and commits, and each stack with its source.
 - The maintenance window and qdeploy stack updates cover the stacks of every source.
 
@@ -93,11 +94,11 @@ Earlier installations:
 const repositoryTopic = `The service clones the stacks repository of the host over SSH with its own deploy key and checks the server with its own known_hosts file; the system's SSH configuration and known hosts are not used. Host key checking is always strict.
 
 Binding:
-- qdeploy key generate, then enter the public key as a deploy key with write access in the git platform; qdeploy pushes its version and revert commits with it
+- qdeploy key generate (or qdeploy key set for a key you already have), then enter the public key as a deploy key with write access in the git platform; qdeploy pushes its version and revert commits with it
 - qdeploy repo set <ssh-url> --dir <path>: the URL is user@host:path or ssh://[user@]host[:port]/path; --dir names the stack folder, is required and has no default
 - On first contact the host key and its SHA256 fingerprint are shown. At a terminal you confirm it by answering the question (default no). Without a terminal, pass the expected fingerprint: --fingerprint SHA256:...
 - Compare the fingerprint with the one the git platform publishes before you confirm it.
-- The stack folder is any absolute path, for example on another disk; each host chooses its own. It must be empty or already a clone of the same URL. Another folder becomes a further stack folder next to the earlier ones, with its own deploy key from qdeploy key generate --dir <path>; a bound folder is never rebound to another URL.
+- The stack folder is any absolute path, for example on another disk; each host chooses its own. It must be empty or already a clone of the same URL. Another folder becomes a further stack folder next to the earlier ones, with its own deploy key from qdeploy key generate --dir <path> or qdeploy key set --dir <path>; a bound folder is never rebound to another URL.
 - A folder that does not exist is created only after you confirmed its exact path: answer the question at a terminal, or pass --create without one. It gets the owner qdeploy:qdeploy and mode 0755. Neither the installer, the service nor an update creates a stack folder.
 - The service runs sandboxed and may write only where the systemd drop-in /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf allows it. repo set adds the folder there as ReadWritePaths=-<path> (entries are only ever added), reloads systemd and restarts the service once. A bound folder without that entry, as after an update from an older release, is added when you next run qdeploy as root.
 - The same steps are offered by sudo qdeploy in the Settings area.

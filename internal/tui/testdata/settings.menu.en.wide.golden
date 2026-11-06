@@ -3,7 +3,7 @@ qdeploy  maintenance window closed                                              
 ------------------------------------------------------------------------------------------------------------------------
   SETTING             ABOUT                                                                                             
 > Stacks repository   bind the repository, confirm its host key, fetch                                                  
-  Deploy key          show or generate the key for the git platform                                                     
+  Deploy key          store or generate the key for the git platform                                                    
   Credentials         registry logins and the GitHub token                                                              
   Maintenance window  when updates run                                                                                  
   Notifications       webhook, Slack, Telegram and e-mail channels                                                      

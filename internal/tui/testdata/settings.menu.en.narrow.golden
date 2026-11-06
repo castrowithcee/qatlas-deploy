@@ -3,7 +3,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
 --------------------------------------------------------
   SETTING             ABOUT                             
 > Stacks repository   bind the repository, confirm its ~
-  Deploy key          show or generate the key for the ~
+  Deploy key          store or generate the key for the~
   Credentials         registry logins and the GitHub to~
   Maintenance window  when updates run                  
   Notifications       webhook, Slack, Telegram and e-ma~

@@ -1,6 +1,10 @@
 package tui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/castrowithcee/qatlas-deploy/internal/control"
+)
 
 // The goldens of the Settings area fix its pages, its forms and its questions byte for byte. The masked fields
 // of the forms hold typed values; the goldens show them hidden, and goldenScreens fails if one shows.
@@ -45,7 +49,28 @@ func TestGoldenSettingsKeyNone(t *testing.T) {
 }
 
 func TestGoldenSettingsKeyShown(t *testing.T) {
-	goldenScreens(t, "settings.key.shown", settingsRows, settingsBackend, seq(toKey, keys("G", "y", "enter"))...)
+	goldenScreens(t, "settings.key.shown", settingsRows, settingsBackend, seq(toKey, keys("e", "right", "f2", "enter"))...)
+}
+
+func TestGoldenSettingsKeyForm(t *testing.T) {
+	goldenScreens(t, "settings.key.form", settingsRows, func() *fakeBackend { return keyBackend("/srv/first-example", "/srv/second-example") },
+		seq(toKey, keys("e"))...)
+}
+
+func TestGoldenSettingsKeyStoreForm(t *testing.T) {
+	goldenScreens(t, "settings.key.store", settingsRows, settingsBackend, seq(toKey, keys("e", "f2"), typed(hiddenA))...)
+}
+
+func TestGoldenSettingsKeyStoreProblem(t *testing.T) {
+	goldenScreens(t, "settings.key.problem", settingsRows, settingsBackend, seq(toKey, keys("e", "f2", "f2"))...)
+}
+
+func TestGoldenSettingsKeyReplaceQuestion(t *testing.T) {
+	goldenScreens(t, "settings.key.replace", settingsRows, func() *fakeBackend {
+		b := keyBackend("/srv/first-example")
+		b.key = &control.KeyResult{PublicKey: "ssh-ed25519 AAAAexamplekey qdeploy", Fingerprint: fingerprint}
+		return b
+	}, seq(toKey, keys("e", "f2"), typed(hiddenA), keys("f2"))...)
 }
 
 func TestGoldenSettingsCredentials(t *testing.T) {
