@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+------------------------------------------------------------------------------------------------------------------------
+  Stacks-Repository binden                                                                                              
+                                                                                                                        
+              #========================================================================================================#
+> SSH-URL     | git@example.test:ops/stacks.git_                                                                       |
+              #========================================================================================================#
+              user@host:pfad oder ssh://[user@]host[:port]/pfad                                                         
+              +-------------#= Änderungen verwerfen =======================================#---------------------------+
+  Verzeichnis | leer        | ! Die Änderungen an diesem Formular verwerfen?               |                           |
+              +-------------|                                                              |---------------------------+
+                            | Die Änderungen, die Sie hier gemacht haben, gehen verloren.  |                            
+                            |                                                              |                            
+                            | [ ja, ausführen ]  > abbrechen <                             |                            
+                            | y ja, ausführen  n/esc/enter abbrechen                       |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                                                                                     
+                                                                                                                        

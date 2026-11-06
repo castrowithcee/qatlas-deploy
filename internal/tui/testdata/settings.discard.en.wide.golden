@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  Bind the stacks repository                                                                                            
+                                                                                                                        
+            #==========================================================================================================#
+> SSH URL   | git@example.test:ops/stacks.git_                                                                         |
+            #==========================================================================================================#
+            user@host:path or ssh://[user@]host[:port]/path                                                             
+            +---------------#= Discard the changes ========================================#---------------------------+
+  Directory | empty         | ! Discard the changes to this form?                          |                           |
+            +---------------|                                                              |---------------------------+
+                            | The changes you made here are lost.                          |                            
+                            |                                                              |                            
+                            | [ yes, do it ]  > cancel <                                   |                            
+                            | y yes, do it  n/esc/enter cancel                             |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 save ]  [ esc discard ]                                                                                            
+                                                                                                                        

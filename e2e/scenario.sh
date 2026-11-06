@@ -2422,12 +2422,20 @@ scenario_tui_setup() {
 	tui_wait 'Set a credential' 10
 	tui_send Tab
 	tui_type "$tui_registry_host"
-	tui_send Tab
+	# Escape on a changed form asks first; the default answer keeps the form and its value.
+	tui_send Escape
+	tui_wait 'Discard the changes to this form?' 10
+	tui_send Enter
+	tui_wait "$tui_registry_host" 10
+	tui_has 'Set a credential' || fail "cancelling the discard question closed the form: $(tui_screen)"
+	# A click takes the focus of a field without typing, and a click on the Save button saves like F2.
+	tui_click 'Registry user'
+	sleep 0.3
 	tui_type "$tui_login_user"
 	tui_send Tab
 	tui_type "$tui_login_value"
 	sleep 0.5
-	tui_send F2
+	tui_click '[ F2 save ]'
 	tui_wait 'Store the credential' 10
 	tui_send y
 	tui_wait 'is stored' 20

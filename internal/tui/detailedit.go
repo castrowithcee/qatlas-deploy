@@ -218,7 +218,9 @@ func (m *Model) formView(width, height int) string {
 	if f.kind == formDataDirs {
 		head = append(head, m.formDataDirLines(f, width)...)
 	}
-	view, _ := f.form.View(m.styles, width, max(height-len(head), 1))
+	room := max(height-len(head), 1)
+	view, targets := f.form.View(m.styles, width, room)
+	m.formPart(f.form, targets, width, room, len(head))
 	return strings.Join(head, "\n") + "\n" + view
 }
 
