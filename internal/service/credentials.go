@@ -41,21 +41,52 @@ func keyResult(k credentials.PublicKey) control.KeyResult {
 	return control.KeyResult{PublicKey: k.Authorized, Fingerprint: k.Fingerprint}
 }
 
-func registerCredentialCommands(r *control.Registry, st *credentials.Store) error {
+// keyName names the deploy key of the stack folder dir, the default key for an empty dir.
+func keyName(set *sourceSet, dir string) (string, error) {
+	if dir == "" {
+		return credentials.DefaultKey, nil
+	}
+	if err := checkDirShape(dir); err != nil {
+		return "", control.NewError(control.CodeInvalid, err.Error())
+	}
+	conf, _, err := set.load()
+	if err != nil {
+		return "", err
+	}
+	name := keyFor(conf, dir)
+	if !credentials.ValidKeyName(name) {
+		return "", control.NewError(control.CodeInvalid, "the stack folder path is too long")
+	}
+	return name, nil
+}
+
+func registerCredentialCommands(r *control.Registry, st *credentials.Store, set *sourceSet) error {
 	commands := map[string]control.Handler{
 		control.KeyGenerateCommand: func(_ context.Context, raw json.RawMessage) (any, error) {
 			var a control.KeyGenerateArgs
 			if err := decodeArgs(raw, &a); err != nil {
 				return nil, err
 			}
-			k, err := st.GenerateKey(a.Replace)
+			name, err := keyName(set, a.Dir)
+			if err != nil {
+				return nil, err
+			}
+			k, err := st.GenerateNamedKey(name, a.Replace)
 			if err != nil {
 				return nil, answerOf(err)
 			}
 			return keyResult(k), nil
 		},
-		control.KeyShowCommand: func(context.Context, json.RawMessage) (any, error) {
-			k, err := st.ShowKey()
+		control.KeyShowCommand: func(_ context.Context, raw json.RawMessage) (any, error) {
+			var a control.KeyShowArgs
+			if err := decodeArgs(raw, &a); err != nil {
+				return nil, err
+			}
+			name, err := keyName(set, a.Dir)
+			if err != nil {
+				return nil, err
+			}
+			k, err := st.ShowNamedKey(name)
 			if err != nil {
 				return nil, answerOf(err)
 			}

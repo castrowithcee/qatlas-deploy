@@ -65,12 +65,12 @@ func registryCredentialFrom(store *credentials.Store) func(string) (registry.Cre
 
 type updatesService struct {
 	repo      *repoService
-	eng       *engine.Engine
+	eng       *sourceSet
 	detector  *updates.Detector
 	changelog *changelogSource
 }
 
-func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.Engine, store *credentials.Store, opts registry.Options, clog changelog.Options) (*updatesService, error) {
+func registerUpdateCommands(r *control.Registry, repo *repoService, eng *sourceSet, store *credentials.Store, opts registry.Options, clog changelog.Options) (*updatesService, error) {
 	cs := newChangelogSource(store, opts, clog, filepath.Join(repo.stateDir, changelogCacheDir))
 	cs.clean()
 	s := &updatesService{repo: repo, eng: eng, detector: &updates.Detector{Credential: registryCredentialFrom(store), Options: opts}, changelog: cs}
@@ -84,16 +84,17 @@ func registerUpdateCommands(r *control.Registry, repo *repoService, eng *engine.
 	return s, nil
 }
 
-// loadStacks reads the working copy and narrows it to the named stack; an empty name keeps all of them. Like
-// the stack list it takes no lock: it reads the working copy as it is.
+// loadStacks reads the working copies, keeps the stacks that own their name and narrows them to the named
+// stack; an empty name keeps all of them. Like the stack list it takes no lock: it reads the working copies as
+// they are.
 func (s *updatesService) loadStacks(name string) ([]stacks.Stack, error) {
-	c, err := s.repo.bound()
+	owned, _, err := s.eng.ownedStacks()
 	if err != nil {
 		return nil, err
 	}
-	list, err := stacks.Load(c.Dir)
-	if err != nil {
-		return nil, control.NewError(control.CodeNoRepo, "the working copy cannot be read; run 'qdeploy repo set' again")
+	list := make([]stacks.Stack, 0, len(owned))
+	for _, ref := range owned {
+		list = append(list, ref.st)
 	}
 	if name != "" {
 		i := slices.IndexFunc(list, func(st stacks.Stack) bool { return st.Name == name })

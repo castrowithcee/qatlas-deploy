@@ -180,6 +180,8 @@ func (e *Engine) updatable(ctx context.Context, b Binding, name string) (stacks.
 	switch {
 	case i < 0:
 		return stacks.Stack{}, "", ErrUnknownStack
+	case b.blocked(name) != nil:
+		return stacks.Stack{}, "", ErrNameCollision
 	case list[i].Err != nil:
 		return stacks.Stack{}, "", fmt.Errorf("%w: %s", ErrUnreadable, e.text(list[i].Err.Error()))
 	case list[i].EnvErr != nil:

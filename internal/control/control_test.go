@@ -87,3 +87,37 @@ func TestStackDirUsesTheFolderOfTheListedName(t *testing.T) {
 		t.Error("StackDir without Dir answered")
 	}
 }
+
+func TestPrimaryEntryOfAName(t *testing.T) {
+	collision := []FindingInfo{{Kind: FindingNameCollision}}
+	list := []StackStatus{
+		{Name: "demo", Source: "a", Findings: collision},
+		{Name: "demo", Source: "b", Removed: true},
+		{Name: "demo", Source: "c"},
+		{Name: "web", Source: "a", Findings: collision},
+		{Name: "web", Source: "b", Findings: collision},
+	}
+	want := []bool{false, false, true, true, false}
+	for i, w := range want {
+		if got := Primary(list, i); got != w {
+			t.Errorf("Primary(%d) = %v, want %v", i, got, w)
+		}
+	}
+	if !Primary(list[1:2], 0) {
+		t.Error("a single entry does not stand for its name")
+	}
+}
+
+func TestStackDirUsesTheSourceOfTheHoldingStack(t *testing.T) {
+	r := StacksResult{Dir: "/srv/first", Stacks: []StackInfo{
+		{Name: "demo", Folder: "demo", SourceDir: "/srv/second", Collision: "taken"},
+		{Name: "demo", Folder: "demo", SourceDir: "/srv/first"},
+		{Name: "web", Folder: "web", SourceDir: "/srv/second"},
+	}}
+	if got, ok := r.StackDir("demo"); !ok || got != "/srv/first/demo" {
+		t.Fatalf("demo = %q, %v", got, ok)
+	}
+	if got, ok := r.StackDir("web"); !ok || got != "/srv/second/web" {
+		t.Fatalf("web = %q, %v", got, ok)
+	}
+}

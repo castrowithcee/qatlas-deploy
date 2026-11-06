@@ -38,8 +38,8 @@ type dataDirsResult struct {
 
 // dataDirFinding is the data-dir-missing finding of a stack, if the service reports one.
 func (m *Model) dataDirFinding(stack string) (control.FindingInfo, bool) {
-	for _, st := range m.snap.status.Engine.Stacks {
-		if st.Name != stack {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name != stack || !control.Primary(m.snap.status.Engine.Stacks, i) {
 			continue
 		}
 		for _, f := range st.Findings {

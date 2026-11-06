@@ -93,16 +93,6 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	}
 	registry := control.NewRegistry()
 	started := time.Now().UTC().Truncate(time.Second)
-	if err := registerCredentialCommands(registry, store); err != nil {
-		return err
-	}
-	repo, err := newRepoService(cfg.StateDir, store, cfg.Git)
-	if err != nil {
-		return fmt.Errorf("prepare the repository commands: %w", err)
-	}
-	if err := registerRepoCommands(registry, repo); err != nil {
-		return err
-	}
 	notifier, err := newNotifyService(cfg.StateDir, store, cfg.Notify, secrets, cfg.Version, log)
 	if err != nil {
 		return fmt.Errorf("prepare the notifications: %w", err)
@@ -116,16 +106,20 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if deployer != nil {
 		deployer = redactingDeployer{next: deployer, r: secrets}
 	}
-	eng, err := engine.New(engine.Config{
-		StateDir: cfg.StateDir, Source: repo.engineSource, Lock: &repo.mu, Refs: &repo.refs, Deployer: deployer,
-		Events: notifier.runEvent,
-		Redact: secrets.Apply, Interval: cfg.PollInterval, Clock: cfg.Clock, Logger: log,
-	})
+	eng, err := openSources(cfg.StateDir, store, cfg.Git, engine.Config{
+		Deployer: deployer, Events: notifier.runEvent, Redact: secrets.Apply, Interval: cfg.PollInterval, Clock: cfg.Clock,
+	}, log)
 	if err != nil {
-		return fmt.Errorf("prepare the engine: %w", err)
+		return fmt.Errorf("prepare the stack folders: %w", err)
 	}
 	notifier.bindRunLog(eng.AppendLog)
-	repo.onBound = eng.Wake
+	if err := registerCredentialCommands(registry, store, eng); err != nil {
+		return err
+	}
+	repo := newRepoService(cfg.StateDir, store, eng)
+	if err := registerRepoCommands(registry, repo); err != nil {
+		return err
+	}
 	upd, err := registerUpdateCommands(registry, repo, eng, store, cfg.Registry, cfg.Changelog)
 	if err != nil {
 		return err
@@ -161,7 +155,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 		}
 		return nil
 	}
-	if err := registerSecretCommands(registry, eng, repo.engineSource, secrets, log); err != nil {
+	if err := registerSecretCommands(registry, eng, secrets, log); err != nil {
 		return err
 	}
 	dock := cfg.Docker
@@ -194,9 +188,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	engineDone := make(chan struct{})
 	go func() {
 		defer close(engineDone)
-		if err := eng.Run(ctx); err != nil {
-			log.Error("engine stopped", "error", err)
-		}
+		eng.run(ctx)
 	}()
 	defer func() { <-engineDone }()
 	monitorDone := make(chan struct{})

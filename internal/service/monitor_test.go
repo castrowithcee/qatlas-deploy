@@ -430,16 +430,16 @@ func TestMonitorFailureShownInStatus(t *testing.T) {
 	snap := engine.Snapshot{State: engine.State{Stacks: map[string]engine.StackState{"web": {
 		Deployed: strings.Repeat("a", 40), Failure: &engine.Failure{Kind: engine.FailureExited, Container: "web-app-1", Since: since},
 	}}}}
-	got := engineStatus(snap).Stacks[0].Findings
+	got := stackStatuses(snap)[0].Findings
 	if len(got) != 1 || got[0].Kind != "container-failed" || got[0].Detail != "since 2026-05-04T03:02:01Z: exited web-app-1" {
 		t.Fatalf("findings = %+v", got)
 	}
 	want := &control.FailureInfo{Kind: "exited", Container: "web-app-1", Since: since}
-	if f := engineStatus(snap).Stacks[0].Failure; f == nil || *f != *want {
+	if f := stackStatuses(snap)[0].Failure; f == nil || *f != *want {
 		t.Fatalf("failure = %+v", f)
 	}
 	snap.State.Stacks["web"] = engine.StackState{Deployed: strings.Repeat("a", 40)}
-	if f := engineStatus(snap).Stacks[0].Failure; f != nil {
+	if f := stackStatuses(snap)[0].Failure; f != nil {
 		t.Fatalf("failure without a monitored failure = %+v", f)
 	}
 }

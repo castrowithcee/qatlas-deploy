@@ -137,3 +137,43 @@ func TestStatusAsNonRootNamesSudo(t *testing.T) {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
 }
+
+func TestStatusFieldsAreUniqueAcrossSources(t *testing.T) {
+	head := strings.Repeat("a", 40)
+	polled := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	e := control.EngineStatus{
+		Sources: []control.SourceStatus{
+			{ID: "srv-first", Path: "/srv/first", Kind: "remote", LastPoll: polled, Head: head, RemoteHead: head},
+			{ID: "srv-second", Path: "/srv/second", Kind: "remote", LastPoll: polled, PollError: "fetch: connection timed out"},
+		},
+		Stacks: []control.StackStatus{
+			{Name: "demo-stack", Source: "srv-first", Deployed: head},
+			{Name: "demo-stack", Source: "srv-second",
+				Findings: []control.FindingInfo{{Kind: control.FindingNameCollision, Detail: "the name is taken"}}},
+			{Name: "web-stack", Source: "srv-second"},
+		},
+	}
+	got := map[string]any{}
+	for _, f := range engineFields(e) {
+		if _, dup := got[f.Name]; dup {
+			t.Fatalf("duplicate field %s", f.Name)
+		}
+		got[f.Name] = f.Value
+	}
+	for name, want := range map[string]any{
+		"source.srv-first.path":                       "/srv/first",
+		"source.srv-first.last_poll":                  "2026-03-04T05:06:07Z",
+		"source.srv-first.head":                       head,
+		"source.srv-second.kind":                      "remote",
+		"source.srv-second.poll_error":                "fetch: connection timed out",
+		"stack.demo-stack.source":                     "srv-first",
+		"stack.demo-stack.deployed":                   head,
+		"source.srv-second.stack.demo-stack.source":   "srv-second",
+		"source.srv-second.stack.demo-stack.findings": "name-collision: the name is taken",
+		"stack.web-stack.source":                      "srv-second",
+	} {
+		if got[name] != want {
+			t.Errorf("%s = %v, want %v", name, got[name], want)
+		}
+	}
+}

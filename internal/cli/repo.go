@@ -26,16 +26,16 @@ const remoteCallLimit = 3 * time.Minute
 func newRepoCommand(program *cobracli.Program, state *notRunning) *cobra.Command {
 	group := &cobra.Command{
 		Use:   "repo",
-		Short: "Bind and update the stacks repository",
-		Long: "The service clones the stacks repository over SSH with its own deploy key and keeps the server's\n" +
-			"host key in its own known_hosts file. Only root may use the service channel, so run these commands\n" +
-			"with sudo.",
+		Short: "Bind and update the stacks repositories",
+		Long: "The service clones each stacks repository over SSH into its own stack folder, with a deploy key per\n" +
+			"folder, and keeps the servers' host keys in its own known_hosts file. Only root may use the service\n" +
+			"channel, so run these commands with sudo.",
 	}
 	var dir, fingerprint string
 	var create bool
 	set := &cobra.Command{
 		Use:   "set <ssh-url>",
-		Short: "Bind the stacks repository, confirm its host key and clone it",
+		Short: "Bind a stacks repository to a stack folder, confirm its host key and clone it",
 		Long: "set shows the SSH host key of the server with its SHA256 fingerprint the first time and stores it\n" +
 			"only after you confirm it: at a terminal by answering the question, without a terminal by passing\n" +
 			"the expected fingerprint with --fingerprint. Then the service clones the repository into the stack\n" +
@@ -46,7 +46,9 @@ func newRepoCommand(program *cobracli.Program, state *notRunning) *cobra.Command
 			"The service runs sandboxed, so the folder is added to the systemd drop-in\n" +
 			"/etc/systemd/system/qdeploy.service.d/10-stack-folders.conf (entries are only ever added) and the\n" +
 			"service restarts once. A host that is pinned with another key is refused and the pinned key is never\n" +
-			"replaced; a repository bound earlier is not replaced either.",
+			"replaced. Each further folder becomes a further source next to those bound earlier; a folder bound\n" +
+			"earlier is never rebound to another URL. The first folder uses the deploy key of 'qdeploy key\n" +
+			"generate', every further one its own key from 'qdeploy key generate --dir <path>'.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return usageFailure("repo set takes exactly one argument, the SSH URL of the stacks repository",
@@ -65,22 +67,35 @@ func newRepoCommand(program *cobracli.Program, state *notRunning) *cobra.Command
 		"expected SHA256 fingerprint of the server's host key; required without a terminal")
 	fetch := &cobra.Command{
 		Use:   "fetch",
-		Short: "Fetch new commits of the stacks repository",
-		Long: "fetch updates the remote-tracking branch of the bound repository and reports whether it differs from\n" +
-			"the working copy. The working copy itself is not changed. A host key that differs from the pinned one\n" +
-			"aborts the command.",
+		Short: "Fetch new commits of the stacks repositories",
+		Long: "fetch updates the remote-tracking branch of every bound repository and reports per stack folder\n" +
+			"whether it differs from the working copy. The working copies themselves are not changed. A host key\n" +
+			"that differs from the pinned one aborts the fetch of that folder; the command fails only when no\n" +
+			"folder could be fetched.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			var res control.RepoFetchResult
 			if err := repoCall(c, state, control.RepoFetchCommand, nil, &res); err != nil {
 				return err
 			}
-			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: []output.Field{
+			fields := []output.Field{
 				{Name: "dir", Value: res.Dir},
 				{Name: "head", Value: res.Head},
 				{Name: "remote_head", Value: res.RemoteHead},
 				{Name: "updates_available", Value: res.UpdatesAvailable},
-			}})
+			}
+			if len(res.Sources) > 1 {
+				for _, src := range res.Sources {
+					p := "source." + src.ID + "."
+					fields = append(fields, output.Field{Name: p + "dir", Value: src.Dir},
+						output.Field{Name: p + "head", Value: src.Head}, output.Field{Name: p + "remote_head", Value: src.RemoteHead},
+						output.Field{Name: p + "updates_available", Value: src.UpdatesAvailable})
+					if src.Error != "" {
+						fields = append(fields, output.Field{Name: p + "error", Value: src.Error})
+					}
+				}
+			}
+			return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: fields})
 		},
 	}
 	group.AddCommand(set, fetch)

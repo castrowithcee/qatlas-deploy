@@ -6,19 +6,25 @@ ssh-keygen -A >/dev/null
 install -m 0600 -o git -g git /dev/null /srv/git/.ssh/authorized_keys
 printf '%s\n' "$GIT_AUTHORIZED_KEY" >/srv/git/.ssh/authorized_keys
 
-if [ ! -d /srv/git/stacks.git ]; then
+# seed creates the bare repository $1.git from the directory $2 once.
+seed_repo() {
+	[ ! -d "/srv/git/$1.git" ] || return 0
 	su git -s /bin/sh -c '
 		set -eu
-		git init -q --bare --initial-branch=main /srv/git/stacks.git
+		git init -q --bare --initial-branch=main "/srv/git/$1.git"
 		seed=$(mktemp -d)
-		cp -r /usr/local/share/demo-stacks/. "$seed"
+		cp -r "$2/." "$seed"
 		cd "$seed"
 		git init -q --initial-branch=main
 		git add .
 		git -c user.name="E2E Seed" -c user.email=seed.qdeploye2e.test commit -q -m "Initial demo stacks"
-		git push -q /srv/git/stacks.git main
+		git push -q "/srv/git/$1.git" main
 		rm -rf "$seed"
-	'
-fi
+	' sh "$1" "$2"
+}
+
+seed_repo stacks /usr/local/share/demo-stacks
+# A second repository for the second stack folder: one stack named like one of the first, one of its own.
+seed_repo stacks2 /usr/local/share/demo-stacks-second
 
 exec /usr/sbin/sshd -D -e

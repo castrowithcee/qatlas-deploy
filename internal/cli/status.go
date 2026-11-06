@@ -31,10 +31,11 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show whether the qdeploy service is running",
-		Long: "status asks the running service for its version and start time, the state of its last repository poll\n" +
+		Long: "status asks the running service for its version and start time, the state of the last poll of each stack folder\n" +
 			"and, per stack, what is deployed, pending or running, the last run result, a pause after a failed rollback, the operator's pause and pin, and the findings,\n" +
-			"and whether the maintenance window is open and when it opens next (see 'qdeploy window'). Only root may use the service\n" +
-			"channel, so run it with sudo. Without a running service it ends with exit code 3.",
+			"and whether the maintenance window is open and when it opens next (see 'qdeploy window'). A stack is listed as\n" +
+			"stack.<name>; when another stack folder holds its name, as source.<id>.stack.<name> (see 'qdeploy help sources').\n" +
+			"Only root may use the service channel, so run it with sudo. Without a running service it ends with exit code 3.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			var st control.StatusResult
@@ -70,9 +71,26 @@ func engineFields(e control.EngineStatus) []output.Field {
 			out = append(out, output.Field{Name: f[0], Value: f[1]})
 		}
 	}
-	for _, s := range e.Stacks {
+	for _, src := range e.Sources {
+		p := "source." + src.ID + "."
+		out = append(out, output.Field{Name: p + "path", Value: src.Path}, output.Field{Name: p + "kind", Value: src.Kind})
+		if !src.LastPoll.IsZero() {
+			out = append(out, output.Field{Name: p + "last_poll", Value: src.LastPoll.UTC().Format(time.RFC3339)})
+		}
+		for _, f := range [][2]string{{"poll_error", src.PollError}, {"note", src.Note}, {"head", src.Head}, {"remote_head", src.RemoteHead}} {
+			if f[1] != "" {
+				out = append(out, output.Field{Name: p + f[0], Value: f[1]})
+			}
+		}
+	}
+	for i, s := range e.Stacks {
+		// The entry that stands for a name keeps the short key; another source's entry of it carries its source.
 		p := "stack." + s.Name + "."
-		out = append(out, output.Field{Name: p + "deployed", Value: s.Deployed}, output.Field{Name: p + "pending", Value: s.Pending})
+		if !control.Primary(e.Stacks, i) {
+			p = "source." + s.Source + ".stack." + s.Name + "."
+		}
+		out = append(out, output.Field{Name: p + "source", Value: s.Source},
+			output.Field{Name: p + "deployed", Value: s.Deployed}, output.Field{Name: p + "pending", Value: s.Pending})
 		if s.ActiveRun != "" {
 			out = append(out, output.Field{Name: p + "active_run", Value: s.ActiveRun})
 		}
@@ -143,7 +161,7 @@ func failureOf(err error) error {
 			NextStep: "Bind the stacks repository with 'qdeploy repo set <ssh-url>'.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeRepoBound:
 		return &cli.Failure{Code: output.CodeInvalidRequest, Message: remote.Message, Usage: true,
-			NextStep: "Run 'qdeploy repo set' with the URL and directory already bound, or remove the service's stacks-repo.json while the service is stopped.",
+			NextStep: "Run 'qdeploy repo set' with the URL already bound to that folder, or bind the repository to another folder with --dir.",
 			Cause:    err}
 	case errors.As(err, &remote) && remote.Code == control.CodeHostKey:
 		return &cli.Failure{Code: output.CodeAuth, Message: remote.Message,

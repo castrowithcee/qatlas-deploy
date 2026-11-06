@@ -90,7 +90,7 @@ func (d redactingDeployer) Restore(ctx context.Context, st stacks.Stack, id stri
 	return d.next.Restore(ctx, st, id, log)
 }
 
-func registerSecretCommands(r *control.Registry, eng *engine.Engine, source func() (engine.Binding, error),
+func registerSecretCommands(r *control.Registry, eng *sourceSet,
 	secrets *redact.Redactor, log *slog.Logger) error {
 	checkStack := func(name string) error {
 		if !backup.ValidStack(name) {
@@ -163,22 +163,18 @@ func registerSecretCommands(r *control.Registry, eng *engine.Engine, source func
 			if err := checkStack(a.Stack); err != nil {
 				return nil, err
 			}
-			b, err := source()
-			if err != nil {
-				return nil, answer(a.Stack, err)
-			}
 			// The file is replaced atomically, so reading without the stack's run slot never sees a half
 			// written file and works while a run is active.
 			// The stack is found by its project name, which may differ from its folder. A stack with Err is
 			// still answered: only key names are read.
-			all, err := stacks.Load(b.Dir)
+			owned, _, err := eng.ownedStacks()
 			if err != nil {
-				return nil, answer(a.Stack, err)
+				return nil, err
 			}
 			dir := ""
-			for _, st := range all {
-				if st.Name == a.Stack {
-					dir = st.Dir
+			for _, ref := range owned {
+				if ref.st.Name == a.Stack {
+					dir = ref.st.Dir
 					break
 				}
 			}

@@ -1,4 +1,4 @@
-// Package credentials is the service's private store: the SSH deploy key and named secret values. Only the
+// Package credentials is the service's private store: the SSH deploy keys and named secret values. Only the
 // service process writes it; every file stays inside a directory that belongs to the process alone.
 package credentials
 
@@ -55,7 +55,20 @@ var (
 	ErrUnsafe = errors.New("the credential store is not private to the service")
 )
 
-var namePattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
+var (
+	namePattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
+	keyPattern  = regexp.MustCompile(`^deploy-key(?:-[A-Za-z0-9_.@+-]{1,200})?$`)
+)
+
+// DefaultKey names the deploy key of a store that serves one stacks repository, and of the first one bound.
+const DefaultKey = keyFile
+
+// SourceKey names the deploy key of the source with the given id: a git platform accepts one deploy key in
+// one repository only.
+func SourceKey(id string) string { return keyFile + "-" + id }
+
+// ValidKeyName reports whether name may name a deploy key; it becomes a file name in the store.
+func ValidKeyName(name string) bool { return keyPattern.MatchString(name) }
 
 // ValidName reports whether name may name a credential. The name becomes a file name, so the pattern
 // admits no separator and nothing that starts with a dot.
@@ -241,12 +254,20 @@ func (s *Store) write(path string, data []byte, replace bool) error {
 	return nil
 }
 
-// GenerateKey creates the Ed25519 deploy key. An existing key is replaced only with replace; otherwise it
-// is ErrKeyExists. The private key is never returned.
+// GenerateKey creates the default deploy key, see GenerateNamedKey.
 func (s *Store) GenerateKey(replace bool) (PublicKey, error) {
+	return s.GenerateNamedKey(DefaultKey, replace)
+}
+
+// GenerateNamedKey creates the Ed25519 deploy key name. An existing key is replaced only with replace;
+// otherwise it is ErrKeyExists. The private key is never returned.
+func (s *Store) GenerateNamedKey(name string, replace bool) (PublicKey, error) {
+	if !ValidKeyName(name) {
+		return PublicKey{}, ErrInvalidName
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	path := filepath.Join(s.dir, keyFile)
+	path := filepath.Join(s.dir, name)
 	if !replace {
 		if _, err := os.Lstat(path); err == nil {
 			return PublicKey{}, ErrKeyExists
@@ -275,14 +296,23 @@ func (s *Store) GenerateKey(replace bool) (PublicKey, error) {
 	return publicOf(sshPub), nil
 }
 
-// KeyPath is where the private deploy key lives, for handing the path to the SSH child of git.
-func (s *Store) KeyPath() string { return filepath.Join(s.dir, keyFile) }
+// KeyPath is where the private default deploy key lives, see NamedKeyPath.
+func (s *Store) KeyPath() string { return s.NamedKeyPath(DefaultKey) }
 
-// ShowKey returns the public part of the deploy key.
-func (s *Store) ShowKey() (PublicKey, error) {
+// NamedKeyPath is where the private deploy key name lives, for handing the path to the SSH child of git.
+func (s *Store) NamedKeyPath(name string) string { return filepath.Join(s.dir, name) }
+
+// ShowKey returns the public part of the default deploy key.
+func (s *Store) ShowKey() (PublicKey, error) { return s.ShowNamedKey(DefaultKey) }
+
+// ShowNamedKey returns the public part of the deploy key name.
+func (s *Store) ShowNamedKey(name string) (PublicKey, error) {
+	if !ValidKeyName(name) {
+		return PublicKey{}, ErrInvalidName
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	data, err := s.read(filepath.Join(s.dir, keyFile))
+	data, err := s.read(filepath.Join(s.dir, name))
 	if errors.Is(err, fs.ErrNotExist) {
 		return PublicKey{}, ErrNoKey
 	}
@@ -393,15 +423,21 @@ func (s *Store) Delete(name string) error {
 // loadSecrets reads every stored secret; a file that fails the checks stops the start.
 func (s *Store) loadSecrets() ([]string, error) {
 	var secrets []string
-	data, err := s.read(filepath.Join(s.dir, keyFile))
-	switch {
-	case err == nil:
+	keys, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", s.dir, err)
+	}
+	for _, e := range keys {
+		if !ValidKeyName(e.Name()) {
+			continue
+		}
+		data, err := s.read(filepath.Join(s.dir, e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("read the deploy key %s: %w", e.Name(), err)
+		}
 		if block, _ := pem.Decode(data); block != nil {
 			secrets = append(secrets, keySecrets(block, data)...)
 		}
-	case errors.Is(err, fs.ErrNotExist):
-	default:
-		return nil, fmt.Errorf("read the deploy key: %w", err)
 	}
 	entries, err := os.ReadDir(s.values)
 	if err != nil {

@@ -251,8 +251,8 @@ func (m *Model) stoppedSection(r stackRow, width int) []string {
 	}
 	t := m.text
 	var since time.Time
-	for _, st := range m.snap.status.Engine.Stacks {
-		if st.Name == r.name && st.Stopped != nil {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name == r.name && st.Stopped != nil && control.Primary(m.snap.status.Engine.Stacks, i) {
 			since = st.Stopped.Since
 		}
 	}
@@ -295,8 +295,8 @@ func (m *Model) summaryLines(r stackRow, width int) []string {
 
 // failureOf is the container failure the status reports for a stack, nil when it reports none.
 func (m *Model) failureOf(stack string) *control.FailureInfo {
-	for _, st := range m.snap.status.Engine.Stacks {
-		if st.Name == stack {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name == stack && control.Primary(m.snap.status.Engine.Stacks, i) {
 			return st.Failure
 		}
 	}
@@ -341,7 +341,7 @@ func (m *Model) versionItems(stack string) (items []versionItem, checkErr string
 		}
 	}
 	for _, si := range m.snap.stacks.Stacks {
-		if si.Name != stack {
+		if si.Name != stack || si.Collision != "" {
 			continue
 		}
 		for _, img := range si.Images {
