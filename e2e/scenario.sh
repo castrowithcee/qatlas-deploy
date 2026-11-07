@@ -1533,7 +1533,9 @@ scenario_container_logs() {
 	one_out=$(qd container logs "$name" --tail 0) || one_rc=$?
 	stack_out=$(qd container logs --stack demo-stack --tail 0) || stack_rc=$?
 	json_out=$(qd --output json container logs "$name" --tail 5) || json_rc=$?
-	follow_out=$(docker exec "$host" timeout --preserve-status -s INT 6 qdeploy container logs "$name" --tail 1 --follow 2>&1 </dev/null) || follow_rc=$?
+	# --foreground: otherwise GNU timeout also signals the process group, so qdeploy gets the interrupt twice and the
+	# second one can kill it (exit 130) after the first has ended the follow.
+	follow_out=$(docker exec "$host" timeout --foreground --preserve-status -s INT 6 qdeploy container logs "$name" --tail 1 --follow 2>&1 </dev/null) || follow_rc=$?
 	missing_out=$(qd container logs --stack "$prefix-no-such-stack") || missing_rc=$?
 
 	[ "$tail_rc" -eq 0 ] || fail "container logs --tail 20 failed: $tail_out"
