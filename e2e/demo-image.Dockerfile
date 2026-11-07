@@ -11,3 +11,7 @@ HEALTHCHECK --interval=2s --timeout=3s --start-period=1s --retries=2 CMD ["/fake
 
 FROM base AS healthy
 HEALTHCHECK --interval=2s --timeout=3s --start-period=1s --retries=2 CMD ["/fakes", "healthcheck"]
+
+# Healthy for 100 seconds after its start, then unhealthy for good until its data is replaced.
+FROM healthy AS late
+ENV DEMO_FAIL_AFTER=100s

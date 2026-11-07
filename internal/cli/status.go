@@ -128,6 +128,9 @@ func engineFields(e control.EngineStatus) []output.Field {
 		if r := s.Repair; r != nil {
 			out = append(out, output.Field{Name: p + "repair", Value: repairText(r)})
 		}
+		if o := s.Observe; o != nil {
+			out = append(out, output.Field{Name: p + "observe", Value: "until " + o.Until.UTC().Format(time.RFC3339) + ", update " + o.Commit})
+		}
 	}
 	return out
 }

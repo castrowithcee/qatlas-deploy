@@ -70,6 +70,8 @@ const (
 	textRepairHalted         kittui.TextID = "repair.halted"
 	textRepairNext           kittui.TextID = "repair.next"
 	textRepairAttempts       kittui.TextID = "repair.attempts"
+	textDetailObserve        kittui.TextID = "detail.observe"
+	textObserveUntil         kittui.TextID = "observe.until"
 	textFailureExited        kittui.TextID = "failure.exited"
 	textFailureUnhealthy     kittui.TextID = "failure.unhealthy"
 	textFailureRestartLoop   kittui.TextID = "failure.restartloop"
@@ -120,6 +122,8 @@ func detailEnglish() map[kittui.TextID]string {
 		textRepairHalted:         "halted since %s after %d of %d attempts; resume releases it",
 		textRepairNext:           "%d of %d attempts, next at %s",
 		textRepairAttempts:       "%d of %d attempts",
+		textDetailObserve:        "Observation",
+		textObserveUntil:         "update %s until %s; a failure rolls it back",
 		textFailureExited:        "exited",
 		textFailureUnhealthy:     "unhealthy",
 		textFailureRestartLoop:   "restart loop",
@@ -195,6 +199,8 @@ func detailGerman() map[kittui.TextID]string {
 		textRepairHalted:         "angehalten seit %s nach %d von %d Versuchen; resume gibt sie frei",
 		textRepairNext:           "%d von %d Versuchen, nächster um %s",
 		textRepairAttempts:       "%d von %d Versuchen",
+		textDetailObserve:        "Beobachtung",
+		textObserveUntil:         "Update %s bis %s; ein Ausfall setzt es zurück",
 		textFailureExited:        "beendet",
 		textFailureUnhealthy:     "nicht gesund",
 		textFailureRestartLoop:   "Neustartschleife",

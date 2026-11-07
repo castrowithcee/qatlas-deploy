@@ -603,3 +603,23 @@ func TestMonitorExitedWithErrorOrUnparseableStatusIsFailure(t *testing.T) {
 		r.wantEvents(1, 0)
 	}
 }
+
+func TestObservationShownInStatusOnlyWhileActive(t *testing.T) {
+	commit := strings.Repeat("b", 40)
+	until := time.Now().Add(time.Hour)
+	stack := func(deployed string, until time.Time) engine.Snapshot {
+		return engine.Snapshot{State: engine.State{Stacks: map[string]engine.StackState{"web": {
+			Deployed: deployed, Observe: &engine.Observation{Commit: commit, Until: until},
+		}}}}
+	}
+	o := stackStatuses(stack(commit, until))[0].Observe
+	if o == nil || o.Commit != commit || !o.Until.Equal(until) {
+		t.Fatalf("active observation = %+v", o)
+	}
+	if o := stackStatuses(stack(commit, time.Now().Add(-time.Minute)))[0].Observe; o != nil {
+		t.Fatalf("expired observation = %+v", o)
+	}
+	if o := stackStatuses(stack(strings.Repeat("c", 40), until))[0].Observe; o != nil {
+		t.Fatalf("observation of another commit = %+v", o)
+	}
+}

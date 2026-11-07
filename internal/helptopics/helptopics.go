@@ -118,6 +118,7 @@ Fields (all optional except version):
 - update.mode: manual (default) or automatic
 - update.ceiling: patch, minor (default) or major; the largest version step taken; versions are MAJOR.MINOR.PATCH (SemVer or CalVer), and with CalVer the first part, for example the year, counts as major
 - update.major: stepwise (default, one major version at a time) or direct
+- update.observe: observation time in minutes after an update by qdeploy (default 60, 0 off, at most 1440); a failure of the stack in it rolls the update back (see qdeploy help containers); a commit that did not come from qdeploy starts none
 - update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
 - update.changelog.<VARIABLE>: GitHub repository (owner/name or a github.com address) whose releases are shown as changelog; it takes precedence over the image label org.opencontainers.image.source
 - backup.paths: data directories below data/ in the stack folder, for example data/db; other paths are refused when a backup runs
@@ -231,15 +232,15 @@ const notificationsTopic = `A notification channel receives the events it select
 Events (--events takes a comma list; without it a new channel receives all; a stored channel keeps the events it selected):
 - succeeded: a run deployed a commit
 - failed: a run failed and no rollback was made
-- rolled-back: a run failed and the stack was rolled back to the previous state
+- rolled-back: a run failed and the stack was rolled back to the previous state; with cause observation, the stack failed in the observation time after an update and qdeploy rolled that update back
 - rollback-failed: a run failed and the rollback failed too; the stack is stopped and paused
 - container-failed: the failure monitor found a container of an own stack failed (see qdeploy help containers); one message per failure with stack, kind, container and the time since which it failed
 - recovered: that failure ended; names the same container and how long it lasted, and whether qdeploy restarted it
-- recovery-failed: three repair attempts did not end the failure (see qdeploy help containers); sent once, names stack, kind, container, the time since which it failed and the number of attempts
+- recovery-failed: three repair attempts did not end the failure (see qdeploy help containers); sent once, names stack, kind, container, the time since which it failed and the number of attempts; with cause backup-missing, the stack failed in the observation time but the backup of the update is missing, so the update was not rolled back and nothing was changed
 - update-available: a newer image version was found for a stack in manual mode, once per version
 
 Channel types and settings:
-- webhook: posts JSON (event, stack, run, commit, error, items; for container-failed, recovered and recovery-failed also kind, container and since; recovered and recovery-failed also at; recovered also restarted, recovery-failed also attempts) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
+- webhook: posts JSON (event, stack, run, commit, error, items; for container-failed, recovered and recovery-failed also kind, container and since; recovered and recovery-failed also at; recovered also restarted, recovery-failed also attempts; cause is observation for rolled-back and rollback-failed after a failure in the observation time, backup-missing with error for recovery-failed) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
 - slack: posts text to an incoming-webhook URL.
 - telegram: sends text to a chat; needs --chat-id, and --base-url for a Bot API server of your own.
 - smtp: sends an e-mail; needs --host, --from and --to (comma list or repeated); --port (default 587 with starttls, 465 with tls), --security starttls (default) or tls, and --user for a login. The connection is always encrypted.
@@ -280,6 +281,6 @@ Failure monitor: every 30 seconds the service checks the containers of own stack
 - restart-loop: its restart count rose by 3 or more within 5 minutes
 - missing: a service that was running at the last good reading is gone
 Nothing is checked while a run or an action of the stack is active, nor for stopped (qdeploy stack stop), paused (either pause) and foreign stacks. A container stopped with qdeploy container stop is no failure.
-Repair: the monitor also repairs a failure by restarts, each under the run slot of the stack. Attempt 1 comes one minute after the failure began and restarts the failed containers; attempts 2 and 3 come 5 and 15 minutes after the previous one and restart the stack. If the failure persists after the third, the repair is halted: qdeploy status shows "repair" as halted, recovery-failed is sent once and no further attempt is made until qdeploy stack resume releases it. The attempts count until the stack has run an hour without a failure. Stopped (qdeploy stack stop), paused (either pause) and foreign stacks are not repaired; a stop or pause ends a repair under way, its count stays.
+Repair: the monitor also repairs a failure by restarts, each under the run slot of the stack. Attempt 1 comes one minute after the failure began and restarts the failed containers; attempts 2 and 3 come 5 and 15 minutes after the previous one and restart the stack. In the observation time after an update by qdeploy (qdeploy help stack-settings, update.observe), a failure gets only attempt 1; if it lasts until attempt 2 would be due, qdeploy rolls that update back instead of attempts 2 and 3: it stops the stack, restores the backup of the update, reverts the update commit and starts and checks the stack again. Data written since the update is lost. A failed rollback stops and pauses the stack; a missing backup halts the repair without any change. If the failure persists after the third, the repair is halted: qdeploy status shows "repair" as halted, recovery-failed is sent once and no further attempt is made until qdeploy stack resume releases it. The attempts count until the stack has run an hour without a failure. Stopped (qdeploy stack stop), paused (either pause) and foreign stacks are not repaired; a stop or pause ends a repair under way, its count stays.
 
 Environment: only the names of the variables are shown, never their values.`

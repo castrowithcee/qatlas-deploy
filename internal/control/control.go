@@ -253,6 +253,14 @@ type StackStatus struct {
 	Failure *FailureInfo `json:"failure,omitempty"`
 	// Repair is the state of the automatic repair of a failure; nil when there is none.
 	Repair *RepairInfo `json:"repair,omitempty"`
+	// Observe is the update by qdeploy whose observation time is running; nil when none is.
+	Observe *ObserveInfo `json:"observe,omitempty"`
+}
+
+// ObserveInfo is a running observation time: the update commit and when the time ends.
+type ObserveInfo struct {
+	Commit string    `json:"commit"`
+	Until  time.Time `json:"until"`
 }
 
 // RepairInfo is the state of the automatic repair: the attempts made of Max, when the last was made and the
