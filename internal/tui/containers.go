@@ -267,6 +267,7 @@ func (m *Model) containerDetailView(width, height int) string {
 	if v.total > v.rows {
 		m.scrollNote = fmt.Sprintf("%d/%d", v.top+v.rows, v.total)
 	}
+	m.textPart(func(steps int) { v.top = wheeled(v.top, v.total, v.rows, steps) }, width, height, 0)
 	return strings.Join(lines[v.top:min(v.top+height, len(lines))], "\n")
 }
 

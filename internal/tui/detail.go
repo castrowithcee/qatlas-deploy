@@ -186,6 +186,11 @@ func scrolled(top, total, rows int, id kittui.ActionID) int {
 	return max(min(top, total-rows), 0)
 }
 
+// wheeled is the first shown line after steps notches of the wheel, kept inside the text like a key.
+func wheeled(top, total, rows, steps int) int {
+	return max(min(top+steps*kittui.WheelTextLines, total-rows), 0)
+}
+
 // detailView is the stack chosen in Stacks: its versions, changelogs, backups, last runs and functions,
 // scrolled to the first shown line.
 func (m *Model) detailView(width, height int) string {
@@ -201,6 +206,7 @@ func (m *Model) detailView(width, height int) string {
 	if d.total > d.rows {
 		m.scrollNote = fmt.Sprintf("%d/%d", d.top+d.rows, d.total)
 	}
+	m.textPart(func(steps int) { d.top = wheeled(d.top, d.total, d.rows, steps) }, width, height, 0)
 	return strings.Join(lines[d.top:min(d.top+height, len(lines))], "\n")
 }
 
