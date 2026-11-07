@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 2 3 [4 Einstellungen] 5                             
+--------------------------------------------------------
+  Allgemein                                             
+                                                        
+               #=======================================#
+> Design       | terminal                            v |
+               #=======================================#
+               die Farben der Oberfläche                
+               +---------------------------------------+
+  Startbereich | Stacks                              v |
+               +---------------------------------------+
+               +---------------------------------------+
+  Sprache      | English                             v |
+               +---------------------------------------+
+               +---------------------------------------+
+  Maus         | an                                  v |
+               +---------------------------------------+
+                                                        
+                                                        
+                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                     
+enter Auswählen  F2 Speichern  esc verwerfen            
+               tab Nächstes Feld  shift+tab Voriges Feld

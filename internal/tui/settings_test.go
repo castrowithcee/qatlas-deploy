@@ -49,12 +49,13 @@ func keys(k ...string) []string { return k }
 
 // The ways to a page of the Settings area from the Stacks area.
 var (
-	toMenu   = keys("4")
-	toRepo   = keys("4", "enter")
-	toKey    = keys("4", "down", "enter")
-	toCreds  = keys("4", "down", "down", "enter")
-	toWindow = keys("4", "down", "down", "down", "enter")
-	toNotify = keys("4", "down", "down", "down", "down", "enter")
+	toMenu    = keys("4")
+	toGeneral = keys("4", "enter")
+	toRepo    = keys("4", "down", "enter")
+	toKey     = keys("4", "down", "down", "enter")
+	toCreds   = keys("4", "down", "down", "down", "enter")
+	toWindow  = keys("4", "down", "down", "down", "down", "enter")
+	toNotify  = keys("4", "down", "down", "down", "down", "down", "enter")
 )
 
 func newSettingsModel(t *testing.T, b *fakeBackend) *Model {
@@ -93,8 +94,8 @@ func contains(t *testing.T, m *Model, want ...string) {
 func TestSettingsAreaListsItsPages(t *testing.T) {
 	m := newSettingsModel(t, settingsBackend())
 	send(m, toMenu...)
-	contains(t, m, "Stacks repository", "Deploy key", "Credentials", "Maintenance window", "Notifications")
-	send(m, "down", "down", "enter")
+	contains(t, m, "General", "Stacks repository", "Deploy key", "Credentials", "Maintenance window", "Notifications")
+	send(m, "down", "down", "down", "enter")
 	contains(t, m, "registry.docker.io", "github.com")
 	// Esc leaves the page, then the area.
 	send(m, "esc")

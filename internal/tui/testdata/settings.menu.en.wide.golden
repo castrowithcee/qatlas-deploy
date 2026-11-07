@@ -2,7 +2,8 @@ qdeploy  maintenance window closed                                              
    1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
   SETTING             ABOUT                                                                                             
-> Stacks repository   bind the repository, confirm its host key, fetch                                                  
+> General             theme, start area, language and mouse of this device                                              
+  Stacks repository   bind the repository, confirm its host key, fetch                                                  
   Deploy key          store or generate the key for the git platform                                                    
   Credentials         registry logins and the GitHub token                                                              
   Maintenance window  when updates run                                                                                  
@@ -20,5 +21,4 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
-enter open  r reload  1-5 area  q quit                                                               up/down choose  1/5
+enter open  r reload  1-5 area  q quit                                                               up/down choose  1/6

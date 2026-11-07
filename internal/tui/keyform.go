@@ -17,6 +17,7 @@ const (
 	// formKeyChoice asks for the stack folder and whether to store or generate; formKeyStore asks for the key.
 	formKeyChoice formKind = formDataDirs + 1
 	formKeyStore  formKind = formKeyChoice + 1
+	formGeneral   formKind = formKeyStore + 1
 )
 
 // maxKeyBytes is the largest private key the service takes. The terminal interface may not import the

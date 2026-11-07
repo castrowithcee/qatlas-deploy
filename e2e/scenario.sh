@@ -1422,7 +1422,7 @@ scenario_key_set() {
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
 	tui_wait '1 Stacks' 30
-	tui_page 1
+	tui_page 2
 	tui_send e
 	tui_wait 'Stack folder' 10
 	tui_send Right Right
@@ -2525,6 +2525,51 @@ scenario_tui() {
 	tui_screen | grep -qE '^ +(mode +|No stack chosen)' || fail "the area changed with Tab: $(tui_screen)"
 	log 'scenario: Tab, Right and Left switched the area without digits and Tab led back to the content'
 
+	step 'Settings General: Deutsch is saved and the interface switches at once, keeps it after a restart, and English is saved back'
+	tui_send Escape
+	tui_page 0
+	tui_wait 'Start area' 10
+	# The language names stand only in the language field, so they are matched without its frame.
+	tui_wait 'English' 10
+	tui_send Tab Tab
+	tui_wait '> Language' 10
+	tui_send Right
+	tui_wait 'Deutsch' 10
+	tui_send F2
+	tui_wait 'Die Einstellungen sind gespeichert.' 10
+	tui_wait '4 Einstellungen' 10
+	tui_send Escape
+	tui_wait 'Repository binden' 10
+	tui_send 1
+	tui_wait '2 Stack-Details' 10
+	tui_wait 'q Beenden' 10
+	log 'scenario: the interface switched to Deutsch when the General page was saved:'
+	tui_excerpt 'qdeploy' 4
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait '2 Stack-Details' 30
+	tui_wait 'demo-stack' 30
+	tui_wait 'q Beenden' 10
+	tui_send 4
+	tui_wait 'Repository binden' 10
+	tui_send Home Enter
+	tui_wait 'Startbereich' 10
+	tui_send Tab Tab
+	tui_wait '> Sprache' 10
+	tui_send Left
+	tui_wait 'English' 10
+	tui_send F2
+	tui_wait 'The settings are saved.' 10
+	tui_send Escape
+	tui_wait 'bind the repository' 10
+	tui_send 1
+	tui_wait '2 Stack detail' 10
+	tui_has 'Stack-Details' && fail "the interface still shows German after English was saved: $(tui_screen)"
+	log 'scenario: Deutsch stayed after the restart of the interface and English was saved back'
+
 	step 'q ends the interface with exit code 0'
 	tui_send Escape
 	tui_send 1
@@ -2671,7 +2716,7 @@ scenario_tui_setup() {
 	tui_wait 'No stacks' 30
 
 	step 'Settings: the deploy key is generated and its public part shown'
-	tui_page 1
+	tui_page 2
 	tui_wait 'No deploy key yet' 10
 	tui_key_generate
 	tui_wait 'Add this public key' 10
@@ -2683,7 +2728,7 @@ scenario_tui_setup() {
 	log 'scenario: deploy key generated through the interface and registered on the git server'
 
 	step 'Settings: a registry credential is set after a question'
-	tui_page 2
+	tui_page 3
 	tui_wait 'Credentials' 10
 	tui_send a
 	tui_wait 'Set a credential' 10
@@ -2712,7 +2757,7 @@ scenario_tui_setup() {
 
 	step 'Settings: the maintenance window is moved away from now'
 	win_start=$(date -u -d '+12 hours' +%H:%M)
-	tui_page 3
+	tui_page 4
 	tui_wait 'Maintenance window' 10
 	tui_send e
 	tui_wait 'Change the maintenance window' 10
@@ -2736,7 +2781,7 @@ scenario_tui_setup() {
 		fail "the window was not set through the interface: $(qd --output json window show)"
 
 	step 'Settings: a webhook channel is added and its test message is sent'
-	tui_page 4
+	tui_page 5
 	tui_wait 'Notifications' 10
 	tui_send a
 	tui_wait 'Add a notification channel' 10
@@ -2760,7 +2805,7 @@ scenario_tui_setup() {
 	hook_seen /tui-hook-e2e-path test || fail 'the webhook receiver did not record the test message of the interface'
 
 	step 'Settings: the repository is bound after the host key is shown and confirmed'
-	tui_page 0
+	tui_page 1
 	tui_wait 'No stacks repository is bound' 10
 	tui_send b
 	tui_wait 'Bind the stacks repository' 10

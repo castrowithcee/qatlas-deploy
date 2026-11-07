@@ -13,6 +13,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-kit/i18n"
 	kittui "github.com/castrowithcee/qatlas-kit/tui"
+	"github.com/castrowithcee/qatlas-kit/uiprefs"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
@@ -74,6 +75,9 @@ type config struct {
 	now      func() time.Time // clock of the log filter; nil takes time.Now
 	warnings []string
 	mouse    bool // the mouse preference
+	// prefs are the whole preferences as loaded; savePrefs writes them, nil when they cannot be saved.
+	prefs     uiprefs.Prefs
+	savePrefs func(uiprefs.Prefs) error
 }
 
 // tickMsg starts a periodic refresh.
@@ -87,9 +91,13 @@ type Model struct {
 	folders Folders
 	keys    *kittui.Keymap
 	text    kittui.Translator
+	lang    i18n.Lang
 	frame   *kittui.Frame
-	loc     *time.Location
-	now     func() time.Time
+	// prefs are the preferences as saved last; a save changes the chosen values and keeps the rest.
+	prefs     uiprefs.Prefs
+	savePrefs func(uiprefs.Prefs) error
+	loc       *time.Location
+	now       func() time.Time
 
 	themes         *kittui.ThemeSet
 	theme          string
@@ -169,7 +177,8 @@ func newModel(c config) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, frame: kittui.NewFrame(keys, text),
+	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, lang: c.lang, frame: kittui.NewFrame(keys, text),
+		prefs: c.prefs, savePrefs: c.savePrefs,
 		loc: c.loc, themes: themes, theme: c.theme, profile: c.profile, charset: c.charset, area: areaStacks,
 		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
 		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick,
@@ -187,25 +196,15 @@ func newModel(c config) (*Model, error) {
 	if slices.ContainsFunc(areas(), func(a kittui.Area) bool { return a.ID == c.start }) {
 		m.area = c.start
 	}
-	m.list, err = kittui.NewList(kittui.ListSpec{Columns: stackColumns(text, m.tones), Keys: stackListKeys(), Ticks: true,
-		Search: kittui.SearchByKey, Empty: textStacksEmpty}, keys, text)
-	if err != nil {
+	if m.list, err = m.newStackList(text); err != nil {
 		return nil, err
 	}
-	m.list.SetFocused(true)
-	m.runsList, err = kittui.NewList(kittui.ListSpec{Columns: runColumns(text, m.runTones), Keys: listKeys(),
-		Search: kittui.SearchByKey, Empty: textRunsEmpty}, keys, text)
-	if err != nil {
+	if m.runsList, err = m.newRunsList(text); err != nil {
 		return nil, err
 	}
-	m.runsList.SetFocused(true)
-	m.ctList, err = kittui.NewList(kittui.ListSpec{Columns: containerColumns(text, m.ctTones), Keys: listKeys(),
-		Search: kittui.SearchByKey, Empty: textCtEmpty}, keys, text)
-	if err != nil {
+	if m.ctList, err = m.newContainerList(text); err != nil {
 		return nil, err
 	}
-	m.ctList.SetFocused(true)
-	m.ctList.SetGrouped(true)
 	if m.set, err = newSettings(keys, text); err != nil {
 		return nil, err
 	}
@@ -216,6 +215,35 @@ func newModel(c config) (*Model, error) {
 		m.notice = text.Lookup(kittui.TextWarning, c.warnings[0])
 	}
 	return m, nil
+}
+
+// The three lists are built with the translator, so a change of language builds them again.
+func (m *Model) newStackList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: stackColumns(text, m.tones), Keys: stackListKeys(), Ticks: true,
+		Search: kittui.SearchByKey, Empty: textStacksEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+	}
+	return l, err
+}
+
+func (m *Model) newRunsList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: runColumns(text, m.runTones), Keys: listKeys(),
+		Search: kittui.SearchByKey, Empty: textRunsEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+	}
+	return l, err
+}
+
+func (m *Model) newContainerList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: containerColumns(text, m.ctTones), Keys: listKeys(),
+		Search: kittui.SearchByKey, Empty: textCtEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+		l.SetGrouped(true)
+	}
+	return l, err
 }
 
 // restyle resolves the styles of the theme under the terminal; false when the theme is unknown.
@@ -334,7 +362,12 @@ func (m *Model) apply(msg refreshMsg) {
 	if msg.problem != nil {
 		m.failure = m.errorText(msg.problem)
 	}
-	rows := buildRows(msg.snap)
+	m.fillStacks()
+}
+
+// fillStacks sets the rows of the stacks list and of the runs list from the snapshot read last.
+func (m *Model) fillStacks() {
+	rows := buildRows(m.snap)
 	ids := itemIDs(rows)
 	clear(m.tones)
 	clear(m.rows)
@@ -435,7 +468,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.modalKey(msg)
 	}
 	if (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil {
-		if m.set.busy {
+		if m.formBlocked() {
 			if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actForceQuit {
 				return tea.Quit
 			}

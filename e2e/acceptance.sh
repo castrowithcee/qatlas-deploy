@@ -172,7 +172,7 @@ acc_first_setup() {
 	tui_wait 'No stacks' 30
 
 	step 'Settings: the deploy key is generated and registered on the git server'
-	tui_page 1
+	tui_page 2
 	tui_wait 'No deploy key yet' 10
 	tui_key_generate
 	tui_wait 'Add this public key' 10
@@ -183,7 +183,7 @@ acc_first_setup() {
 
 	step 'Settings: the maintenance window is moved away from now'
 	win_start=$(date -u -d '+12 hours' +%H:%M)
-	tui_page 3
+	tui_page 4
 	tui_wait 'Maintenance window' 10
 	tui_send e
 	tui_wait 'Change the maintenance window' 10
@@ -205,7 +205,7 @@ acc_first_setup() {
 	tui_send Enter
 
 	step 'Settings: a webhook channel is added and its test message is sent'
-	tui_page 4
+	tui_page 5
 	tui_wait 'Notifications' 10
 	tui_send a
 	tui_wait 'Add a notification channel' 10
@@ -230,7 +230,7 @@ acc_first_setup() {
 	acc 'webhook channel added through the interface; the test message reached the receiver'
 
 	step 'Settings: the repository is bound after the host key is shown and confirmed'
-	tui_page 0
+	tui_page 1
 	tui_wait 'No stacks repository is bound' 10
 	tui_send b
 	tui_wait 'Bind the stacks repository' 10

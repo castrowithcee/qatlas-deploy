@@ -186,11 +186,16 @@ func (m *Model) applyContainers(msg containersMsg) {
 		return
 	}
 	m.ct.err, m.ct.loaded, m.ct.groups = nil, true, msg.res.Groups
+	m.fillContainers()
+}
+
+// fillContainers sets the rows of the containers list from the groups read last.
+func (m *Model) fillContainers() {
 	clear(m.ctTones)
 	clear(m.ctNames)
 	var items []kittui.ListItem
 	var names []string
-	for _, g := range msg.res.Groups {
+	for _, g := range m.ct.groups {
 		title := m.groupTitle(g)
 		for _, c := range g.Containers {
 			word, tone := m.stateWord(c.State)
