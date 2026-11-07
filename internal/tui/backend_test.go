@@ -6,10 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/channeltest"
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
@@ -27,18 +25,7 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 			Endpoint: ep, StateDir: filepath.Join(t.TempDir(), "state"), PeerCheck: func(net.Conn) error { return nil }})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	path, err := ep.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
-	}
+	channeltest.WaitReady(t, ep)
 
 	b := NewBackend(ep)
 	st, err := b.Status(ctx)

@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -74,18 +73,8 @@ func startServiceLogged(t *testing.T, check service.PeerCheck, logOut io.Writer)
 			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups, Registry: testRegistry, Changelog: testChangelog, Docker: testDocker})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	path, err := ep.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			return dir
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
-	}
+	channeltest.WaitReady(t, ep)
+	return dir
 }
 
 func TestStatusJSON(t *testing.T) {

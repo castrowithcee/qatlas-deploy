@@ -4,14 +4,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
-	"time"
-
-	"github.com/castrowithcee/qatlas-kit/localipc"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/channeltest"
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
@@ -28,7 +24,7 @@ func TestKeySetAnswersAndNeverEchoesTheKey(t *testing.T) {
 		done <- Run(ctx, log, Config{Endpoint: ep, StateDir: filepath.Join(t.TempDir(), "state"), PeerCheck: allowAll})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	waitForChannel(t, ep)
+	channeltest.WaitReady(t, ep)
 	cl, err := client.Dial(context.Background(), ep)
 	if err != nil {
 		t.Fatal(err)
@@ -81,20 +77,4 @@ func (b *lockedBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
-}
-
-func waitForChannel(t *testing.T, ep localipc.ServiceEndpoint) {
-	t.Helper()
-	path, err := ep.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
-	}
 }
