@@ -271,7 +271,8 @@ rollback_failed_steps=stop,backup,pull,up,check,rollback,stop,restore,revert,pus
 
 # newest_run prints the id of the newest recorded run of a stack (empty when there is none).
 newest_run() {
-	qd stack runs "$1" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' || true
+	# The error column can name another run, so only the first id of the newest line counts.
+	qd stack runs "$1" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' | head -n 1
 }
 
 # next_run waits for a run of the stack other than the run id $2, active or already finished, and prints its
