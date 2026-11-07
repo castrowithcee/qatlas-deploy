@@ -2099,6 +2099,18 @@ tui_click() {
 	tui_send -l "$(printf '\033[<0;%d;%dM\033[<0;%d;%dm' "$1" "$2" "$1" "$2")"
 }
 
+# tui_wheel turns the mouse wheel $2 notches ($1 is up or down) at the cell $3 (column), $4 (row), 1-based, as
+# a terminal reports it (SGR, buttons 64 and 65).
+tui_wheel() {
+	button=65
+	[ "$1" = up ] && button=64
+	n=0
+	while [ "$n" -lt "$2" ]; do
+		tui_send -l "$(printf '\033[<%d;%d;%dM' "$button" "$3" "$4")"
+		n=$((n + 1))
+	done
+}
+
 # tui_click_row clicks the stack $1 in the Stacks list and waits until the cursor marks it.
 tui_click_row() {
 	tui_click "$1"
@@ -2161,8 +2173,8 @@ scenario_tui() {
 	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$head_before" ] || fail 'the question already made a commit'
 	[ "$(stack_run_count demo-cache)" = "$runs_before" ] || fail 'the question already started a run'
 
-	step 'y runs the update; while it runs the Runs area lists the run and opens its log, which follows it'
-	tui_send y
+	step 'a click on the answer runs the update as y does; while it runs the Runs area lists the run and opens its log, which follows it'
+	tui_click 'yes, do it'
 	tui_send 3
 	# The list is read again on r. The run lasts a few seconds, long enough for a poll every 0.3 seconds.
 	i=0
@@ -2195,6 +2207,29 @@ scenario_tui() {
 	[ "$(stack_images demo-cache)" = "$image:1.1.0" ] || fail "demo-cache does not run 1.1.0: $(stack_images demo-cache)"
 	stack_healthy demo-cache || fail 'demo-cache is not healthy after the update'
 	log "scenario: interface update of demo-cache: run $screen_run, demo-cache runs 1.1.0"
+
+	step 'the wheel scrolls the run log in a small window and the lines of its end come back'
+	tui_tmux resize-window -t qdtui -y 12
+	i=0
+	until tui_screen | grep -q "$screen_run"; do
+		i=$((i + 1))
+		[ "$i" -lt 40 ] || fail "the run log is not redrawn in the small window: $(tui_screen)"
+		sleep 0.25
+	done
+	tui_send End
+	tui_wait 'result succeeded' 10
+	tui_wheel up 3 10 6
+	i=0
+	while tui_has 'result succeeded'; do
+		i=$((i + 1))
+		[ "$i" -lt 20 ] || fail "the wheel did not scroll the run log up: $(tui_screen)"
+		sleep 0.25
+	done
+	tui_wheel down 10 10 6
+	tui_wait 'result succeeded' 10
+	tui_tmux resize-window -t qdtui -y 40
+	tui_wait "$screen_run" 10
+	log 'scenario: the wheel scrolled the run log up and back down'
 
 	step 'two ticked stacks are updated with one question, one after another'
 	head_before=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
