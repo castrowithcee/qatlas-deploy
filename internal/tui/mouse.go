@@ -184,7 +184,7 @@ func answerTargets(d *kittui.Dialog, ts []kittui.Target) []kittui.Target {
 
 // formTakesMouse reports whether form is the open form and takes input now, as for the keyboard.
 func (m *Model) formTakesMouse(form *kittui.Form) bool {
-	return m.formShown() && m.set.form.form == form && !m.set.busy && m.modal == nil
+	return m.formShown() && m.set.form.form == form && !m.formBlocked() && m.modal == nil
 }
 
 // rowClick marks the clicked row and gives the rows the focus. A second click on the marked row opens it by

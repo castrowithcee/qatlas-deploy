@@ -15,6 +15,10 @@ func TestGoldenSettingsMenu(t *testing.T) {
 	goldenScreens(t, "settings.menu", settingsRows, settingsBackend, toMenu...)
 }
 
+func TestGoldenSettingsGeneralForm(t *testing.T) {
+	goldenScreens(t, "settings.general", settingsRows, settingsBackend, toGeneral...)
+}
+
 func TestGoldenSettingsRepo(t *testing.T) {
 	goldenScreens(t, "settings.repo", settingsRows, settingsBackend, toRepo...)
 }

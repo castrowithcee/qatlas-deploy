@@ -24,6 +24,25 @@ const (
 	textColType               kittui.TextID = "col.type"
 	textColEvents             kittui.TextID = "col.events"
 	textColTarget             kittui.TextID = "col.target"
+	textPageGeneral           kittui.TextID = "page.general"
+	textAboutGeneral          kittui.TextID = "about.general"
+	textFieldTheme            kittui.TextID = "field.theme"
+	textHintTheme             kittui.TextID = "hint.theme"
+	textFieldStartArea        kittui.TextID = "field.startarea"
+	textHintStartArea         kittui.TextID = "hint.startarea"
+	textFieldLanguage         kittui.TextID = "field.language"
+	textHintLanguage          kittui.TextID = "hint.language"
+	textFieldMouse            kittui.TextID = "field.mouse"
+	textHintMouse             kittui.TextID = "hint.mouse"
+	textLangEnglish           kittui.TextID = "lang.english"
+	textLangGerman            kittui.TextID = "lang.german"
+	textLangSystem            kittui.TextID = "lang.system"
+	textMouseOn               kittui.TextID = "mouse.on"
+	textMouseOff              kittui.TextID = "mouse.off"
+	textGeneralSaved          kittui.TextID = "general.saved"
+	textGeneralSavedStart     kittui.TextID = "general.saved.start"
+	textGeneralCannotSave     kittui.TextID = "general.cannotsave"
+	textGeneralSaveFailed     kittui.TextID = "general.savefailed"
 	textPageRepo              kittui.TextID = "page.repo"
 	textPageKey               kittui.TextID = "page.key"
 	textPageCreds             kittui.TextID = "page.creds"
@@ -214,6 +233,25 @@ func settingsEnglish() map[kittui.TextID]string {
 		textPageCreds:             "Credentials",
 		textPageWindow:            "Maintenance window",
 		textPageNotify:            "Notifications",
+		textPageGeneral:           "General",
+		textAboutGeneral:          "theme, start area, language and mouse of this device",
+		textFieldTheme:            "Theme",
+		textHintTheme:             "the colors of the interface",
+		textFieldStartArea:        "Start area",
+		textHintStartArea:         "the area shown at start; applies from the next start",
+		textFieldLanguage:         "Language",
+		textHintLanguage:          "the language of the interface; system follows the device",
+		textFieldMouse:            "Mouse",
+		textHintMouse:             "with the mouse on, hold Shift to select text",
+		textLangEnglish:           "English",
+		textLangGerman:            "Deutsch",
+		textLangSystem:            "System",
+		textMouseOn:               "on",
+		textMouseOff:              "off",
+		textGeneralSaved:          "The settings are saved.",
+		textGeneralSavedStart:     "The settings are saved. The start area applies from the next start.",
+		textGeneralCannotSave:     "The settings cannot be saved here: this device has no place for them.",
+		textGeneralSaveFailed:     "The settings could not be saved: %s",
 		textAboutRepo:             "bind the repository, confirm its host key, fetch",
 		textAboutKey:              "store or generate the key for the git platform",
 		textAboutCreds:            "registry logins and the GitHub token",
@@ -400,6 +438,25 @@ func settingsGerman() map[kittui.TextID]string {
 		textPageCreds:             "Zugangsdaten",
 		textPageWindow:            "Wartungsfenster",
 		textPageNotify:            "Benachrichtigungen",
+		textPageGeneral:           "Allgemein",
+		textAboutGeneral:          "Design, Startbereich, Sprache und Maus dieses Geräts",
+		textFieldTheme:            "Design",
+		textHintTheme:             "die Farben der Oberfläche",
+		textFieldStartArea:        "Startbereich",
+		textHintStartArea:         "der Bereich beim Start; gilt ab dem nächsten Start",
+		textFieldLanguage:         "Sprache",
+		textHintLanguage:          "die Sprache der Oberfläche; System folgt dem Gerät",
+		textFieldMouse:            "Maus",
+		textHintMouse:             "bei eingeschalteter Maus Text mit gedrückter Umschalttaste markieren",
+		textLangEnglish:           "English",
+		textLangGerman:            "Deutsch",
+		textLangSystem:            "System",
+		textMouseOn:               "an",
+		textMouseOff:              "aus",
+		textGeneralSaved:          "Die Einstellungen sind gespeichert.",
+		textGeneralSavedStart:     "Die Einstellungen sind gespeichert. Der Startbereich gilt ab dem nächsten Start.",
+		textGeneralCannotSave:     "Die Einstellungen können hier nicht gespeichert werden: Dieses Gerät hat keinen Ort dafür.",
+		textGeneralSaveFailed:     "Die Einstellungen konnten nicht gespeichert werden: %s",
 		textAboutRepo:             "Repository binden, Hostschlüssel bestätigen, abrufen",
 		textAboutKey:              "Schlüssel für die Git-Plattform hinterlegen oder erzeugen",
 		textAboutCreds:            "Registry-Logins und GitHub-Token",

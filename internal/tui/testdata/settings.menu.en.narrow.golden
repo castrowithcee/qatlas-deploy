@@ -2,7 +2,8 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
 --------------------------------------------------------
   SETTING             ABOUT                             
-> Stacks repository   bind the repository, confirm its ~
+> General             theme, start area, language and m~
+  Stacks repository   bind the repository, confirm its ~
   Deploy key          store or generate the key for the~
   Credentials         registry logins and the GitHub to~
   Maintenance window  when updates run                  
@@ -19,6 +20,5 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
                                                         
-                                                        
 enter open  r reload  1-5 area  q quit                  
-                                     up/down choose  1/5
+                                     up/down choose  1/6

@@ -2,7 +2,8 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
 --------------------------------------------------------
   EINSTELLUNG         INHALT                            
-> Stacks-Repository   Repository binden, Hostschlüssel ~
+> Allgemein           Design, Startbereich, Sprache und~
+  Stacks-Repository   Repository binden, Hostschlüssel ~
   Deploy-Schlüssel    Schlüssel für die Git-Plattform h~
   Zugangsdaten        Registry-Logins und GitHub-Token  
   Wartungsfenster     wann Updates laufen               
@@ -19,6 +20,5 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
                                                         
                                                         
-                                                        
 enter öffnen  r Neu laden  1-5 Bereich  q Beenden       
-                                  up/down Auswählen  1/5
+                                  up/down Auswählen  1/6

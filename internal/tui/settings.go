@@ -17,11 +17,12 @@ import (
 type settingsPage string
 
 const (
-	pageRepo   settingsPage = "repo"
-	pageKey    settingsPage = "key"
-	pageCreds  settingsPage = "credentials"
-	pageWindow settingsPage = "window"
-	pageNotify settingsPage = "notifications"
+	pageGeneral settingsPage = "general"
+	pageRepo    settingsPage = "repo"
+	pageKey     settingsPage = "key"
+	pageCreds   settingsPage = "credentials"
+	pageWindow  settingsPage = "window"
+	pageNotify  settingsPage = "notifications"
 )
 
 // settingsPages are the pages in the order of the menu, with the texts of their title and of their line in the
@@ -30,6 +31,7 @@ var settingsPages = []struct {
 	page         settingsPage
 	title, about kittui.TextID
 }{
+	{pageGeneral, textPageGeneral, textAboutGeneral},
 	{pageRepo, textPageRepo, textAboutRepo},
 	{pageKey, textPageKey, textAboutKey},
 	{pageCreds, textPageCreds, textAboutCreds},
@@ -57,6 +59,7 @@ type settingsState struct {
 	creds    part
 	credList *kittui.List
 	credData map[kittui.ItemID]control.CredentialInfo
+	credRead []control.CredentialInfo
 
 	window    part
 	windowRes control.WindowResult
@@ -64,6 +67,7 @@ type settingsState struct {
 	notify     part
 	notifyList *kittui.List
 	notifyData map[kittui.ItemID]control.NotifyChannelInfo
+	notifyRead []control.NotifyChannelInfo
 }
 
 // bind is a repository the person asked to bind and the host key the server presented for it.
@@ -161,6 +165,9 @@ func (m *Model) settingsBusy() bool { return m.set.busy }
 // openPage shows a page and reads what it shows.
 func (m *Model) openPage(p settingsPage) tea.Cmd {
 	m.set.page = p
+	if p == pageGeneral {
+		return m.openForm(m.generalForm())
+	}
 	return m.loadPage(true)
 }
 
@@ -247,6 +254,7 @@ func (m *Model) applySettingsLoad(msg settingsLoadMsg) {
 
 func (m *Model) setCredentials(list []control.CredentialInfo) {
 	s := m.set
+	s.credRead = list
 	s.credData = map[kittui.ItemID]control.CredentialInfo{}
 	items := make([]kittui.ListItem, len(list))
 	for i, c := range list {
@@ -264,6 +272,7 @@ const modifiedLayout = "2006-01-02 15:04"
 
 func (m *Model) setChannels(list []control.NotifyChannelInfo) {
 	s := m.set
+	s.notifyRead = list
 	s.notifyData = map[kittui.ItemID]control.NotifyChannelInfo{}
 	items := make([]kittui.ListItem, len(list))
 	for i, c := range list {
@@ -374,7 +383,9 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 	t := m.text
 	var cmds []tea.Cmd
 	done := func(text string, details ...string) {
-		s.form = nil
+		if s.form == nil || s.form.kind != formGeneral {
+			s.form = nil
+		}
 		m.tell(textSettingDoneTitle, text, details)
 	}
 	switch res := msg.res.(type) {
@@ -450,7 +461,7 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 func (m *Model) settingFailed(msg settingMsg) tea.Cmd {
 	s := m.set
 	text := m.serviceText(msg.err)
-	if s.form != nil {
+	if s.form != nil && s.form.kind != formGeneral {
 		if p, ok := m.keyProblem(s.form, msg); ok {
 			s.form.problems(p)
 			return nil

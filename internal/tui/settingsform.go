@@ -161,12 +161,14 @@ func (m *Model) notifyDetailForm(basics control.NotifyAddArgs) *settingsForm {
 // that does not hold up stays open with its problems under the fields.
 func (m *Model) submitForm() tea.Cmd {
 	f := m.set.form
-	if f == nil || m.settingsBusy() {
+	if f == nil || m.formBlocked() {
 		return nil
 	}
 	v := f.form.Values()
 	text := func(id string) string { return strings.TrimSpace(v[kittui.FieldID(id)].Text) }
 	switch f.kind {
+	case formGeneral:
+		return m.submitGeneral(f)
 	case formRepo:
 		return m.submitRepo(f, text("url"), text("dir"))
 	case formCred:
@@ -439,17 +441,32 @@ func (m *Model) formAct(act kittui.ActionID, handled bool) (cmd tea.Cmd, done bo
 	return nil, handled
 }
 
+// dropForm closes the open form; the General page is nothing but its form, so it falls back to the menu.
+func (m *Model) dropForm() {
+	m.set.form = nil
+	if m.set.page == pageGeneral {
+		m.set.page = ""
+	}
+}
+
+// formBlocked says the open form takes no input: a write of the service is under way. The General form stays
+// usable, as saving it reaches no service.
+func (m *Model) formBlocked() bool {
+	f := m.set.form
+	return m.settingsBusy() && (f == nil || f.kind != formGeneral)
+}
+
 // discardForm ends the form; nothing is kept of it. A form with changes asks first and stays open until the
 // answer, the question names no value.
 func (m *Model) discardForm() tea.Cmd {
 	f := m.set.form
 	if !f.form.Changed() {
-		m.set.form = nil
+		m.dropForm()
 		return nil
 	}
 	m.ask(textTitleDiscard, m.text.Lookup(textAskDiscard), m.text.Lookup(textWhatDiscard), nil, true, func() tea.Cmd {
 		if m.set.form == f {
-			m.set.form = nil
+			m.dropForm()
 		}
 		return nil
 	})

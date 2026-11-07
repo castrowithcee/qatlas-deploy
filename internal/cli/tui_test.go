@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-kit/uiprefs"
+
 	"github.com/castrowithcee/qatlas-deploy/internal/channeltest"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/tui"
@@ -71,6 +73,47 @@ func TestTUICommandReadsThePreferences(t *testing.T) {
 	}
 	if p := (*started)[0].Prefs; p.Language != "deutsch" || p.Start != "runs" {
 		t.Fatalf("prefs = %+v", p)
+	}
+}
+
+func TestTUICommandSavesThePreferencesWhereItReadsThem(t *testing.T) {
+	startService(t, func(net.Conn) error { return nil })
+	out, started := fakeTerminal(t)
+	if code, stderr := runOn(out, "tui"); code != 0 || len(*started) != 1 {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+	opts := (*started)[0]
+	if opts.SavePrefs == nil {
+		t.Fatal("the interface cannot save the preferences")
+	}
+	schema, err := tui.PrefsSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := opts.Prefs
+	want.Language, want.Start, want.MouseEnabled = uiprefs.LanguageGerman, "runs", false
+	if err := opts.SavePrefs(want); err != nil {
+		t.Fatal(err)
+	}
+	path, err := prefsPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, warnings := uiprefs.Load(path, schema); len(warnings) != 0 || got.Language != want.Language ||
+		got.Start != want.Start || got.MouseEnabled || got.Theme != want.Theme || got.Icons != want.Icons {
+		t.Fatalf("read back %+v with %v, want %+v", got, warnings, want)
+	}
+}
+
+func TestTUICommandWithoutHomeCannotSavePreferences(t *testing.T) {
+	startService(t, func(net.Conn) error { return nil })
+	out, started := fakeTerminal(t)
+	t.Setenv("HOME", "")
+	if code, stderr := runOn(out, "tui"); code != 0 || len(*started) != 1 {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+	if (*started)[0].SavePrefs != nil {
+		t.Fatal("a save callback without a home directory")
 	}
 }
 

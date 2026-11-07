@@ -139,7 +139,7 @@ func TestSettingsTextPageHasADetailZone(t *testing.T) {
 	m := newTestModel(t, i18n.English, demoBackend(), wideWidth, goldenRows)
 	send(m, "4")
 	wantZone(t, m, kittui.ZoneRows)
-	send(m, "enter")
+	send(m, "down", "enter")
 	if m.set.page == "" || m.set.activeList() != nil {
 		t.Fatalf("page %q is not a text page", m.set.page)
 	}
