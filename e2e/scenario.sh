@@ -1195,6 +1195,8 @@ scenario_stacks_repo() {
 
 	scenario_root_source
 
+	scenario_source_inspect
+
 	scenario_key_set
 
 	scenario_repair_end
@@ -1360,6 +1362,44 @@ scenario_root_source() {
 	[ "$(stack_field demo-root deployed)" = "$revert" ] || fail "demo-root is not recorded as deployed at the revert commit $revert"
 	[ "$(stack_images demo-root)" = "$image:1.1.0" ] || fail "demo-root does not run the previous image 1.1.0: $(stack_images demo-root)"
 	log "scenario: demo-root, the root of /opt/stacks3, deployed 1.1.0 and rolled back 2.0.0 with the revert $revert"
+}
+
+# scenario_source_inspect proves source inspect on four kinds of folder below /srv/qd-inspect, which no stack folder
+# uses: an empty folder to clone into, a clone with an origin, a repository without a remote and files
+# without a repository. The answers are parsed as JSON, and the tree of the folders is the same before and after.
+scenario_source_inspect() {
+	base=/srv/qd-inspect
+	step 'source inspect classifies an empty folder, a clone, a local repository and a folder of files'
+	docker exec "$host" sh -ec "rm -rf '$base' && mkdir -p '$base/empty' '$base/clone' '$base/local' '$base/files'" ||
+		fail 'cannot prepare the folders to inspect'
+	docker exec "$host" sh -ec "git init -q '$base/clone' && git -C '$base/clone' remote add origin '$url'" ||
+		fail 'cannot prepare the clone to inspect'
+	docker exec "$host" sh -ec "git init -q '$base/local' && echo demo >'$base/local/notes.txt' && git -C '$base/local' add -A &&
+		git -C '$base/local' -c user.name='E2E Inspect' -c user.email=inspect.qdeploye2e.test commit -q -m 'First commit'" ||
+		fail 'cannot prepare the local repository to inspect'
+	printf 'services:\n  app:\n    image: registry.%s/demo/app:1.0.0\n' "$domain" |
+		docker exec -i "$host" sh -ec "cat >'$base/files/compose.yaml'" || fail 'cannot write the compose file to inspect'
+	tree_before=$(docker exec "$host" find "$base" -printf '%p %m %u %s\n' | sort)
+
+	out=$(qd --output json source inspect "$base/empty" --url "$url") || fail "source inspect of an empty folder failed: $out"
+	printf '%s' "$out" | jq -e --arg u "$url" '.case == "clone" and .url == $u and (.access.mode | length) > 0' >/dev/null ||
+		fail "unexpected inspection of the empty folder: $out"
+	out=$(qd --output json source inspect "$base/clone") || fail "source inspect of a clone failed: $out"
+	printf '%s' "$out" | jq -e --arg u "$url" '.case == "adopt-clone" and .url == $u' >/dev/null ||
+		fail "unexpected inspection of the clone: $out"
+	out=$(qd --output json source inspect "$base/local") || fail "source inspect of a local repository failed: $out"
+	printf '%s' "$out" | jq -e '.case == "local" and (has("url") | not)' >/dev/null ||
+		fail "unexpected inspection of the local repository: $out"
+	out=$(qd --output json source inspect "$base/files") || fail "source inspect of a folder of files failed: $out"
+	printf '%s' "$out" | jq -e '.case == "files" and (.planned_files | index("compose.yaml")) != null and (.stacks | length) >= 1' >/dev/null ||
+		fail "unexpected inspection of the folder of files: $out"
+	out=$(qd source inspect "$base/files") || fail "source inspect as text failed: $out"
+	printf '%s' "$out" | grep -q 'files' || fail "the text answer does not name the case: $out"
+
+	[ "$(docker exec "$host" find "$base" -printf '%p %m %u %s\n' | sort)" = "$tree_before" ] ||
+		fail 'source inspect changed the folders it inspected'
+	docker exec "$host" rm -rf "$base" || fail 'cannot remove the inspected folders'
+	log 'scenario: source inspect told clone, adopt-clone, local and files and changed nothing'
 }
 
 # key_pub_field prints the public part (type and key, without comment) of the qdeploy key output $1.
