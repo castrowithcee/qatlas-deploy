@@ -199,6 +199,32 @@ func TestFetchErrorOfOneSourceLeavesTheOther(t *testing.T) {
 	wantCode(t, h.call(control.RepoFetchCommand, nil, nil), control.CodeRemote)
 }
 
+func TestRepoFetchWithDirFetchesOnlyThatFolder(t *testing.T) {
+	d := &fakeDeployer{}
+	h := bound(t, d)
+	dir := h.addSource(moreStacks(false))
+	first, second := h.git.Fetches(h.dir), h.git.Fetches(dir)
+
+	var res control.RepoFetchResult
+	if err := h.call(control.RepoFetchCommand, control.RepoFetchArgs{Dir: dir}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Sources) != 1 || res.Sources[0].Dir != dir || res.Dir != dir || res.Head != h.git.Head {
+		t.Fatalf("fetch = %+v", res)
+	}
+	if h.git.Fetches(dir) != second+1 || h.git.Fetches(h.dir) != first {
+		t.Fatalf("fetches: %d and %d, were %d and %d", h.git.Fetches(h.dir), h.git.Fetches(dir), first, second)
+	}
+
+	wantCode(t, h.call(control.RepoFetchCommand, control.RepoFetchArgs{Dir: filepath.Join(tempBase(t), "unknown")}, nil), control.CodeNotFound)
+
+	// Without the argument every folder is fetched, as before.
+	res = control.RepoFetchResult{}
+	if err := h.call(control.RepoFetchCommand, nil, &res); err != nil || len(res.Sources) != 2 {
+		t.Fatalf("fetch = %+v, %v", res, err)
+	}
+}
+
 func TestNameCollisionKeepsTheDeployedStack(t *testing.T) {
 	d := &fakeDeployer{}
 	h := bound(t, d)

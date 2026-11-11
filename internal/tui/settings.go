@@ -522,7 +522,7 @@ func (m *Model) tell(title kittui.TextID, text string, details []string) {
 
 func (m *Model) askFetch() tea.Cmd {
 	m.ask(textPageRepo, m.text.Lookup(textAskFetch), m.text.Lookup(textWhatFetch), nil, false, func() tea.Cmd {
-		return m.writeCall(opFetch, "", func(b Backend) (any, error) { return b.RepoFetch(m.ctx) })
+		return m.writeCall(opFetch, "", func(b Backend) (any, error) { return b.RepoFetch(m.ctx, "") })
 	})
 	return nil
 }

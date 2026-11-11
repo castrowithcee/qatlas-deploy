@@ -576,6 +576,21 @@ func (f *fakeFolders) Grant(_ context.Context, dir string, create bool) error {
 	return f.grantErr
 }
 
+func (f *fakeFolders) PlanPermissions(_ context.Context, res control.SourceInspectResult) (PermPlan, error) {
+	f.calls = append(f.calls, "plan:"+res.Path)
+	return PermPlan{}, nil
+}
+
+func (f *fakeFolders) ApplyPermissions(context.Context, PermPlan) error {
+	f.calls = append(f.calls, "apply")
+	return nil
+}
+
+func (f *fakeFolders) ReadOnly(path string) (bool, error) {
+	f.calls = append(f.calls, "readonly:"+path)
+	return false, nil
+}
+
 func TestRepoBindCreatesAMissingFolderOnlyAfterConfirmation(t *testing.T) {
 	for _, lang := range []struct {
 		lang i18n.Lang

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -111,47 +112,53 @@ func runSourceAdd(c *cobra.Command, program *cobracli.Program, gate *cobracli.Ga
 		}
 	}
 
-	var plan *permPlan
-	if a := res.Access; res.Case == control.SourceCaseClone && a != nil && a.SetsPermissions && a.ModePath == path {
-		_, gid, err := folders.owner()
-		if err != nil {
-			return folderFailure("cannot find the service account "+serviceAccount, err)
-		}
-		if plan, err = planFolder(path, gid); err != nil {
-			return err
-		}
-	}
-	if res.Case != control.SourceCaseClone {
-		if _, err := folders.missing(path); err != nil {
-			return err
-		}
-		a := res.Access
-		switch {
-		case a == nil:
-		case res.Case == control.SourceCaseFiles:
-			if a.SetsPermissions {
-				_, gid, err := folders.owner()
-				if err != nil {
-					return folderFailure("cannot find the service account "+serviceAccount, err)
-				}
-				if plan, err = planListedFiles(path, gid, res.PlannedFiles, bindMounts(res)); err != nil {
-					return err
-				}
-			}
-		case a.SetsPermissions || (a.GitWritable != nil && !*a.GitWritable):
-			_, gid, err := folders.owner()
-			if err != nil {
-				return folderFailure("cannot find the service account "+serviceAccount, err)
-			}
-			if plan, err = planPermissions(c.Context(), path, gid, bindMounts(res)); err != nil {
-				return err
-			}
-		}
+	plan, err := planAccess(c.Context(), res)
+	if err != nil {
+		return err
 	}
 	question := previewSourceAdd(c, res, repoURL, plan, remote)
 	return gate.Run(cobracli.Request{Question: question}, func() error {
 		return executeSourceAdd(c, program, state, res, repoURL, fingerprint, plan, remote)
 	})
+}
+
+// planAccess works out what must change so that the service can write the folder of res: nil when nothing
+// needs to. It changes nothing.
+func planAccess(ctx context.Context, res control.SourceInspectResult) (*permPlan, error) {
+	path, a := res.Path, res.Access
+	if res.Case == control.SourceCaseClone {
+		if a == nil || !a.SetsPermissions || a.ModePath != path {
+			return nil, nil
+		}
+		_, gid, err := folders.owner()
+		if err != nil {
+			return nil, folderFailure("cannot find the service account "+serviceAccount, err)
+		}
+		return planFolder(path, gid)
+	}
+	if _, err := folders.missing(path); err != nil {
+		return nil, err
+	}
+	switch {
+	case a == nil:
+		return nil, nil
+	case res.Case == control.SourceCaseFiles:
+		if !a.SetsPermissions {
+			return nil, nil
+		}
+		_, gid, err := folders.owner()
+		if err != nil {
+			return nil, folderFailure("cannot find the service account "+serviceAccount, err)
+		}
+		return planListedFiles(path, gid, res.PlannedFiles, bindMounts(res))
+	case a.SetsPermissions || (a.GitWritable != nil && !*a.GitWritable):
+		_, gid, err := folders.owner()
+		if err != nil {
+			return nil, folderFailure("cannot find the service account "+serviceAccount, err)
+		}
+		return planPermissions(ctx, path, gid, bindMounts(res))
+	}
+	return nil, nil
 }
 
 func executeSourceAdd(c *cobra.Command, program *cobracli.Program, state *notRunning, res control.SourceInspectResult,

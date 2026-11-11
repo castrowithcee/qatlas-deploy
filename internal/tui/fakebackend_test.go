@@ -42,6 +42,15 @@ type fakeBackend struct {
 	window  control.WindowResult
 	notify  []control.NotifyChannelInfo
 	repoSet []control.RepoSetArgs
+	// The stack folders: inspects answers by path (unknown paths are rejected), folderList is the bound list,
+	// compare the answer of source.compare. fetchDirs, sourceAdds and removes record the calls in order; the
+	// reads (inspect, compare, list) are only counted, so a test can tell that nothing changing was called.
+	inspects   map[string]control.SourceInspectResult
+	folderList control.SourceListResult
+	compare    control.SourceCompareResult
+	fetchDirs  []string
+	sourceAdds []control.SourceAddArgs
+	removes    []string
 	// sent are the arguments of the credential and channel writes in order, kept to check what reached the
 	// service and that nothing else did.
 	credSets []control.CredentialSetArgs
@@ -451,11 +460,68 @@ func (f *fakeBackend) RepoSet(_ context.Context, args control.RepoSetArgs) (cont
 	return control.RepoSetResult{URL: args.URL, Dir: args.Dir, Fingerprint: args.Fingerprint, Head: commitA, Cloned: true}, nil
 }
 
-func (f *fakeBackend) RepoFetch(context.Context) (control.RepoFetchResult, error) {
-	if err := f.act("fetch", ""); err != nil {
+func (f *fakeBackend) RepoFetch(_ context.Context, dir string) (control.RepoFetchResult, error) {
+	if err := f.act("fetch", dir); err != nil {
 		return control.RepoFetchResult{}, err
 	}
+	f.mu.Lock()
+	f.fetchDirs = append(f.fetchDirs, dir)
+	f.mu.Unlock()
 	return control.RepoFetchResult{Dir: stackDir, Head: commitA, RemoteHead: commitB, UpdatesAvailable: true}, nil
+}
+
+func (f *fakeBackend) SourceInspect(_ context.Context, path, url string) (control.SourceInspectResult, error) {
+	f.count("sourceinspect")
+	if err := f.fail("sourceinspect", path); err != nil {
+		return control.SourceInspectResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if res, ok := f.inspects[path]; ok {
+		return res, nil
+	}
+	return control.SourceInspectResult{Path: path, Case: control.SourceCaseReject, Reason: "no such folder in the fake",
+		Stacks: []control.SourceStack{}}, nil
+}
+
+func (f *fakeBackend) SourceCompare(_ context.Context, args control.SourceCompareArgs) (control.SourceCompareResult, error) {
+	f.count("sourcecompare")
+	if err := f.fail("sourcecompare", args.Path); err != nil {
+		return control.SourceCompareResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.compare, nil
+}
+
+func (f *fakeBackend) SourceAdd(_ context.Context, args control.SourceAddArgs) (control.SourceAddResult, error) {
+	if err := f.act("sourceadd", args.Path); err != nil {
+		return control.SourceAddResult{}, err
+	}
+	f.mu.Lock()
+	f.sourceAdds = append(f.sourceAdds, args)
+	f.mu.Unlock()
+	return control.SourceAddResult{ID: "demo-id", Path: args.Path, Kind: "local", Head: commitA}, nil
+}
+
+func (f *fakeBackend) SourceList(context.Context) (control.SourceListResult, error) {
+	f.count("sourcelist")
+	if err := f.fail("sourcelist", ""); err != nil {
+		return control.SourceListResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.folderList, nil
+}
+
+func (f *fakeBackend) SourceRemove(_ context.Context, path string) (control.SourceRemoveResult, error) {
+	if err := f.act("sourceremove", path); err != nil {
+		return control.SourceRemoveResult{}, err
+	}
+	f.mu.Lock()
+	f.removes = append(f.removes, path)
+	f.mu.Unlock()
+	return control.SourceRemoveResult{ID: "demo-id", Path: path}, nil
 }
 
 // keySlot is the stored key of a stack folder: key for the default one, dirKeys for the others. The caller
