@@ -729,6 +729,104 @@ type CheckFinding struct {
 	Fix      string `json:"fix"`
 }
 
+// SourceInspectCommand classifies a folder before it is taken over as a stack folder. It only reads.
+const SourceInspectCommand = "source.inspect"
+
+// The cases SourceInspectResult.Case takes. Exactly one applies to a folder.
+const (
+	// SourceCaseClone: the folder is missing or empty and gets a clone of the URL.
+	SourceCaseClone = "clone"
+	// SourceCaseAdopt: the folder is a clone with an origin remote that is taken over as it is.
+	SourceCaseAdopt = "adopt-clone"
+	// SourceCaseLocal: the folder is a repository without a remote and runs locally.
+	SourceCaseLocal = "local"
+	// SourceCaseFiles: the folder holds files and no repository; the first commit would take PlannedFiles.
+	SourceCaseFiles = "files"
+	// SourceCaseReject: the folder cannot be taken over; Reason says why and Fix what to do.
+	SourceCaseReject = "reject"
+)
+
+// The reasons a file or folder is left out of the first commit of a folder without a repository.
+const (
+	SourceExcludedBindMount  = "bind-mount"
+	SourceExcludedTooLarge   = "too-large"
+	SourceExcludedNotRegular = "not-regular"
+	SourceExcludedUnreadable = "unreadable"
+	SourceExcludedNestedRepo = "nested-repo"
+)
+
+// SourceInspectArgs are the arguments of SourceInspectCommand. Path is the folder; URL is the SSH address of the
+// repository to clone or to expect as origin and may be empty.
+type SourceInspectArgs struct {
+	Path string `json:"path"`
+	URL  string `json:"url,omitempty"`
+}
+
+// SourceInspectResult answers SourceInspectCommand.
+//
+// Case is one of the SourceCase constants. URL is the repository address of the clone and of the adopted clone.
+// NeedsURL is set for a clone without a URL. Reason and Fix are set for a rejection. Access says who owns the
+// folder and what the service may do there; it is empty for a rejection. PlannedFiles and Excluded are set
+// for SourceCaseFiles only. Stacks holds the stacks the folder would bring, none for a clone or a rejection;
+// StacksError says they could not be read. ContainersChecked says the container engine was asked;
+// ContainersError says why it could not be, and then the rest of the answer still holds.
+type SourceInspectResult struct {
+	Path              string           `json:"path"`
+	Case              string           `json:"case"`
+	URL               string           `json:"url,omitempty"`
+	NeedsURL          bool             `json:"needs_url,omitempty"`
+	Reason            string           `json:"reason,omitempty"`
+	Fix               string           `json:"fix,omitempty"`
+	Access            *SourceAccess    `json:"access,omitempty"`
+	PlannedFiles      []string         `json:"planned_files,omitempty"`
+	Excluded          []SourceExcluded `json:"excluded,omitempty"`
+	Stacks            []SourceStack    `json:"stacks"`
+	StacksError       string           `json:"stacks_error,omitempty"`
+	ContainersChecked bool             `json:"containers_checked"`
+	ContainersError   string           `json:"containers_error,omitempty"`
+}
+
+// SourceAccess is the permission information of a folder. ModePath is the folder Mode belongs to: Path, or the
+// nearest existing parent while Path is missing. Owner and Group are empty when the id has no name.
+// ServiceCanWrite says the service may create files there; SetsPermissions says source add will then change the
+// permissions (group qdeploy, group write, setgid), which it does exactly when the service cannot write.
+// GitWritable is set for an existing repository and says the service may write its .git folder.
+type SourceAccess struct {
+	ModePath        string `json:"mode_path"`
+	OwnerID         uint32 `json:"owner_id"`
+	Owner           string `json:"owner,omitempty"`
+	GroupID         uint32 `json:"group_id"`
+	Group           string `json:"group,omitempty"`
+	Mode            string `json:"mode"`
+	ServiceCanWrite bool   `json:"service_can_write"`
+	SetsPermissions bool   `json:"sets_permissions"`
+	GitWritable     *bool  `json:"git_writable,omitempty"`
+}
+
+// SourceExcluded is a file or folder, as a path below the folder, that the first commit would leave out. Reason is
+// one of the SourceExcluded constants; Stack names the stack whose bind mount it is.
+type SourceExcluded struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+	Stack  string `json:"stack,omitempty"`
+}
+
+// SourceStack is the check of one stack the folder would bring, with the containers that would collide with
+// it: Compose containers of another project that run in the stack's folder.
+type SourceStack struct {
+	Name      string           `json:"name"`
+	Folder    string           `json:"folder"`
+	Functions []StackFunction  `json:"functions"`
+	Findings  []CheckFinding   `json:"findings"`
+	Conflicts []SourceConflict `json:"conflicts,omitempty"`
+}
+
+// SourceConflict is a container of another Compose project that runs in the folder of a stack.
+type SourceConflict struct {
+	Container string `json:"container"`
+	Project   string `json:"project"`
+}
+
 // The commands that save and restore the data of a stack.
 const (
 	BackupCreateCommand  = "backup.create"

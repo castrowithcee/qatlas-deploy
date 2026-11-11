@@ -35,6 +35,7 @@ type WorkingCopy interface {
 	Head(ctx context.Context) (string, error)
 	RemoteHead(ctx context.Context) (string, error)
 	RemoteURL(ctx context.Context) (string, error)
+	Remotes(ctx context.Context) ([]string, error)
 	Status(ctx context.Context) ([]gitrepo.Change, error)
 	ChangedFolders(ctx context.Context, from, to string) ([]string, error)
 	FastForward(ctx context.Context, commit string) error
