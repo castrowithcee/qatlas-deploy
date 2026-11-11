@@ -186,6 +186,10 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodeRemote:
 		return &cli.Failure{Code: output.CodeUnreachable, Message: remote.Message,
 			NextStep: "Check the URL, the network and that the deploy key is entered in the git platform ('qdeploy key show').", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeSecrets:
+		f := secretsFailure(remote.Message)
+		f.Cause = err
+		return f
 	case errors.As(err, &remote) && remote.Code == control.CodeRunActive:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Wait for the active run to end ('qdeploy stack runs'), then run the command again.", Cause: err}

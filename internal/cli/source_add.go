@@ -28,7 +28,11 @@ func newSourceAddCommand(program *cobracli.Program, state *notRunning) *cobra.Co
 			"remote is taken over with that address; a repository without a remote is bound as a local source; a\n" +
 			"folder with files and no repository gets a repository with a first commit of the listed files (branch\n" +
 			"main, as qdeploy, files left out only in .git/info/exclude, no file written) and is bound as a local\n" +
-			"source. If the list changed since it was shown, add stops before it changes anything.\n" +
+			"source. With --url, a folder of files is instead compared with the repository at that address, which\n" +
+			"must hold commits: add shows how they relate like 'source remote' does, stops at secret-like files in\n" +
+			"what a push would publish, and after you confirm starts the repository on the history of the remote\n" +
+			"(the state of the host becomes one commit and is pushed when the files differ) and binds it as a\n" +
+			"remote source. If the list changed since it was shown, add stops before it changes anything.\n" +
 			"A folder that is rejected is refused and nothing changes.\n" +
 			"When the service cannot write the folder or its .git, add gives them to the group of the service account\n" +
 			"as root: the group of the folder, of the folders of versioned files and of .git, group write and setgid\n" +
@@ -48,7 +52,7 @@ func newSourceAddCommand(program *cobracli.Program, state *notRunning) *cobra.Co
 			return runSourceAdd(c, program, gate, state, args[0], url, fingerprint)
 		},
 	}
-	add.Flags().StringVar(&url, "url", "", "SSH address of the repository to clone, or to expect as origin")
+	add.Flags().StringVar(&url, "url", "", "SSH address of the repository to clone, to expect as origin, or to join a folder of files with")
 	add.Flags().StringVar(&fingerprint, "fingerprint", "",
 		"expected SHA256 fingerprint of the server's host key; required without a terminal")
 	gate = program.AddGate(add, cobracli.Gates{Question: true})
@@ -99,6 +103,14 @@ func runSourceAdd(c *cobra.Command, program *cobracli.Program, gate *cobracli.Ga
 			"Run 'qdeploy source add "+path+" --url <ssh-url>'.")
 	}
 
+	var remote *filesRemote
+	if res.Case == control.SourceCaseFiles && url != "" {
+		var err error
+		if remote, err = compareFiles(c, state, path, url, fingerprint); err != nil {
+			return err
+		}
+	}
+
 	var plan *permPlan
 	if a := res.Access; res.Case == control.SourceCaseClone && a != nil && a.SetsPermissions && a.ModePath == path {
 		_, gid, err := folders.owner()
@@ -136,14 +148,14 @@ func runSourceAdd(c *cobra.Command, program *cobracli.Program, gate *cobracli.Ga
 			}
 		}
 	}
-	question := previewSourceAdd(c, res, repoURL, plan)
+	question := previewSourceAdd(c, res, repoURL, plan, remote)
 	return gate.Run(cobracli.Request{Question: question}, func() error {
-		return executeSourceAdd(c, program, state, res, repoURL, fingerprint, plan)
+		return executeSourceAdd(c, program, state, res, repoURL, fingerprint, plan, remote)
 	})
 }
 
 func executeSourceAdd(c *cobra.Command, program *cobracli.Program, state *notRunning, res control.SourceInspectResult,
-	repoURL, fingerprint string, plan *permPlan) error {
+	repoURL, fingerprint string, plan *permPlan, remote *filesRemote) error {
 	path, notice := res.Path, c.ErrOrStderr()
 	changed := 0
 	if plan != nil {
@@ -151,7 +163,7 @@ func executeSourceAdd(c *cobra.Command, program *cobracli.Program, state *notRun
 	}
 	switch res.Case {
 	case control.SourceCaseFiles:
-		return executeSourceFiles(c, program, state, res, plan)
+		return executeSourceFiles(c, program, state, res, plan, remote)
 	case control.SourceCaseClone, control.SourceCaseAdopt:
 		probe, err := trustHostKey(c, state, repoURL, fingerprint)
 		if err != nil {
@@ -189,9 +201,10 @@ func executeSourceAdd(c *cobra.Command, program *cobracli.Program, state *notRun
 
 // executeSourceFiles starts a repository in a folder of files. It looks at the folder once more first: what
 // was added or left out since the preview is not taken along silently, and nothing has changed by then.
-func executeSourceFiles(c *cobra.Command, program *cobracli.Program, state *notRunning, shown control.SourceInspectResult, plan *permPlan) error {
+func executeSourceFiles(c *cobra.Command, program *cobracli.Program, state *notRunning, shown control.SourceInspectResult,
+	plan *permPlan, remote *filesRemote) error {
 	path, notice := shown.Path, c.ErrOrStderr()
-	now, err := inspectSource(c, state, path, "")
+	now, err := inspectSource(c, state, path, remote.url())
 	if err != nil {
 		return err
 	}
@@ -210,7 +223,13 @@ func executeSourceFiles(c *cobra.Command, program *cobracli.Program, state *notR
 		return err
 	}
 	var added control.SourceAddResult
-	if err := credentialCall(c, state, control.SourceAddCommand, control.SourceAddArgs{Path: path, Files: shown.PlannedFiles}, &added); err != nil {
+	args := control.SourceAddArgs{Path: path, Files: shown.PlannedFiles}
+	callService := credentialCall
+	if remote != nil {
+		args.URL, args.Fingerprint, args.ExpectState, args.ExpectCommit = remote.address, remote.fingerprint, remote.cmp.State, remote.cmp.Commit
+		callService = repoCall
+	}
+	if err := callService(c, state, control.SourceAddCommand, args, &added); err != nil {
 		var f *cli.Failure
 		if changed > 0 && errors.As(err, &f) {
 			kept := *f
@@ -219,14 +238,67 @@ func executeSourceFiles(c *cobra.Command, program *cobracli.Program, state *notR
 		}
 		return err
 	}
-	return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: []output.Field{
+	fields := []output.Field{
 		{Name: "id", Value: added.ID},
 		{Name: "path", Value: added.Path},
 		{Name: "kind", Value: added.Kind},
 		{Name: "head", Value: added.Head},
 		{Name: "files", Value: added.Files},
-		{Name: "changed_paths", Value: changed},
-	}})
+	}
+	if remote != nil {
+		fields = append(fields, output.Field{Name: "url", Value: remote.address},
+			output.Field{Name: "state", Value: remote.cmp.State}, output.Field{Name: "branch", Value: remote.cmp.Branch},
+			output.Field{Name: "pushed", Value: added.Pushed})
+	}
+	fields = append(fields, output.Field{Name: "changed_paths", Value: changed})
+	return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: fields})
+}
+
+// filesRemote is the comparison of a folder of files with the repository it is to join, as the operator saw
+// it. Only the state and commit shown are acted on.
+type filesRemote struct {
+	address, fingerprint string
+	cmp                  control.SourceCompareResult
+}
+
+// url is the address to look at the folder with; a nil remote has none.
+func (r *filesRemote) url() string {
+	if r == nil {
+		return ""
+	}
+	return r.address
+}
+
+// compareFiles confirms the host key, compares the folder of files with the remote and shows the result. It
+// stops at secret-like files in what a push would publish, and at a remote without commit. Nothing in the
+// folder has changed by then.
+func compareFiles(c *cobra.Command, state *notRunning, path, url, fingerprint string) (*filesRemote, error) {
+	probe, err := trustHostKey(c, state, url, fingerprint)
+	if err != nil {
+		return nil, err
+	}
+	cmp, err := compareRemote(c, state, path, url, probe.Fingerprint)
+	if err != nil {
+		return nil, err
+	}
+	if cmp.Case != control.SourceCaseFiles {
+		return nil, folderFailure("the service answered with the case "+cmp.Case+" for a folder of files", nil)
+	}
+	w := c.ErrOrStderr()
+	_, _ = fmt.Fprintf(w, "Compare %s with %s:\n", path, url)
+	printLines(w, compareLines(cmp))
+	if err := refuseSecrets(cmp); err != nil {
+		return nil, err
+	}
+	switch cmp.State {
+	case control.SourceRemoteEqual, control.SourceRemoteDifferent:
+	case control.SourceRemoteEmpty:
+		return nil, usageFailure("the repository at the address has no commit; nothing was changed",
+			"Take the folder over without --url, then run 'qdeploy source remote "+path+" "+url+"'.")
+	default:
+		return nil, folderFailure("the service answered with the unknown state "+cmp.State, nil)
+	}
+	return &filesRemote{address: url, fingerprint: probe.Fingerprint, cmp: cmp}, nil
 }
 
 // listDifference names what differs between two answers for a folder of files: the case, and the paths that
@@ -325,7 +397,7 @@ func bindMounts(res control.SourceInspectResult) []string {
 
 // previewSourceAdd shows what will change and returns the question for the confirmation. Without a terminal
 // the confirmation needs --yes; --yes never confirms a host key. Nothing has been changed by then.
-func previewSourceAdd(c *cobra.Command, res control.SourceInspectResult, url string, plan *permPlan) string {
+func previewSourceAdd(c *cobra.Command, res control.SourceInspectResult, url string, plan *permPlan, remote *filesRemote) string {
 	w := c.ErrOrStderr()
 	var lines []string
 	switch res.Case {
@@ -335,7 +407,11 @@ func previewSourceAdd(c *cobra.Command, res control.SourceInspectResult, url str
 	case control.SourceCaseAdopt:
 		lines = append(lines, fmt.Sprintf("Take over the clone %s with the address %s.", res.Path, url))
 	case control.SourceCaseFiles:
-		lines = append(lines, filesPreview(res)...)
+		if remote != nil {
+			lines = append(lines, filesRemotePreview(res, remote)...)
+		} else {
+			lines = append(lines, filesPreview(res)...)
+		}
 	default:
 		lines = append(lines, fmt.Sprintf("Take over the repository %s as a local source.", res.Path))
 	}
@@ -347,6 +423,9 @@ func previewSourceAdd(c *cobra.Command, res control.SourceInspectResult, url str
 	for _, l := range lines {
 		_, _ = fmt.Fprintln(w, "  "+l)
 	}
+	if remote != nil {
+		return filesRemoteQuestion(remote)
+	}
 	return fmt.Sprintf("Apply these changes (case %s, folder %s)?", res.Case, res.Path)
 }
 
@@ -356,8 +435,29 @@ func filesPreview(res control.SourceInspectResult) []string {
 	lines := []string{
 		fmt.Sprintf("Start a git repository in %s (branch main, core.sharedRepository=group) and bind it as a local source.", res.Path),
 		"The first commit is made as " + serviceAccount + "; no file in the folder is written.",
-		fmt.Sprintf("The first commit takes %d files:", len(res.PlannedFiles)),
 	}
+	return append(lines, fileListLines(res, "The first commit takes")...)
+}
+
+// filesRemotePreview describes the repository a folder of files gets on the history of a remote.
+func filesRemotePreview(res control.SourceInspectResult, remote *filesRemote) []string {
+	branch := remote.cmp.Branch
+	lines := []string{
+		fmt.Sprintf("Start a git repository in %s (branch %s, core.sharedRepository=group) on the history of %s and bind it as a remote source.",
+			res.Path, branch, remote.address),
+	}
+	if remote.cmp.State == control.SourceRemoteDifferent {
+		lines = append(lines, fmt.Sprintf("The state of the host becomes one commit as %s on %s and is pushed to the remote.", serviceAccount, branch))
+	} else {
+		lines = append(lines, "The files equal the remote: no commit is made and nothing is pushed.")
+	}
+	lines = append(lines, "No file in the folder is written.")
+	return append(lines, fileListLines(res, "The repository takes")...)
+}
+
+// fileListLines lists the files of the repository and what is left out with the reason.
+func fileListLines(res control.SourceInspectResult, takes string) []string {
+	lines := []string{fmt.Sprintf("%s %d files:", takes, len(res.PlannedFiles))}
 	for i, f := range res.PlannedFiles {
 		if i == listLimit {
 			lines = append(lines, fmt.Sprintf("  ... and %d more", len(res.PlannedFiles)-listLimit))
@@ -381,4 +481,13 @@ func filesPreview(res control.SourceInspectResult) []string {
 		lines = append(lines, line)
 	}
 	return lines
+}
+
+// filesRemoteQuestion is what the operator confirms for a folder of files that joins a remote.
+func filesRemoteQuestion(remote *filesRemote) string {
+	if remote.cmp.State == control.SourceRemoteEqual {
+		return "Take over the folder with the history of the remote?"
+	}
+	return fmt.Sprintf("Start the repository on the history of the remote, put the state of the host as a commit on %s and push it?",
+		remote.cmp.Branch)
 }
