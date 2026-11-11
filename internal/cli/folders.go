@@ -50,6 +50,9 @@ type folderHost struct {
 	waitService func(ctx context.Context) error
 	// readOnly reports whether the file system of a path lies read-only.
 	readOnly func(path string) (bool, error)
+	// lchown and chmod change the group and the mode of the paths source add hands to the service.
+	lchown func(path string, uid, gid int) error
+	chmod  func(path string, mode fs.FileMode) error
 }
 
 var folders = folderHost{
@@ -75,6 +78,8 @@ var folders = folderHost{
 	},
 	waitService: waitForService,
 	readOnly:    pathOnReadOnlyFS,
+	lchown:      os.Lchown,
+	chmod:       os.Chmod,
 }
 
 // waitForService polls the control socket until the service answers; any answer counts, also a refusal.

@@ -11,7 +11,7 @@ func All() []helptopics.Topic {
 		{Name: "qdeploy", Short: "What qdeploy is and what it is for", Text: overview},
 		{Name: "credentials", Short: "The deploy keys and stored credentials", Text: credentialsTopic},
 		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
-		{Name: "sources", Short: "Several stack folders on one host: ids, deploy keys and unique stack names", Text: sourcesTopic},
+		{Name: "sources", Short: "Several stack folders on one host: taking over a folder, ids, deploy keys and unique stack names", Text: sourcesTopic},
 		{Name: "stack-capabilities", Short: "What qdeploy can do with a stack's files, and what qdeploy stack check reports", Text: stackCapabilitiesTopic},
 		{Name: "stack-settings", Short: "Stack settings", Text: stackSettingsTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
@@ -31,6 +31,9 @@ Commands:
 - qdeploy repo set <ssh-url> [--dir <path>]: bind a stacks repository to a stack folder, confirm its host key and clone it; a further folder becomes a further source (run with sudo; see qdeploy help sources)
 - qdeploy repo fetch: fetch new commits of every stack folder without touching the working copies (run with sudo)
 - qdeploy source inspect <path> [--url <ssh-url>]: classify a folder before it is taken over as a stack folder (clone, adopt-clone, local, files or reject), with its permissions, the files and stacks it would bring and container conflicts; changes nothing (run with sudo; see qdeploy help sources)
+- qdeploy source add <path> [--url <ssh-url>] [--fingerprint <fp>] [--yes]: take over a folder as a stack folder (a clone to make, an existing clone or a repository without a remote) and give the service the access it needs, after a preview and a confirmation (run with sudo; see qdeploy help sources)
+- qdeploy source list: list the bound stack folders with kind, address, head and the state of the last poll (run with sudo)
+- qdeploy source remove <path> [--yes]: release a stack folder after a question; no file is deleted and no container is stopped (run with sudo; see qdeploy help sources)
 - qdeploy stack list: list the stacks of the working copy with image versions, update mode and whether the stack is stopped (run with sudo)
 - qdeploy stack check [stack]: show per stack of the working copy whether deploy, update, rollback with data, backup and the redaction of secrets work with its files, why not and what to change, and the findings; exit code 1 on errors (run with sudo; see qdeploy help stack-capabilities)
 - qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has; the stack is named by its Compose project (see qdeploy help stack-capabilities), and for a stack with the finding project-renamed this decides to start the new project, next to the old one, which keeps running (run with sudo)
@@ -90,10 +93,23 @@ Taking over a folder:
 - clone: the folder is missing or empty and would get a clone of the URL; without --url the answer says an address is needed.
 - adopt-clone: the folder is a clone with an origin remote, and is taken over as it is; a --url must equal that origin.
 - local: the folder is a repository without a remote and runs locally, never pushed. A --url is rejected here, as for a folder with files.
-- files: the folder holds files and no repository. The answer lists the files a first commit would take and what it would leave out with the reason: bind-mount (the data folder of a stack), too-large, not-regular (not a plain file or folder), unreadable and nested-repo (a folder with a repository of its own).
+- files: the folder holds files and no repository. The answer lists the files a first commit would take and what it would leave out with the reason: bind-mount (the data folder of a stack), too-large, not-regular (not a plain file or folder), unreadable and nested-repo (a folder with a repository of its own). source add refuses it for now: make the folder a git repository first.
 - reject: the folder cannot be taken over. The answer gives the reason and what to do, for example a symbolic link in the path, a folder inside another repository or overlapping another source, a repository with remotes but no origin, an address that differs from the origin, or a folder on a read-only file system.
-- Every answer except a rejection shows the owner, group and mode of the folder (or of its nearest existing parent while it is missing), whether the service can write there, and whether the inspection shows that permissions would have to be set: group qdeploy, group write and setgid, which happens exactly when the service cannot write. For a repository it also says whether the service can write its .git folder.
+- Every answer except a rejection shows the owner, group and mode of the folder (or of its nearest existing parent while it is missing), whether the service can write there, and whether permissions would have to be set. For a repository it also says whether the service can write its .git folder.
 - For each stack the folder would bring it shows the functions and findings as qdeploy stack check does, and the containers of other Compose projects that already run in the stack's folder: deploying the stack would create duplicates of them. When the stacks or the container engine cannot be read, the answer says why and the rest still holds.
+
+Source add:
+- qdeploy source add <path> [--url <ssh-url>] [--fingerprint <fp>] [--yes] inspects the folder, shows the case and the changes it would make, and applies them only after you confirm: at a terminal by answering the question, without a terminal with --yes. A rejected folder and a folder of files are refused and nothing changes.
+- clone and adopt-clone work like qdeploy repo set (see qdeploy help repository): the host key is confirmed at the terminal or with --fingerprint, and the folder needs its deploy key. --yes never confirms a host key.
+- local binds the repository without a remote and without a deploy key. The service deploys the commits that people make there and rolls a failing one back with a revert commit in the same folder; nothing is pushed.
+- Permissions are set only when the service cannot write the folder or its .git, as root and without changing an owner: the group of the service account qdeploy for the folder, .git and every folder with versioned files; group write and setgid on those folders; group read and write on versioned files; core.sharedRepository=group. Never changed: the sources of bind mounts and everything below them, unversioned files, symbolic links, files with further hard links and paths outside the folder. An unversioned file the stacks need, such as secrets.env, must therefore already be readable by the service, for example with the group qdeploy and mode 0640.
+- The folder is then added to the systemd drop-in and the service restarts once, as repo set does.
+- qdeploy source list shows every bound folder with path, id, kind, address (none for a local one), head, last poll, poll error and note.
+- qdeploy source remove <path> [--yes] asks first. It releases only the binding and drops the engine state of the source: no file in the folder is deleted, no container is stopped, and the permissions, the drop-in entry and the deploy key stay, so source add binds the folder again. A source with an active run is refused.
+
+Commits of people in a local folder:
+- A person commits as a member of the group qdeploy (usermod -aG qdeploy <user>, then a new login) or as the service account with sudo -u qdeploy git -c safe.directory=<path> .... The folder belongs to another user, so git refuses it until it is marked safe; a group member does that once with git config --global --add safe.directory <path>.
+- A person who creates new folders should work with umask 002: a folder made with the usual umask 022 is not group-writable, and the service could not write into it when a revert has to restore files there.
 
 Stack names:
 - Compose tells stacks apart only by project name, so a name is deployed from one source alone. When two sources list the same name, the stack already deployed keeps it, else the one of the source bound first; the other gets the finding name-collision and is never deployed until one of them gets another project name.
@@ -113,6 +129,7 @@ Binding:
 - A folder that does not exist is created only after you confirmed its exact path: answer the question at a terminal, or pass --create without one. It gets the owner qdeploy:qdeploy and mode 0755. Neither the installer, the service nor an update creates a stack folder.
 - The service runs sandboxed and may write only where the systemd drop-in /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf allows it. repo set adds the folder there as ReadWritePaths=-<path> (entries are only ever added), reloads systemd and restarts the service once. A bound folder without that entry, as after an update from an older release, is added when you next run qdeploy as root.
 - The same steps are offered by sudo qdeploy in the Settings area.
+- qdeploy repo set is the short form of qdeploy source add for cloning into an empty or missing folder and for taking over an existing clone; source add also binds a repository without a remote (see qdeploy help sources).
 
 Afterwards:
 - qdeploy repo fetch: fetch new commits into the remote-tracking branch and report whether the working copy is behind; the working copy itself is not changed

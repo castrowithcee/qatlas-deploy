@@ -1199,6 +1199,8 @@ scenario_stacks_repo() {
 
 	scenario_key_set
 
+	scenario_source_local
+
 	scenario_repair_end
 
 	scenario_tui_setup
@@ -1400,6 +1402,181 @@ scenario_source_inspect() {
 		fail 'source inspect changed the folders it inspected'
 	docker exec "$host" rm -rf "$base" || fail 'cannot remove the inspected folders'
 	log 'scenario: source inspect told clone, adopt-clone, local and files and changed nothing'
+}
+
+# local_tree prints mode, owner, group and size of every path below /srv/qd-local except .git, which the service
+# may touch while it polls.
+local_tree() {
+	docker exec "$host" find /srv/qd-local -path /srv/qd-local/.git -prune -o -printf '%p %m %u:%g %s\n' | sort
+}
+
+# local_git runs git on /srv/qd-local as the person $admin; stderr is merged.
+local_git() {
+	docker exec -u "$admin" "$host" git -C /srv/qd-local "$@" 2>&1
+}
+
+# list_has_path succeeds when source list names the folder $1.
+list_has_path() {
+	qd --output json source list | jq -e --arg p "$1" '[.sources[].path] | index($p) != null' >/dev/null
+}
+
+# scenario_source_local proves source add, list and remove on a local repository without a remote below
+# /srv/qd-local, which no stack folder uses: the service gets the access it needs, a version committed by a person is
+# deployed, a failing one is rolled back by a local revert commit, and removing the source leaves the files and the
+# containers alone. Then the existing clone /opt/stacks2 is released and taken over again with its origin and key.
+scenario_source_local() {
+	base=/srv/qd-local
+	image=registry.$domain/demo/app
+
+	step 'a local repository without a remote is prepared as root, with an unversioned secrets file'
+	docker exec "$host" sh -ec "rm -rf '$base' && mkdir -p '$base/demo-local' && chmod 0755 '$base'" || fail 'cannot create the local folder'
+	cat <<EOF2 | docker exec -i "$host" sh -ec "cat >'$base/demo-local/compose.yaml'"
+name: demo-local
+
+services:
+  app:
+    image: registry.$domain/demo/app:\${DEMO_APP_VERSION}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: demo-local
+      DEMO_VERSION: \${DEMO_APP_VERSION}
+      DEMO_HEALTH: \${DEMO_HEALTH}
+EOF2
+	printf 'DEMO_APP_VERSION=1.0.0\nDEMO_HEALTH=ok\n' | docker exec -i "$host" sh -ec "cat >'$base/demo-local/.env'"
+	printf 'secrets.env\ndata/\n' | docker exec -i "$host" sh -ec "cat >'$base/demo-local/.gitignore'"
+	docker exec "$host" sh -ec "cd '$base' && git init -q -b main && git add -A &&
+		git -c user.name='E2E Root' -c user.email=root.qdeploye2e.test commit -q -m 'Add the demo-local stack' &&
+		printf 'DEMO_SECRET=not-a-real-secret\n' >demo-local/secrets.env && chgrp qdeploy demo-local/secrets.env &&
+		chmod 0640 demo-local/secrets.env" ||
+		fail 'cannot create the local repository'
+	[ -z "$(docker exec "$host" git -C "$base" remote)" ] || fail 'the local repository has a remote'
+	secret_before=$(docker exec "$host" stat -c '%U:%G %a' "$base/demo-local/secrets.env")
+	[ "$secret_before" = 'root:qdeploy 640' ] || fail "unexpected secrets file: $secret_before"
+
+	step 'source list shows the earlier sources and not the local folder'
+	out=$(qd --output json source list) || fail "source list failed: $out"
+	printf '%s' "$out" | jq -e '[.sources[].path] | (index("/opt/stacks") != null and index("/opt/stacks2") != null and index("/srv/qd-local") == null)' >/dev/null ||
+		fail "unexpected source list: $out"
+	out=$(qd source list) || fail "source list as text failed: $out"
+	printf '%s' "$out" | grep -qi 'source.opt-stacks.path' || fail "the text list does not show opt-stacks: $out"
+
+	step 'source add without a terminal and without --yes is refused and changes nothing'
+	dir_before=$(docker exec "$host" stat -c '%U:%G %a' "$base")
+	out=$(qd_fails source add "$base") || fail "source add without --yes succeeded: $out"
+	printf '%s' "$out" | grep -q 'confirmation-required' || fail "source add without --yes does not ask for confirmation: $out"
+	[ "$(docker exec "$host" stat -c '%U:%G %a' "$base")" = "$dir_before" ] || fail 'a refused source add changed the folder'
+	if docker exec "$host" grep -qF "$base" /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf; then
+		fail 'a refused source add wrote the drop-in'
+	fi
+	if list_has_path "$base"; then fail 'a refused source add bound the folder'; fi
+
+	step 'source add --yes binds the repository as a local source and gives the service the group access'
+	# qd merges stderr, where the preview and the notices go; the JSON answer is the last line.
+	out=$(qd --output json source add "$base" --yes) || fail "source add failed: $out"
+	printf '%s\n' "$out" | tail -n 1 | jq -e '.kind == "local" and .path == "/srv/qd-local"' >/dev/null || fail "unexpected source add result: $out"
+	wait_for 'the qdeploy service to answer' 30 qd status
+	[ "$(docker exec "$host" stat -c '%U:%G' "$base")" = root:qdeploy ] || fail "the folder has the wrong owner or group: $(docker exec "$host" stat -c '%U:%G' "$base")"
+	case $(docker exec "$host" stat -c '%A' "$base") in d???rws*) ;; *) fail "the folder is not group-writable with setgid: $(docker exec "$host" stat -c '%A' "$base")" ;; esac
+	[ "$(docker exec "$host" stat -c '%U:%G %a' "$base/demo-local/secrets.env")" = "$secret_before" ] || fail 'source add changed the unversioned secrets file'
+	[ "$(docker exec "$host" git -C "$base" config core.sharedRepository)" = group ] || fail 'core.sharedRepository is not group'
+	docker exec "$host" grep -qx "ReadWritePaths=-$base" /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf || fail 'the drop-in does not grant /srv/qd-local'
+	list_has_path "$base" || fail "source list does not show the local folder: $(qd --output json source list)"
+	[ "$(qd --output json source list | jq -r --arg p "$base" '.sources[] | select(.path == $p) | .kind')" = local ] || fail 'the local source has the wrong kind'
+
+	step 'demo-local is deployed at 1.0.0'
+	i=0
+	until stack_settled demo-local succeeded; do
+		i=$((i + 1))
+		[ "$(stack_field demo-local last_run)" != failed ] || fail "the first run of demo-local failed: $(qd stack log "$(newest_run demo-local)")"
+		[ "$i" -lt 180 ] || fail "timeout waiting for the first run of demo-local: $(qd --output json status | tr ',' '\n' | grep -e qd-local -e demo-local)"
+		sleep 1
+	done
+	[ "$(stack_images demo-local)" = "$image:1.0.0" ] || fail "demo-local does not run 1.0.0: $(stack_images demo-local)"
+
+	step 'a person in the group qdeploy commits a version; git refuses the folder until it is marked safe'
+	docker exec "$host" usermod -aG qdeploy "$admin" || fail 'cannot add the admin to the group qdeploy'
+	as_admin 'id -nG' | tr ' ' '\n' | grep -qx qdeploy || fail "the admin has no group qdeploy in a new session: $(as_admin 'id -nG')"
+	out=$(local_git rev-parse HEAD) && fail "git accepted a folder of another owner without safe.directory: $out"
+	printf '%s' "$out" | grep -q 'dubious ownership' || fail "git refused the folder for another reason: $out"
+	as_admin "git config --global --add safe.directory $base" || fail 'cannot mark the folder safe'
+	local_git rev-parse HEAD >/dev/null || fail "git still refuses the folder: $(local_git rev-parse HEAD)"
+	out=$(as_admin "umask 022; mkdir $base/demo-local/probe && stat -c %A $base/demo-local/probe && rmdir $base/demo-local/probe")
+	case $out in d???r-s*) ;; *) fail "a folder made with umask 022 is group-writable: $out" ;; esac
+	prev=$(newest_run demo-local)
+	as_admin "umask 002; cd $base && sed -i 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=1.1.0/' demo-local/.env &&
+		mkdir demo-local/notes && echo 'kept by a person' >demo-local/notes/info.txt &&
+		stat -c %A demo-local/notes | grep -q '^d...rws' && git add -A &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -m 'Update demo-local to 1.1.0'" ||
+		fail 'the admin could not commit a version in the local folder'
+	good_local=$(docker exec "$host" git -C "$base" rev-parse HEAD)
+	restart_service
+	run=$(next_run demo-local "$prev") || fail 'no run of demo-local started for the version change'
+	wait_for "the run $run" 240 run_finished demo-local "$run"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run of the version change did not succeed: $(qd stack log "$run")"
+	[ "$(stack_field demo-local deployed)" = "$good_local" ] || fail "demo-local is not recorded as deployed at $good_local"
+	[ "$(stack_images demo-local)" = "$image:1.1.0" ] || fail "demo-local does not run 1.1.0: $(stack_images demo-local)"
+
+	step 'a failing version is rolled back by a revert commit of the service, and the folder has no remote'
+	prev=$run
+	as_admin "umask 002; cd $base && sed -i 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=2.0.0/; s/^DEMO_HEALTH=.*/DEMO_HEALTH=fail/' demo-local/.env &&
+		echo 'edited for 2.0.0' >>demo-local/notes/info.txt &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am 'Update demo-local to 2.0.0 with a broken healthcheck'" ||
+		fail 'the admin could not commit the failing version'
+	bad_local=$(docker exec "$host" git -C "$base" rev-parse HEAD)
+	restart_service
+	run=$(next_run demo-local "$prev") || fail 'no run of demo-local started for the failing commit'
+	wait_for "the run $run" 240 run_finished demo-local "$run"
+	run_log=$(qd stack log "$run")
+	printf '%s' "$run_log" | grep -q ' result rolled-back' || fail "the run did not end rolled-back: $run_log"
+	revert=$(docker exec "$host" git -C "$base" rev-parse HEAD)
+	[ "$revert" != "$bad_local" ] || fail 'no revert commit was made in the local folder'
+	meta=$(docker exec "$host" git -C "$base" log -1 --format='%an|%s|%P' "$revert")
+	[ "$meta" = "qdeploy|Revert demo-local to $(printf '%s' "$good_local" | cut -c 1-12)|$bad_local" ] ||
+		fail "the revert commit has the wrong author, subject or parent: $meta"
+	[ -z "$(docker exec "$host" git -C "$base" remote)" ] || fail 'the rollback gave the local repository a remote'
+	docker exec "$host" grep -qx DEMO_APP_VERSION=1.1.0 "$base/demo-local/.env" || fail 'the revert did not restore the version file'
+	[ "$(docker exec "$host" cat "$base/demo-local/notes/info.txt")" = 'kept by a person' ] || fail 'the revert did not restore the folder of the person'
+	[ "$(stack_images demo-local)" = "$image:1.1.0" ] || fail "demo-local does not run the previous image 1.1.0: $(stack_images demo-local)"
+
+	step 'source remove asks first, then releases only the binding'
+	containers_before=$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=demo-local | sort)
+	[ -n "$containers_before" ] || fail 'demo-local has no running container'
+	tree_before=$(local_tree)
+	out=$(qd_fails source remove "$base") || fail "source remove without --yes succeeded: $out"
+	printf '%s' "$out" | grep -q 'confirmation-required' || fail "source remove without --yes does not ask for confirmation: $out"
+	list_has_path "$base" || fail 'a refused source remove released the folder'
+	out=$(qd --output json source remove "$base" --yes) || fail "source remove failed: $out"
+	printf '%s\n' "$out" | tail -n 1 | jq -e '.id == "srv-qd-local" and .path == "/srv/qd-local"' >/dev/null || fail "unexpected source remove result: $out"
+	[ "$(local_tree)" = "$tree_before" ] || fail 'source remove changed a file of the folder'
+	[ "$(docker exec "$host" docker ps -q --filter label=com.docker.compose.project=demo-local | sort)" = "$containers_before" ] ||
+		fail 'source remove stopped or replaced a container of demo-local'
+	if list_has_path "$base"; then fail "source list still shows the released folder: $(qd --output json source list)"; fi
+	docker exec "$host" grep -qx "ReadWritePaths=-$base" /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf || fail 'source remove took the folder out of the drop-in'
+	out=$(qd_fails source remove "$base" --yes) || fail "source remove of an unbound folder succeeded: $out"
+	printf '%s' "$out" | grep -q 'not-found' || fail "source remove of an unbound folder is no not-found error: $out"
+	log 'scenario: a local repository was bound with group access, deployed, rolled back by a local revert and released without a change to its files'
+
+	step 'an existing clone is released and taken over again with its origin and its deploy key'
+	key2_before=$(key_pub_field "$(qd --output json key show --dir /opt/stacks2)")
+	[ -n "$key2_before" ] || fail 'the clone has no deploy key before it is released'
+	out=$(qd --output json source remove /opt/stacks2 --yes) || fail "source remove of /opt/stacks2 failed: $out"
+	if list_has_path /opt/stacks2; then fail 'source list still shows /opt/stacks2'; fi
+	[ "$(key_pub_field "$(qd --output json key show --dir /opt/stacks2)")" = "$key2_before" ] || fail 'releasing /opt/stacks2 changed its deploy key'
+	[ "$(stack_images demo-second)" = "$image:1.0.0" ] || fail 'releasing /opt/stacks2 stopped demo-second'
+	head2=$(docker exec "$host" git -c safe.directory=/opt/stacks2 -C /opt/stacks2 rev-parse HEAD)
+	out=$(qd --output json source add /opt/stacks2 --yes --fingerprint "$(git_ed25519_fingerprint)") || fail "source add of the clone failed: $out"
+	printf '%s\n' "$out" | tail -n 1 | jq -e --arg u "$url2" '.url == $u and .cloned == false and .dir == "/opt/stacks2"' >/dev/null ||
+		fail "source add did not take over the clone with its origin: $out"
+	wait_for 'the qdeploy service to answer' 30 qd status
+	# The engine state of the source went with the release, so the stack is deployed once more.
+	wait_for 'the run of demo-second after the takeover' 180 stack_settled demo-second succeeded
+	[ "$(docker exec "$host" git -c safe.directory=/opt/stacks2 -C /opt/stacks2 rev-parse HEAD)" = "$head2" ] || fail 'taking over the clone changed its head'
+	[ "$(key_pub_field "$(qd --output json key show --dir /opt/stacks2)")" = "$key2_before" ] || fail 'taking over /opt/stacks2 changed its deploy key'
+	qd --output json source list | jq -e '[.sources[] | select(.path == "/opt/stacks2" and .kind == "remote")] | length == 1' >/dev/null ||
+		fail "source list does not show /opt/stacks2 again: $(qd --output json source list)"
+	[ "$(stack_images demo-second)" = "$image:1.0.0" ] || fail 'demo-second does not run after /opt/stacks2 is taken over again'
+	[ "$(stack_field demo-second source)" = opt-stacks2 ] || fail "demo-second is not listed with its source: $(qd --output json status)"
+	log 'scenario: /opt/stacks2 was released and taken over again with its origin, head and deploy key'
 }
 
 # key_pub_field prints the public part (type and key, without comment) of the qdeploy key output $1.

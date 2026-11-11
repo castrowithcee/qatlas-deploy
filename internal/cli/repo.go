@@ -117,9 +117,33 @@ func runRepoSet(c *cobra.Command, program *cobracli.Program, state *notRunning, 
 			"Copy the fingerprint of the server's host key.")
 	}
 
+	probe, err := trustHostKey(c, state, url, fingerprint)
+	if err != nil {
+		return err
+	}
+	res, err := bindRepo(c, state, url, dir, probe, create)
+	if err != nil {
+		return err
+	}
+	return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: repoSetFields(res)})
+}
+
+func repoSetFields(res control.RepoSetResult) []output.Field {
+	return []output.Field{
+		{Name: "url", Value: res.URL},
+		{Name: "dir", Value: res.Dir},
+		{Name: "host_key_fingerprint", Value: res.Fingerprint},
+		{Name: "head", Value: res.Head},
+		{Name: "cloned", Value: res.Cloned},
+	}
+}
+
+// trustHostKey probes the server of url and returns its host key once the operator trusts it: it is pinned
+// already, or it matches --fingerprint, or the operator confirms it at a terminal. Nothing is stored here.
+func trustHostKey(c *cobra.Command, state *notRunning, url, fingerprint string) (control.RepoProbeResult, error) {
 	var probe control.RepoProbeResult
 	if err := repoCall(c, state, control.RepoProbeCommand, control.RepoProbeArgs{URL: url}, &probe); err != nil {
-		return err
+		return probe, err
 	}
 	target := probe.Host
 	if probe.Port != "22" {
@@ -128,7 +152,7 @@ func runRepoSet(c *cobra.Command, program *cobracli.Program, state *notRunning, 
 	switch {
 	case fingerprint != "":
 		if fingerprint != probe.Fingerprint {
-			return &cli.Failure{Code: output.CodeAuth, Message: fmt.Sprintf(
+			return probe, &cli.Failure{Code: output.CodeAuth, Message: fmt.Sprintf(
 				"the host key of %s has fingerprint %s, not the expected %s; nothing was stored",
 				target, probe.Fingerprint, fingerprint),
 				NextStep: "Do not continue unless the difference is explained and verified out of band."}
@@ -137,27 +161,22 @@ func runRepoSet(c *cobra.Command, program *cobracli.Program, state *notRunning, 
 		// The operator confirmed exactly this key before.
 	default:
 		if err := confirmHostKey(c, target, probe); err != nil {
-			return err
+			return probe, err
 		}
 	}
+	return probe, nil
+}
 
-	// After the host key is confirmed, so a refused key creates nothing; before the clone, which needs the grant.
-	if err := prepareFolder(c, dir, create); err != nil {
-		return err
-	}
-
+// bindRepo grants the stack folder and has the service bind and clone it. It runs after the host key is
+// confirmed, so a refused key creates nothing, and before the clone, which needs the grant.
+func bindRepo(c *cobra.Command, state *notRunning, url, dir string, probe control.RepoProbeResult, create bool) (control.RepoSetResult, error) {
 	var res control.RepoSetResult
-	args := control.RepoSetArgs{URL: url, Dir: dir, Fingerprint: probe.Fingerprint}
-	if err := repoCall(c, state, control.RepoSetCommand, args, &res); err != nil {
-		return err
+	if err := prepareFolder(c, dir, create); err != nil {
+		return res, err
 	}
-	return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: []output.Field{
-		{Name: "url", Value: res.URL},
-		{Name: "dir", Value: res.Dir},
-		{Name: "host_key_fingerprint", Value: res.Fingerprint},
-		{Name: "head", Value: res.Head},
-		{Name: "cloned", Value: res.Cloned},
-	}})
+	args := control.RepoSetArgs{URL: url, Dir: dir, Fingerprint: probe.Fingerprint}
+	err := repoCall(c, state, control.RepoSetCommand, args, &res)
+	return res, err
 }
 
 // confirmHostKey shows the key and asks at a terminal; without a terminal it refuses and names the flag.
