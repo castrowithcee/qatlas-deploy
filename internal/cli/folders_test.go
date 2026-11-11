@@ -24,6 +24,13 @@ type hostDouble struct {
 	// readOnlyFS makes every path lie on a read-only file system; checked collects the paths asked.
 	readOnlyFS bool
 	checked    []string
+	// lchowns records every group change; the real call follows it.
+	lchowns []lchownCall
+}
+
+type lchownCall struct {
+	path     string
+	uid, gid int
 }
 
 func useFolderHost(t *testing.T) *hostDouble {
@@ -49,6 +56,11 @@ func useFolderHost(t *testing.T) *hostDouble {
 			d.checked = append(d.checked, path)
 			return d.readOnlyFS, nil
 		},
+		lchown: func(path string, uid, gid int) error {
+			d.lchowns = append(d.lchowns, lchownCall{path, uid, gid})
+			return os.Lchown(path, uid, gid)
+		},
+		chmod: os.Chmod,
 	}
 	t.Cleanup(func() { folders = old })
 	return d

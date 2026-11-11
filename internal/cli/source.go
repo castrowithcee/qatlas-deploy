@@ -56,28 +56,45 @@ func newSourceCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		},
 	}
 	inspect.Flags().StringVar(&url, "url", "", "SSH address of the repository to clone, or to expect as origin")
-	group.AddCommand(inspect)
+	group.AddCommand(inspect, newSourceAddCommand(program, state))
 	return group
 }
 
 func runSourceInspect(c *cobra.Command, program *cobracli.Program, state *notRunning, path, url string) error {
+	res, err := inspectSource(c, state, path, url)
+	if err != nil {
+		return err
+	}
+	if !structuredFormat(program.Format()) && res.Access != nil && res.Access.GitWritable != nil && !*res.Access.GitWritable {
+		_, _ = fmt.Fprintln(c.ErrOrStderr(), gitNotWritableWarning)
+	}
+	return output.Encode(c.OutOrStdout(), program.Format(), sourceResult(program.Format(), res))
+}
+
+const gitNotWritableWarning = "warning: the service cannot write .git; source add sets the group permissions, " +
+	"or commit as a member of the group qdeploy or with sudo -u qdeploy git"
+
+func structuredFormat(f output.Format) bool { return f == output.FormatJSON || f == output.FormatTOON }
+
+// inspectSource validates the arguments, asks the service and adds what only this client can tell.
+func inspectSource(c *cobra.Command, state *notRunning, path, url string) (control.SourceInspectResult, error) {
+	var res control.SourceInspectResult
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
-		return usageFailure("the path must be absolute and clean", "Pass the absolute path of the folder.")
+		return res, usageFailure("the path must be absolute and clean", "Pass the absolute path of the folder.")
 	}
 	if url != "" {
 		if err := gitrepo.ValidateURL(url); err != nil {
-			return usageFailure(err.Error(), "Pass the SSH address of the repository.")
+			return res, usageFailure(err.Error(), "Pass the SSH address of the repository.")
 		}
 	}
-	var res control.SourceInspectResult
 	if err := credentialCall(c, state, control.SourceInspectCommand, control.SourceInspectArgs{Path: path, URL: url}, &res); err != nil {
-		return err
+		return res, err
 	}
 	// The service is sandboxed and sees every path that is not granted as read-only, so only this client can tell.
 	if res.Case != control.SourceCaseReject {
 		readOnly, err := folders.readOnly(path)
 		if err != nil {
-			return folderFailure("cannot inspect the file system of "+path, err)
+			return res, folderFailure("cannot inspect the file system of "+path, err)
 		}
 		if readOnly {
 			res = control.SourceInspectResult{Path: res.Path, Case: control.SourceCaseReject, Reason: readOnlyReason,
@@ -85,7 +102,7 @@ func runSourceInspect(c *cobra.Command, program *cobracli.Program, state *notRun
 				Stacks: []control.SourceStack{}}
 		}
 	}
-	return output.Encode(c.OutOrStdout(), program.Format(), sourceResult(program.Format(), res))
+	return res, nil
 }
 
 // pathOnReadOnlyFS reports whether the file system of path, or of its nearest existing parent while it is
@@ -115,7 +132,7 @@ func pathOnReadOnlyFS(path string) (bool, error) {
 
 // sourceResult is the nested result for JSON and TOON and one flat field list for the text formats.
 func sourceResult(format output.Format, res control.SourceInspectResult) output.Object {
-	if format == output.FormatJSON || format == output.FormatTOON {
+	if structuredFormat(format) {
 		fields := []output.Field{{Name: "path", Value: res.Path}, {Name: "case", Value: res.Case}}
 		// An empty string would stay in the output, so a field without a value is left out here.
 		add := func(name string, value any) { fields = append(fields, output.Field{Name: name, Value: value}) }
