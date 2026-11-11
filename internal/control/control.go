@@ -796,13 +796,16 @@ type SourceInspectResult struct {
 }
 
 // SourceAddCommand binds a repository without a remote as a local source. It does so only for a folder that
-// SourceInspectCommand classifies as SourceCaseLocal and that the service can write; it clones nothing and
-// changes no permission.
+// SourceInspectCommand classifies as SourceCaseLocal, or as SourceCaseFiles when the arguments confirm the file
+// list, and that the service can write; it clones nothing and changes no permission.
 const SourceAddCommand = "source.add"
 
-// SourceAddArgs are the arguments of SourceAddCommand.
+// SourceAddArgs are the arguments of SourceAddCommand. Files is the list of planned files the operator confirmed
+// for a folder without a repository (SourceCaseFiles); only then does the service start a repository with
+// exactly these files, and only if the list still matches what the folder holds.
 type SourceAddArgs struct {
-	Path string `json:"path"`
+	Path  string   `json:"path"`
+	Files []string `json:"files,omitempty"`
 }
 
 // SourceAddResult answers SourceAddCommand.
@@ -811,6 +814,8 @@ type SourceAddResult struct {
 	Path string `json:"path"`
 	Kind string `json:"kind"`
 	Head string `json:"head"`
+	// Files is the number of files of the first commit when the service started the repository.
+	Files int `json:"files,omitempty"`
 }
 
 // SourceListCommand lists the bound stack folders.
