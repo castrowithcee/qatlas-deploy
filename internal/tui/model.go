@@ -369,12 +369,18 @@ func (m *Model) apply(msg refreshMsg) {
 // fillStacks sets the rows of the stacks list and of the runs list from the snapshot read last.
 func (m *Model) fillStacks() {
 	rows := buildRows(m.snap)
+	// The rows go under their stack folder once there is more than one; a single folder keeps the flat list.
+	grouped := len(m.snap.status.Engine.Sources) > 1
+	m.list.SetGrouped(grouped)
 	ids := itemIDs(rows)
 	clear(m.tones)
 	clear(m.rows)
 	items := make([]kittui.ListItem, len(rows))
 	for i, r := range rows {
 		items[i] = kittui.ListItem{ID: ids[i], Cells: cells(r, m.text, m.loc, m.tones)}
+		if grouped {
+			items[i].Group = r.folder
+		}
 		m.rows[ids[i]] = r
 	}
 	if err := m.list.SetItems(items); err != nil {
@@ -1089,7 +1095,22 @@ func (m *Model) workspace(width, height int) string {
 	case areaRuns:
 		return m.runsView(width, height)
 	}
-	return m.listView(m.list, width, height, 0)
+	return m.stacksView(width, height)
+}
+
+// stacksView draws the Stacks area: a line for every stack folder whose last poll failed, then the list.
+func (m *Model) stacksView(width, height int) string {
+	var lines []string
+	for _, f := range m.snap.status.Engine.Sources {
+		if f.PollError != "" {
+			lines = append(lines, m.line(2, kittui.StyleFail, m.text.Lookup(textStacksFolderFailed, f.Path, f.PollError), width))
+		}
+	}
+	if len(lines) == 0 || height <= len(lines) {
+		return m.listView(m.list, width, height, 0)
+	}
+	view := m.listView(m.list, width, height-len(lines), len(lines))
+	return strings.Join(lines, "\n") + "\n" + view
 }
 
 // note is a dimmed sentence wrapped into width cells and indented like the rows of a list.
