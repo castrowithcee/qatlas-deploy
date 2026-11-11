@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -314,6 +315,17 @@ func (r *Repo) run(ctx context.Context, inRepo bool, outLimit int, args ...strin
 
 // runEnv is run with extra environment entries appended to the minimal environment.
 func (r *Repo) runEnv(ctx context.Context, inRepo bool, outLimit int, extraEnv []string, args ...string) (string, error) {
+	return r.runIO(ctx, inRepo, outLimit, extraEnv, ioOptions{}, args...)
+}
+
+// ioOptions are the rarely needed knobs of runIO: stdin is what git reads, and truncate makes output beyond
+// the limit end the process quietly, returning its head, instead of failing with ErrOutputLimit.
+type ioOptions struct {
+	stdin    io.Reader
+	truncate bool
+}
+
+func (r *Repo) runIO(ctx context.Context, inRepo bool, outLimit int, extraEnv []string, opts ioOptions, args ...string) (string, error) {
 	gitPath := r.cfg.test.gitPath
 	if gitPath == "" {
 		p, err := lookIn(fixedPath, "git")
@@ -347,12 +359,15 @@ func (r *Repo) runEnv(ctx context.Context, inRepo bool, outLimit int, extraEnv [
 	stdout := &capped{limit: outLimit, onOver: cancel}
 	stderr := &capped{limit: maxStderr, onOver: cancel}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
+	cmd.Stdin = opts.stdin
 	confine(cmd)
 
 	runErr := cmd.Run()
 	switch {
-	case stdout.over || stderr.over:
+	case stderr.over || (stdout.over && !opts.truncate):
 		return "", ErrOutputLimit
+	case stdout.over:
+		return stdout.String(), nil
 	case ctx.Err() != nil:
 		return "", ctx.Err()
 	case runErr != nil:
