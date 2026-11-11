@@ -119,7 +119,8 @@ func TestSourceAddBindsAndRunsALocalFolder(t *testing.T) {
 	if h.knownHosts() != "" {
 		t.Fatalf("known hosts = %q", h.knownHosts())
 	}
-	wantCode(t, h.call(control.KeyShowCommand, control.KeyShowArgs{Dir: dir}, nil), control.CodeInvalid)
+	// The key it would use once it gets a remote does not exist yet.
+	wantCode(t, h.call(control.KeyShowCommand, control.KeyShowArgs{Dir: dir}, nil), control.CodeNotFound)
 
 	st := h.waitStatus("local source polled", func(st control.StatusResult) bool {
 		return len(st.Engine.Sources) == 1 && st.Engine.Sources[0].Head == res.Head && len(stacksNamed(st, "web")) == 1

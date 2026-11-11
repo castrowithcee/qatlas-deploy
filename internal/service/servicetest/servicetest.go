@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -33,6 +34,15 @@ type Git struct {
 	// RevertErr is what RevertStack answers; nil means gitrepo.ErrNothingToRevert. Use SetRevertErr.
 	RevertErr error
 
+	// The remote steps. Compare is what CompareRemote and CompareFolder answer, Scan what ScanPush answers,
+	// HostCommit what CommitHostTree and InitFromRemote return; each error makes its step fail. NotAncestor
+	// makes IsAncestor answer no. Change them with Configure while a service runs.
+	Compare                                                               gitrepo.Comparison
+	Scan                                                                  gitrepo.Scan
+	HostCommit                                                            string
+	CompareErr, AddRemoteErr, FetchBranchErr, CommitErr, PushErr, InitErr error
+	NotAncestor                                                           bool
+
 	mu        sync.Mutex
 	gate      chan struct{} // set by BlockFetch
 	entered   chan struct{}
@@ -44,6 +54,8 @@ type Git struct {
 	fetches   map[string]int
 	commits   map[string]fakeCommit
 	pushed    []string
+	ops       []string
+	history   bool
 }
 
 // fakeCommit is a commit CommitFile made: the file it changes and its message.
@@ -56,6 +68,20 @@ type fakeCommit struct {
 func New() *Git {
 	return &Git{Head: "0123456789abcdef0123456789abcdef01234567", origins: map[string]string{},
 		configs: map[string]gitrepo.Config{}, fetchErrs: map[string]error{}, fetches: map[string]int{}}
+}
+
+// Configure changes the fake under its lock.
+func (g *Git) Configure(fn func(g *Git)) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	fn(g)
+}
+
+// Ops lists the remote steps taken so far, oldest first, each as its name and arguments.
+func (g *Git) Ops() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return slices.Clone(g.ops)
 }
 
 // SetFiles replaces the files the next clones write.
@@ -233,8 +259,12 @@ func (c *copyOf) Status(context.Context) ([]gitrepo.Change, error) { return nil,
 
 func (c *copyOf) ChangedFolders(context.Context, string, string) ([]string, error) { return nil, nil }
 
-// IsAncestor answers yes: the fake's working copy never runs ahead of the branch.
-func (c *copyOf) IsAncestor(context.Context, string, string) (bool, error) { return true, nil }
+// IsAncestor answers yes unless NotAncestor is set: the fake's working copy never runs ahead of the branch.
+func (c *copyOf) IsAncestor(context.Context, string, string) (bool, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	return !c.g.NotAncestor, nil
+}
 
 // FastForward follows a pushed commit of CommitFile and does nothing otherwise.
 func (c *copyOf) FastForward(_ context.Context, to string) error {
@@ -365,4 +395,111 @@ func (c *copyOf) Remotes(context.Context) ([]string, error) {
 		return []string{"origin"}, nil
 	}
 	return nil, nil
+}
+
+func (g *Git) record(format string, args ...any) { g.ops = append(g.ops, fmt.Sprintf(format, args...)) }
+
+// CompareFolder implements service.Git; it answers Compare.
+func (g *Git) CompareFolder(_ context.Context, cfg gitrepo.Config, dir, url string, files []string) (gitrepo.Comparison, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.last, g.configs[dir] = cfg, cfg
+	g.record("compare-folder %s %d", url, len(files))
+	return g.Compare, g.CompareErr
+}
+
+// InitFromRemote implements service.Git: it makes the .git folder and puts the branch on HostCommit.
+func (g *Git) InitFromRemote(_ context.Context, cfg gitrepo.Config, dir, url, branch, remoteCommit string, files, excluded []string) (string, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.last, g.configs[dir] = cfg, cfg
+	g.record("init-from-remote %s %s %s %d", url, branch, remoteCommit, len(files))
+	if g.InitErr != nil {
+		return "", g.InitErr
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		return "", err
+	}
+	commit := g.HostCommit
+	if remoteCommit != "" && commit == "" {
+		commit = remoteCommit
+	}
+	g.Head = commit
+	g.origins[dir] = url
+	return commit, nil
+}
+
+func (c *copyOf) CompareRemote(_ context.Context, url string) (gitrepo.Comparison, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("compare-remote %s", url)
+	return c.g.Compare, c.g.CompareErr
+}
+
+func (c *copyOf) AddRemote(_ context.Context, url string) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("add-remote %s", url)
+	if c.g.AddRemoteErr != nil {
+		return c.g.AddRemoteErr
+	}
+	if _, ok := c.g.origins[c.dir]; ok {
+		return gitrepo.ErrHasRemote
+	}
+	c.g.origins[c.dir] = url
+	return nil
+}
+
+func (c *copyOf) FetchBranch(_ context.Context, branch string) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("fetch-branch %s", branch)
+	return c.g.FetchBranchErr
+}
+
+func (c *copyOf) CommitHostTree(_ context.Context, parent string) (string, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("commit-host-tree %s", parent)
+	return c.g.HostCommit, c.g.CommitErr
+}
+
+func (c *copyOf) SaveLocalHistory(_ context.Context, commit string) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("save-history %s", commit)
+	if c.g.history {
+		return gitrepo.ErrHistorySaved
+	}
+	c.g.history = true
+	return nil
+}
+
+func (c *copyOf) ResetBranch(_ context.Context, commit string) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("reset-branch %s", commit)
+	c.g.Head = commit
+	return nil
+}
+
+func (c *copyOf) SetUpstream(context.Context) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("set-upstream")
+	return nil
+}
+
+func (c *copyOf) PushBranch(context.Context) error {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("push-branch")
+	return c.g.PushErr
+}
+
+func (c *copyOf) ScanPush(_ context.Context, head, base string) (gitrepo.Scan, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	c.g.record("scan %s %s", head, base)
+	return c.g.Scan, nil
 }

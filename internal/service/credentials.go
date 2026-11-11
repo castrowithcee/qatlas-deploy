@@ -56,10 +56,7 @@ func keyName(set *sourceSet, dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name := keyFor(conf, dir, set.keyExists)
-	if name == "" {
-		return "", control.NewError(control.CodeInvalid, "the stack folder is a local source and has no deploy key")
-	}
+	name := remoteKeyFor(conf, dir, set.keyExists)
 	if !credentials.ValidKeyName(name) {
 		return "", control.NewError(control.CodeInvalid, "the stack folder path is too long")
 	}

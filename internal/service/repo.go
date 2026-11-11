@@ -45,12 +45,25 @@ type WorkingCopy interface {
 	Push(ctx context.Context, commit string) error
 	TrackedFiles(ctx context.Context, dir string) ([]string, error)
 	IsIgnored(ctx context.Context, path string) (bool, error)
+	// The steps that give a repository a remote, in the remote mode; see internal/gitrepo.
+	CompareRemote(ctx context.Context, url string) (gitrepo.Comparison, error)
+	AddRemote(ctx context.Context, url string) error
+	FetchBranch(ctx context.Context, branch string) error
+	CommitHostTree(ctx context.Context, parent string) (string, error)
+	SaveLocalHistory(ctx context.Context, commit string) error
+	ResetBranch(ctx context.Context, commit string) error
+	SetUpstream(ctx context.Context) error
+	PushBranch(ctx context.Context) error
+	ScanPush(ctx context.Context, head, base string) (gitrepo.Scan, error)
 }
 
 // Git is the git layer behind the repository commands. Config.Git nil means internal/gitrepo.
 type Git interface {
 	Clone(ctx context.Context, cfg gitrepo.Config, url, dir string) (WorkingCopy, error)
 	Open(cfg gitrepo.Config, dir string) (WorkingCopy, error)
+	// CompareFolder and InitFromRemote work on a folder without a repository; see internal/gitrepo.
+	CompareFolder(ctx context.Context, cfg gitrepo.Config, dir, url string, files []string) (gitrepo.Comparison, error)
+	InitFromRemote(ctx context.Context, cfg gitrepo.Config, dir, url, branch, remoteCommit string, files, excluded []string) (string, error)
 }
 
 type realGit struct{}
@@ -61,6 +74,14 @@ func (realGit) Clone(ctx context.Context, cfg gitrepo.Config, url, dir string) (
 
 func (realGit) Open(cfg gitrepo.Config, dir string) (WorkingCopy, error) {
 	return gitrepo.Open(cfg, dir)
+}
+
+func (realGit) CompareFolder(ctx context.Context, cfg gitrepo.Config, dir, url string, files []string) (gitrepo.Comparison, error) {
+	return gitrepo.CompareFolder(ctx, cfg, dir, url, files)
+}
+
+func (realGit) InitFromRemote(ctx context.Context, cfg gitrepo.Config, dir, url, branch, remoteCommit string, files, excluded []string) (string, error) {
+	return gitrepo.InitFromRemote(ctx, cfg, dir, url, branch, remoteCommit, files, excluded)
 }
 
 var plainPath = regexp.MustCompile(`^/[A-Za-z0-9_./@+-]+$`)
@@ -159,8 +180,8 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 	if err := checkDirShape(a.Dir); err != nil {
 		return nil, control.NewError(control.CodeInvalid, err.Error())
 	}
-	if !strings.HasPrefix(a.Fingerprint, "SHA256:") {
-		return nil, control.NewError(control.CodeInvalid, "the confirmed fingerprint must be a SHA256:... value")
+	if err := checkFingerprint(a.Fingerprint); err != nil {
+		return nil, err
 	}
 	if err := s.checkDirOutsideState(a.Dir); err != nil {
 		return nil, err
@@ -188,30 +209,13 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 			return nil, err
 		}
 	}
-	if _, err := s.keys.ShowNamedKey(src.Key); err != nil {
-		if errors.Is(err, credentials.ErrNoKey) {
-			return nil, control.NewError(control.CodeNotFound, fmt.Sprintf(
-				"no deploy key exists for stack folder %s; run 'qdeploy key generate --dir %s' (or 'qdeploy key set --dir %s' to store one you have) and enter it in the git platform", a.Dir, a.Dir, a.Dir))
-		}
-		return nil, answerOf(err)
+	if err := s.requireKey(a.Dir, src.Key); err != nil {
+		return nil, err
 	}
 
 	// The key is read again here: only a key the operator confirmed is ever pinned.
-	key, err := s.probeHost(ctx, host, port)
+	key, err := s.pinConfirmed(ctx, host, port, a.Fingerprint)
 	if err != nil {
-		return nil, err
-	}
-	if key.Fingerprint != a.Fingerprint {
-		return nil, control.NewError(control.CodeHostKey,
-			"the host key presented now is not the confirmed one; nothing was stored")
-	}
-	s.hostMu.Lock()
-	err = hostkey.Pin(s.knownHosts(), host, port, key)
-	s.hostMu.Unlock()
-	if err != nil {
-		if errors.Is(err, hostkey.ErrConflict) {
-			return nil, changedKeyError(host, port)
-		}
 		return nil, err
 	}
 
@@ -241,6 +245,49 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 		return nil, err
 	}
 	return control.RepoSetResult{URL: a.URL, Dir: a.Dir, Fingerprint: key.Fingerprint, Head: head, Cloned: cloned}, nil
+}
+
+// requireKey refuses a stack folder whose deploy key does not exist and says how to create one.
+func (s *repoService) requireKey(dir, key string) error {
+	if _, err := s.keys.ShowNamedKey(key); err != nil {
+		if errors.Is(err, credentials.ErrNoKey) {
+			return control.NewError(control.CodeNotFound, fmt.Sprintf(
+				"no deploy key exists for stack folder %s; run 'qdeploy key generate --dir %s' (or 'qdeploy key set --dir %s' to store one you have) and enter it in the git platform", dir, dir, dir))
+		}
+		return answerOf(err)
+	}
+	return nil
+}
+
+// checkFingerprint refuses a confirmed host key that is not in the form probe answers with.
+func checkFingerprint(fingerprint string) error {
+	if !strings.HasPrefix(fingerprint, "SHA256:") {
+		return control.NewError(control.CodeInvalid, "the confirmed fingerprint must be a SHA256:... value")
+	}
+	return nil
+}
+
+// pinConfirmed reads the host key of the server again and pins it when, and only when, it is the one the
+// operator confirmed.
+func (s *repoService) pinConfirmed(ctx context.Context, host, port, fingerprint string) (hostkey.Key, error) {
+	key, err := s.probeHost(ctx, host, port)
+	if err != nil {
+		return hostkey.Key{}, err
+	}
+	if key.Fingerprint != fingerprint {
+		return hostkey.Key{}, control.NewError(control.CodeHostKey,
+			"the host key presented now is not the confirmed one; nothing was stored")
+	}
+	s.hostMu.Lock()
+	err = hostkey.Pin(s.knownHosts(), host, port, key)
+	s.hostMu.Unlock()
+	if err != nil {
+		if errors.Is(err, hostkey.ErrConflict) {
+			return hostkey.Key{}, changedKeyError(host, port)
+		}
+		return hostkey.Key{}, err
+	}
+	return key, nil
 }
 
 // checkWritableFolder refuses a stack folder the service could not clone into and says why and what to do.

@@ -56,7 +56,7 @@ func newSourceCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		},
 	}
 	inspect.Flags().StringVar(&url, "url", "", "SSH address of the repository to clone, or to expect as origin")
-	group.AddCommand(inspect, newSourceAddCommand(program, state), newSourceListCommand(program, state),
+	group.AddCommand(inspect, newSourceAddCommand(program, state), newSourceRemoteCommand(program, state), newSourceListCommand(program, state),
 		newSourceRemoveCommand(program, state))
 	return group
 }

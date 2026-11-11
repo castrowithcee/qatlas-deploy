@@ -1203,6 +1203,8 @@ scenario_stacks_repo() {
 
 	scenario_source_files
 
+	scenario_source_remote
+
 	scenario_repair_end
 
 	scenario_tui_setup
@@ -1708,6 +1710,157 @@ EOF2
 	[ -z "$(files_git remote)" ] || fail 'the rollback gave the repository a remote'
 	[ "$(stack_images demo-files)" = "$image:1.1.0" ] || fail "demo-files does not run the previous image 1.1.0: $(stack_images demo-files)"
 	log 'scenario: a folder of files got a repository with group access, deployed 1.1.0 and rolled back 2.0.0 by a local revert'
+}
+
+# register_folder_key creates the deploy key of the folder $1 and enters its public part at the git server.
+register_folder_key() {
+	out=$(qd --output json key generate --dir "$1") || fail "key generate --dir $1 failed: $out"
+	pub=$(printf '%s\n' "$out" | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p')
+	case $pub in ssh-ed25519\ *) ;; *) fail "no public key in: $out" ;; esac
+	printf '%s\n' "$pub" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+}
+
+# remote_head prints the commit of refs/heads/main at the git server for the repository address $1 (empty without).
+remote_head() {
+	as_admin "git ls-remote $1 refs/heads/main" | cut -f 1
+}
+
+# folder_git runs git on the folder $1 as root, marked safe because the service owns .git; stderr is merged.
+folder_git() {
+	dir=$1
+	shift
+	docker exec "$host" git -c "safe.directory=$dir" -C "$dir" "$@" 2>&1
+}
+
+# tree_sums prints the checksum of every file of the folder $1 outside .git.
+tree_sums() {
+	docker exec "$host" sh -ec "cd '$1' && find . -path ./.git -prune -o -type f -exec sha256sum {} + | sort -k2"
+}
+
+# copy_stacks3 copies the tracked files of /opt/stacks3 without .git to the folder $1, readable by the service.
+copy_stacks3() {
+	docker exec "$host" sh -ec "rm -rf '$1' && mkdir -p '$1' &&
+		git -c safe.directory=/opt/stacks3 -C /opt/stacks3 ls-files -z | tar -C /opt/stacks3 --null -T - -cf - | tar -C '$1' -xf - &&
+		chmod -R a+rX '$1'" || fail "cannot copy /opt/stacks3 to $1"
+}
+
+# scenario_source_remote proves source remote and source add --url. The folder of files of the scenario before
+# becomes a remote source by pushing its history to an empty repository. A repository whose history once held a
+# secrets file is not pushed, however it looks now. A folder of files with the files of /opt/stacks3 takes over
+# the history of that repository, and one whose .env differs starts on it and is not touched without the
+# confirmation. Nothing here pushes with force.
+scenario_source_remote() {
+	base=/srv/qd-files/web
+	url4=git.$domain:stacks4.git
+	url5=git.$domain:stacks5.git
+	url3=git.$domain:stacks3.git
+
+	step 'an empty remote: source remote without the confirmation changes nothing'
+	register_folder_key "$base"
+	run_before=$(newest_run demo-files)
+	[ -n "$run_before" ] || fail 'demo-files has no run'
+	out=$(qd_fails source remote "$base" "$url4" --fingerprint "$(git_ed25519_fingerprint)") || fail "source remote without --yes succeeded: $out"
+	printf '%s' "$out" | grep -q 'confirmation-required' || fail "source remote without --yes does not ask for confirmation: $out"
+	[ -z "$(files_git remote)" ] || fail 'a refused source remote gave the folder a remote'
+	[ -z "$(remote_head "$url4")" ] || fail 'a refused source remote pushed'
+	[ "$(qd --output json source list | jq -r --arg p "$base" '.sources[] | select(.path == $p) | .kind')" = local ] || fail 'a refused source remote changed the kind of the source'
+
+	step 'source remote --yes pushes the local history to the empty repository'
+	head_before=$(files_git rev-parse HEAD)
+	out=$(qd --output json source remote "$base" "$url4" --fingerprint "$(git_ed25519_fingerprint)" --yes) || fail "source remote failed: $out"
+	printf '%s\n' "$out" | tail -n 1 | jq -e --arg u "$url4" --arg h "$head_before" \
+		'.state == "empty" and .pushed == true and .branch == "main" and .url == $u and (.head | length) >= 7 and (.head as $x | $h | startswith($x))' >/dev/null ||
+		fail "unexpected source remote result: $out"
+	[ "$(remote_head "$url4")" = "$head_before" ] || fail "the repository does not hold the head of the folder: $(remote_head "$url4")"
+	[ "$(qd --output json source list | jq -r --arg p "$base" '.sources[] | select(.path == $p) | "\(.kind) \(.url)"')" = "remote $url4" ] ||
+		fail "the folder is not a remote source with the address: $(qd --output json source list)"
+	[ "$(files_git rev-parse HEAD)" = "$head_before" ] || fail 'source remote moved the head of the folder'
+	[ "$(newest_run demo-files)" = "$run_before" ] || fail 'source remote started a run of demo-files'
+	[ "$(stack_images demo-files)" = "registry.$domain/demo/app:1.1.0" ] || fail "demo-files does not run 1.1.0 any more: $(stack_images demo-files)"
+
+	step 'a history that once held a secrets file is not pushed'
+	docker exec "$host" sh -ec "rm -rf /srv/qd-secret && mkdir -p /srv/qd-secret/demo-secret && chmod 0755 /srv/qd-secret /srv/qd-secret/demo-secret" ||
+		fail 'cannot create the secret folder'
+	cat <<EOF2 | docker exec -i "$host" sh -ec "cat >/srv/qd-secret/demo-secret/compose.yaml"
+name: demo-secret
+
+services:
+  app:
+    image: registry.$domain/demo/app:1.0.0
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: demo-secret
+      DEMO_VERSION: 1.0.0
+      DEMO_HEALTH: ok
+EOF2
+	printf 'DEMO_SECRET=not-a-real-secret\n' | docker exec -i "$host" sh -ec "cat >/srv/qd-secret/demo-secret/secrets.env"
+	docker exec "$host" sh -ec "cd /srv/qd-secret && chmod 0644 demo-secret/compose.yaml demo-secret/secrets.env && git init -q -b main && git add -A &&
+		git -c user.name='E2E Root' -c user.email=root.qdeploye2e.test commit -q -m 'Add the demo-secret stack with a secrets file' &&
+		git rm -q demo-secret/secrets.env &&
+		git -c user.name='E2E Root' -c user.email=root.qdeploye2e.test commit -q -m 'Remove the secrets file'" ||
+		fail 'cannot create the secret repository'
+	first_secret=$(docker exec "$host" git -C /srv/qd-secret rev-list --max-parents=0 HEAD | cut -c 1-7)
+	[ -n "$first_secret" ] || fail 'the secret repository has no first commit'
+	[ -z "$(docker exec "$host" git -C /srv/qd-secret ls-files | grep secrets.env)" ] || fail 'the secrets file is still in the last commit'
+	out=$(qd --output json source add /srv/qd-secret --yes) || fail "source add of the secret repository failed: $out"
+	printf '%s\n' "$out" | tail -n 1 | jq -e '.kind == "local"' >/dev/null || fail "unexpected source add result: $out"
+	wait_for 'the qdeploy service to answer' 30 qd status
+	register_folder_key /srv/qd-secret
+	out=$(qd_fails source remote /srv/qd-secret "$url5" --fingerprint "$(git_ed25519_fingerprint)" --yes) || fail "source remote pushed secrets: $out"
+	printf '%s' "$out" | grep -q 'secrets-found' || fail "source remote does not report secrets-found: $out"
+	printf '%s' "$out" | grep -q "$first_secret" || fail "the output does not name the commit $first_secret: $out"
+	printf '%s' "$out" | grep -q 'secrets.env' || fail "the output does not name secrets.env: $out"
+	if printf '%s' "$out" | grep -q 'not-a-real-secret'; then fail 'the output shows the value of the secret'; fi
+	[ "$(qd --output json source list | jq -r '.sources[] | select(.path == "/srv/qd-secret") | .kind')" = local ] || fail 'the refused source remote changed the kind of the source'
+	[ -z "$(docker exec "$host" git -C /srv/qd-secret remote)" ] || fail 'the refused source remote gave the folder a remote'
+	[ -z "$(as_admin "git ls-remote $url5")" ] || fail "the refused push created a branch: $(as_admin "git ls-remote $url5")"
+	wait_for 'the first run of demo-secret' 180 stack_settled demo-secret succeeded
+	out=$(qd --output json source remove /srv/qd-secret --yes) || fail "source remove of the secret folder failed: $out"
+	docker exec "$host" docker compose -p demo-secret down >/dev/null 2>&1 || fail 'cannot remove the containers of demo-secret'
+	log 'scenario: source remote pushed the folder of files to an empty repository and refused a history with a secrets file'
+
+	step 'the files of /opt/stacks3 are checked against its repository before they are copied'
+	repo_head3=$(remote_head "$url3")
+	[ -n "$repo_head3" ] || fail 'stacks3 has no head'
+	[ "$(docker exec "$host" git -c safe.directory=/opt/stacks3 -C /opt/stacks3 rev-parse HEAD)" = "$repo_head3" ] ||
+		fail 'the head of /opt/stacks3 is not the head of its repository'
+	[ -z "$(docker exec "$host" git -c safe.directory=/opt/stacks3 -C /opt/stacks3 status --porcelain)" ] || fail '/opt/stacks3 has local changes'
+
+	step 'a folder of files equal to the repository takes over its history without a push'
+	equal=/srv/qd-b-equal
+	copy_stacks3 "$equal"
+	register_folder_key "$equal"
+	out=$(qd --output json source inspect "$equal" --url "$url3") || fail "source inspect of the equal folder failed: $out"
+	printf '%s' "$out" | jq -e '.case == "files"' >/dev/null || fail "the equal folder is not a folder of files: $out"
+	sums_before=$(tree_sums "$equal")
+	out=$(qd --output json source add "$equal" --url "$url3" --fingerprint "$(git_ed25519_fingerprint)" --yes) || fail "source add --url for the equal folder failed: $out"
+	printf '%s\n' "$out" | tail -n 1 | jq -e '.kind == "remote" and .state == "equal" and .pushed == false' >/dev/null ||
+		fail "unexpected source add result for the equal folder: $out"
+	wait_for 'the qdeploy service to answer' 30 qd status
+	[ "$(folder_git "$equal" rev-parse HEAD)" = "$repo_head3" ] || fail "the head of the folder is not the head of the repository: $(folder_git "$equal" rev-parse HEAD)"
+	[ "$(folder_git "$equal" remote)" = origin ] || fail "the folder has not exactly the remote origin: $(folder_git "$equal" remote)"
+	folder_git "$equal" remote get-url origin | grep -q 'stacks3.git' || fail "origin is not the repository: $(folder_git "$equal" remote get-url origin)"
+	[ "$(qd --output json source list | jq -r --arg p "$equal" '.sources[] | select(.path == $p) | .kind')" = remote ] || fail 'the equal folder is not a remote source'
+	[ "$(tree_sums "$equal")" = "$sums_before" ] || fail 'the takeover changed the content of a file'
+	[ "$(remote_head "$url3")" = "$repo_head3" ] || fail 'taking over an equal remote changed it'
+	out=$(qd --output json source remove "$equal" --yes) || fail "source remove of the equal folder failed: $out"
+
+	step 'a folder of files that differs is shown and changes nothing without the confirmation'
+	diff_dir=/srv/qd-b-diff
+	copy_stacks3 "$diff_dir"
+	docker exec "$host" sed -i 's/^DEMO_HEALTH=.*/DEMO_HEALTH=degraded/' "$diff_dir/.env"
+	docker exec "$host" grep -qx 'DEMO_HEALTH=degraded' "$diff_dir/.env" || fail 'cannot change the .env of the differing folder'
+	register_folder_key "$diff_dir"
+	meta_before=$(docker exec "$host" stat -c '%U:%G %a' "$diff_dir")
+	out=$(qd_fails source add "$diff_dir" --url "$url3" --fingerprint "$(git_ed25519_fingerprint)") || fail "source add --url for the differing folder without --yes succeeded: $out"
+	printf '%s' "$out" | grep -q 'confirmation-required' || fail "source add --url without --yes does not ask for confirmation: $out"
+	printf '%s' "$out" | grep -q '\.env' || fail "the output does not name .env as a differing path: $out"
+	if docker exec "$host" test -e "$diff_dir/.git"; then fail 'a refused source add made a repository'; fi
+	if list_has_path "$diff_dir"; then fail 'a refused source add bound the folder'; fi
+	[ "$(docker exec "$host" stat -c '%U:%G %a' "$diff_dir")" = "$meta_before" ] || fail 'a refused source add changed the owner, group or mode of the folder'
+	[ "$(remote_head "$url3")" = "$repo_head3" ] || fail 'a refused source add changed the repository'
+	docker exec "$host" rm -rf "$diff_dir" /srv/qd-secret "$equal"
+	log 'scenario: source add --url took over the history of an equal repository and left a differing folder alone'
 }
 
 # key_pub_field prints the public part (type and key, without comment) of the qdeploy key output $1.

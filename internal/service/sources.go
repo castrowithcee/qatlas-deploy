@@ -353,6 +353,13 @@ func keyFor(conf sourcesConfig, dir string, exists func(name string) bool) strin
 	return own
 }
 
+// remoteKeyFor names the deploy key the folder dir has as a remote source. A local source of the folder has no
+// key of its own yet and does not count, so its key can be made before source remote needs it.
+func remoteKeyFor(conf sourcesConfig, dir string, exists func(name string) bool) string {
+	conf.Sources = slices.DeleteFunc(slices.Clone(conf.Sources), func(c sourceConfig) bool { return c.Path == dir && c.Kind == kindLocal })
+	return keyFor(conf, dir, exists)
+}
+
 // keyExists tells whether the credential store holds the deploy key name.
 func (s *sourceSet) keyExists(name string) bool {
 	_, err := s.keys.ShowNamedKey(name)
@@ -399,6 +406,44 @@ func (s *sourceSet) add(c sourceConfig, conf sourcesConfig, rev configfile.Revis
 		s.start(src)
 	}
 	return src, nil
+}
+
+// convert replaces the stored source that has the id of c with c and runs a new engine on the state the old one
+// leaves below sources/<id>/, so nothing it has deployed is deployed again. The caller holds neither lock of the
+// old source: stopping its engine waits for work that needs them.
+func (s *sourceSet) convert(old *source, c sourceConfig, conf sourcesConfig, rev configfile.Revision) (*source, error) {
+	next, err := s.newSource(c)
+	if err != nil {
+		return nil, err
+	}
+	i := slices.IndexFunc(conf.Sources, func(o sourceConfig) bool { return o.ID == c.ID })
+	if i < 0 {
+		next.eng.Close()
+		return nil, control.NewError(control.CodeNotFound, "no source is bound to this folder")
+	}
+	conf.Sources = slices.Clone(conf.Sources)
+	conf.Sources[i] = c
+	if _, err := s.store.SaveIfUnchanged(conf, rev); err != nil {
+		next.eng.Close()
+		return nil, errors.New("the source configuration cannot be written")
+	}
+	s.mu.Lock()
+	if j := slices.Index(s.list, old); j >= 0 {
+		s.list[j] = next
+	}
+	cancel, done := old.cancel, old.done
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+		<-done
+	}
+	old.eng.Close()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ctx != nil && !s.closed {
+		s.start(next)
+	}
+	return next, nil
 }
 
 // remove releases src: it is dropped from the stored sources and the routing, its engine stops, and its state
