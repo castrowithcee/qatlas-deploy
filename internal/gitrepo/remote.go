@@ -67,6 +67,9 @@ type Comparison struct {
 	// the PathCount that do. They are data of the remote and the folder.
 	Paths     []string
 	PathCount int
+	// Scan is the secret check of what a push of the host tree on top of the remote commit would publish; set
+	// for RemoteDifferent only.
+	Scan Scan
 }
 
 // CompareRemote compares the branch of the remote url that has the name of the checked-out branch with the tree
@@ -199,7 +202,27 @@ func (r *Repo) compare(ctx context.Context, url, branch string, files []string, 
 	slices.Sort(res.Paths)
 	res.State, res.PathCount = RemoteDifferent, len(res.Paths)
 	res.Paths = res.Paths[:min(len(res.Paths), MaxListedPaths)]
+	if res.Scan, err = r.scanHostTree(ctx, gitDir, env, fetched, hostTree); err != nil {
+		return Comparison{}, err
+	}
 	return res, nil
+}
+
+// scanHostTree scans, inside the temporary repository, the commit that has the host tree on top of parent: the
+// one commit a push would add.
+func (r *Repo) scanHostTree(ctx context.Context, gitDir string, env []string, parent, tree string) (Scan, error) {
+	commit, err := r.gitIn(ctx, append(slices.Clone(env), identityEnv()...))("commit-tree", tree, "-p", parent, "-m", adoptMessage)
+	if err != nil {
+		return Scan{}, err
+	}
+	if !hexRe.MatchString(commit) {
+		return Scan{}, errors.New("commit-tree returned no commit id")
+	}
+	tmp, err := Open(r.cfg, gitDir)
+	if err != nil {
+		return Scan{}, err
+	}
+	return tmp.ScanPush(ctx, commit, parent)
 }
 
 // lendObjects lets the temporary repository read the objects of the working copy and returns the tree of HEAD.

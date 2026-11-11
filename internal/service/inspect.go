@@ -259,23 +259,19 @@ func (s *inspectService) decideRepo(ctx context.Context, a control.SourceInspect
 			"Rename the remote to origin, or remove the remotes to run the folder locally."), nil
 	case a.URL != "":
 		return rejected("the folder is a repository without a remote, and source add cannot add one",
-			"Leave the address out to run the folder locally, or add the origin remote yourself."), nil
+			"Leave the address out to run the folder locally, then give it a remote with 'qdeploy source remote'."), nil
 	}
 	return verdict{kase: control.SourceCaseLocal, view: wc, repo: true}, nil
 }
 
 func (s *inspectService) decideFiles(ctx context.Context, a control.SourceInspectArgs) (verdict, error) {
-	if a.URL != "" {
-		return rejected("the folder holds files and no repository, and source add cannot connect it to an address",
-			"Leave the address out to start a local repository from the files."), nil
-	}
 	// The plan needs the stacks for their bind mounts; a folder whose stacks cannot be read has none.
 	list, loadErr := stacks.Load(a.Path)
 	plan, err := planFiles(ctx, a.Path, list)
 	if err != nil {
 		return verdict{}, err
 	}
-	return verdict{kase: control.SourceCaseFiles, view: plan, plan: plan, list: list, loadErr: loadErr, loaded: true}, nil
+	return verdict{kase: control.SourceCaseFiles, url: a.URL, view: plan, plan: plan, list: list, loadErr: loadErr, loaded: true}, nil
 }
 
 // filePlan is what a first commit of a folder without a repository would hold, and the git view of it: the

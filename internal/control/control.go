@@ -73,6 +73,8 @@ const (
 	CodeStackStopped   = "stack-stopped"
 	CodeStackAction    = "stack-action-failed"
 	CodeNameCollision  = "name-collision"
+	// CodeSecrets answers a push that would publish secret-like files; the message names the places, never a value.
+	CodeSecrets = "secrets-found"
 
 	CodeNoBackups     = "no-backups"
 	CodeNoBackupRules = "no-backup-rules"
@@ -773,8 +775,8 @@ type SourceInspectArgs struct {
 
 // SourceInspectResult answers SourceInspectCommand.
 //
-// Case is one of the SourceCase constants. URL is the repository address of the clone and of the adopted clone.
-// NeedsURL is set for a clone without a URL. Reason and Fix are set for a rejection. Access says who owns the
+// Case is one of the SourceCase constants. URL is the repository address of the clone, of the adopted clone and
+// of a folder of files that is to be joined with it. NeedsURL is set for a clone without a URL. Reason and Fix are set for a rejection. Access says who owns the
 // folder and what the service may do there; it is empty for a rejection. PlannedFiles and Excluded are set
 // for SourceCaseFiles only. Stacks holds the stacks the folder would bring, none for a clone or a rejection;
 // StacksError says they could not be read. ContainersChecked says the container engine was asked;
@@ -797,15 +799,25 @@ type SourceInspectResult struct {
 
 // SourceAddCommand binds a repository without a remote as a local source. It does so only for a folder that
 // SourceInspectCommand classifies as SourceCaseLocal, or as SourceCaseFiles when the arguments confirm the file
-// list, and that the service can write; it clones nothing and changes no permission.
+// list, and that the service can write; it clones nothing and changes no permission. With URL, a folder of
+// files is joined with the repository that already holds content at that address and bound as a remote source.
 const SourceAddCommand = "source.add"
 
 // SourceAddArgs are the arguments of SourceAddCommand. Files is the list of planned files the operator confirmed
 // for a folder without a repository (SourceCaseFiles); only then does the service start a repository with
 // exactly these files, and only if the list still matches what the folder holds.
+//
+// URL, Fingerprint, ExpectState and ExpectCommit connect that folder to a repository at URL: they are the
+// address, the confirmed host key and the SourceCompareResult (State and Commit) the operator was shown. The
+// service compares again and refuses, changing nothing, when the answer differs. A remote without commit
+// (SourceRemoteEmpty) is refused: take the folder without an address and use SourceRemoteCommand.
 type SourceAddArgs struct {
-	Path  string   `json:"path"`
-	Files []string `json:"files,omitempty"`
+	Path         string   `json:"path"`
+	Files        []string `json:"files,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	Fingerprint  string   `json:"fingerprint,omitempty"`
+	ExpectState  string   `json:"expect_state,omitempty"`
+	ExpectCommit string   `json:"expect_commit,omitempty"`
 }
 
 // SourceAddResult answers SourceAddCommand.
@@ -816,6 +828,102 @@ type SourceAddResult struct {
 	Head string `json:"head"`
 	// Files is the number of files of the first commit when the service started the repository.
 	Files int `json:"files,omitempty"`
+	// Pushed says the commit with the files of the folder was pushed to the remote.
+	Pushed bool `json:"pushed,omitempty"`
+}
+
+// SourceCompareCommand compares a folder with the repository at a URL. It changes nothing in the folder; its
+// only effect is pinning the host key the operator confirmed. The folder is a local source (SourceCaseLocal,
+// compared by the tree of its HEAD with the remote branch of the same name) or a folder of files without a
+// repository (SourceCaseFiles, compared by the planned files with the default branch of the remote).
+const SourceCompareCommand = "source.compare"
+
+// SourceCompareArgs are the arguments of SourceCompareCommand. Fingerprint is the host key the operator
+// confirmed (see RepoProbeCommand).
+type SourceCompareArgs struct {
+	Path        string `json:"path"`
+	URL         string `json:"url"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// How a remote branch relates to the files of the folder.
+const (
+	// SourceRemoteEmpty: the remote has no commit on the branch.
+	SourceRemoteEmpty = "empty"
+	// SourceRemoteEqual: the remote branch holds exactly the files of the folder.
+	SourceRemoteEqual = "equal"
+	// SourceRemoteDifferent: the files differ; Paths names them.
+	SourceRemoteDifferent = "different"
+)
+
+// SourceCompareResult answers SourceCompareCommand. Case is SourceCaseLocal or SourceCaseFiles. Branch is the
+// compared remote branch and Commit its commit, empty for SourceRemoteEmpty. Paths are the paths that differ,
+// a limited number of the PathCount that differ; they are data of the remote and the folder. PlannedFiles is
+// the file list of SourceCaseFiles that was compared. Secrets is set when a push would follow (a remote
+// without commit for a local source, a different remote) and holds the secret check of what that push would
+// publish.
+type SourceCompareResult struct {
+	Case         string         `json:"case"`
+	State        string         `json:"state"`
+	Branch       string         `json:"branch"`
+	Commit       string         `json:"commit,omitempty"`
+	Paths        []string       `json:"paths,omitempty"`
+	PathCount    int            `json:"path_count"`
+	PlannedFiles []string       `json:"planned_files,omitempty"`
+	Secrets      *SourceSecrets `json:"secrets,omitempty"`
+}
+
+// The kinds SourceSecretFinding.Kind takes.
+const (
+	SourceSecretFile       = "secrets-file"
+	SourceSecretEnv        = "env-secret"
+	SourceSecretPrivateKey = "private-key"
+)
+
+// SourceSecrets is the secret check of the commits a push would publish. Total counts all findings; Findings
+// holds the first ones. It names places only, never values.
+type SourceSecrets struct {
+	Total    int                   `json:"total"`
+	Findings []SourceSecretFinding `json:"findings,omitempty"`
+}
+
+// SourceSecretFinding is one secret-like file of one commit.
+type SourceSecretFinding struct {
+	Commit string `json:"commit"`
+	Path   string `json:"path"`
+	Kind   string `json:"kind"`
+}
+
+// SourceRemoteCommand gives a local source a remote and makes it a remote source. The service compares the
+// folder with the remote again and acts only if State and Commit are the ones the operator was shown
+// (ExpectState, ExpectCommit); otherwise it refuses and changes nothing. A remote without commit receives the
+// branch; an equal remote is followed without a push; a different remote is followed with one commit that
+// holds the files of the folder, which is pushed. The local history that a followed remote replaces stays under
+// a ref. Secret-like files in what would be pushed refuse the command with CodeSecrets; there is no way
+// around it. A run of the source that is active refuses it with CodeRunActive.
+const SourceRemoteCommand = "source.remote"
+
+// SourceRemoteArgs are the arguments of SourceRemoteCommand.
+type SourceRemoteArgs struct {
+	Path         string `json:"path"`
+	URL          string `json:"url"`
+	Fingerprint  string `json:"fingerprint"`
+	ExpectState  string `json:"expect_state"`
+	ExpectCommit string `json:"expect_commit,omitempty"`
+}
+
+// SourceRemoteResult answers SourceRemoteCommand. State is the state that was acted on, Head the commit the
+// branch is at now. Pushed says a commit was pushed. HistoryRef names the ref that keeps the local history that
+// the branch left, empty when none was saved.
+type SourceRemoteResult struct {
+	ID         string `json:"id"`
+	Path       string `json:"path"`
+	URL        string `json:"url"`
+	State      string `json:"state"`
+	Branch     string `json:"branch"`
+	Head       string `json:"head"`
+	Pushed     bool   `json:"pushed"`
+	HistoryRef string `json:"history_ref,omitempty"`
 }
 
 // SourceListCommand lists the bound stack folders.

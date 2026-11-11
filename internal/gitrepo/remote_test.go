@@ -129,6 +129,19 @@ func TestCompareRemoteOfARepository(t *testing.T) {
 		t.Fatal("the working copy borrowed objects")
 	}
 
+	// A secret that is in the host tree and not on the remote shows in the scan; the history of the host does not.
+	leaky := hostRepo(t, map[string]string{"web/compose.yaml": "mine\n", "web/secrets.env": "DEMO_TOKEN=not-a-real-secret\n"})
+	fixtureGit(t, leaky.dir, "rm", "-q", "web/secrets.env")
+	fixtureGit(t, leaky.dir, "commit", "-q", "-m", "drop the secret again")
+	if got, err := leaky.CompareRemote(ctx, remote.bare); err != nil || got.Scan.Total != 0 {
+		t.Fatalf("a secret only in the history of the host: %+v, %v", got.Scan, err)
+	}
+	withSecret := hostRepo(t, map[string]string{"web/secrets.env": "DEMO_TOKEN=not-a-real-secret\n"})
+	if got, err := withSecret.CompareRemote(ctx, remote.bare); err != nil || got.Scan.Total != 1 || got.Scan.Findings[0].Path != "web/secrets.env" ||
+		strings.Contains(fmt.Sprint(got.Scan), "not-a-real-secret") {
+		t.Fatalf("a secret in the host tree: %+v, %v", got.Scan, err)
+	}
+
 	// The same files with another history are equal.
 	same := hostRepo(t, remoteFiles)
 	fixtureGit(t, same.dir, "rm", "-q", "first.txt")
@@ -184,8 +197,14 @@ func TestCompareFolderOfFilesWithoutGit(t *testing.T) {
 	got, err = CompareFolder(ctx, cfg, dir, remote.bare, []string{"README.md", "web/compose.yaml", "web/secrets.env"})
 	want := Comparison{State: RemoteDifferent, Branch: "main", Commit: remoteHead,
 		Paths: []string{"db/compose.yaml", "web/secrets.env"}, PathCount: 2}
-	if err != nil || fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("different: %+v, %v; want %+v", got, err, want)
+	// The secrets file is what a push would publish, and only that: the place, never the value.
+	if scan := got.Scan; err != nil || scan.Total != 1 || len(scan.Findings) != 1 || scan.Findings[0].Path != "web/secrets.env" ||
+		scan.Findings[0].Kind != KindSecretsFile || strings.Contains(fmt.Sprint(scan), "not-a-real-secret") {
+		t.Fatalf("scan of the host tree: %+v, %v", got.Scan, err)
+	}
+	got.Scan = Scan{}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("different: %+v; want %+v", got, want)
 	}
 	wantSame(t, "folder", before, snapshot(t, dir))
 	if _, err := os.Lstat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
