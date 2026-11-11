@@ -353,6 +353,13 @@ func keyFor(conf sourcesConfig, dir string, exists func(name string) bool) strin
 	return own
 }
 
+// remoteKeyFor names the deploy key the folder dir has as a remote source. A local source of the folder has no
+// key of its own yet and does not count, so its key can be made before source remote needs it.
+func remoteKeyFor(conf sourcesConfig, dir string, exists func(name string) bool) string {
+	conf.Sources = slices.DeleteFunc(slices.Clone(conf.Sources), func(c sourceConfig) bool { return c.Path == dir && c.Kind == kindLocal })
+	return keyFor(conf, dir, exists)
+}
+
 // keyExists tells whether the credential store holds the deploy key name.
 func (s *sourceSet) keyExists(name string) bool {
 	_, err := s.keys.ShowNamedKey(name)

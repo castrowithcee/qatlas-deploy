@@ -84,4 +84,12 @@ func TestKeyForKeepsTheKeyOfAReleasedFolder(t *testing.T) {
 	if got := keyFor(sourcesConfig{Sources: []sourceConfig{{ID: "srv-b", Path: "/srv/b", Kind: kindLocal}}}, "/srv/b", has()); got != "" {
 		t.Errorf("a local folder got the key %q", got)
 	}
+	local := sourceConfig{ID: "srv-b", Path: "/srv/b", Kind: kindLocal}
+	if got := remoteKeyFor(sourcesConfig{Sources: []sourceConfig{local}}, "/srv/b", has()); got != credentials.DefaultKey {
+		t.Errorf("a local folder that gets a remote is named %q, want the free default key", got)
+	}
+	conf = sourcesConfig{Sources: []sourceConfig{remote("/srv/a", credentials.DefaultKey), local}}
+	if got := remoteKeyFor(conf, "/srv/b", has(credentials.DefaultKey)); got != own("/srv/b") {
+		t.Errorf("a local folder next to the default key is named %q, want its own", got)
+	}
 }
