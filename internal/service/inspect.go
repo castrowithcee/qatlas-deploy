@@ -283,7 +283,10 @@ func (s *inspectService) decideFiles(ctx context.Context, a control.SourceInspec
 type filePlan struct {
 	planned  []string
 	excluded []control.SourceExcluded
-	preview  *gitrepo.Preview
+	// rawPlanned and rawExcluded are planned and the paths of excluded as they are on disk, in the same order;
+	// the lists above show them with unprintable characters replaced.
+	rawPlanned, rawExcluded []string
+	preview                 *gitrepo.Preview
 }
 
 func (p *filePlan) close() { _ = p.preview.Close() }
@@ -368,6 +371,7 @@ func planFiles(ctx context.Context, root string, list []stacks.Stack) (*filePlan
 			excluded = append(excluded, control.SourceExcluded{Path: f, Reason: control.SourceExcludedUnreadable})
 		default:
 			plan.planned = append(plan.planned, maskControl(f))
+			plan.rawPlanned = append(plan.rawPlanned, f)
 		}
 	}
 
@@ -388,6 +392,7 @@ func planFiles(ctx context.Context, root string, list []stacks.Stack) (*filePlan
 	}
 	slices.SortFunc(excluded, func(a, b control.SourceExcluded) int { return strings.Compare(a.Path, b.Path) })
 	for i := range excluded {
+		plan.rawExcluded = append(plan.rawExcluded, excluded[i].Path)
 		excluded[i].Path = maskControl(excluded[i].Path)
 	}
 	plan.excluded = excluded

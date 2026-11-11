@@ -1,7 +1,9 @@
 package service_test
 
 import (
+	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +38,12 @@ func headOf(t *testing.T, dir string) string {
 func (h *harness) sourceAdd(path string) (control.SourceAddResult, error) {
 	var res control.SourceAddResult
 	err := h.call(control.SourceAddCommand, control.SourceAddArgs{Path: path}, &res)
+	return res, err
+}
+
+func (h *harness) sourceAddFiles(path string, list []string) (control.SourceAddResult, error) {
+	var res control.SourceAddResult
+	err := h.call(control.SourceAddCommand, control.SourceAddArgs{Path: path, Files: list}, &res)
 	return res, err
 }
 
@@ -156,7 +164,7 @@ func TestSourceAddRefusesWhatIsNotALocalRepository(t *testing.T) {
 	for name, c := range map[string]struct{ path, want string }{
 		"missing":   {missing, "nothing to bind"},
 		"clone":     {clone, "repo set"},
-		"files":     {files, "no repository"},
+		"files":     {files, "confirm the file list"},
 		"no commit": {noCommit, "first commit"},
 		"relative":  {"stacks", "absolute"},
 	} {
@@ -381,4 +389,107 @@ func TestInspectListsTheBindMountsOfEachStack(t *testing.T) {
 	if got := inspectedStack(t, h.inspect(local, ""), "web").BindMounts; len(got) != 0 {
 		t.Errorf("a missing source is listed: %v", got)
 	}
+}
+
+func noGit(t *testing.T, h *harness, dir string) {
+	t.Helper()
+	if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
+		t.Fatal("a .git was created")
+	}
+	if len(h.sourceList().Sources) != 0 {
+		t.Fatal("a folder was bound")
+	}
+}
+
+func TestSourceAddStartsARepositoryWithTheConfirmedFiles(t *testing.T) {
+	notRoot(t)
+	clock := &svcClock{now: noon}
+	h := realGitService(t, withClock(clock, nil))
+	dir := newFolder(t)
+	writeTree(t, dir, localFiles())
+	writeTree(t, dir, map[string]string{"web/odd [x].txt": "x"})
+	before := tree(t, dir)
+
+	shown := h.inspect(dir, "")
+	if shown.Case != control.SourceCaseFiles || slices.Contains(shown.PlannedFiles, "web/data/db.bin") {
+		t.Fatalf("inspect = %+v", shown)
+	}
+	res, err := h.sourceAddFiles(dir, shown.PlannedFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Path != dir || res.Kind != "local" || res.Files != len(shown.PlannedFiles) || res.Head != headOf(t, dir) {
+		t.Fatalf("add = %+v", res)
+	}
+	out, err := exec.Command("git", "-C", dir, "ls-tree", "-r", "--name-only", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Fields(strings.ReplaceAll(string(out), " ", "_")); len(got) != len(shown.PlannedFiles) {
+		t.Fatalf("committed %q, planned %q", got, shown.PlannedFiles)
+	}
+	if got := tree(t, dir); !maps.Equal(got, before) {
+		t.Fatalf("the files changed: %v", got)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, ".gitignore")); err == nil {
+		t.Fatal("a .gitignore was written")
+	}
+	exclude, err := os.ReadFile(filepath.Join(dir, ".git", "info", "exclude"))
+	if err != nil || !strings.Contains(string(exclude), "/web/data\n") {
+		t.Fatalf("exclude = %q, %v", exclude, err)
+	}
+	if list := h.sourceList(); len(list.Sources) != 1 || list.Sources[0].Kind != control.SourceKindLocal {
+		t.Fatalf("list = %+v", list)
+	}
+	h.waitStatus("started repository polled", func(st control.StatusResult) bool {
+		return len(st.Engine.Sources) == 1 && st.Engine.Sources[0].Head == res.Head && len(stacksNamed(st, "web")) == 1
+	})
+	if _, err := h.sourceAddFiles(dir, shown.PlannedFiles); err == nil {
+		t.Fatal("a bound folder was added again")
+	}
+}
+
+func TestSourceAddFilesCreatesNothingWhenTheListChangedOrIsMissing(t *testing.T) {
+	h := realGitService(t)
+	dir := newFolder(t)
+	writeTree(t, dir, localFiles())
+	shown := h.inspect(dir, "").PlannedFiles
+
+	_, err := h.sourceAddFiles(dir, nil)
+	wantCode(t, err, control.CodeInvalid)
+	if !strings.Contains(err.Error(), "confirm the file list") {
+		t.Fatalf("err = %v", err)
+	}
+	noGit(t, h, dir)
+
+	writeTree(t, dir, map[string]string{"web/new.txt": "x"})
+	_, err = h.sourceAddFiles(dir, shown)
+	wantCode(t, err, control.CodeInvalid)
+	if !strings.Contains(err.Error(), `1 added: "web/new.txt"`) || strings.Contains(err.Error(), "removed") {
+		t.Fatalf("err = %v", err)
+	}
+	noGit(t, h, dir)
+
+	if err := os.Remove(filepath.Join(dir, "web/new.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "web/.env")); err != nil {
+		t.Fatal(err)
+	}
+	_, err = h.sourceAddFiles(dir, shown)
+	wantCode(t, err, control.CodeInvalid)
+	if !strings.Contains(err.Error(), `1 removed: "web/.env"`) || strings.Contains(err.Error(), "added") {
+		t.Fatalf("err = %v", err)
+	}
+	noGit(t, h, dir)
+
+	var many []string
+	for i := range 25 {
+		many = append(many, fmt.Sprintf("gone/f%02d", i))
+	}
+	_, err = h.sourceAddFiles(dir, append(slices.Clone(shown), many...))
+	if err == nil || !strings.Contains(err.Error(), "26 removed") || strings.Contains(err.Error(), "f24") || !strings.Contains(err.Error(), "...") {
+		t.Fatalf("err = %v", err)
+	}
+	noGit(t, h, dir)
 }

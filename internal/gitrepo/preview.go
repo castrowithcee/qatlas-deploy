@@ -67,9 +67,10 @@ func OpenPreview(ctx context.Context, cfg Config, dir string, skip []string) (*P
 	return p, nil
 }
 
-// excludePattern is the ignore pattern that matches exactly the path p, anchored at the root.
+// excludePattern is the ignore pattern that matches exactly the path p, anchored at the root. Git ignores
+// trailing spaces unless they are escaped, so the last one is; a path with a line break or NUL has none.
 func excludePattern(p string) (string, bool) {
-	if p == "" || strings.ContainsAny(p, "\n\r\x00") || strings.HasSuffix(p, " ") {
+	if p == "" || strings.ContainsAny(p, "\n\r\x00") {
 		return "", false
 	}
 	var b strings.Builder
@@ -80,7 +81,11 @@ func excludePattern(p string) (string, bool) {
 		}
 		b.WriteRune(c)
 	}
-	return b.String(), true
+	out := b.String()
+	if strings.HasSuffix(out, " ") {
+		out = out[:len(out)-1] + `\ `
+	}
+	return out, true
 }
 
 func (p *Preview) env() []string {
