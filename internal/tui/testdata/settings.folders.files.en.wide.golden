@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  ! Start a git repository in /srv/files-example and take it over?                                                      
+                                                                                                                        
+  Yes looks at the folder once more and makes the changes listed below only if its list is unchanged.                   
+                                                                                                                        
+    folder: /srv/files-example                                                                                          
+    case: files (files without a repository; a first commit takes the listed files)                                     
+    owner: root, group: root, mode: 0755                                                                                
+    the service can write it: no                                                                                        
+    permissions are set: yes                                                                                            
+                                                                                                                        
+  Files of the first commit (2)                                                                                         
+    demo/.env                                                                                                           
+    demo/compose.yaml                                                                                                   
+                                                                                                                        
+  Left out (1), recorded only in .git/info/exclude                                                                      
+    demo/data: bind-mount (stack demo)                                                                                  
+                                                                                                                        
+  Stacks (1)                                                                                                            
+    demo (folder demo)                                                                                                  
+      works: deploy                                                                                                     
+y yes, do it  n/esc/enter cancel                                                                   up/down scroll  20/29

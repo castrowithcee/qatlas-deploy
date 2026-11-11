@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 2 3 [4 Einstellungen] 5                             
+--------------------------------------------------------
+  Stack-Ordner                                          
+                                                        
+  PFAD                 ART     COMMIT   ZUSTAND         
+> /srv/stacks-example  remote  1111111  ok              
+  /srv/local-example   lokal   2222222  Fehler          
+                                                        
+  /srv/stacks-example                                   
+    Adresse: ssh://git.example.test/ops/stacks.git      
+    letzter Abruf: Fr 2026-10-30 14:30                  
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+a hinzufügen  F jetzt abrufen  e Deploy-Schlüssel       
+x lösen  esc Zurück  r Neu laden  1-5 Bereich  q Beenden

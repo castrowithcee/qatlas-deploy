@@ -9,7 +9,6 @@ const (
 	textKeyNext               kittui.TextID = "key.next"
 	textKeyPrev               kittui.TextID = "key.prev"
 	textKeySave               kittui.TextID = "key.save"
-	textKeyBind               kittui.TextID = "key.bind"
 	textKeyFetch              kittui.TextID = "key.fetch"
 	textKeyAdd                kittui.TextID = "key.add"
 	textKeyRemove             kittui.TextID = "key.remove"
@@ -43,12 +42,10 @@ const (
 	textGeneralSavedStart     kittui.TextID = "general.saved.start"
 	textGeneralCannotSave     kittui.TextID = "general.cannotsave"
 	textGeneralSaveFailed     kittui.TextID = "general.savefailed"
-	textPageRepo              kittui.TextID = "page.repo"
 	textPageKey               kittui.TextID = "page.key"
 	textPageCreds             kittui.TextID = "page.creds"
 	textPageWindow            kittui.TextID = "page.window"
 	textPageNotify            kittui.TextID = "page.notify"
-	textAboutRepo             kittui.TextID = "about.repo"
 	textAboutKey              kittui.TextID = "about.key"
 	textAboutCreds            kittui.TextID = "about.creds"
 	textAboutWindow           kittui.TextID = "about.window"
@@ -83,21 +80,13 @@ const (
 	textWhatNotifyRemove      kittui.TextID = "what.notifyremove"
 	textAskNotifyTest         kittui.TextID = "ask.notifytest"
 	textWhatNotifyTest        kittui.TextID = "what.notifytest"
-	textAskBind               kittui.TextID = "ask.bind"
-	textAskFolderCreate       kittui.TextID = "ask.foldercreate"
-	textWhatFolderCreate      kittui.TextID = "what.foldercreate"
 	textProblemDirRequired    kittui.TextID = "problem.dirrequired"
-	textWhatBind              kittui.TextID = "what.bind"
-	textWhatBindPinned        kittui.TextID = "what.bindpinned"
 	textDetailHost            kittui.TextID = "detail.host"
 	textDetailKeyType         kittui.TextID = "detail.keytype"
 	textDetailFingerprint     kittui.TextID = "detail.fingerprint"
 	textDetailDir             kittui.TextID = "detail.dir"
 	textHeaderWorking         kittui.TextID = "header.working"
-	textRepoNone              kittui.TextID = "repo.none"
-	textDetailStacks          kittui.TextID = "detail.stacks"
 	textDetailPollError       kittui.TextID = "detail.pollerror"
-	textRepoRebind            kittui.TextID = "repo.rebind"
 	textKeyNone               kittui.TextID = "key.none"
 	textKeyCopy               kittui.TextID = "key.copy"
 	textDetailDays            kittui.TextID = "detail.days"
@@ -113,15 +102,12 @@ const (
 	textDetailZone            kittui.TextID = "detail.zone"
 	textDetailNext            kittui.TextID = "detail.next"
 	textDetailLastRun         kittui.TextID = "detail.lastrunat"
-	textTitleBind             kittui.TextID = "title.bind"
 	textTitleCred             kittui.TextID = "title.cred"
 	textTitleWindow           kittui.TextID = "title.window"
 	textTitleNotify           kittui.TextID = "title.notify"
 	textTitleNotifyDetail     kittui.TextID = "title.notifydetail"
 	textFieldURL              kittui.TextID = "field.url"
 	textHintURL               kittui.TextID = "hint.url"
-	textFieldDir              kittui.TextID = "field.dir"
-	textHintDir               kittui.TextID = "hint.dir"
 	textFieldCredKind         kittui.TextID = "field.credkind"
 	textHintCredKind          kittui.TextID = "hint.credkind"
 	textKindRegistry          kittui.TextID = "kind.registry"
@@ -205,6 +191,96 @@ const (
 	textTitleDiscard          kittui.TextID = "title.discard"
 	textAskDiscard            kittui.TextID = "ask.discard"
 	textWhatDiscard           kittui.TextID = "what.discard"
+	textPageFolders           kittui.TextID = "page.folders"
+	textAboutFolders          kittui.TextID = "about.folders"
+	textColPath               kittui.TextID = "col.path"
+	textColKind               kittui.TextID = "col.kind"
+	textColCommit             kittui.TextID = "col.commit"
+	textColPolled             kittui.TextID = "col.polled"
+	textFolderKindRemote      kittui.TextID = "folder.remote"
+	textFolderKindLocal       kittui.TextID = "folder.local"
+	textFolderOK              kittui.TextID = "folder.ok"
+	textFolderFailed          kittui.TextID = "folder.failed"
+	textFoldersEmpty          kittui.TextID = "folders.empty"
+	textDetailURL             kittui.TextID = "detail.url"
+	textDetailLastPoll        kittui.TextID = "detail.lastpoll"
+	textDetailNote            kittui.TextID = "detail.note"
+	textKeyRelease            kittui.TextID = "key.release"
+	textKeyDeployKey          kittui.TextID = "key.deploykey"
+	textAnswerContinue        kittui.TextID = "answer.continue"
+	textTitleFolderAdd        kittui.TextID = "title.folderadd"
+	textFieldFolderPath       kittui.TextID = "field.folderpath"
+	textHintFolderPath        kittui.TextID = "hint.folderpath"
+	textTitleFolderURL        kittui.TextID = "title.folderurl"
+	textFoldersNone           kittui.TextID = "folders.none"
+	textDetailCase            kittui.TextID = "detail.case"
+	textCaseClone             kittui.TextID = "case.clone"
+	textCaseAdopt             kittui.TextID = "case.adopt"
+	textCaseLocal             kittui.TextID = "case.local"
+	textCaseFiles             kittui.TextID = "case.files"
+	textCaseReject            kittui.TextID = "case.reject"
+	textDetailReason          kittui.TextID = "detail.reason"
+	textDetailFix             kittui.TextID = "detail.fix"
+	textReasonReadOnly        kittui.TextID = "reason.readonly"
+	textFixReadOnly           kittui.TextID = "fix.readonly"
+	textDetailMissing         kittui.TextID = "detail.missing"
+	textDetailOwner           kittui.TextID = "detail.owner"
+	textDetailServiceWrites   kittui.TextID = "detail.servicewrites"
+	textDetailSetsPerms       kittui.TextID = "detail.setsperms"
+	textDetailGitWritable     kittui.TextID = "detail.gitwritable"
+	textHeadFiles             kittui.TextID = "head.files"
+	textHeadExcluded          kittui.TextID = "head.excluded"
+	textExcludedNone          kittui.TextID = "excluded.none"
+	textExcludedEntry         kittui.TextID = "excluded.entry"
+	textExcludedStack         kittui.TextID = "excluded.stack"
+	textMoreEntries           kittui.TextID = "more.entries"
+	textHeadStacks            kittui.TextID = "head.stacks"
+	textStackFolder           kittui.TextID = "stack.folder"
+	textStackWorks            kittui.TextID = "stack.works"
+	textStackFails            kittui.TextID = "stack.fails"
+	textStackFinding          kittui.TextID = "stack.finding"
+	textStackConflict         kittui.TextID = "stack.conflict"
+	textStacksError           kittui.TextID = "stacks.error"
+	textContainersError       kittui.TextID = "containers.error"
+	textHeadChanges           kittui.TextID = "head.changes"
+	textChangeCreate          kittui.TextID = "change.create"
+	textChangeClone           kittui.TextID = "change.clone"
+	textChangeAdopt           kittui.TextID = "change.adopt"
+	textChangeLocal           kittui.TextID = "change.local"
+	textChangeFiles           kittui.TextID = "change.files"
+	textChangeNoPerms         kittui.TextID = "change.noperms"
+	textChangeDropIn          kittui.TextID = "change.dropin"
+	textAskFolderRejected     kittui.TextID = "ask.folderrejected"
+	textWhatNothing           kittui.TextID = "what.nothing"
+	textAskFolderNoFiles      kittui.TextID = "ask.foldernofiles"
+	textWhatFolderNoFiles     kittui.TextID = "what.foldernofiles"
+	textAskFolderClone        kittui.TextID = "ask.folderclone"
+	textWhatFolderClone       kittui.TextID = "what.folderclone"
+	textAskFolderAdopt        kittui.TextID = "ask.folderadopt"
+	textWhatFolderAdopt       kittui.TextID = "what.folderadopt"
+	textAskFolderLocal        kittui.TextID = "ask.folderlocal"
+	textWhatFolderApply       kittui.TextID = "what.folderapply"
+	textAskFolderFiles        kittui.TextID = "ask.folderfiles"
+	textWhatFolderFiles       kittui.TextID = "what.folderfiles"
+	textAskHostKey            kittui.TextID = "ask.hostkey"
+	textWhatHostKey           kittui.TextID = "what.hostkey"
+	textWhatHostKeyPinned     kittui.TextID = "what.hostkeypinned"
+	textAskFolderCloneFinal   kittui.TextID = "ask.folderclonefinal"
+	textWhatFolderFinal       kittui.TextID = "what.folderfinal"
+	textFolderNoKey           kittui.TextID = "folder.nokey"
+	textFolderNoKeyNext       kittui.TextID = "folder.nokeynext"
+	textFolderListChanged     kittui.TextID = "folder.listchanged"
+	textFolderLocalFetch      kittui.TextID = "folder.localfetch"
+	textFolderLocalKey        kittui.TextID = "folder.localkey"
+	textFetchFailed           kittui.TextID = "fetch.failed"
+	textAskRelease            kittui.TextID = "ask.release"
+	textWhatRelease           kittui.TextID = "what.release"
+	textDoneReleased          kittui.TextID = "done.released"
+	textDoneFolderAdded       kittui.TextID = "done.folderadded"
+	textDetailKind            kittui.TextID = "detail.kind"
+	textDetailFiles           kittui.TextID = "detail.files"
+	textKeptChanges           kittui.TextID = "kept.changes"
+	textErrHost               kittui.TextID = "error.host"
 )
 
 func settingsEnglish() map[kittui.TextID]string {
@@ -213,7 +289,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textKeyNext:               "next field",
 		textKeyPrev:               "previous field",
 		textKeySave:               "save",
-		textKeyBind:               "bind",
 		textKeyFetch:              "fetch now",
 		textKeyAdd:                "add",
 		textKeyRemove:             "remove",
@@ -228,7 +303,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textColType:               "type",
 		textColEvents:             "events",
 		textColTarget:             "target",
-		textPageRepo:              "Stacks repository",
 		textPageKey:               "Deploy key",
 		textPageCreds:             "Credentials",
 		textPageWindow:            "Maintenance window",
@@ -252,7 +326,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textGeneralSavedStart:     "The settings are saved. The start area applies from the next start.",
 		textGeneralCannotSave:     "The settings cannot be saved here: this device has no place for them.",
 		textGeneralSaveFailed:     "The settings could not be saved: %s",
-		textAboutRepo:             "bind the repository, confirm its host key, fetch",
 		textAboutKey:              "store or generate the key for the git platform",
 		textAboutCreds:            "registry logins and the GitHub token",
 		textAboutWindow:           "when updates run",
@@ -261,12 +334,12 @@ func settingsEnglish() map[kittui.TextID]string {
 		textNotifyEmpty:           "No notification channels. {add} adds one.",
 		textEventsAll:             "all",
 		textSettingDoneTitle:      "Done",
-		textDoneBound:             "The stacks repository is bound.",
+		textDoneBound:             "The stack folder %s is bound.",
 		textDetailHead:            "commit: %s",
 		textDetailRemote:          "remote commit: %s",
 		textDetailCloned:          "cloned now: %s",
-		textDoneFetchedCurrent:    "Fetched; the working copy is up to date.",
-		textDoneFetchedNew:        "Fetched; the remote has newer commits.",
+		textDoneFetchedCurrent:    "Fetched %s; the working copy is up to date.",
+		textDoneFetchedNew:        "Fetched %s; the remote has newer commits.",
 		textDoneGenerated:         "The deploy key is generated.",
 		textDoneWindow:            "The maintenance window is changed.",
 		textDoneAdded:             "The channel %s is added.",
@@ -279,7 +352,7 @@ func settingsEnglish() map[kittui.TextID]string {
 		textYes:                   "yes",
 		textNo:                    "no",
 		textChooseOne:             "Choose an entry first.",
-		textAskFetch:              "Fetch the stacks repository now?",
+		textAskFetch:              "Fetch the stack folder %s now?",
 		textWhatFetch:             "Updates the remote-tracking branch; the working copy stays as it is.",
 		textAskCredDelete:         "Delete the credential %s?",
 		textWhatCredDelete:        "Without it qdeploy works anonymously for this service. The value cannot be recovered.",
@@ -287,21 +360,13 @@ func settingsEnglish() map[kittui.TextID]string {
 		textWhatNotifyRemove:      "The channel and its stored secrets are deleted.",
 		textAskNotifyTest:         "Send a test message through %s?",
 		textWhatNotifyTest:        "One short message is sent to the channel, without retries.",
-		textAskFolderCreate:       "Create the stack folder %s?",
-		textWhatFolderCreate:      "The folder is created with owner qdeploy:qdeploy and mode 0755, the service is granted write access to it in a systemd drop-in and restarts once.",
-		textProblemDirRequired:    "The stack folder is required: enter an absolute path.",
-		textAskBind:               "Bind %s and trust this host key?",
-		textWhatBind:              "Compare the fingerprint with the git platform first. The key is stored only now, and the repository is cloned.",
-		textWhatBindPinned:        "The service already trusts exactly this host key. The repository is cloned.",
+		textProblemDirRequired:    "The folder is required: enter an absolute path.",
 		textDetailHost:            "host: %s",
 		textDetailKeyType:         "key type: %s",
 		textDetailFingerprint:     "fingerprint: %s",
-		textDetailDir:             "directory: %s",
+		textDetailDir:             "folder: %s",
 		textHeaderWorking:         "working",
-		textRepoNone:              "No stacks repository is bound. Press {bind} to bind one.",
-		textDetailStacks:          "stacks: %d",
 		textDetailPollError:       "poll failed: %s",
-		textRepoRebind:            "{bind} binds a repository, {fetch} fetches new commits now.",
 		textKeyNone:               "No deploy key yet. Press {edit} to store or generate one.",
 		textKeyCopy:               "Add this public key as a deploy key on the git platform:",
 		textDetailDays:            "days: %s",
@@ -317,15 +382,12 @@ func settingsEnglish() map[kittui.TextID]string {
 		textDetailZone:            "time zone: %s",
 		textDetailNext:            "next opening: %s",
 		textDetailLastRun:         "last work began: %s",
-		textTitleBind:             "Bind the stacks repository",
 		textTitleCred:             "Set a credential",
 		textTitleWindow:           "Change the maintenance window",
 		textTitleNotify:           "Add a notification channel",
 		textTitleNotifyDetail:     "Settings of the channel",
 		textFieldURL:              "SSH URL",
 		textHintURL:               "user@host:path or ssh://[user@]host[:port]/path",
-		textFieldDir:              "Directory",
-		textHintDir:               "absolute path of the working copy",
 		textFieldCredKind:         "Credential",
 		textHintCredKind:          "left and right choose",
 		textKindRegistry:          "registry login",
@@ -391,7 +453,7 @@ func settingsEnglish() map[kittui.TextID]string {
 		textFieldTo:               "To",
 		textHintTo:                "recipient addresses, comma separated",
 		textProblemURL:            "The SSH address is required and holds no blanks.",
-		textProblemDir:            "The directory must be an absolute, clean path.",
+		textProblemDir:            "The path must be absolute and clean.",
 		textProblemHost:           "This is no registry host.",
 		textProblemUser:           "The user is required and holds no colon.",
 		textProblemSecret:         "A value of 4 to 8192 characters without control characters is required.",
@@ -409,6 +471,96 @@ func settingsEnglish() map[kittui.TextID]string {
 		textTitleDiscard:          "Discard the changes",
 		textAskDiscard:            "Discard the changes to this form?",
 		textWhatDiscard:           "The changes you made here are lost.",
+		textPageFolders:           "Stack folders",
+		textAboutFolders:          "list, add, fetch and release the stack folders",
+		textColPath:               "path",
+		textColKind:               "kind",
+		textColCommit:             "commit",
+		textColPolled:             "last poll",
+		textFolderKindRemote:      "remote",
+		textFolderKindLocal:       "local",
+		textFolderOK:              "ok",
+		textFolderFailed:          "failed",
+		textFoldersEmpty:          "No stack folders yet. {add} adds one.",
+		textDetailURL:             "address: %s",
+		textDetailLastPoll:        "last poll: %s",
+		textDetailNote:            "note: %s",
+		textKeyRelease:            "release",
+		textKeyDeployKey:          "deploy key",
+		textAnswerContinue:        "continue",
+		textTitleFolderAdd:        "Add a stack folder",
+		textFieldFolderPath:       "Folder",
+		textHintFolderPath:        "absolute path; it is only inspected, nothing changes before the questions",
+		textTitleFolderURL:        "Address of the repository to clone",
+		textFoldersNone:           "This interface cannot reach the host side to add a stack folder.",
+		textDetailCase:            "case: %s",
+		textCaseClone:             "clone (the folder is missing or empty and gets a clone of a repository)",
+		textCaseAdopt:             "adopt-clone (a clone with an origin remote, taken over as it is)",
+		textCaseLocal:             "local (a repository without a remote, deployed as it is)",
+		textCaseFiles:             "files (files without a repository; a first commit takes the listed files)",
+		textCaseReject:            "reject (the folder cannot be taken over)",
+		textDetailReason:          "reason: %s",
+		textDetailFix:             "what to do: %s",
+		textReasonReadOnly:        "the folder lies on a read-only file system",
+		textFixReadOnly:           "Choose a folder on a writable file system, or remount the file system read-write.",
+		textDetailMissing:         "the folder is missing; the nearest existing folder is %s",
+		textDetailOwner:           "owner: %s, group: %s, mode: %s",
+		textDetailServiceWrites:   "the service can write it: %s",
+		textDetailSetsPerms:       "permissions are set: %s",
+		textDetailGitWritable:     "the service can write .git: %s",
+		textHeadFiles:             "Files of the first commit (%d)",
+		textHeadExcluded:          "Left out (%d), recorded only in .git/info/exclude",
+		textExcludedNone:          "Nothing is left out.",
+		textExcludedEntry:         "%s: %s",
+		textExcludedStack:         "%s: %s (stack %s)",
+		textMoreEntries:           "... and %d more",
+		textHeadStacks:            "Stacks (%d)",
+		textStackFolder:           "%s (folder %s)",
+		textStackWorks:            "works: %s",
+		textStackFails:            "does not work: %s",
+		textStackFinding:          "%s %s: %s",
+		textStackConflict:         "conflict: the container %s of the project %s runs in the folder",
+		textStacksError:           "the stacks cannot be read: %s",
+		textContainersError:       "the containers were not checked: %s",
+		textHeadChanges:           "Changes after yes",
+		textChangeCreate:          "The folder is created with owner qdeploy:qdeploy and mode 0755.",
+		textChangeClone:           "The host key is stored and the repository is cloned into the folder.",
+		textChangeAdopt:           "The host key is stored and the clone is taken over with its address.",
+		textChangeLocal:           "The repository is taken over as a local stack folder.",
+		textChangeFiles:           "A git repository is started with branch main and a first commit of the listed files as qdeploy; no file in the folder is written. It is taken over as a local stack folder.",
+		textChangeNoPerms:         "No permission changes: the service can write already.",
+		textChangeDropIn:          "The folder is added to the systemd drop-in of the service, which restarts once.",
+		textAskFolderRejected:     "%s cannot be taken over.",
+		textWhatNothing:           "Nothing was changed.",
+		textAskFolderNoFiles:      "%s has no file a first commit could take.",
+		textWhatFolderNoFiles:     "Nothing was changed. Put the stack files into the folder first.",
+		textAskFolderClone:        "Clone a repository into %s?",
+		textWhatFolderClone:       "Next the SSH address is asked and the host key shown. Nothing changes before the last question.",
+		textAskFolderAdopt:        "Take over the clone %s with the address %s?",
+		textWhatFolderAdopt:       "Next the host key is shown and the deploy key of the folder is checked. Nothing changes before the last question.",
+		textAskFolderLocal:        "Take over the repository %s as a local stack folder?",
+		textWhatFolderApply:       "Yes makes the changes listed below.",
+		textAskFolderFiles:        "Start a git repository in %s and take it over?",
+		textWhatFolderFiles:       "Yes looks at the folder once more and makes the changes listed below only if its list is unchanged.",
+		textAskHostKey:            "Trust this host key for %s?",
+		textWhatHostKey:           "Compare the fingerprint with the git platform first. Nothing is stored yet; the key is passed on only after the last question.",
+		textWhatHostKeyPinned:     "The service already trusts exactly this host key. Nothing changes before the last question.",
+		textAskFolderCloneFinal:   "Clone %s into %s?",
+		textWhatFolderFinal:       "Only now the host key is stored and the changes listed below are made.",
+		textFolderNoKey:           "%s has no deploy key yet.",
+		textFolderNoKeyNext:       "Store or generate it on this page and enter the public key on the git platform, then add the folder again. Nothing was changed.",
+		textFolderListChanged:     "%s changed since its list was shown; nothing was changed. Add it again to review the new list.",
+		textFolderLocalFetch:      "A local stack folder has no remote to fetch from.",
+		textFolderLocalKey:        "A local stack folder has no deploy key.",
+		textFetchFailed:           "the fetch of %s failed: %s",
+		textAskRelease:            "Release the stack folder %s?",
+		textWhatRelease:           "qdeploy no longer deploys from it. Nothing is deleted and no container is stopped; the permissions, the systemd drop-in entry and the deploy key stay.",
+		textDoneReleased:          "The stack folder %s is released.",
+		textDoneFolderAdded:       "The stack folder %s is added.",
+		textDetailKind:            "kind: %s",
+		textDetailFiles:           "files of the first commit: %d",
+		textKeptChanges:           "%s; the group and the mode of %d paths stay changed",
+		textErrHost:               "the host side failed: %s",
 	}
 }
 
@@ -418,7 +570,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textKeyNext:               "nächstes Feld",
 		textKeyPrev:               "voriges Feld",
 		textKeySave:               "speichern",
-		textKeyBind:               "binden",
 		textKeyFetch:              "jetzt abrufen",
 		textKeyAdd:                "hinzufügen",
 		textKeyRemove:             "entfernen",
@@ -433,7 +584,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textColType:               "Typ",
 		textColEvents:             "Ereignisse",
 		textColTarget:             "Ziel",
-		textPageRepo:              "Stacks-Repository",
 		textPageKey:               "Deploy-Schlüssel",
 		textPageCreds:             "Zugangsdaten",
 		textPageWindow:            "Wartungsfenster",
@@ -457,7 +607,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textGeneralSavedStart:     "Die Einstellungen sind gespeichert. Der Startbereich gilt ab dem nächsten Start.",
 		textGeneralCannotSave:     "Die Einstellungen können hier nicht gespeichert werden: Dieses Gerät hat keinen Ort dafür.",
 		textGeneralSaveFailed:     "Die Einstellungen konnten nicht gespeichert werden: %s",
-		textAboutRepo:             "Repository binden, Hostschlüssel bestätigen, abrufen",
 		textAboutKey:              "Schlüssel für die Git-Plattform hinterlegen oder erzeugen",
 		textAboutCreds:            "Registry-Logins und GitHub-Token",
 		textAboutWindow:           "wann Updates laufen",
@@ -466,12 +615,12 @@ func settingsGerman() map[kittui.TextID]string {
 		textNotifyEmpty:           "Keine Benachrichtigungskanäle. {add} legt einen an.",
 		textEventsAll:             "alle",
 		textSettingDoneTitle:      "Erledigt",
-		textDoneBound:             "Das Stacks-Repository ist gebunden.",
+		textDoneBound:             "Der Stack-Ordner %s ist gebunden.",
 		textDetailHead:            "Commit: %s",
 		textDetailRemote:          "Remote-Commit: %s",
 		textDetailCloned:          "jetzt geklont: %s",
-		textDoneFetchedCurrent:    "Abgerufen; die Arbeitskopie ist aktuell.",
-		textDoneFetchedNew:        "Abgerufen; das Remote hat neuere Commits.",
+		textDoneFetchedCurrent:    "%s abgerufen; die Arbeitskopie ist aktuell.",
+		textDoneFetchedNew:        "%s abgerufen; das Remote hat neuere Commits.",
 		textDoneGenerated:         "Der Deploy-Schlüssel ist erzeugt.",
 		textDoneWindow:            "Das Wartungsfenster ist geändert.",
 		textDoneAdded:             "Der Kanal %s ist angelegt.",
@@ -484,7 +633,7 @@ func settingsGerman() map[kittui.TextID]string {
 		textYes:                   "ja",
 		textNo:                    "nein",
 		textChooseOne:             "Wähle zuerst einen Eintrag.",
-		textAskFetch:              "Das Stacks-Repository jetzt abrufen?",
+		textAskFetch:              "Den Stack-Ordner %s jetzt abrufen?",
 		textWhatFetch:             "Aktualisiert den Remote-Zweig; die Arbeitskopie bleibt unverändert.",
 		textAskCredDelete:         "Die Zugangsdaten %s löschen?",
 		textWhatCredDelete:        "Ohne sie arbeitet qdeploy bei diesem Dienst anonym. Der Wert ist nicht wiederherstellbar.",
@@ -492,21 +641,13 @@ func settingsGerman() map[kittui.TextID]string {
 		textWhatNotifyRemove:      "Der Kanal und seine gespeicherten Geheimnisse werden gelöscht.",
 		textAskNotifyTest:         "Eine Testnachricht über %s senden?",
 		textWhatNotifyTest:        "Eine kurze Nachricht geht einmal an den Kanal, ohne Wiederholung.",
-		textAskFolderCreate:       "Stack-Ordner %s anlegen?",
-		textWhatFolderCreate:      "Der Ordner wird mit Eigentümer qdeploy:qdeploy und Modus 0755 angelegt, der Dienst erhält dafür in einem systemd-Drop-in Schreibzugriff und startet einmal neu.",
-		textProblemDirRequired:    "Der Stack-Ordner ist erforderlich: Gib einen absoluten Pfad ein.",
-		textAskBind:               "%s binden und diesem Hostschlüssel vertrauen?",
-		textWhatBind:              "Vergleiche den Fingerabdruck zuerst mit der Git-Plattform. Der Schlüssel wird erst jetzt gespeichert und das Repository geklont.",
-		textWhatBindPinned:        "Der Dienst vertraut genau diesem Hostschlüssel bereits. Das Repository wird geklont.",
+		textProblemDirRequired:    "Der Ordner ist erforderlich: Gib einen absoluten Pfad ein.",
 		textDetailHost:            "Host: %s",
 		textDetailKeyType:         "Schlüsseltyp: %s",
 		textDetailFingerprint:     "Fingerabdruck: %s",
-		textDetailDir:             "Verzeichnis: %s",
+		textDetailDir:             "Ordner: %s",
 		textHeaderWorking:         "arbeitet",
-		textRepoNone:              "Es ist kein Stacks-Repository gebunden. {bind} bindet eines.",
-		textDetailStacks:          "Stacks: %d",
 		textDetailPollError:       "Abruf fehlgeschlagen: %s",
-		textRepoRebind:            "{bind} bindet ein Repository, {fetch} ruft neue Commits jetzt ab.",
 		textKeyNone:               "Noch kein Deploy-Schlüssel. {edit} hinterlegt oder erzeugt einen.",
 		textKeyCopy:               "Trage diesen öffentlichen Schlüssel als Deploy-Key bei der Git-Plattform ein:",
 		textDetailDays:            "Tage: %s",
@@ -522,15 +663,12 @@ func settingsGerman() map[kittui.TextID]string {
 		textDetailZone:            "Zeitzone: %s",
 		textDetailNext:            "nächste Öffnung: %s",
 		textDetailLastRun:         "letzte Arbeit begann: %s",
-		textTitleBind:             "Stacks-Repository binden",
 		textTitleCred:             "Zugangsdaten setzen",
 		textTitleWindow:           "Wartungsfenster ändern",
 		textTitleNotify:           "Benachrichtigungskanal anlegen",
 		textTitleNotifyDetail:     "Einstellungen des Kanals",
 		textFieldURL:              "SSH-URL",
 		textHintURL:               "user@host:pfad oder ssh://[user@]host[:port]/pfad",
-		textFieldDir:              "Verzeichnis",
-		textHintDir:               "absoluter Pfad der Arbeitskopie",
 		textFieldCredKind:         "Zugangsdaten",
 		textHintCredKind:          "links und rechts wählen",
 		textKindRegistry:          "Registry-Login",
@@ -596,7 +734,7 @@ func settingsGerman() map[kittui.TextID]string {
 		textFieldTo:               "Empfänger",
 		textHintTo:                "Empfängeradressen, durch Komma getrennt",
 		textProblemURL:            "Die SSH-Adresse ist nötig und enthält keine Leerzeichen.",
-		textProblemDir:            "Das Verzeichnis muss ein absoluter, bereinigter Pfad sein.",
+		textProblemDir:            "Der Pfad muss absolut und bereinigt sein.",
 		textProblemHost:           "Das ist kein Registry-Host.",
 		textProblemUser:           "Der Benutzer ist nötig und enthält keinen Doppelpunkt.",
 		textProblemSecret:         "Nötig ist ein Wert von 4 bis 8192 Zeichen ohne Steuerzeichen.",
@@ -614,5 +752,95 @@ func settingsGerman() map[kittui.TextID]string {
 		textTitleDiscard:          "Änderungen verwerfen",
 		textAskDiscard:            "Die Änderungen an diesem Formular verwerfen?",
 		textWhatDiscard:           "Die Änderungen, die Sie hier gemacht haben, gehen verloren.",
+		textPageFolders:           "Stack-Ordner",
+		textAboutFolders:          "Stack-Ordner anzeigen, hinzufügen, abrufen und lösen",
+		textColPath:               "Pfad",
+		textColKind:               "Art",
+		textColCommit:             "Commit",
+		textColPolled:             "letzter Abruf",
+		textFolderKindRemote:      "remote",
+		textFolderKindLocal:       "lokal",
+		textFolderOK:              "ok",
+		textFolderFailed:          "Fehler",
+		textFoldersEmpty:          "Noch keine Stack-Ordner. {add} fügt einen hinzu.",
+		textDetailURL:             "Adresse: %s",
+		textDetailLastPoll:        "letzter Abruf: %s",
+		textDetailNote:            "Hinweis: %s",
+		textKeyRelease:            "lösen",
+		textKeyDeployKey:          "Deploy-Schlüssel",
+		textAnswerContinue:        "weiter",
+		textTitleFolderAdd:        "Stack-Ordner hinzufügen",
+		textFieldFolderPath:       "Ordner",
+		textHintFolderPath:        "absoluter Pfad; er wird nur geprüft, vor den Fragen ändert sich nichts",
+		textTitleFolderURL:        "Adresse des zu klonenden Repositorys",
+		textFoldersNone:           "Diese Oberfläche erreicht die Host-Seite zum Hinzufügen eines Stack-Ordners nicht.",
+		textDetailCase:            "Fall: %s",
+		textCaseClone:             "clone (der Ordner fehlt oder ist leer und bekommt einen Klon eines Repositorys)",
+		textCaseAdopt:             "adopt-clone (ein Klon mit origin-Remote, der so übernommen wird)",
+		textCaseLocal:             "local (ein Repository ohne Remote, das so ausgerollt wird)",
+		textCaseFiles:             "files (Dateien ohne Repository; ein erster Commit nimmt die aufgeführten Dateien)",
+		textCaseReject:            "reject (der Ordner kann nicht übernommen werden)",
+		textDetailReason:          "Grund: %s",
+		textDetailFix:             "Lösung: %s",
+		textReasonReadOnly:        "der Ordner liegt auf einem schreibgeschützten Dateisystem",
+		textFixReadOnly:           "Wähle einen Ordner auf einem beschreibbaren Dateisystem oder hänge das Dateisystem beschreibbar ein.",
+		textDetailMissing:         "der Ordner fehlt; der nächste vorhandene Ordner ist %s",
+		textDetailOwner:           "Eigentümer: %s, Gruppe: %s, Modus: %s",
+		textDetailServiceWrites:   "der Dienst kann ihn schreiben: %s",
+		textDetailSetsPerms:       "Rechte werden gesetzt: %s",
+		textDetailGitWritable:     "der Dienst kann .git schreiben: %s",
+		textHeadFiles:             "Dateien des ersten Commits (%d)",
+		textHeadExcluded:          "Ausgelassen (%d), nur in .git/info/exclude vermerkt",
+		textExcludedNone:          "Nichts wird ausgelassen.",
+		textExcludedEntry:         "%s: %s",
+		textExcludedStack:         "%s: %s (Stack %s)",
+		textMoreEntries:           "... und %d weitere",
+		textHeadStacks:            "Stacks (%d)",
+		textStackFolder:           "%s (Ordner %s)",
+		textStackWorks:            "funktioniert: %s",
+		textStackFails:            "funktioniert nicht: %s",
+		textStackFinding:          "%s %s: %s",
+		textStackConflict:         "Konflikt: Der Container %s des Projekts %s läuft im Ordner",
+		textStacksError:           "die Stacks sind nicht lesbar: %s",
+		textContainersError:       "die Container wurden nicht geprüft: %s",
+		textHeadChanges:           "Änderungen nach Ja",
+		textChangeCreate:          "Der Ordner wird mit Eigentümer qdeploy:qdeploy und Modus 0755 angelegt.",
+		textChangeClone:           "Der Hostschlüssel wird gespeichert und das Repository in den Ordner geklont.",
+		textChangeAdopt:           "Der Hostschlüssel wird gespeichert und der Klon mit seiner Adresse übernommen.",
+		textChangeLocal:           "Das Repository wird als lokaler Stack-Ordner übernommen.",
+		textChangeFiles:           "Ein Git-Repository wird mit Branch main und einem ersten Commit der aufgeführten Dateien als qdeploy angelegt; keine Datei im Ordner wird geschrieben. Es wird als lokaler Stack-Ordner übernommen.",
+		textChangeNoPerms:         "Keine Rechteänderung: Der Dienst kann bereits schreiben.",
+		textChangeDropIn:          "Der Ordner wird in das systemd-Drop-in des Dienstes eingetragen, der einmal neu startet.",
+		textAskFolderRejected:     "%s kann nicht übernommen werden.",
+		textWhatNothing:           "Es wurde nichts geändert.",
+		textAskFolderNoFiles:      "%s hat keine Datei, die ein erster Commit nehmen könnte.",
+		textWhatFolderNoFiles:     "Es wurde nichts geändert. Lege zuerst die Stack-Dateien in den Ordner.",
+		textAskFolderClone:        "Ein Repository nach %s klonen?",
+		textWhatFolderClone:       "Als Nächstes werden die SSH-Adresse abgefragt und der Hostschlüssel gezeigt. Vor der letzten Frage ändert sich nichts.",
+		textAskFolderAdopt:        "Den Klon %s mit der Adresse %s übernehmen?",
+		textWhatFolderAdopt:       "Als Nächstes wird der Hostschlüssel gezeigt und der Deploy-Schlüssel des Ordners geprüft. Vor der letzten Frage ändert sich nichts.",
+		textAskFolderLocal:        "Das Repository %s als lokalen Stack-Ordner übernehmen?",
+		textWhatFolderApply:       "Ja nimmt die unten aufgeführten Änderungen vor.",
+		textAskFolderFiles:        "In %s ein Git-Repository anlegen und übernehmen?",
+		textWhatFolderFiles:       "Ja prüft den Ordner noch einmal und nimmt die unten aufgeführten Änderungen nur vor, wenn seine Liste unverändert ist.",
+		textAskHostKey:            "Diesem Hostschlüssel für %s vertrauen?",
+		textWhatHostKey:           "Vergleiche den Fingerabdruck zuerst mit der Git-Plattform. Noch wird nichts gespeichert; der Schlüssel wird erst nach der letzten Frage weitergegeben.",
+		textWhatHostKeyPinned:     "Der Dienst vertraut genau diesem Hostschlüssel bereits. Vor der letzten Frage ändert sich nichts.",
+		textAskFolderCloneFinal:   "%s nach %s klonen?",
+		textWhatFolderFinal:       "Erst jetzt wird der Hostschlüssel gespeichert, und die unten aufgeführten Änderungen werden vorgenommen.",
+		textFolderNoKey:           "%s hat noch keinen Deploy-Schlüssel.",
+		textFolderNoKeyNext:       "Hinterlege oder erzeuge ihn auf dieser Seite und trage den öffentlichen Schlüssel bei der Git-Plattform ein, dann füge den Ordner erneut hinzu. Es wurde nichts geändert.",
+		textFolderListChanged:     "%s hat sich geändert, seit die Liste gezeigt wurde; es wurde nichts geändert. Füge ihn erneut hinzu, um die neue Liste zu prüfen.",
+		textFolderLocalFetch:      "Ein lokaler Stack-Ordner hat kein Remote zum Abrufen.",
+		textFolderLocalKey:        "Ein lokaler Stack-Ordner hat keinen Deploy-Schlüssel.",
+		textFetchFailed:           "der Abruf von %s ist fehlgeschlagen: %s",
+		textAskRelease:            "Den Stack-Ordner %s lösen?",
+		textWhatRelease:           "qdeploy rollt nicht mehr daraus aus. Nichts wird gelöscht und kein Container gestoppt; die Rechte, der Eintrag im systemd-Drop-in und der Deploy-Schlüssel bleiben.",
+		textDoneReleased:          "Der Stack-Ordner %s ist gelöst.",
+		textDoneFolderAdded:       "Der Stack-Ordner %s ist hinzugefügt.",
+		textDetailKind:            "Art: %s",
+		textDetailFiles:           "Dateien des ersten Commits: %d",
+		textKeptChanges:           "%s; Gruppe und Modus von %d Pfaden bleiben geändert",
+		textErrHost:               "auf dem Host fehlgeschlagen: %s",
 	}
 }

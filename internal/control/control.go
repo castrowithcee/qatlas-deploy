@@ -621,6 +621,12 @@ type RepoSetResult struct {
 	Cloned      bool   `json:"cloned"`
 }
 
+// RepoFetchArgs are the arguments of RepoFetchCommand. Dir fetches only that bound stack folder; empty fetches
+// every one.
+type RepoFetchArgs struct {
+	Dir string `json:"dir,omitempty"`
+}
+
 // RepoFetchResult answers RepoFetchCommand. Sources has one entry per stack folder, in the order they were
 // bound; Dir, Head, RemoteHead and UpdatesAvailable repeat the first entry. The command fails only when no
 // source could be fetched.

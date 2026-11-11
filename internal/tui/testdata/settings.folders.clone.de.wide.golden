@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+------------------------------------------------------------------------------------------------------------------------
+  ! Ein Repository nach /srv/new-example klonen?                                                                        
+                                                                                                                        
+  Als Nächstes werden die SSH-Adresse abgefragt und der Hostschlüssel gezeigt. Vor der letzten Frage ändert sich nichts.
+                                                                                                                        
+    Ordner: /srv/new-example                                                                                            
+    Fall: clone (der Ordner fehlt oder ist leer und bekommt einen Klon eines Repositorys)                               
+    der Ordner fehlt; der nächste vorhandene Ordner ist /srv                                                            
+    Eigentümer: root, Gruppe: root, Modus: 0755                                                                         
+    der Dienst kann ihn schreiben: nein                                                                                 
+    Rechte werden gesetzt: nein                                                                                         
+                                                                                                                        
+  Änderungen nach Ja                                                                                                    
+    Der Ordner wird mit Eigentümer qdeploy:qdeploy und Modus 0755 angelegt.                                             
+    Der Hostschlüssel wird gespeichert und das Repository in den Ordner geklont.                                        
+    Keine Rechteänderung: Der Dienst kann bereits schreiben.                                                            
+    Der Ordner wird in das systemd-Drop-in des Dienstes eingetragen, der einmal neu startet.                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+y weiter  n/esc/enter abbrechen                                                                         up/down Scrollen

@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+------------------------------------------------------------------------------------------------------------------------
+  /srv/reject-example kann nicht übernommen werden.                                                                     
+                                                                                                                        
+  Es wurde nichts geändert.                                                                                             
+                                                                                                                        
+    Ordner: /srv/reject-example                                                                                         
+    Fall: reject (der Ordner kann nicht übernommen werden)                                                              
+    Grund: the folder is a repository whose origin is no SSH address                                                    
+    Lösung: Set an SSH origin, or choose another folder.                                                                
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+n/esc/enter schließen                                                                                   up/down Scrollen

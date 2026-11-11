@@ -352,13 +352,20 @@ func (s *repoService) checkDirOutsideState(dir string) error {
 }
 
 func (s *repoService) handleFetch(ctx context.Context, raw json.RawMessage) (any, error) {
-	var none struct{}
-	if err := decodeArgs(raw, &none); err != nil {
+	var a control.RepoFetchArgs
+	if err := decodeArgs(raw, &a); err != nil {
 		return nil, err
 	}
 	srcs := s.set.sources()
 	if len(srcs) == 0 {
 		return nil, control.NewError(control.CodeNoRepo, "no stacks repository is bound")
+	}
+	if a.Dir != "" {
+		i := slices.IndexFunc(srcs, func(src *source) bool { return src.conf.Path == a.Dir })
+		if i < 0 {
+			return nil, control.NewError(control.CodeNotFound, "no source is bound to this folder")
+		}
+		srcs = srcs[i : i+1]
 	}
 	res := control.RepoFetchResult{Sources: make([]control.RepoFetchSource, 0, len(srcs))}
 	var firstErr error

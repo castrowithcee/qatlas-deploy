@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,8 +17,7 @@ import (
 type formKind int
 
 const (
-	formRepo formKind = iota
-	formCred
+	formCred formKind = iota
 	formWindow
 	formNotifyBasics
 	formNotifyDetail
@@ -77,13 +75,6 @@ func textField(id string, label, hint kittui.TextID, value string) kittui.FormFi
 
 func maskedField(id string, label, hint kittui.TextID) kittui.FormField {
 	return kittui.FormField{ID: kittui.FieldID(id), Kind: kittui.FieldMasked, Label: label, Hint: hint}
-}
-
-func (m *Model) repoForm() *settingsForm {
-	return m.newSettingsForm(formRepo, textTitleBind, []kittui.FormField{
-		textField("url", textFieldURL, textHintURL, ""),
-		textField("dir", textFieldDir, textHintDir, ""),
-	})
 }
 
 func (m *Model) credentialForm() *settingsForm {
@@ -169,8 +160,10 @@ func (m *Model) submitForm() tea.Cmd {
 	switch f.kind {
 	case formGeneral:
 		return m.submitGeneral(f)
-	case formRepo:
-		return m.submitRepo(f, text("url"), text("dir"))
+	case formFolder:
+		return m.submitFolder(f, text("path"))
+	case formFolderURL:
+		return m.submitFolderURL(f, text("url"))
 	case formCred:
 		return m.submitCredential(f, string(v["kind"].Choice), text("host"), text("user"), v["token"].Text)
 	case formWindow:
@@ -193,54 +186,6 @@ func (m *Model) submitForm() tea.Cmd {
 
 func (m *Model) bad(field string, cause kittui.TextID, args ...any) kittui.FormProblem {
 	return kittui.FormProblem{Field: kittui.FieldID(field), Cause: m.text.Lookup(cause, args...), NextStep: m.text.Lookup(textFormFix)}
-}
-
-func (m *Model) submitRepo(f *settingsForm, url, dir string) tea.Cmd {
-	var ps []kittui.FormProblem
-	// Only the service knows which addresses it accepts; it answers the probe with the reason.
-	if url == "" || strings.ContainsFunc(url, unicode.IsSpace) {
-		ps = append(ps, m.bad("url", textProblemURL))
-	}
-	switch {
-	case dir == "":
-		ps = append(ps, m.bad("dir", textProblemDirRequired))
-	case !filepath.IsAbs(dir) || filepath.Clean(dir) != dir:
-		ps = append(ps, m.bad("dir", textProblemDir))
-	}
-	if len(ps) > 0 {
-		f.problems(ps...)
-		return nil
-	}
-	m.set.pending = bind{url: url, dir: dir}
-	if m.folders == nil {
-		return m.probeRepo()
-	}
-	absent, err := m.folders.Missing(dir)
-	if err != nil {
-		f.problem(m.serviceText(err), m.text.Lookup(textFormFix))
-		return nil
-	}
-	if absent {
-		// Nothing is created before the person has seen the exact path and said yes.
-		m.ask(textPageRepo, m.text.Lookup(textAskFolderCreate, dir), m.text.Lookup(textWhatFolderCreate), nil, false,
-			func() tea.Cmd { return m.grantFolder(true) })
-		return nil
-	}
-	return m.grantFolder(false)
-}
-
-// grantFolder prepares the stack folder; the probe of the repository follows when it is done.
-func (m *Model) grantFolder(create bool) tea.Cmd {
-	dir := m.set.pending.dir
-	return m.writeCall(opFolder, dir, func(Backend) (any, error) { return folderReady{}, m.folders.Grant(m.ctx, dir, create) })
-}
-
-// folderReady is the answer of a prepared stack folder.
-type folderReady struct{}
-
-func (m *Model) probeRepo() tea.Cmd {
-	url := m.set.pending.url
-	return m.writeCall(opProbe, "", func(b Backend) (any, error) { return b.RepoProbe(m.ctx, url) })
 }
 
 // The kinds of credential the form offers: the two names qdeploy reads.

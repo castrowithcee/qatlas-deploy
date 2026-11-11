@@ -3,7 +3,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
 --------------------------------------------------------
   SETTING             ABOUT                             
 > General             theme, start area, language and m~
-  Stacks repository   bind the repository, confirm its ~
+  Stack folders       list, add, fetch and release the ~
   Deploy key          store or generate the key for the~
   Credentials         registry logins and the GitHub to~
   Maintenance window  when updates run                  

@@ -3,7 +3,7 @@ qdeploy  Wartungsfenster zu                                                     
 ------------------------------------------------------------------------------------------------------------------------
   EINSTELLUNG         INHALT                                                                                            
 > Allgemein           Design, Startbereich, Sprache und Maus dieses Geräts                                              
-  Stacks-Repository   Repository binden, Hostschlüssel bestätigen, abrufen                                              
+  Stack-Ordner        Stack-Ordner anzeigen, hinzufügen, abrufen und lösen                                              
   Deploy-Schlüssel    Schlüssel für die Git-Plattform hinterlegen oder erzeugen                                         
   Zugangsdaten        Registry-Logins und GitHub-Token                                                                  
   Wartungsfenster     wann Updates laufen                                                                               

@@ -48,9 +48,11 @@ func (m *Model) keyDir(chosen string) string {
 	return chosen
 }
 
+// openKeyForm asks for the key; the folder is chosen only on the page of the default key, as the page of one
+// folder is for that folder alone.
 func (m *Model) openKeyForm() tea.Cmd {
 	var fields []kittui.FormField
-	if src := m.keySources(); len(src) > 1 {
+	if src := m.keySources(); len(src) > 1 && m.set.keyFor == "" {
 		choices := make([]kittui.Choice, len(src))
 		for i, s := range src {
 			// A path is its own label: the translator returns an unknown text as it is.
@@ -67,7 +69,10 @@ func (m *Model) openKeyForm() tea.Cmd {
 func (m *Model) submitKeyChoice(f *settingsForm, v map[kittui.FieldID]kittui.FormValue) tea.Cmd {
 	dir := m.keyDir(string(v["folder"].Choice))
 	label := string(v["folder"].Choice)
-	if label == "" {
+	switch {
+	case m.set.keyFor != "":
+		dir, label = m.set.keyFor, m.set.keyFor
+	case label == "":
 		label = m.firstSourcePath()
 	}
 	if v["mode"].Choice == keyModeGenerate {

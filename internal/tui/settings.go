@@ -18,7 +18,7 @@ type settingsPage string
 
 const (
 	pageGeneral settingsPage = "general"
-	pageRepo    settingsPage = "repo"
+	pageFolders settingsPage = "folders"
 	pageKey     settingsPage = "key"
 	pageCreds   settingsPage = "credentials"
 	pageWindow  settingsPage = "window"
@@ -32,7 +32,7 @@ var settingsPages = []struct {
 	title, about kittui.TextID
 }{
 	{pageGeneral, textPageGeneral, textAboutGeneral},
-	{pageRepo, textPageRepo, textAboutRepo},
+	{pageFolders, textPageFolders, textAboutFolders},
 	{pageKey, textPageKey, textAboutKey},
 	{pageCreds, textPageCreds, textAboutCreds},
 	{pageWindow, textPageWindow, textAboutWindow},
@@ -48,10 +48,15 @@ type settingsState struct {
 	// busy is set while a write is under way; the interface takes no key but quit then.
 	busy bool
 	form *settingsForm
-	// pending is what a confirmed bind carries from the probe to the write.
-	pending bind
 
-	key    part
+	folderList *kittui.List
+	folderData map[kittui.ItemID]control.SourceStatus
+	// add is the stack folder being added, nil while none is.
+	add *addFlow
+
+	key part
+	// keyFor is the stack folder the key page shows, empty for the default key.
+	keyFor string
 	keyRes control.KeyResult
 	// noKey says the service holds no deploy key yet.
 	noKey bool
@@ -70,16 +75,11 @@ type settingsState struct {
 	notifyRead []control.NotifyChannelInfo
 }
 
-// bind is a repository the person asked to bind and the host key the server presented for it.
-type bind struct {
-	url, dir string
-	probe    control.RepoProbeResult
-}
-
-// settingsLoadMsg carries the answer of a read of one page.
+// settingsLoadMsg carries the answer of a read of one page; dir is the stack folder a key page read for.
 type settingsLoadMsg struct {
 	gen  int
 	page settingsPage
+	dir  string
 	res  any
 	err  error
 }
@@ -89,8 +89,10 @@ type settingOp int
 
 const (
 	opProbe settingOp = iota
-	opFolder
-	opRepoSet
+	opInspect
+	opKeyCheck
+	opFolderAdd
+	opSourceRemove
 	opFetch
 	opKeyGenerate
 	opKeySet
@@ -144,6 +146,9 @@ func newSettings(keys *kittui.Keymap, text kittui.Translator) (*settingsState, e
 		return nil, err
 	}
 	s.notifyList.SetFocused(true)
+	if s.folderList, err = newFolderList(keys, text); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -156,6 +161,8 @@ func (s *settingsState) activeList() *kittui.List {
 		return s.credList
 	case pageNotify:
 		return s.notifyList
+	case pageFolders:
+		return s.folderList
 	}
 	return nil
 }
@@ -164,17 +171,24 @@ func (m *Model) settingsBusy() bool { return m.set.busy }
 
 // openPage shows a page and reads what it shows.
 func (m *Model) openPage(p settingsPage) tea.Cmd {
-	m.set.page = p
-	if p == pageGeneral {
+	s := m.set
+	s.page = p
+	switch p {
+	case pageGeneral:
 		return m.openForm(m.generalForm())
+	case pageFolders:
+		m.fillFolders()
+		return m.reloadNow()
+	case pageKey:
+		s.keyFor, s.key, s.noKey = "", part{}, false
 	}
 	return m.loadPage(true)
 }
 
-// loadPage reads what the page shows. The repository page shows the status the refresh reads.
+// loadPage reads what the page shows. The folder page shows the status the refresh reads.
 func (m *Model) loadPage(force bool) tea.Cmd {
 	s := m.set
-	ctx, b, page := m.ctx, m.backend, s.page
+	ctx, b, page, dir := m.ctx, m.backend, s.page, s.keyFor
 	read := func(p *part, fn func() (any, error)) tea.Cmd {
 		if p.loading || p.loaded && !force {
 			return nil
@@ -184,12 +198,12 @@ func (m *Model) loadPage(force bool) tea.Cmd {
 		gen := s.gen
 		return func() tea.Msg {
 			res, err := fn()
-			return settingsLoadMsg{gen: gen, page: page, res: res, err: err}
+			return settingsLoadMsg{gen: gen, page: page, dir: dir, res: res, err: err}
 		}
 	}
 	switch page {
 	case pageKey:
-		return read(&s.key, func() (any, error) { return b.KeyShow(ctx, "") })
+		return read(&s.key, func() (any, error) { return b.KeyShow(ctx, dir) })
 	case pageCreds:
 		return read(&s.creds, func() (any, error) { return b.Credentials(ctx) })
 	case pageWindow:
@@ -218,6 +232,10 @@ func (s *settingsState) pagePart(p settingsPage) *part {
 func (m *Model) applySettingsLoad(msg settingsLoadMsg) {
 	s := m.set
 	p := s.pagePart(msg.page)
+	if msg.page == pageKey && msg.dir != s.keyFor {
+		// The key of a folder the page no longer shows; the read of the folder shown is its own.
+		return
+	}
 	if p == nil || msg.page != s.page {
 		if p != nil {
 			p.loading = false
@@ -325,6 +343,11 @@ func (m *Model) settingsAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 	s := m.set
 	switch {
 	case id == actBack:
+		if s.page == pageKey && s.keyFor != "" {
+			s.page, s.keyFor = pageFolders, ""
+			m.fillFolders()
+			return nil, true
+		}
 		if s.page != "" {
 			s.page = ""
 			return nil, true
@@ -335,10 +358,14 @@ func (m *Model) settingsAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 			return m.openPage(settingsPage(item)), true
 		}
 		return nil, true
-	case id == actBind && s.page == pageRepo:
-		return m.openForm(m.repoForm()), true
-	case id == actFetch && s.page == pageRepo:
-		return m.askFetch(), true
+	case id == actAdd && s.page == pageFolders:
+		return m.openForm(m.folderForm()), true
+	case id == actFetch && s.page == pageFolders:
+		return m.askFolderFetch(), true
+	case id == actRemove && s.page == pageFolders:
+		return m.askFolderRemove(), true
+	case id == actEdit && s.page == pageFolders:
+		return m.openFolderKey(), true
 	case id == actEdit && s.page == pageKey:
 		return m.openKeyForm(), true
 	case id == actAdd && s.page == pageCreds:
@@ -389,25 +416,44 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		m.tell(textSettingDoneTitle, text, details)
 	}
 	switch res := msg.res.(type) {
-	case folderReady:
-		return m.probeRepo()
+	case inspected:
+		s.form, s.add = nil, res.flow
+		m.showInspection(res.flow)
+		return nil
 	case control.RepoProbeResult:
-		s.pending.probe = res
-		m.askBind()
+		if s.add == nil {
+			return nil
+		}
+		s.form, s.add.probe = nil, res
+		m.askHostKey()
+		return nil
+	case keyChecked:
+		return m.keyDone(res.found)
+	case listChanged:
+		s.add = nil
+		m.failure = t.Lookup(kittui.TextError, t.Lookup(textFolderListChanged, res.path))
 		return nil
 	case control.RepoSetResult:
-		done(t.Lookup(textDoneBound), t.Lookup(textDetailHead, short(res.Head)), t.Lookup(textDetailCloned, yesNo(t, res.Cloned)))
+		s.add = nil
+		done(t.Lookup(textDoneBound, res.Dir), t.Lookup(textDetailHead, short(res.Head)), t.Lookup(textDetailCloned, yesNo(t, res.Cloned)))
+		cmds = append(cmds, m.reloadNow())
+	case control.SourceAddResult:
+		s.add = nil
+		details := []string{t.Lookup(textDetailKind, res.Kind), t.Lookup(textDetailHead, short(res.Head))}
+		if res.Files > 0 {
+			details = append(details, t.Lookup(textDetailFiles, res.Files))
+		}
+		done(t.Lookup(textDoneFolderAdded, res.Path), details...)
+		cmds = append(cmds, m.reloadNow())
+	case control.SourceRemoveResult:
+		done(t.Lookup(textDoneReleased, res.Path))
 		cmds = append(cmds, m.reloadNow())
 	case control.RepoFetchResult:
-		text := t.Lookup(textDoneFetchedCurrent)
-		if res.UpdatesAvailable {
-			text = t.Lookup(textDoneFetchedNew)
-		}
-		done(text, t.Lookup(textDetailHead, short(res.Head)), t.Lookup(textDetailRemote, short(res.RemoteHead)))
+		m.fetchDone(res, msg.name, done)
 		cmds = append(cmds, m.reloadNow())
 	case control.KeyResult:
-		// The page shows the default key only; the key of another stack folder is shown in the answer alone.
-		if msg.name == "" {
+		// The page shows the key of its folder only; the key of another stack folder is shown in the answer alone.
+		if msg.name == s.keyFor {
 			s.key.loaded, s.noKey, s.keyRes = true, false, res
 		}
 		text := textDoneKeySet
@@ -461,6 +507,17 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 func (m *Model) settingFailed(msg settingMsg) tea.Cmd {
 	s := m.set
 	text := m.serviceText(msg.err)
+	var host hostError
+	if errors.As(msg.err, &host) {
+		text = m.text.Lookup(textErrHost, host.err.Error())
+	}
+	var kept keptChanges
+	if errors.As(msg.err, &kept) {
+		text = m.text.Lookup(textKeptChanges, text, kept.changed)
+	}
+	if msg.op == opFetch {
+		text = m.text.Lookup(textFetchFailed, msg.name, text)
+	}
 	if s.form != nil && s.form.kind != formGeneral {
 		if p, ok := m.keyProblem(s.form, msg); ok {
 			s.form.problems(p)
@@ -503,6 +560,27 @@ func (m *Model) ask(title kittui.TextID, question, consequence string, details [
 	m.modal = &modal{kind: modalAsk, dialog: dialog, yes: yes}
 }
 
+// askSheet opens a question that fills the workspace, for one with more to read than a dialog holds; body
+// gives its lines for a width. Without yes it only tells, and its one answer closes it.
+func (m *Model) askSheet(title kittui.TextID, question, consequence string, body func(int) []string, answers []kittui.Answer, yes func() tea.Cmd) {
+	if m.settingsBusy() {
+		m.warn(m.text.Lookup(textActionBusy))
+		return
+	}
+	spec := kittui.DialogSpec{Title: title, Question: question, Consequence: consequence, Answers: answers, Default: actNo,
+		Keys: kittui.DialogKeys{Enter: actEnter}}
+	if yes == nil {
+		spec.Notice, spec.Details = true, dialogLines([]string{consequence})
+		spec.Answers = []kittui.Answer{{Action: actNo, Label: textAnswerClose}}
+	}
+	dialog, err := kittui.NewDialog(spec, m.keys, m.text)
+	if err != nil {
+		m.failure = m.text.Lookup(kittui.TextError, err.Error())
+		return
+	}
+	m.modal = &modal{kind: modalSheet, dialog: dialog, yes: yes, question: question, consequence: consequence, body: body}
+}
+
 // tell reports the result of a change: a calm notice dialog when there are details, else the message line.
 func (m *Model) tell(title kittui.TextID, text string, details []string) {
 	if len(details) == 0 {
@@ -518,13 +596,6 @@ func (m *Model) tell(title kittui.TextID, text string, details []string) {
 		return
 	}
 	m.modal = &modal{kind: modalAsk, dialog: dialog}
-}
-
-func (m *Model) askFetch() tea.Cmd {
-	m.ask(textPageRepo, m.text.Lookup(textAskFetch), m.text.Lookup(textWhatFetch), nil, false, func() tea.Cmd {
-		return m.writeCall(opFetch, "", func(b Backend) (any, error) { return b.RepoFetch(m.ctx) })
-	})
-	return nil
 }
 
 func (m *Model) askCredentialDelete() tea.Cmd {
@@ -563,27 +634,6 @@ func (m *Model) askNotifyTest() tea.Cmd {
 	return nil
 }
 
-// askBind asks whether the host key the server presented is the one to trust, then binds. A key the service
-// pinned before is not asked again, as the command does.
-func (m *Model) askBind() {
-	t, p := m.text, m.set.pending
-	target := p.probe.Host
-	if p.probe.Port != "22" && p.probe.Port != "" {
-		target += ":" + p.probe.Port
-	}
-	details := []string{t.Lookup(textDetailHost, target), t.Lookup(textDetailKeyType, p.probe.KeyType),
-		t.Lookup(textDetailFingerprint, p.probe.Fingerprint), t.Lookup(textDetailDir, p.dir)}
-	question, consequence := t.Lookup(textAskBind, p.url), t.Lookup(textWhatBind)
-	if p.probe.Pinned {
-		consequence = t.Lookup(textWhatBindPinned)
-	}
-	m.ask(textPageRepo, question, consequence, details, false, func() tea.Cmd {
-		return m.writeCall(opRepoSet, "", func(b Backend) (any, error) {
-			return b.RepoSet(m.ctx, control.RepoSetArgs{URL: p.url, Dir: p.dir, Fingerprint: p.probe.Fingerprint})
-		})
-	})
-}
-
 // settingsMark is the status mark while a write is under way.
 func (m *Model) settingsMark() kittui.StatusMark {
 	return kittui.StatusMark{Kind: kittui.StatusBusy, Text: m.text.Lookup(textHeaderWorking)}
@@ -600,8 +650,16 @@ func (m *Model) settingsFooter(common, nav []kittui.Hint) []kittui.Hint {
 	switch s.page {
 	case "":
 		return append(append([]kittui.Hint{{Action: actEnter, Label: textKeyOpen}}, common...), nav...)
-	case pageRepo:
-		own = []kittui.Hint{{Action: actBind, Label: textKeyBind, Priority: 3}, {Action: actFetch, Label: textKeyFetch, Priority: 3}}
+	case pageFolders:
+		own = []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}}
+		// Fetch and deploy key exist only for a folder with a remote.
+		if f, ok := m.selectedFolder(); ok && f.Kind == control.SourceKindRemote {
+			own = append(own, kittui.Hint{Action: actFetch, Label: textKeyFetch, Priority: 3},
+				kittui.Hint{Action: actEdit, Label: textKeyDeployKey, Priority: 3})
+		}
+		if _, ok := m.selectedFolder(); ok {
+			own = append(own, kittui.Hint{Action: actRemove, Label: textKeyRelease, Priority: 3})
+		}
 	case pageKey:
 		own = []kittui.Hint{{Action: actEdit, Label: textKeySetKey, Priority: 3}}
 	case pageCreds:
@@ -628,6 +686,9 @@ func (m *Model) settingsView(width, height int) string {
 	}
 	if s.page == "" {
 		return m.listView(s.menu, width, height, 0)
+	}
+	if s.page == pageFolders {
+		return m.foldersView(width, height)
 	}
 	title := m.heading(pageTitle(s.page), width)
 	if list := s.activeList(); list != nil {
@@ -666,8 +727,6 @@ func (m *Model) partLines(p part, width int) []string {
 // pageLines are the lines of the pages that are text.
 func (m *Model) pageLines(width int) []string {
 	switch m.set.page {
-	case pageRepo:
-		return m.repoLines(width)
 	case pageKey:
 		return m.keyLines(width)
 	case pageWindow:
@@ -676,38 +735,19 @@ func (m *Model) pageLines(width int) []string {
 	return nil
 }
 
-func (m *Model) repoLines(width int) []string {
-	t, e := m.text, m.snap.status.Engine
-	none := t.Lookup(textNoValue)
-	if m.snap.noRepo || !m.loaded {
-		return m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textRepoNone), width)
-	}
-	val := func(v string) string {
-		if v == "" {
-			return none
-		}
-		return short(v)
-	}
-	lines := []string{
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailHead, val(e.Head)), width),
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailRemote, val(e.RemoteHead)), width),
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailStacks, len(e.Stacks)), width),
-	}
-	if e.PollError != "" {
-		lines = append(lines, m.wrapped(detailIndent, kittui.StyleFail, t.Lookup(textDetailPollError, e.PollError), width)...)
-	}
-	return append(lines, "", m.line(detailIndent, kittui.StyleHint, t.Lookup(textRepoRebind), width))
-}
-
 func (m *Model) keyLines(width int) []string {
 	s, t := m.set, m.text
+	var lines []string
+	if s.keyFor != "" {
+		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailKeyFolder, s.keyFor), width), "")
+	}
 	if !s.key.loaded || s.key.err != nil {
-		return m.partLines(s.key, width)
+		return append(lines, m.partLines(s.key, width)...)
 	}
 	if s.noKey {
-		return m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyNone), width)
+		return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyNone), width)...)
 	}
-	lines := []string{m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailFingerprint, s.keyRes.Fingerprint), width), ""}
+	lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailFingerprint, s.keyRes.Fingerprint), width), "")
 	lines = append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyCopy), width)...)
 	// The key is written out whole and broken only where the screen is too narrow, so it can be copied.
 	for _, l := range kittui.Wrap(kittui.Escape(strings.TrimSpace(s.keyRes.PublicKey)), max(width-detailIndent, 1)) {

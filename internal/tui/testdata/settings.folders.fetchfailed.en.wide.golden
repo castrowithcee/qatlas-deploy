@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  Stack folders                                                                                                         
+                                                                                                                        
+  PATH                 KIND    COMMIT   STATE   LAST POLL                                                               
+> /srv/stacks-example  remote  1111111  ok      2026-10-30 14:30                                                        
+  /srv/local-example   local   2222222  failed  2026-10-30 14:25                                                        
+                                                                                                                        
+  /srv/stacks-example                                                                                                   
+    address: ssh://git.example.test/ops/stacks.git                                                                      
+    last poll: Fri 2026-10-30 14:30                                                                                     
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+error: the fetch of /srv/stacks-example failed: the service refused the request: cannot reach git.example.test:         
+connection refused                                                                                                      
+a add  F fetch now  e deploy key  x release  esc back  r reload  1-5 area  q quit                    up/down choose  1/2

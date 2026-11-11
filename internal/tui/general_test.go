@@ -83,7 +83,7 @@ func TestGeneralSaveWritesTheChosenValuesAndKeepsTheRest(t *testing.T) {
 	// The form and the message are in the new language in the next frame.
 	contains(t, m, "Allgemein", "Sprache", "Maus", "Deutsch", "Die Einstellungen sind gespeichert.")
 	send(m, "esc")
-	contains(t, m, "Allgemein", "Stacks-Repository")
+	contains(t, m, "Allgemein", "Stack-Ordner")
 }
 
 func TestGeneralLanguageRebuildsTheListsAndKeepsTheirState(t *testing.T) {

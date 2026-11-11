@@ -229,23 +229,26 @@ acc_first_setup() {
 	hook_seen "$acc_hook_path" test || fail 'the webhook receiver did not record the test message of the interface'
 	acc 'webhook channel added through the interface; the test message reached the receiver'
 
-	step 'Settings: the repository is bound after the host key is shown and confirmed'
+	step 'Settings: the repository is cloned into a new stack folder after the host key is shown and confirmed'
 	tui_page 1
-	tui_wait 'No stacks repository is bound' 10
-	tui_send b
-	tui_wait 'Bind the stacks repository' 10
-	tui_type "git.$domain:stacks.git"
-	tui_send Tab
+	tui_wait 'No stack folders yet' 10
+	tui_send a
+	tui_wait 'Add a stack folder' 10
 	tui_type "$acc_stacks"
 	tui_send F2
-	tui_wait "Create the stack folder $acc_stacks?" 10
-	if docker exec "$host" test -e "$acc_stacks"; then fail 'the stack folder exists before the question was answered'; fi
+	tui_wait "Clone a repository into $acc_stacks?" 10
 	tui_send y
+	tui_wait 'Address of the repository to clone' 10
+	tui_type "git.$domain:stacks.git"
+	tui_send F2
 	expected=$(git_ed25519_fingerprint)
 	tui_wait "$(printf '%s' "$expected" | cut -c 1-30)" 60
 	tui_wait 'ssh-ed25519' 10
 	tui_send y
-	tui_wait 'The stacks repository is bound' 120
+	tui_wait "Clone git.$domain:stacks.git into $acc_stacks?" 30
+	if docker exec "$host" test -e "$acc_stacks"; then fail 'the stack folder exists before the last question was answered'; fi
+	tui_send y
+	tui_wait "The stack folder $acc_stacks is bound" 120
 	tui_send Enter
 	docker exec "$host" test -f "$acc_stacks/n8n/compose.yaml" || fail "the clone is missing in $acc_stacks"
 	[ "$(docker exec "$host" stat -c %U:%G:%a "$acc_stacks")" = qdeploy:qdeploy:755 ] ||

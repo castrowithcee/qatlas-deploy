@@ -101,6 +101,8 @@ const (
 	modalPreview
 	// modalSummary is the result of an action; it fills the workspace.
 	modalSummary
+	// modalSheet is a question of the settings with more to read than a dialog holds; it fills the workspace.
+	modalSheet
 )
 
 // changelogEntry is the changelog of one stack read for the update preview.
@@ -123,6 +125,9 @@ type modal struct {
 	// summary
 	title    string
 	outcomes []outcome
+	// sheet: the question, what follows from it and the lines to read below.
+	question, consequence string
+	body                  func(width int) []string
 	// top is the first shown line of a modal that fills the workspace; total and rows are what the last
 	// drawing found.
 	top, total, rows int
@@ -717,9 +722,12 @@ func (m *Model) modalFooter() []kittui.Hint {
 func (m *Model) modalView(width, height int) string {
 	md := m.modal
 	var lines []string
-	if md.kind == modalPreview {
+	switch md.kind {
+	case modalPreview:
 		lines = m.previewLines(width)
-	} else {
+	case modalSheet:
+		lines = append(m.questionLines(md.question, md.consequence, width, md.yes != nil), md.body(width)...)
+	default:
 		lines = m.summaryLinesOf(width)
 	}
 	md.total, md.rows = len(lines), height

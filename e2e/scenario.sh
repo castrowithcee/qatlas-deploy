@@ -3042,7 +3042,7 @@ scenario_tui() {
 	tui_wait 'Die Einstellungen sind gespeichert.' 10
 	tui_wait '4 Einstellungen' 10
 	tui_send Escape
-	tui_wait 'Repository binden' 10
+	tui_wait 'Stack-Ordner anzeigen' 10
 	tui_send 1
 	tui_wait '2 Stack-Details' 10
 	tui_wait 'q Beenden' 10
@@ -3057,7 +3057,7 @@ scenario_tui() {
 	tui_wait 'demo-stack' 30
 	tui_wait 'q Beenden' 10
 	tui_send 4
-	tui_wait 'Repository binden' 10
+	tui_wait 'Stack-Ordner anzeigen' 10
 	tui_send Home Enter
 	tui_wait 'Startbereich' 10
 	tui_send Tab Tab
@@ -3067,7 +3067,7 @@ scenario_tui() {
 	tui_send F2
 	tui_wait 'The settings are saved.' 10
 	tui_send Escape
-	tui_wait 'bind the repository' 10
+	tui_wait 'list, add, fetch and release' 10
 	tui_send 1
 	tui_wait '2 Stack detail' 10
 	tui_has 'Stack-Details' && fail "the interface still shows German after English was saved: $(tui_screen)"
@@ -3121,11 +3121,11 @@ tui_clear() {
 tui_menu() {
 	tui_send 4
 	sleep 0.4
-	tui_has 'bind the repository' || {
+	tui_has 'list, add, fetch and release' || {
 		tui_send Escape
 		sleep 0.4
 	}
-	tui_wait 'bind the repository' 10
+	tui_wait 'list, add, fetch and release' 10
 }
 
 # tui_page opens the page of the Settings menu that is $1 rows below the first.
@@ -3198,6 +3198,55 @@ EOF
 	printf 'DEMO_APP_VERSION=1.0.1\nDEMO_HEALTH=ok\n' | as_admin 'cat >"$HOME"/stacks/demo-echo/.env'
 	as_admin 'cd ~/stacks && cp demo-cache/.gitignore demo-echo/.gitignore && git add -A &&
 		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Add the demo-echo stack" && git push -q origin main'
+}
+
+# prepare_tui_local makes the repository without a remote that the interface adds as a local stack folder: the demo
+# stack demo-tui-local with a committed environment file and a secrets file the service can read but git does not
+# track. It stands below $local_dir.
+prepare_tui_local() {
+	docker exec "$host" sh -ec "rm -rf '$local_dir' && mkdir -p '$local_dir/demo-tui-local' && chmod 0755 '$local_dir'" ||
+		fail 'cannot create the local folder'
+	cat <<EOF2 | docker exec -i "$host" sh -ec "cat >'$local_dir/demo-tui-local/compose.yaml'"
+name: demo-tui-local
+
+services:
+  app:
+    image: registry.$domain/demo/app:\${DEMO_APP_VERSION}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: demo-tui-local
+      DEMO_VERSION: \${DEMO_APP_VERSION}
+      DEMO_HEALTH: \${DEMO_HEALTH}
+EOF2
+	printf 'DEMO_APP_VERSION=1.0.0\nDEMO_HEALTH=ok\n' | docker exec -i "$host" sh -ec "cat >'$local_dir/demo-tui-local/.env'"
+	printf 'secrets.env\ndata/\n' | docker exec -i "$host" sh -ec "cat >'$local_dir/demo-tui-local/.gitignore'"
+	docker exec "$host" sh -ec "cd '$local_dir' && git init -q -b main && git add -A &&
+		git -c user.name='E2E Root' -c user.email=root.qdeploye2e.test commit -q -m 'Add the demo-tui-local stack' &&
+		printf 'DEMO_SECRET=not-a-real-secret\n' >demo-tui-local/secrets.env && chgrp qdeploy demo-tui-local/secrets.env &&
+		chmod 0640 demo-tui-local/secrets.env" ||
+		fail 'cannot create the local repository'
+	[ -z "$(docker exec "$host" git -C "$local_dir" remote)" ] || fail 'the local repository has a remote'
+}
+
+# tui_stack_folder prints the folder the Stacks list shows the stack $1 under: the stacks stand below the row of
+# their folder, which reads "<mark> <path> (<count>)"; the mark is "#" in the goldens and a symbol in a terminal.
+tui_stack_folder() {
+	tui_screen | awk -v s="$1" '
+		/\[.\] [^ ]+ \// { f = $0; sub(/^.*\[.\] [^ ]+ /, "", f); sub(/ \([0-9]+\) *$/, "", f); next }
+		$0 ~ ("\\[.\\] " s " ") { print f; exit }'
+}
+
+# tui_wait_stack_folder waits up to 60 seconds until the Stacks list shows the stack $1 under the folder $2.
+tui_wait_stack_folder() {
+	i=0
+	until [ "$(tui_stack_folder "$1")" = "$2" ]; do
+		i=$((i + 1))
+		if [ "$i" -ge 240 ]; then
+			printf '%s\n' "$(tui_screen)" >&2
+			fail "the Stacks list does not show $1 under $2"
+		fi
+		sleep 0.25
+	done
 }
 
 scenario_tui_setup() {
@@ -3307,30 +3356,85 @@ scenario_tui_setup() {
 	tui_send Enter
 	hook_seen /tui-hook-e2e-path test || fail 'the webhook receiver did not record the test message of the interface'
 
-	step 'Settings: the repository is bound after the host key is shown and confirmed'
+	step 'Settings: a stack folder is not added while its question is not answered with yes'
+	local_dir=/srv/qd-tui-local
+	prepare_tui_local
+	dir_before=$(docker exec "$host" stat -c '%U:%G %a' "$local_dir")
+	secret_before=$(docker exec "$host" stat -c '%U:%G %a' "$local_dir/demo-tui-local/secrets.env")
 	tui_page 1
-	tui_wait 'No stacks repository is bound' 10
-	tui_send b
-	tui_wait 'Bind the stacks repository' 10
-	tui_type "git.$domain:stacks.git"
-	tui_send Tab
+	tui_wait 'No stack folders yet' 10
+	tui_send a
+	tui_wait 'Add a stack folder' 10
+	tui_type "$local_dir"
+	tui_send F2
+	tui_wait "Take over the repository $local_dir as a local stack folder?" 10
+	tui_send n
+	tui_wait 'No stack folders yet' 10
+	if list_has_path "$local_dir"; then fail 'the answer n bound the folder'; fi
+	if docker exec "$host" grep -qF "$local_dir" /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf; then
+		fail 'the answer n wrote the drop-in'
+	fi
+	[ "$(docker exec "$host" stat -c '%U:%G %a' "$local_dir")" = "$dir_before" ] || fail 'the answer n changed the permissions of the folder'
+	[ "$(docker exec "$host" stat -c '%U:%G %a' "$local_dir/demo-tui-local/secrets.env")" = "$secret_before" ] ||
+		fail 'the answer n changed the permissions of the secrets file'
+	[ -z "$(docker exec "$host" git -C "$local_dir" config core.sharedRepository)" ] || fail 'the answer n changed the repository configuration'
+
+	step 'Settings: the clone is added as a stack folder after the host key is shown and confirmed'
+	tui_send a
+	tui_wait 'Add a stack folder' 10
 	tui_type /opt/stacks
+	tui_send F2
+	tui_wait 'Clone a repository into /opt/stacks?' 10
+	tui_send y
+	tui_wait 'Address of the repository to clone' 10
+	tui_type "git.$domain:stacks.git"
 	tui_send F2
 	expected=$(git_ed25519_fingerprint)
 	tui_wait "$(printf '%s' "$expected" | cut -c 1-30)" 60
 	tui_wait 'ssh-ed25519' 10
 	before=$(known_hosts_sum)
 	tui_send y
-	tui_wait 'The stacks repository is bound' 120
+	tui_wait "Clone git.$domain:stacks.git into /opt/stacks?" 30
+	[ "$(known_hosts_sum)" = "$before" ] || fail 'the host key was pinned before the last question'
+	tui_send y
+	tui_wait 'The stack folder /opt/stacks is bound' 120
 	tui_send Enter
 	[ "$(known_hosts_sum)" != "$before" ] || fail 'no host key was pinned'
 	docker exec "$host" test -f /opt/stacks/demo-echo/compose.yaml || fail 'the clone is missing in /opt/stacks'
-	log "scenario: repository bound through the interface, host key $expected confirmed"
+	log "scenario: stack folder cloned through the interface, host key $expected confirmed"
 
 	step 'the Stacks area lists the stacks of the new repository'
 	tui_send 1
 	tui_wait 'demo-echo' 60
 	wait_for 'the first run of demo-echo' 180 stack_idle demo-echo
+
+	step 'Settings: the local repository is added as the second stack folder; the Stacks area lists both folders'
+	tui_page 1
+	tui_wait '/opt/stacks' 10
+	tui_send a
+	tui_wait 'Add a stack folder' 10
+	tui_type "$local_dir"
+	tui_send F2
+	tui_wait "Take over the repository $local_dir as a local stack folder?" 10
+	tui_send y
+	tui_wait "The stack folder $local_dir is added" 120
+	tui_send Enter
+	list_has_path "$local_dir" || fail "source list does not show the local folder: $(qd --output json source list)"
+	docker exec "$host" grep -qx "ReadWritePaths=-$local_dir" /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf ||
+		fail 'the drop-in does not grant the local folder'
+	tui_send 1
+	tui_wait_stack_folder demo-echo /opt/stacks
+	tui_wait_stack_folder demo-tui-local "$local_dir"
+	log 'scenario: the Stacks area lists demo-echo under /opt/stacks and demo-tui-local under the local folder:'
+	tui_excerpt 'STACK' 12
+	i=0
+	until stack_settled demo-tui-local succeeded; do
+		i=$((i + 1))
+		[ "$(stack_field demo-tui-local last_run)" != failed ] || fail "the first run of demo-tui-local failed: $(qd stack log "$(newest_run demo-tui-local)")"
+		[ "$i" -lt 180 ] || fail "timeout waiting for the first run of demo-tui-local: $(qd --output json status | tr ',' '\n' | grep -e tui-local)"
+		sleep 1
+	done
+	[ "$(stack_images demo-tui-local)" = "$image:1.0.0" ] || fail "demo-tui-local does not run 1.0.0: $(stack_images demo-tui-local)"
 
 	step 'Stack detail: a secret is set after a question and the file holds the value'
 	tui_cursor_to demo-echo

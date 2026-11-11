@@ -143,8 +143,8 @@ func (m *Model) relocalize(lang i18n.Lang) tea.Cmd {
 		return nil
 	}
 	s := m.set
-	old := []**kittui.List{&m.list, &m.runsList, &m.ctList, &s.menu, &s.credList, &s.notifyList}
-	fresh := []*kittui.List{stacks, runs, containers, set.menu, set.credList, set.notifyList}
+	old := []**kittui.List{&m.list, &m.runsList, &m.ctList, &s.menu, &s.credList, &s.notifyList, &s.folderList}
+	fresh := []*kittui.List{stacks, runs, containers, set.menu, set.credList, set.notifyList, set.folderList}
 	mem := make([]listMemory, len(old))
 	for i, l := range old {
 		mem[i] = remember(*l)
@@ -159,6 +159,7 @@ func (m *Model) relocalize(lang i18n.Lang) tea.Cmd {
 	}
 	m.setCredentials(s.credRead)
 	m.setChannels(s.notifyRead)
+	m.fillFolders()
 	for i, l := range fresh {
 		mem[i].restore(l)
 	}

@@ -23,6 +23,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/service"
+	"github.com/castrowithcee/qatlas-deploy/internal/tui"
 )
 
 const (
@@ -384,3 +385,27 @@ func (tuiFolders) Missing(dir string) (bool, error) {
 func (tuiFolders) Grant(ctx context.Context, dir string, create bool) error {
 	return folders.grant(ctx, dir, create, io.Discard)
 }
+
+func (tuiFolders) PlanPermissions(ctx context.Context, res control.SourceInspectResult) (tui.PermPlan, error) {
+	if err := folders.requireRoot(); err != nil {
+		return tui.PermPlan{}, err
+	}
+	plan, err := planAccess(ctx, res)
+	if err != nil || plan == nil {
+		return tui.PermPlan{}, err
+	}
+	return tui.NewPermPlan(plan.changed(), plan.summary(), plan), nil
+}
+
+func (tuiFolders) ApplyPermissions(ctx context.Context, p tui.PermPlan) error {
+	plan, ok := p.Handle().(*permPlan)
+	if !ok {
+		return nil
+	}
+	if err := folders.requireRoot(); err != nil {
+		return err
+	}
+	return folders.applyPermissions(ctx, plan)
+}
+
+func (tuiFolders) ReadOnly(path string) (bool, error) { return folders.readOnly(path) }
