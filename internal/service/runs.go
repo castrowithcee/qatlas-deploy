@@ -162,7 +162,7 @@ func engineStatus(snaps []sourceSnapshot) control.EngineStatus {
 	for _, ss := range snaps {
 		st := ss.snap.State
 		res.Sources = append(res.Sources, control.SourceStatus{
-			ID: ss.conf.ID, Path: ss.conf.Path, Kind: ss.conf.Kind, LastPoll: st.LastPoll, PollError: printable(st.PollError),
+			ID: ss.conf.ID, Path: ss.conf.Path, Kind: ss.conf.Kind, URL: ss.conf.URL, LastPoll: st.LastPoll, PollError: printable(st.PollError),
 			Note: printable(st.Note), Head: printable(st.Head), RemoteHead: printable(st.RemoteHead),
 		})
 		for _, item := range stackStatuses(ss.snap) {

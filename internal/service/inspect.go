@@ -46,7 +46,10 @@ type inspectService struct {
 
 func registerInspectCommands(r *control.Registry, repo *repoService, d Docker, log *slog.Logger) error {
 	s := &inspectService{repo: repo, docker: d, log: log}
-	return r.Register(control.SourceInspectCommand, s.handle)
+	if err := r.Register(control.SourceInspectCommand, s.handle); err != nil {
+		return err
+	}
+	return registerSourceCommands(r, s)
 }
 
 // verdict is the outcome of looking at a folder: a case, or a rejection with its reason and fix.
@@ -92,7 +95,7 @@ func (s *inspectService) handle(ctx context.Context, raw json.RawMessage) (any, 
 		if !v.loaded {
 			v.list, v.loadErr = stacks.Load(a.Path)
 		}
-		if err := s.addStacks(ctx, &res, v); err != nil {
+		if err := s.addStacks(ctx, &res, v, a.Path); err != nil {
 			return nil, err
 		}
 	}
@@ -497,7 +500,7 @@ func accessOf(target string) (*control.SourceAccess, error) {
 
 // addStacks reads the stacks of the folder, checks each against the git view and looks for containers of
 // other Compose projects in their folders.
-func (s *inspectService) addStacks(ctx context.Context, res *control.SourceInspectResult, v verdict) error {
+func (s *inspectService) addStacks(ctx context.Context, res *control.SourceInspectResult, v verdict, root string) error {
 	list := v.list
 	if v.loadErr != nil {
 		res.StacksError = "the stacks of the folder cannot be read: " + printable(v.loadErr.Error())
@@ -520,6 +523,9 @@ func (s *inspectService) addStacks(ctx context.Context, res *control.SourceInspe
 		out := control.SourceStack{
 			Name: printable(rep.Stack), Folder: printable(list[i].Folder),
 			Functions: make([]control.StackFunction, 0, len(rep.Functions)), Findings: make([]control.CheckFinding, 0, len(rep.Findings)),
+		}
+		for _, bm := range bindRoots(root, list[i:i+1]) {
+			out.BindMounts = append(out.BindMounts, maskControl(bm.Path))
 		}
 		for _, f := range rep.Functions {
 			out.Functions = append(out.Functions, control.StackFunction{

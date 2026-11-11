@@ -193,12 +193,21 @@ type EngineStatus struct {
 	Stacks     []StackStatus  `json:"stacks"`
 }
 
+// The kinds SourceStatus.Kind takes. A remote source is a clone of a repository; a local one is a repository
+// without a remote that is deployed as it is.
+const (
+	SourceKindRemote = "remote"
+	SourceKindLocal  = "local"
+)
+
 // SourceStatus is the state of one stack folder as of its last poll. PollError tells why the poll, its fetch
 // included, could not complete; Note why the working copy was not brought up to date.
 type SourceStatus struct {
-	ID         string    `json:"id"`
-	Path       string    `json:"path"`
+	ID   string `json:"id"`
+	Path string `json:"path"`
+	// Kind is SourceKindRemote or SourceKindLocal; URL is the repository address and empty for a local one.
 	Kind       string    `json:"kind"`
+	URL        string    `json:"url,omitempty"`
 	LastPoll   time.Time `json:"last_poll,omitzero"`
 	PollError  string    `json:"poll_error,omitempty"`
 	Note       string    `json:"note,omitempty"`
@@ -786,6 +795,47 @@ type SourceInspectResult struct {
 	ContainersError   string           `json:"containers_error,omitempty"`
 }
 
+// SourceAddCommand binds a repository without a remote as a local source. It does so only for a folder that
+// SourceInspectCommand classifies as SourceCaseLocal and that the service can write; it clones nothing and
+// changes no permission.
+const SourceAddCommand = "source.add"
+
+// SourceAddArgs are the arguments of SourceAddCommand.
+type SourceAddArgs struct {
+	Path string `json:"path"`
+}
+
+// SourceAddResult answers SourceAddCommand.
+type SourceAddResult struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+	Kind string `json:"kind"`
+	Head string `json:"head"`
+}
+
+// SourceListCommand lists the bound stack folders.
+const SourceListCommand = "source.list"
+
+// SourceListResult answers SourceListCommand: every source in the order it was bound.
+type SourceListResult struct {
+	Sources []SourceStatus `json:"sources"`
+}
+
+// SourceRemoveCommand releases a stack folder: its engine stops and its state is dropped. No file of the folder
+// is touched, no container is stopped, and the deploy key and the pinned host keys stay.
+const SourceRemoveCommand = "source.remove"
+
+// SourceRemoveArgs are the arguments of SourceRemoveCommand.
+type SourceRemoveArgs struct {
+	Path string `json:"path"`
+}
+
+// SourceRemoveResult answers SourceRemoveCommand.
+type SourceRemoveResult struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+}
+
 // SourceAccess is the permission information of a folder. ModePath is the folder Mode belongs to: Path, or the
 // nearest existing parent while Path is missing. Owner and Group are empty when the id has no name.
 // ServiceCanWrite says the service may create files there; SetsPermissions says source add will then change the
@@ -819,6 +869,9 @@ type SourceStack struct {
 	Functions []StackFunction  `json:"functions"`
 	Findings  []CheckFinding   `json:"findings"`
 	Conflicts []SourceConflict `json:"conflicts,omitempty"`
+	// BindMounts are the sources of the stack's bind mounts that lie in the folder, as paths below it; the
+	// root client leaves them out when it hands the folder to the service.
+	BindMounts []string `json:"bind_mounts,omitempty"`
 }
 
 // SourceConflict is a container of another Compose project that runs in the folder of a stack.

@@ -184,7 +184,7 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 		existing.mu.Lock()
 		defer existing.mu.Unlock()
 	default:
-		if src, err = newSourceConfig(conf, a.URL, a.Dir); err != nil {
+		if src, err = s.set.newSourceConfig(conf, a.URL, a.Dir); err != nil {
 			return nil, err
 		}
 	}
@@ -348,8 +348,11 @@ func (s *repoService) fetch(ctx context.Context, src *source) (control.RepoFetch
 	// The ref lock alone: a fetch moves no working copy, so nobody waits for it but other fetches and pushes.
 	src.refs.Lock()
 	defer src.refs.Unlock()
-	if err := wc.Fetch(ctx); err != nil {
-		return item, gitFailure(err)
+	// A local source has no remote to fetch from.
+	if src.conf.Kind != kindLocal {
+		if err := wc.Fetch(ctx); err != nil {
+			return item, gitFailure(err)
+		}
 	}
 	if item.Head, err = wc.Head(ctx); err != nil {
 		return item, gitFailure(err)
