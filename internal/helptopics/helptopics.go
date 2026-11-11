@@ -30,6 +30,7 @@ Commands:
 - qdeploy key generate|set|show [--dir <path>]: create or store the SSH deploy key of a stack folder and show its public part (run with sudo)
 - qdeploy repo set <ssh-url> [--dir <path>]: bind a stacks repository to a stack folder, confirm its host key and clone it; a further folder becomes a further source (run with sudo; see qdeploy help sources)
 - qdeploy repo fetch: fetch new commits of every stack folder without touching the working copies (run with sudo)
+- qdeploy source inspect <path> [--url <ssh-url>]: classify a folder before it is taken over as a stack folder (clone, adopt-clone, local, files or reject), with its permissions, the files and stacks it would bring and container conflicts; changes nothing (run with sudo; see qdeploy help sources)
 - qdeploy stack list: list the stacks of the working copy with image versions, update mode and whether the stack is stopped (run with sudo)
 - qdeploy stack check [stack]: show per stack of the working copy whether deploy, update, rollback with data, backup and the redaction of secrets work with its files, why not and what to change, and the findings; exit code 1 on errors (run with sudo; see qdeploy help stack-capabilities)
 - qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has; the stack is named by its Compose project (see qdeploy help stack-capabilities), and for a stack with the finding project-renamed this decides to start the new project, next to the old one, which keeps running (run with sudo)
@@ -83,6 +84,16 @@ Sources:
 - Every remote source has its own deploy key: qdeploy key generate --dir <path> or qdeploy key set --dir <path> before qdeploy repo set (see qdeploy help credentials).
 - A source whose fetch or poll fails keeps its state; the other sources go on. qdeploy status shows each source with its last poll, error and commits, and each stack with its source.
 - The maintenance window and qdeploy stack updates cover the stacks of every source.
+
+Taking over a folder:
+- qdeploy source inspect <path> [--url <ssh-url>] classifies a folder and changes nothing: no file, permission, repository or container is touched, and no value of an env file is shown. --url is the SSH address to clone, or the one the folder must have as origin. It exits 0 for every case, a rejection included; read the case, or the case field of --output json.
+- clone: the folder is missing or empty and would get a clone of the URL; without --url the answer says an address is needed.
+- adopt-clone: the folder is a clone with an origin remote, and is taken over as it is; a --url must equal that origin.
+- local: the folder is a repository without a remote and runs locally, never pushed. A --url is rejected here, as for a folder with files.
+- files: the folder holds files and no repository. The answer lists the files a first commit would take and what it would leave out with the reason: bind-mount (the data folder of a stack), too-large, not-regular (not a plain file or folder), unreadable and nested-repo (a folder with a repository of its own).
+- reject: the folder cannot be taken over. The answer gives the reason and what to do, for example a symbolic link in the path, a folder inside another repository or overlapping another source, a repository with remotes but no origin, an address that differs from the origin, or a folder on a read-only file system.
+- Every answer except a rejection shows the owner, group and mode of the folder (or of its nearest existing parent while it is missing), whether the service can write there, and whether the inspection shows that permissions would have to be set: group qdeploy, group write and setgid, which happens exactly when the service cannot write. For a repository it also says whether the service can write its .git folder.
+- For each stack the folder would bring it shows the functions and findings as qdeploy stack check does, and the containers of other Compose projects that already run in the stack's folder: deploying the stack would create duplicates of them. When the stacks or the container engine cannot be read, the answer says why and the rest still holds.
 
 Stack names:
 - Compose tells stacks apart only by project name, so a name is deployed from one source alone. When two sources list the same name, the stack already deployed keeps it, else the one of the source bound first; the other gets the finding name-collision and is never deployed until one of them gets another project name.

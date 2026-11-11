@@ -48,6 +48,8 @@ type folderHost struct {
 	owner func() (uid, gid int, err error)
 	// waitService returns once the control socket of the service answers.
 	waitService func(ctx context.Context) error
+	// readOnly reports whether the file system of a path lies read-only.
+	readOnly func(path string) (bool, error)
 }
 
 var folders = folderHost{
@@ -72,6 +74,7 @@ var folders = folderHost{
 		return uid, gid, err
 	},
 	waitService: waitForService,
+	readOnly:    pathOnReadOnlyFS,
 }
 
 // waitForService polls the control socket until the service answers; any answer counts, also a refusal.

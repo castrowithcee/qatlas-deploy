@@ -21,6 +21,9 @@ type hostDouble struct {
 	cmds     []string
 	waited   int
 	chowned  bool
+	// readOnlyFS makes every path lie on a read-only file system; checked collects the paths asked.
+	readOnlyFS bool
+	checked    []string
 }
 
 func useFolderHost(t *testing.T) *hostDouble {
@@ -41,6 +44,10 @@ func useFolderHost(t *testing.T) *hostDouble {
 		waitService: func(context.Context) error {
 			d.waited++
 			return nil
+		},
+		readOnly: func(path string) (bool, error) {
+			d.checked = append(d.checked, path)
+			return d.readOnlyFS, nil
 		},
 	}
 	t.Cleanup(func() { folders = old })

@@ -357,3 +357,12 @@ func Stacks() map[string]string {
 
 // Settings is the path of the settings file of the stack name, for Git.Files.
 func Settings(name string) string { return stacks.SettingsPath(name) }
+
+func (c *copyOf) Remotes(context.Context) ([]string, error) {
+	c.g.mu.Lock()
+	defer c.g.mu.Unlock()
+	if _, ok := c.g.origins[c.dir]; ok {
+		return []string{"origin"}, nil
+	}
+	return nil, nil
+}
