@@ -398,12 +398,13 @@ func TestSourceAddLocalThatServiceCanWriteSetsNoPermissions(t *testing.T) {
 	}
 }
 
-func TestSourceAddRefusesRejectAndFilesWithoutChange(t *testing.T) {
+func TestSourceAddRefusesRejectWithoutChange(t *testing.T) {
 	d := useFolderHost(t)
 	dir := t.TempDir()
 	for name, res := range map[string]control.SourceInspectResult{
 		"reject": {Case: control.SourceCaseReject, Reason: "the folder is not empty", Fix: "Choose another folder."},
-		"files":  filesResult(control.SourceInspectArgs{Path: dir}),
+		"files, none to take": {Case: control.SourceCaseFiles, Access: &control.SourceAccess{Mode: "0755", SetsPermissions: true},
+			Excluded: []control.SourceExcluded{{Path: "big.bin", Reason: control.SourceExcludedTooLarge}}},
 	} {
 		svc := startFakeService(t, addHandlers(res))
 		code, stdout, stderr := run(t, "source", "add", dir, "--yes")
@@ -411,8 +412,8 @@ func TestSourceAddRefusesRejectAndFilesWithoutChange(t *testing.T) {
 			t.Fatalf("%s: code %d, stdout %q, stderr %q", name, code, stdout, stderr)
 		}
 		want := "the folder is not empty"
-		if name == "files" {
-			want = "files without git"
+		if name != "reject" {
+			want = "no file a first commit could take"
 		}
 		if !strings.Contains(stderr, want) {
 			t.Errorf("%s: stderr lacks %q: %q", name, want, stderr)

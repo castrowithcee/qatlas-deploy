@@ -1201,6 +1201,8 @@ scenario_stacks_repo() {
 
 	scenario_source_local
 
+	scenario_source_files
+
 	scenario_repair_end
 
 	scenario_tui_setup
@@ -1577,6 +1579,135 @@ EOF2
 	[ "$(stack_images demo-second)" = "$image:1.0.0" ] || fail 'demo-second does not run after /opt/stacks2 is taken over again'
 	[ "$(stack_field demo-second source)" = opt-stacks2 ] || fail "demo-second is not listed with its source: $(qd --output json status)"
 	log 'scenario: /opt/stacks2 was released and taken over again with its origin, head and deploy key'
+}
+
+# files_state prints the content hash of every file below /srv/qd-files/web except .git, and the type, owner and size
+# of every path; modes and groups are left out because source add changes them for the listed files.
+files_state() {
+	docker exec "$host" sh -ec "cd /srv/qd-files/web && find . -path ./.git -prune -o -type f -exec sha256sum {} + | sort -k2 &&
+		find . -path ./.git -prune -o -printf '%p %y %u %s\n' | sort"
+}
+
+# files_git runs git on /srv/qd-files/web as root; the folder is marked safe because the service owns .git; stderr is merged.
+files_git() {
+	docker exec "$host" git -c safe.directory=/srv/qd-files/web -C /srv/qd-files/web "$@" 2>&1
+}
+
+# scenario_source_files proves source add on a folder of files without a repository below /srv/qd-files, which no
+# stack folder uses: the answer lists the files and what is left out, nothing changes without the confirmation, the
+# confirmed add starts a repository with one commit of the listed files and leaves every file as it was, a version
+# committed by a person is deployed and a failing one is rolled back by a local revert commit.
+scenario_source_files() {
+	base=/srv/qd-files/web
+	image=registry.$domain/demo/app
+
+	step 'a folder of files without a repository is prepared as root, with a large file the first commit leaves out'
+	docker exec "$host" sh -ec "rm -rf /srv/qd-files && mkdir -p '$base' && chmod 0755 /srv/qd-files '$base'" || fail 'cannot create the folder of files'
+	cat <<EOF2 | docker exec -i "$host" sh -ec "cat >'$base/compose.yaml'"
+name: demo-files
+
+services:
+  app:
+    image: registry.$domain/demo/app:\${DEMO_APP_VERSION}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: demo-files
+      DEMO_VERSION: \${DEMO_APP_VERSION}
+      DEMO_HEALTH: \${DEMO_HEALTH}
+EOF2
+	printf 'DEMO_APP_VERSION=1.0.0\nDEMO_HEALTH=ok\n' | docker exec -i "$host" sh -ec "cat >'$base/.env'"
+	docker exec "$host" sh -ec "head -c 2097152 /dev/zero >'$base/big.bin' && chmod 0644 '$base/big.bin' '$base/compose.yaml' '$base/.env'" ||
+		fail 'cannot create the large file'
+	[ -z "$(docker exec "$host" ls -A "$base" | grep -x .git)" ] || fail 'the folder of files has a .git'
+
+	step 'source inspect names the files to take, the large file with its reason and the stack'
+	out=$(qd --output json source inspect "$base") || fail "source inspect of the folder of files failed: $out"
+	printf '%s' "$out" | jq -e '.case == "files" and (.planned_files | (index("compose.yaml") != null and index(".env") != null)) and
+		([.excluded[] | select(.path == "big.bin" and .reason == "too-large")] | length) == 1 and
+		([.stacks[].name] | index("demo-files")) != null' >/dev/null || fail "unexpected inspection of the folder of files: $out"
+
+	step 'source add without a terminal and without --yes is refused and changes nothing'
+	dir_before=$(docker exec "$host" stat -c '%U:%G %a' "$base")
+	out=$(qd_fails source add "$base") || fail "source add of the files without --yes succeeded: $out"
+	printf '%s' "$out" | grep -q 'confirmation-required' || fail "source add of the files without --yes does not ask for confirmation: $out"
+	if docker exec "$host" test -e "$base/.git"; then fail 'a refused source add made a repository'; fi
+	[ "$(docker exec "$host" stat -c '%U:%G %a' "$base")" = "$dir_before" ] || fail 'a refused source add changed the folder'
+	if docker exec "$host" grep -qF "$base" /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf; then
+		fail 'a refused source add wrote the drop-in'
+	fi
+	if list_has_path "$base"; then fail 'a refused source add bound the folder'; fi
+
+	step 'source add --yes starts a repository with the listed files and changes no file content'
+	state_before=$(files_state)
+	big_before=$(docker exec "$host" stat -c '%a %U:%G' "$base/big.bin")
+	# qd merges stderr, where the preview and the notices go; the JSON answer is the last line.
+	out=$(qd --output json source add "$base" --yes) || fail "source add of the files failed: $out"
+	printf '%s\n' "$out" | tail -n 1 | jq -e '.kind == "local" and .path == "/srv/qd-files/web" and .files == 2' >/dev/null ||
+		fail "unexpected source add result for the files: $out"
+	wait_for 'the qdeploy service to answer' 30 qd status
+	docker exec "$host" test -d "$base/.git" || fail 'source add made no repository'
+	if docker exec "$host" test -e "$base/.gitignore"; then fail 'source add wrote a .gitignore'; fi
+	docker exec "$host" grep -qx '/big.bin' "$base/.git/info/exclude" || fail "the large file is not in .git/info/exclude: $(docker exec "$host" cat "$base/.git/info/exclude")"
+	[ "$(files_git rev-list --count HEAD)" = 1 ] || fail "the repository does not have exactly one commit: $(files_git log --oneline)"
+	[ "$(files_git log -1 --format=%an)" = qdeploy ] || fail "the first commit has the wrong author: $(files_git log -1 --format=%an)"
+	[ "$(files_git symbolic-ref --short HEAD)" = main ] || fail "the branch is not main: $(files_git symbolic-ref --short HEAD)"
+	[ "$(files_git ls-files)" = "$(printf '.env\ncompose.yaml')" ] || fail "the first commit holds the wrong files: $(files_git ls-files)"
+	[ "$(files_git config core.sharedRepository)" = group ] || fail 'core.sharedRepository is not group'
+	[ -z "$(files_git remote)" ] || fail 'the new repository has a remote'
+	[ "$(files_state)" = "$state_before" ] || fail 'source add changed the content, the owner or the size of a file'
+	[ "$(docker exec "$host" stat -c '%a %U:%G' "$base/big.bin")" = "$big_before" ] || fail 'source add changed the large file that is not listed'
+	[ "$(docker exec "$host" stat -c '%U:%G' "$base")" = root:qdeploy ] || fail "the folder has the wrong owner or group: $(docker exec "$host" stat -c '%U:%G' "$base")"
+	case $(docker exec "$host" stat -c '%A' "$base") in d???rws*) ;; *) fail "the folder is not group-writable with setgid: $(docker exec "$host" stat -c '%A' "$base")" ;; esac
+	for f in compose.yaml .env; do
+		[ "$(docker exec "$host" stat -c '%G' "$base/$f")" = qdeploy ] || fail "$f does not have the group qdeploy"
+		case $(docker exec "$host" stat -c '%A' "$base/$f") in -???rw*) ;; *) fail "$f is not group-writable: $(docker exec "$host" stat -c '%A' "$base/$f")" ;; esac
+	done
+	docker exec "$host" grep -qx "ReadWritePaths=-$base" /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf || fail 'the drop-in does not grant /srv/qd-files/web'
+	[ "$(qd --output json source list | jq -r --arg p "$base" '.sources[] | select(.path == $p) | .kind')" = local ] || fail 'the folder of files is not a local source'
+
+	step 'demo-files is deployed at 1.0.0'
+	i=0
+	until stack_settled demo-files succeeded; do
+		i=$((i + 1))
+		[ "$(stack_field demo-files last_run)" != failed ] || fail "the first run of demo-files failed: $(qd stack log "$(newest_run demo-files)")"
+		[ "$i" -lt 180 ] || fail "timeout waiting for the first run of demo-files: $(qd --output json status | tr ',' '\n' | grep -e qd-files -e demo-files)"
+		sleep 1
+	done
+	[ "$(stack_images demo-files)" = "$image:1.0.0" ] || fail "demo-files does not run 1.0.0: $(stack_images demo-files)"
+
+	step 'a person in the group qdeploy commits a version, which is deployed'
+	as_admin "git config --global --add safe.directory $base" || fail 'cannot mark the folder of files safe'
+	prev=$(newest_run demo-files)
+	as_admin "umask 002; cd $base && sed -i 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=1.1.0/' .env &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am 'Update demo-files to 1.1.0'" ||
+		fail 'the admin could not commit a version in the folder of files'
+	good_files=$(files_git rev-parse HEAD)
+	restart_service
+	run=$(next_run demo-files "$prev") || fail 'no run of demo-files started for the version change'
+	wait_for "the run $run" 240 run_finished demo-files "$run"
+	qd stack log "$run" | grep -q ' result succeeded' || fail "the run of the version change did not succeed: $(qd stack log "$run")"
+	[ "$(stack_field demo-files deployed)" = "$good_files" ] || fail "demo-files is not recorded as deployed at $good_files"
+	[ "$(stack_images demo-files)" = "$image:1.1.0" ] || fail "demo-files does not run 1.1.0: $(stack_images demo-files)"
+
+	step 'a failing version is rolled back by a revert commit of the service, and the folder has no remote'
+	prev=$run
+	as_admin "umask 002; cd $base && sed -i 's/^DEMO_APP_VERSION=.*/DEMO_APP_VERSION=2.0.0/; s/^DEMO_HEALTH=.*/DEMO_HEALTH=fail/' .env &&
+		git -c user.name='E2E Admin' -c user.email=admin.qdeploye2e.test commit -q -am 'Update demo-files to 2.0.0 with a broken healthcheck'" ||
+		fail 'the admin could not commit the failing version'
+	bad_files=$(files_git rev-parse HEAD)
+	restart_service
+	run=$(next_run demo-files "$prev") || fail 'no run of demo-files started for the failing commit'
+	wait_for "the run $run" 240 run_finished demo-files "$run"
+	run_log=$(qd stack log "$run")
+	printf '%s' "$run_log" | grep -q ' result rolled-back' || fail "the run did not end rolled-back: $run_log"
+	revert=$(files_git rev-parse HEAD)
+	[ "$revert" != "$bad_files" ] || fail 'no revert commit was made in the folder of files'
+	meta=$(files_git log -1 --format='%an|%s|%P' "$revert")
+	[ "$meta" = "qdeploy|Revert the stack folder to $(printf '%s' "$good_files" | cut -c 1-12)|$bad_files" ] ||
+		fail "the revert commit has the wrong author, subject or parent: $meta"
+	[ -z "$(files_git remote)" ] || fail 'the rollback gave the repository a remote'
+	[ "$(stack_images demo-files)" = "$image:1.1.0" ] || fail "demo-files does not run the previous image 1.1.0: $(stack_images demo-files)"
+	log 'scenario: a folder of files got a repository with group access, deployed 1.1.0 and rolled back 2.0.0 by a local revert'
 }
 
 # key_pub_field prints the public part (type and key, without comment) of the qdeploy key output $1.

@@ -36,6 +36,8 @@ type permPlan struct {
 	hardlinks int
 	// repo says the folder holds a repository: core.sharedRepository is set before the changes.
 	repo bool
+	// listed says the plan covers the listed files of a folder without a repository, which source add makes one of.
+	listed bool
 }
 
 func (p *permPlan) changed() int { return len(p.dirs) + len(p.files) }
@@ -44,11 +46,21 @@ func (p *permPlan) changed() int { return len(p.dirs) + len(p.files) }
 func (p *permPlan) summary() []string {
 	lines := []string{fmt.Sprintf("%d paths get the group of the service account (gid %d) with group write; the owner stays",
 		p.changed(), p.gid)}
+	if p.listed {
+		lines = append(lines, "  the folder and the folders of listed files: group rwx and setgid; listed files: group rw")
+		lines = p.leftAlone(lines)
+		return append(lines, "  files that are not listed stay as they are")
+	}
 	if !p.repo {
 		return append(lines, "  the folder: group rwx and setgid")
 	}
 	lines = append(lines,
 		"  the folder, the folders of versioned files and .git: group rwx and setgid; versioned files and files in .git: group rw")
+	lines = p.leftAlone(lines)
+	return append(lines, "  unversioned files stay as they are", "  git config core.sharedRepository group is set")
+}
+
+func (p *permPlan) leftAlone(lines []string) []string {
 	if len(p.mounts) > 0 {
 		lines = append(lines, "  left alone, bind-mount sources and everything below: "+strings.Join(p.mounts, ", "))
 	}
@@ -58,7 +70,7 @@ func (p *permPlan) summary() []string {
 	if p.hardlinks > 0 {
 		lines = append(lines, fmt.Sprintf("  left alone, files with further hard links: %d", p.hardlinks))
 	}
-	return append(lines, "  unversioned files stay as they are", "  git config core.sharedRepository group is set")
+	return lines
 }
 
 // planFolder gives the group write access to the folder alone, for an existing empty folder a clone goes into.
@@ -67,6 +79,36 @@ func planFolder(dir string, gid int) (*permPlan, error) {
 		return nil, err
 	}
 	return &permPlan{dir: dir, gid: gid, dirs: []string{dir}}, nil
+}
+
+// planListedFiles computes the changes for a folder without a repository: the folder, the folders of the listed
+// files and the listed files themselves. files are paths below dir, as source inspect lists them. It changes
+// nothing and needs no .git.
+func planListedFiles(dir string, gid int, files, mounts []string) (*permPlan, error) {
+	if err := requireRealDir(dir); err != nil {
+		return nil, err
+	}
+	p := &permPlan{dir: dir, gid: gid, mounts: cleanMounts(dir, mounts), listed: true}
+	dirs := map[string]bool{dir: true}
+	for _, rel := range files {
+		if rel == "" || !filepath.IsLocal(rel) || underAny(rel, p.mounts) {
+			continue
+		}
+		parents, ok := p.versionedFile(rel)
+		if !ok {
+			continue
+		}
+		p.files = append(p.files, filepath.Join(dir, rel))
+		for _, d := range parents {
+			dirs[d] = true
+		}
+	}
+	for d := range dirs {
+		p.dirs = append(p.dirs, d)
+	}
+	sort.Strings(p.dirs)
+	sort.Strings(p.files)
+	return p, nil
 }
 
 // singleLink reports whether a regular file has no further hard link: changing a file with one would change
@@ -204,7 +246,7 @@ func requireRealDir(path string) error {
 		return folderFailure("cannot inspect "+path, err)
 	case !info.IsDir():
 		return usageFailure(path+" is not a directory (a symbolic link or a file is not followed)",
-			"Pass a folder with its own .git directory.")
+			"Pass the path of a real folder, not a link or a file.")
 	}
 	return nil
 }
