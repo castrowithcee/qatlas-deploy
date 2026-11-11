@@ -71,7 +71,12 @@ func startFakeService(t *testing.T, handlers fakeHandlers) *fakeService {
 				f.mu.Lock()
 				f.calls = append(f.calls, req.Command)
 				f.mu.Unlock()
-				result, _ := json.Marshal(h(req.Args))
+				answer := h(req.Args)
+				if refusal, ok := answer.(*control.Error); ok {
+					_ = control.WriteFrame(conn, control.Response{V: control.Version, Error: refusal}, control.MaxResponseBytes)
+					return
+				}
+				result, _ := json.Marshal(answer)
 				_ = control.WriteFrame(conn, control.Response{V: control.Version, OK: true, Result: result}, control.MaxResponseBytes)
 			}(conn)
 		}

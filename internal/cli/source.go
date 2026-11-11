@@ -26,7 +26,7 @@ const readOnlyReason = "the folder lies on a read-only file system"
 func newSourceCommand(program *cobracli.Program, state *notRunning) *cobra.Command {
 	group := &cobra.Command{
 		Use:   "source",
-		Short: "Look at a folder before it is taken over as a stack folder",
+		Short: "Inspect, take over, list and release stack folders",
 		Long: "The source commands work on the stack folders of the host. Only root may use the service channel, so\n" +
 			"run them with sudo. See 'qdeploy help sources'.",
 	}
@@ -56,7 +56,8 @@ func newSourceCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		},
 	}
 	inspect.Flags().StringVar(&url, "url", "", "SSH address of the repository to clone, or to expect as origin")
-	group.AddCommand(inspect, newSourceAddCommand(program, state))
+	group.AddCommand(inspect, newSourceAddCommand(program, state), newSourceListCommand(program, state),
+		newSourceRemoveCommand(program, state))
 	return group
 }
 
