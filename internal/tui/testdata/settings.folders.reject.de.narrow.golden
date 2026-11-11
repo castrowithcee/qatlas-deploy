@@ -1,18 +1,16 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
-  1 2 3 [4 Settings] 5                                  
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 2 3 [4 Einstellungen] 5                             
 --------------------------------------------------------
-  Stacks repository                                     
+  /srv/reject-example kann nicht übernommen werden.     
                                                         
-    commit: -                                           
-    remote commit: -                                    
-    stacks: 6                                           
+  Es wurde nichts geändert.                             
                                                         
-    b binds a repository, F fetches new commits now.    
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
+    Ordner: /srv/reject-example                         
+    Fall: reject (der Ordner kann nicht übernommen      
+    werden)                                             
+    Grund: the folder is a repository whose origin is no
+    SSH address                                         
+    Lösung: Set an SSH origin, or choose another folder.
                                                         
                                                         
                                                         
@@ -20,5 +18,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
                                                         
-b bind  F fetch now  esc back  r reload  1-5 area       
-q quit                                                  
+                                                        
+                                                        
+                                                        
+n/esc/enter schließen                   up/down Scrollen

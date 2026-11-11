@@ -43,7 +43,6 @@ const (
 	actNext   kittui.ActionID = "next"
 	actPrev   kittui.ActionID = "prev"
 	actSave   kittui.ActionID = "save"
-	actBind   kittui.ActionID = "bind"
 	actFetch  kittui.ActionID = "fetch"
 	actAdd    kittui.ActionID = "add"
 	actRemove kittui.ActionID = "remove"
@@ -99,7 +98,6 @@ func keyTable() []kittui.Action {
 		act(actNext, kittui.LevelMove, textKeyNext, "tab"),
 		act(actPrev, kittui.LevelMove, textKeyPrev, "shift+tab"),
 		act(actSave, kittui.LevelGlobal, textKeySave, "f2"),
-		act(actBind, kittui.LevelLetter, textKeyBind, "b"),
 		act(actFetch, kittui.LevelLetter, textKeyFetch, "F"),
 		act(actAdd, kittui.LevelLetter, textKeyAdd, "a"),
 		act(actRemove, kittui.LevelLetter, textKeyRemove, "x"),

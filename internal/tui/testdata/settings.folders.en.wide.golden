@@ -1,17 +1,15 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
-  Stacks-Repository                                                                                                     
+  Stack folders                                                                                                         
                                                                                                                         
-    Commit: -                                                                                                           
-    Remote-Commit: -                                                                                                    
-    Stacks: 6                                                                                                           
+  PATH                 KIND    COMMIT   STATE   LAST POLL                                                               
+> /srv/stacks-example  remote  1111111  ok      2026-10-30 14:30                                                        
+  /srv/local-example   local   2222222  failed  2026-10-30 14:25                                                        
                                                                                                                         
-    b bindet ein Repository, F ruft neue Commits jetzt ab.                                                              
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+  /srv/stacks-example                                                                                                   
+    address: ssh://git.example.test/ops/stacks.git                                                                      
+    last poll: Fri 2026-10-30 14:30                                                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -21,4 +19,6 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-b binden  F jetzt abrufen  esc Zurück  r Neu laden  1-5 Bereich  q Beenden                                              
+                                                                                                                        
+                                                                                                                        
+a add  F fetch now  e deploy key  x release  esc back  r reload  1-5 area  q quit                    up/down choose  1/2

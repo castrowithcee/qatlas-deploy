@@ -1,15 +1,9 @@
-qdeploy  Wartungsfenster zu                                                                                 [esc] Zurück
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
    1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
-  Stacks-Repository binden                                                                                              
+  Stack-Ordner                                                                                                          
                                                                                                                         
-              +--------------------------------------------------------------------------------------------------------+
-  SSH-URL     | git@example.test:ops/stacks.git                                                                        |
-              +--------------------------------------------------------------------------------------------------------+
-              #========================================================================================================#
-> Verzeichnis | /srv/stacks-example_                                                                                   |
-              #========================================================================================================#
-              absoluter Pfad der Arbeitskopie                                                                           
+  Noch keine Stack-Ordner. a fügt einen hinzu.                                                                          
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -20,5 +14,11 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-[ F2 speichern ]  [ esc Verwerfen ]                                                                                     
-F2 Speichern  esc verwerfen                                                    tab Nächstes Feld  shift+tab Voriges Feld
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+a hinzufügen  esc Zurück  r Neu laden  1-5 Bereich  q Beenden                                          up/down Auswählen

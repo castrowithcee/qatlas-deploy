@@ -1,24 +1,24 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
 --------------------------------------------------------
-  Stacks-Repository binden                              
-                                                        
-  #= Stacks-Repository ==============================#-+
-  | ! git@example.test:ops/stacks.git binden und     | |
-  |   diesem Hostschlüssel vertrauen?                |-+
-  |                                                  |=#
-> | Vergleiche den Fingerabdruck zuerst mit der Git- | |
-  | Plattform. Der Schlüssel wird erst jetzt         |=#
-  | gespeichert und das Repository geklont.          |  
+  Stack-Ordner                                          
+  #= Stack-Ordner hinzufügen ========================#  
+  | ! Diesem Hostschlüssel für                       |  
+> |   ssh://git.example.test/ops/stacks.git          |  
+  |   vertrauen?                                     |  
+  |                                                  |  
+  | Vergleiche den Fingerabdruck zuerst mit der Git- |  
+  | Plattform. Noch wird nichts gespeichert; der     |  
+  | Schlüssel wird erst nach der letzten Frage       |  
+  | weitergegeben.                                   |  
   | Host: example.test                               |  
   | Schlüsseltyp: ssh-ed25519                        |  
   | Fingerabdruck:                                   |  
   | SHA256:ExampleFingerprintForTestsOnly0000000000  |  
-  | Verzeichnis: /srv/stacks-example                 |  
+  | Ordner: /srv/clone-example                       |  
   |                                                  |  
   | [ ja, ausführen ]  > abbrechen <                 |  
   | y ja, ausführen  n/esc/enter abbrechen           |  
   #==================================================#  
                                                         
-[ F2 speichern ]  [ esc Verwerfen ]                     
-                                                        
+                                                     1/2

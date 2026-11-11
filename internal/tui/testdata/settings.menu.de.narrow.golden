@@ -3,7 +3,7 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
 --------------------------------------------------------
   EINSTELLUNG         INHALT                            
 > Allgemein           Design, Startbereich, Sprache und~
-  Stacks-Repository   Repository binden, Hostschlüssel ~
+  Stack-Ordner        Stack-Ordner anzeigen, hinzufügen~
   Deploy-Schlüssel    Schlüssel für die Git-Plattform h~
   Zugangsdaten        Registry-Logins und GitHub-Token  
   Wartungsfenster     wann Updates laufen               

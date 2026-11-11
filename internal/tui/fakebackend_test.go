@@ -51,6 +51,8 @@ type fakeBackend struct {
 	fetchDirs  []string
 	sourceAdds []control.SourceAddArgs
 	removes    []string
+	// host is the host side the model gets; nil gives it none.
+	host *fakeFolders
 	// sent are the arguments of the credential and channel writes in order, kept to check what reached the
 	// service and that nothing else did.
 	credSets []control.CredentialSetArgs

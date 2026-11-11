@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 2 3 [4 Einstellungen] 5                             
+--------------------------------------------------------
+  ! Ein Repository nach /srv/new-example klonen?        
+                                                        
+  Als Nächstes werden die SSH-Adresse abgefragt und der 
+  Hostschlüssel gezeigt. Vor der letzten Frage ändert   
+  sich nichts.                                          
+                                                        
+    Ordner: /srv/new-example                            
+    Fall: clone (der Ordner fehlt oder ist leer und     
+    bekommt einen Klon eines Repositorys)               
+    der Ordner fehlt; der nächste vorhandene Ordner ist 
+    /srv                                                
+    Eigentümer: root, Gruppe: root, Modus: 0755         
+    der Dienst kann ihn schreiben: nein                 
+    Rechte werden gesetzt: nein                         
+                                                        
+  Änderungen nach Ja                                    
+    Der Ordner wird mit Eigentümer qdeploy:qdeploy und  
+    Modus 0755 angelegt.                                
+    Der Hostschlüssel wird gespeichert und das          
+    Repository in den Ordner geklont.                   
+y weiter  n/esc/enter abbrechen  up/down Scrollen  20/24

@@ -24,8 +24,8 @@ func TestResultWithoutDetailsIsAMessageLine(t *testing.T) {
 }
 
 func TestResultWithDetailsIsACalmNotice(t *testing.T) {
-	m := newSettingsModel(t, settingsBackend())
-	send(m, toRepo...)
+	m := newSettingsModel(t, foldersBackend())
+	send(m, toFolders...)
 	send(m, "F", "y")
 	if m.modal == nil {
 		t.Fatal("no notice dialog")
@@ -83,7 +83,7 @@ func TestFinalQuestionsShowTheirConsequenceInWarnColour(t *testing.T) {
 		words := strings.Fields(m.text.Lookup(what))
 		return styleBefore(t, m.render(), strings.Join(words[:min(len(words), 2)], " "))
 	}
-	plain := colored([][]string{toRepo, {"F"}}, textWhatFetch)
+	plain := colored([][]string{toNotify, {"s"}}, textWhatNotifyTest)
 	cases := []struct {
 		name string
 		keys [][]string

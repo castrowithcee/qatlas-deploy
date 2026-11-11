@@ -363,6 +363,7 @@ func (m *Model) apply(msg refreshMsg) {
 		m.failure = m.errorText(msg.problem)
 	}
 	m.fillStacks()
+	m.fillFolders()
 }
 
 // fillStacks sets the rows of the stacks list and of the runs list from the snapshot read last.
@@ -526,7 +527,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			if cmd, ok := m.openContainerLogs(); ok {
 				return cmd
 			}
-		case actBind, actFetch, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
+		case actFetch, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
 			switch m.area {
 			case areaSettings:
 				if cmd, handled := m.settingsAction(id); handled {

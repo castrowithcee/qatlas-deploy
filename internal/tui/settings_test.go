@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -21,7 +20,7 @@ const (
 )
 
 const (
-	repoURL     = "git@example.test:ops/stacks.git"
+	repoURL     = "ssh://git.example.test/ops/stacks.git"
 	stackDir    = "/srv/stacks-example"
 	fingerprint = "SHA256:ExampleFingerprintForTestsOnly0000000000"
 )
@@ -51,7 +50,7 @@ func keys(k ...string) []string { return k }
 var (
 	toMenu    = keys("4")
 	toGeneral = keys("4", "enter")
-	toRepo    = keys("4", "down", "enter")
+	toFolders = keys("4", "down", "enter")
 	toKey     = keys("4", "down", "down", "enter")
 	toCreds   = keys("4", "down", "down", "down", "enter")
 	toWindow  = keys("4", "down", "down", "down", "down", "enter")
@@ -94,7 +93,7 @@ func contains(t *testing.T, m *Model, want ...string) {
 func TestSettingsAreaListsItsPages(t *testing.T) {
 	m := newSettingsModel(t, settingsBackend())
 	send(m, toMenu...)
-	contains(t, m, "General", "Stacks repository", "Deploy key", "Credentials", "Maintenance window", "Notifications")
+	contains(t, m, "General", "Stack folders", "Deploy key", "Credentials", "Maintenance window", "Notifications")
 	send(m, "down", "down", "down", "enter")
 	contains(t, m, "registry.docker.io", "github.com")
 	// Esc leaves the page, then the area.
@@ -106,108 +105,6 @@ func TestSettingsAreaListsItsPages(t *testing.T) {
 	if m.area != areaStacks {
 		t.Fatalf("area %s", m.area)
 	}
-}
-
-func TestRepoBindAsksForTheFingerprintBeforeStoringIt(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	// Leaving the question keeps the form, and nothing is stored.
-	send(m, "f2")
-	contains(t, m, "host: example.test", fingerprint, "ssh-ed25519")
-	if got := b.actions(); !slices.Equal(got, []string{"probe:" + repoURL}) {
-		t.Fatalf("calls = %v", got)
-	}
-	send(m, "n")
-	if m.set.form == nil || len(b.repoSet) != 0 {
-		t.Fatalf("form %v, binds %v", m.set.form, b.repoSet)
-	}
-	send(m, "f2", "enter") // enter is the default answer, which is cancel
-	if len(b.repoSet) != 0 {
-		t.Fatalf("enter confirmed the host key: %v", b.repoSet)
-	}
-	send(m, "f2", "y")
-	want := control.RepoSetArgs{URL: repoURL, Dir: stackDir, Fingerprint: fingerprint}
-	if len(b.repoSet) != 1 || b.repoSet[0] != want {
-		t.Fatalf("binds = %+v, want %+v", b.repoSet, want)
-	}
-	contains(t, m, "The stacks repository is bound")
-	if m.set.form != nil {
-		t.Fatal("the form stays open after the bind")
-	}
-}
-
-func TestRepoBindOfAPinnedHostSaysSo(t *testing.T) {
-	b := settingsBackend()
-	b.probe.Pinned = true
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	send(m, "f2")
-	contains(t, m, "already trusts exactly this host key")
-}
-
-func TestRepoBindRefusesAMissingURLAndRelativeDirectoryBeforeAskingTheServer(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, "f2")
-	contains(t, m, "SSH address is required")
-	if len(b.actions()) != 0 || m.modal != nil {
-		t.Fatalf("calls %v, question %v", b.actions(), m.modal)
-	}
-	// A directory that is not absolute is refused the same way.
-	send(m, "esc", "b")
-	send(m, typed(repoURL)...)
-	// The stack folder is required, and it must be an absolute path.
-	send(m, "f2")
-	contains(t, m, "stack folder is required")
-	send(m, "tab")
-	send(m, typed("stacks")...)
-	send(m, "f2")
-	contains(t, m, "absolute")
-	if len(b.actions()) != 0 {
-		t.Fatalf("calls %v", b.actions())
-	}
-}
-
-func TestRepoBindShowsWhyTheProbeFailed(t *testing.T) {
-	b := settingsBackend()
-	b.errs["probe:"+repoURL] = control.NewError(control.CodeRemote, "cannot reach the server")
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	send(m, "f2")
-	contains(t, m, "cannot reach the server")
-	if m.modal != nil || len(b.repoSet) != 0 {
-		t.Fatal("a failed probe went on")
-	}
-}
-
-func TestRepoFetchAsksFirst(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "F", "n")
-	if len(b.actions()) != 0 {
-		t.Fatalf("calls %v", b.actions())
-	}
-	send(m, "F", "y")
-	if got := b.actions(); !slices.Equal(got, []string{"fetch:"}) {
-		t.Fatalf("calls = %v", got)
-	}
-	contains(t, m, "newer commits")
 }
 
 func TestDeployKeyIsGeneratedFromTheFormAndShown(t *testing.T) {
@@ -539,16 +436,15 @@ func TestSettingsKeysDoNothingOutsideTheirPage(t *testing.T) {
 func TestWritesRefuseAKeyWhileOneIsUnderWay(t *testing.T) {
 	b := settingsBackend()
 	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
+	m.folders = &fakeFolders{}
+	send(m, toFolders...)
+	send(m, "a")
 	send(m, typed(stackDir)...)
 	cmd := press(m, "f2")
 	if !m.set.busy {
 		t.Fatal("no write under way")
 	}
-	// A key while the probe runs changes nothing.
+	// A key while the inspection runs changes nothing.
 	press(m, "x", "esc")
 	if m.set.form == nil {
 		t.Fatal("the form was closed under a write")
@@ -559,10 +455,13 @@ func TestWritesRefuseAKeyWhileOneIsUnderWay(t *testing.T) {
 	}
 }
 
-// fakeFolders records the host side of binding a stack folder.
+// fakeFolders records the host side of adding a stack folder. plans are the permission plans by folder; a
+// folder without one needs none.
 type fakeFolders struct {
 	absent   bool
+	readOnly bool
 	grantErr error
+	plans    map[string]PermPlan
 	calls    []string
 }
 
@@ -578,85 +477,28 @@ func (f *fakeFolders) Grant(_ context.Context, dir string, create bool) error {
 
 func (f *fakeFolders) PlanPermissions(_ context.Context, res control.SourceInspectResult) (PermPlan, error) {
 	f.calls = append(f.calls, "plan:"+res.Path)
-	return PermPlan{}, nil
+	return f.plans[res.Path], nil
 }
 
-func (f *fakeFolders) ApplyPermissions(context.Context, PermPlan) error {
-	f.calls = append(f.calls, "apply")
+func (f *fakeFolders) ApplyPermissions(_ context.Context, p PermPlan) error {
+	f.calls = append(f.calls, fmt.Sprintf("apply:%d", p.Changed))
 	return nil
 }
 
 func (f *fakeFolders) ReadOnly(path string) (bool, error) {
 	f.calls = append(f.calls, "readonly:"+path)
-	return false, nil
+	return f.readOnly, nil
 }
 
-func TestRepoBindCreatesAMissingFolderOnlyAfterConfirmation(t *testing.T) {
-	for _, lang := range []struct {
-		lang i18n.Lang
-		want string
-	}{{i18n.English, "Create the stack folder " + stackDir}, {i18n.German, "Stack-Ordner " + stackDir + " anlegen"}} {
-		b := settingsBackend()
-		m := newTestModel(t, lang.lang, b, wideWidth, settingsRows)
-		f := &fakeFolders{absent: true}
-		m.folders = f
-		send(m, toRepo...)
-		send(m, "b")
-		send(m, typed(repoURL)...)
-		send(m, "tab")
-		send(m, typed(stackDir)...)
-		send(m, "f2")
-		contains(t, m, lang.want)
-		if got := f.calls; !slices.Equal(got, []string{"missing:" + stackDir}) || len(b.actions()) != 0 {
-			t.Fatalf("before the answer: folder calls %v, backend calls %v", got, b.actions())
-		}
-		send(m, "n")
-		send(m, "f2", "enter") // enter is the default answer, which is cancel
-		if len(f.calls) != 2 || len(b.actions()) != 0 {
-			t.Fatalf("a declined folder had an effect: %v, %v", f.calls, b.actions())
-		}
-		send(m, "f2", "y")
-		want := []string{"missing:" + stackDir, "missing:" + stackDir, "missing:" + stackDir, "grant:" + stackDir + ":true"}
-		if !slices.Equal(f.calls, want) {
-			t.Fatalf("folder calls = %v, want %v", f.calls, want)
-		}
-		if got := b.actions(); !slices.Equal(got, []string{"probe:" + repoURL}) {
-			t.Fatalf("the probe does not follow the folder: %v", got)
+// changes are the calls that changed the host.
+func (f *fakeFolders) changes() []string {
+	var out []string
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "grant:") || strings.HasPrefix(c, "apply:") {
+			out = append(out, c)
 		}
 	}
-}
-
-func TestRepoBindOfAnExistingFolderOnlyGrantsIt(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	f := &fakeFolders{}
-	m.folders = f
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	send(m, "f2")
-	if want := []string{"missing:" + stackDir, "grant:" + stackDir + ":false"}; !slices.Equal(f.calls, want) {
-		t.Fatalf("folder calls = %v, want %v", f.calls, want)
-	}
-	contains(t, m, "host: example.test")
-}
-
-func TestRepoBindStopsWhenTheFolderCannotBeGranted(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	m.folders = &fakeFolders{grantErr: errors.New("the service manager refused")}
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	send(m, "f2")
-	contains(t, m, "the service manager refused")
-	if len(b.actions()) != 0 || m.modal != nil {
-		t.Fatalf("the bind went on: %v", b.actions())
-	}
+	return out
 }
 
 func TestWindowDaysInUILanguage(t *testing.T) {

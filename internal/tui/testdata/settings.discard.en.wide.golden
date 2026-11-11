@@ -1,15 +1,15 @@
 qdeploy  maintenance window closed                                                                  [esc] back  [?] help
    1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
-  Bind the stacks repository                                                                                            
+  Add a stack folder                                                                                                    
                                                                                                                         
-            #==========================================================================================================#
-> SSH URL   | git@example.test:ops/stacks.git_                                                                         |
-            #==========================================================================================================#
-            user@host:path or ssh://[user@]host[:port]/path                                                             
-            +---------------#= Discard the changes ========================================#---------------------------+
-  Directory | empty         | ! Discard the changes to this form?                          |                           |
-            +---------------|                                                              |---------------------------+
+         #=============================================================================================================#
+> Folder | /srv/stacks-example_                                                                                        |
+         #=============================================================================================================#
+         absolute path; it is only inspected, nothing changes before the questions                                      
+                            #= Discard the changes ========================================#                            
+                            | ! Discard the changes to this form?                          |                            
+                            |                                                              |                            
                             | The changes you made here are lost.                          |                            
                             |                                                              |                            
                             | [ yes, do it ]  > cancel <                                   |                            

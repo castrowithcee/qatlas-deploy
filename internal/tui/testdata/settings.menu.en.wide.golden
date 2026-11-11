@@ -3,7 +3,7 @@ qdeploy  maintenance window closed                                              
 ------------------------------------------------------------------------------------------------------------------------
   SETTING             ABOUT                                                                                             
 > General             theme, start area, language and mouse of this device                                              
-  Stacks repository   bind the repository, confirm its host key, fetch                                                  
+  Stack folders       list, add, fetch and release the stack folders                                                    
   Deploy key          store or generate the key for the git platform                                                    
   Credentials         registry logins and the GitHub token                                                              
   Maintenance window  when updates run                                                                                  

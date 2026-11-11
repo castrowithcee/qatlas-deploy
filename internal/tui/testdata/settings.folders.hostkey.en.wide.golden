@@ -1,24 +1,24 @@
 qdeploy  maintenance window closed                                                                  [esc] back  [?] help
    1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
-  Bind the stacks repository                                                                                            
+  Stack folders                                                                                                         
                                                                                                                         
-            +----------------------------------------------------------------------------------------------------------+
-  SSH URL   | git@example.te#= Stacks repository ==========================================#                           |
-            +---------------| ! Bind git@example.test:ops/stacks.git and trust this host   |---------------------------+
-            #===============|   key?                                                       |===========================#
-> Directory | /srv/stacks-ex|                                                              |                           |
-            #===============| Compare the fingerprint with the git platform first. The key |===========================#
-            absolute path of| is stored only now, and the repository is cloned.            |                            
+  PATH                 KIND #= Add a stack folder =========================================#                            
+> /srv/stacks-example  remot| ! Trust this host key for                                    |                            
+  /srv/local-example   local|   ssh://git.example.test/ops/stacks.git?                     |                            
+                            |                                                              |                            
+  /srv/stacks-example       | Compare the fingerprint with the git platform first. Nothing |                            
+    address: ssh://git.examp| is stored yet; the key is passed on only after the last      |                            
+    last poll: Fri 2026-10-3| question.                                                    |                            
                             | host: example.test                                           |                            
                             | key type: ssh-ed25519                                        |                            
                             | fingerprint: SHA256:ExampleFingerprintForTestsOnly0000000000 |                            
-                            | directory: /srv/stacks-example                               |                            
+                            | folder: /srv/clone-example                                   |                            
                             |                                                              |                            
                             | [ yes, do it ]  > cancel <                                   |                            
                             | y yes, do it  n/esc/enter cancel                             |                            
                             #==============================================================#                            
                                                                                                                         
                                                                                                                         
-[ F2 save ]  [ esc discard ]                                                                                            
                                                                                                                         
+                                                                                                                     1/2

@@ -1,17 +1,15 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-  1 2 3 [4 Einstellungen] 5                             
+qdeploy  maintenance window closed  [esc] back  [?] help
+  1 2 3 [4 Settings] 5                                  
 --------------------------------------------------------
-  Stacks-Repository                                     
+  Stack folders                                         
                                                         
-    Es ist kein Stacks-Repository gebunden. b bindet    
-    eines.                                              
+  PATH                 KIND    COMMIT   STATE           
+> /srv/stacks-example  remote  1111111  ok              
+  /srv/local-example   local   2222222  failed          
                                                         
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
+  /srv/stacks-example                                   
+    address: ssh://git.example.test/ops/stacks.git      
+    last poll: Fri 2026-10-30 14:30                     
                                                         
                                                         
                                                         
@@ -20,5 +18,7 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
                                                         
                                                         
-b binden  F jetzt abrufen  esc Zurück  r Neu laden      
-1-5 Bereich  q Beenden                                  
+                                                        
+                                                        
+a add  F fetch now  e deploy key  x release  esc back   
+r reload  1-5 area  q quit           up/down choose  1/2

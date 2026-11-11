@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  ! Take over the clone /srv/clone-example with the address ssh://git.example.test/ops/stacks.git?                      
+                                                                                                                        
+  Next the host key is shown and the deploy key of the folder is checked. Nothing changes before the last question.     
+                                                                                                                        
+    folder: /srv/clone-example                                                                                          
+    case: adopt-clone (a clone with an origin remote, taken over as it is)                                              
+    owner: admin, group: admin, mode: 0755                                                                              
+    the service can write it: no                                                                                        
+    permissions are set: yes                                                                                            
+    the service can write .git: no                                                                                      
+                                                                                                                        
+  Stacks (1)                                                                                                            
+    wiki (folder wiki)                                                                                                  
+      works: deploy                                                                                                     
+                                                                                                                        
+  Changes after yes                                                                                                     
+    The host key is stored and the clone is taken over with its address.                                                
+    9 paths get the group of the service account with group write; the owner stays                                      
+    The folder is added to the systemd drop-in of the service, which restarts once.                                     
+                                                                                                                        
+y continue  n/esc/enter cancel                                                                            up/down scroll

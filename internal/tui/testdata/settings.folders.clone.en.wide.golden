@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  ! Clone a repository into /srv/new-example?                                                                           
+                                                                                                                        
+  Next the SSH address is asked and the host key shown. Nothing changes before the last question.                       
+                                                                                                                        
+    folder: /srv/new-example                                                                                            
+    case: clone (the folder is missing or empty and gets a clone of a repository)                                       
+    the folder is missing; the nearest existing folder is /srv                                                          
+    owner: root, group: root, mode: 0755                                                                                
+    the service can write it: no                                                                                        
+    permissions are set: no                                                                                             
+                                                                                                                        
+  Changes after yes                                                                                                     
+    The folder is created with owner qdeploy:qdeploy and mode 0755.                                                     
+    The host key is stored and the repository is cloned into the folder.                                                
+    No permission changes: the service can write already.                                                               
+    The folder is added to the systemd drop-in of the service, which restarts once.                                     
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+y continue  n/esc/enter cancel                                                                            up/down scroll

@@ -1,17 +1,15 @@
-qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
 ------------------------------------------------------------------------------------------------------------------------
-  Stacks repository                                                                                                     
+  Stack-Ordner                                                                                                          
                                                                                                                         
-    No stacks repository is bound. Press b to bind one.                                                                 
+  PFAD                 ART     COMMIT   ZUSTAND  LETZTER ABRUF                                                          
+  /srv/stacks-example  remote  1111111  ok       2026-10-30 14:30                                                       
+> /srv/local-example   lokal   2222222  Fehler   2026-10-30 14:25                                                       
                                                                                                                         
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+  /srv/local-example                                                                                                    
+    letzter Abruf: Fr 2026-10-30 14:25                                                                                  
+    Abruf fehlgeschlagen: the working copy has uncommitted changes in demo/compose.yaml                                 
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -21,4 +19,6 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-b bind  F fetch now  esc back  r reload  1-5 area  q quit                                                               
+                                                                                                                        
+                                                                                                                        
+a hinzufügen  x lösen  esc Zurück  r Neu laden  1-5 Bereich  q Beenden                            up/down Auswählen  2/2

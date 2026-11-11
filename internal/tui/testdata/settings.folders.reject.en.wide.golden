@@ -1,16 +1,14 @@
-qdeploy  maintenance window closed                                                                            [esc] back
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
    1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
-  Bind the stacks repository                                                                                            
+  /srv/reject-example cannot be taken over.                                                                             
                                                                                                                         
-            +----------------------------------------------------------------------------------------------------------+
-  SSH URL   | git@example.test:ops/stacks.git                                                                          |
-            +----------------------------------------------------------------------------------------------------------+
-            #==========================================================================================================#
-> Directory | /srv/stacks-example_                                                                                     |
-            #==========================================================================================================#
-            absolute path of the working copy                                                                           
+  Nothing was changed.                                                                                                  
                                                                                                                         
+    folder: /srv/reject-example                                                                                         
+    case: reject (the folder cannot be taken over)                                                                      
+    reason: the folder is a repository whose origin is no SSH address                                                   
+    what to do: Set an SSH origin, or choose another folder.                                                            
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -20,5 +18,7 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-[ F2 save ]  [ esc discard ]                                                                                            
-F2 save  esc discard                                                            tab next field  shift+tab previous field
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+n/esc/enter close                                                                                         up/down scroll

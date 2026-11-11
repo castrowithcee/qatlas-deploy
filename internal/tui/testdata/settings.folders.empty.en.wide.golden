@@ -1,11 +1,9 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
 ------------------------------------------------------------------------------------------------------------------------
-  Stacks-Repository                                                                                                     
+  Stack folders                                                                                                         
                                                                                                                         
-    Es ist kein Stacks-Repository gebunden. b bindet eines.                                                             
-                                                                                                                        
-                                                                                                                        
+  No stack folders yet. a adds one.                                                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -21,4 +19,6 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-b binden  F jetzt abrufen  esc Zurück  r Neu laden  1-5 Bereich  q Beenden                                              
+                                                                                                                        
+                                                                                                                        
+a add  esc back  r reload  1-5 area  q quit                                                               up/down choose

@@ -1,18 +1,16 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
 --------------------------------------------------------
-  Stacks repository                                     
+  Stack folders                                         
                                                         
-    No stacks repository is bound. Press b to bind one. 
+  PATH                 KIND    COMMIT   STATE           
+  /srv/stacks-example  remote  1111111  ok              
+> /srv/local-example   local   2222222  failed          
                                                         
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
+  /srv/local-example                                    
+    last poll: Fri 2026-10-30 14:25                     
+    poll failed: the working copy has uncommitted       
+    changes in demo/compose.yaml                        
                                                         
                                                         
                                                         
@@ -20,5 +18,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
                                                         
-b bind  F fetch now  esc back  r reload  1-5 area       
-q quit                                                  
+                                                        
+                                                        
+a add  x release  esc back  r reload  1-5 area  q quit  
+                                     up/down choose  2/2

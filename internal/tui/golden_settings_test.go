@@ -19,33 +19,45 @@ func TestGoldenSettingsGeneralForm(t *testing.T) {
 	goldenScreens(t, "settings.general", settingsRows, settingsBackend, toGeneral...)
 }
 
-func TestGoldenSettingsRepo(t *testing.T) {
-	goldenScreens(t, "settings.repo", settingsRows, settingsBackend, toRepo...)
+func TestGoldenSettingsFolders(t *testing.T) {
+	goldenScreens(t, "settings.folders", settingsRows, foldersBackend, toFolders...)
 }
 
-func TestGoldenSettingsRepoWithoutRepository(t *testing.T) {
-	goldenScreens(t, "settings.repo.none", settingsRows, func() *fakeBackend {
-		b := settingsBackend()
-		b.status.Engine.Stacks = nil
-		b.stacksErr = noRepoError()
+// The second folder is the chosen one: its poll error is shown in full below the list.
+func TestGoldenSettingsFoldersPollError(t *testing.T) {
+	goldenScreens(t, "settings.folders.pollerror", settingsRows, foldersBackend, seq(toFolders, keys("down"))...)
+}
+
+func TestGoldenSettingsFoldersEmpty(t *testing.T) {
+	goldenScreens(t, "settings.folders.empty", settingsRows, settingsBackend, toFolders...)
+}
+
+func TestGoldenSettingsFolderFiles(t *testing.T) {
+	goldenScreens(t, "settings.folders.files", settingsRows, foldersBackend, addKeys(filesDir)...)
+}
+
+func TestGoldenSettingsFolderClone(t *testing.T) {
+	goldenScreens(t, "settings.folders.clone", settingsRows, foldersBackend, addKeys(cloneDir)...)
+}
+
+func TestGoldenSettingsFolderAdopt(t *testing.T) {
+	goldenScreens(t, "settings.folders.adopt", settingsRows, foldersBackend, addKeys(adoptDir)...)
+}
+
+func TestGoldenSettingsFolderHostKey(t *testing.T) {
+	goldenScreens(t, "settings.folders.hostkey", settingsRows, foldersBackend, seq(addKeys(adoptDir), keys("y"))...)
+}
+
+func TestGoldenSettingsFolderReject(t *testing.T) {
+	goldenScreens(t, "settings.folders.reject", settingsRows, foldersBackend, addKeys(rejectDir)...)
+}
+
+func TestGoldenSettingsFolderFetchFailed(t *testing.T) {
+	goldenScreens(t, "settings.folders.fetchfailed", settingsRows, func() *fakeBackend {
+		b := foldersBackend()
+		b.errs["fetch:"+stackDir] = control.NewError(control.CodeRemote, "cannot reach git.example.test: connection refused")
 		return b
-	}, toRepo...)
-}
-
-func TestGoldenSettingsRepoForm(t *testing.T) {
-	goldenScreens(t, "settings.repo.form", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("tab"), typed(stackDir))...)
-}
-
-func TestGoldenSettingsRepoFormProblem(t *testing.T) {
-	goldenScreens(t, "settings.repo.problem", settingsRows, settingsBackend, seq(toRepo, keys("b", "f2"))...)
-}
-
-func TestGoldenSettingsBindQuestion(t *testing.T) {
-	goldenScreens(t, "settings.repo.bind", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("tab"), typed(stackDir), keys("f2"))...)
-}
-
-func TestGoldenSettingsFetched(t *testing.T) {
-	goldenScreens(t, "settings.repo.fetched", settingsRows, settingsBackend, seq(toRepo, keys("F", "y"))...)
+	}, seq(toFolders, keys("F", "y"))...)
 }
 
 func TestGoldenSettingsKeyNone(t *testing.T) {
@@ -165,7 +177,7 @@ func TestGoldenSettingsNotifyRemoveQuestion(t *testing.T) {
 }
 
 func TestGoldenSettingsDiscardQuestion(t *testing.T) {
-	goldenScreens(t, "settings.discard", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("esc"))...)
+	goldenScreens(t, "settings.discard", settingsRows, settingsBackend, seq(toFolders, keys("a"), typed(stackDir), keys("esc"))...)
 }
 
 func TestGoldenDetailDiscardQuestion(t *testing.T) {
