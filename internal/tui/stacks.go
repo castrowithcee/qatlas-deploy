@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -97,7 +98,9 @@ const (
 
 // stackRow is one stack as the Stacks area shows it, before translation.
 type stackRow struct {
-	name      string
+	name string
+	// folder is the path of the stack folder the stack comes from; empty when the service named none.
+	folder    string
 	current   []string
 	avail     availability
 	available []string
@@ -129,10 +132,21 @@ func buildRows(s snapshot) []stackRow {
 		return r
 	}
 	unreadable := map[string]bool{}
+	source := map[string]string{}
+	paths := map[string]string{}
+	for _, src := range s.status.Engine.Sources {
+		paths[src.ID] = src.Path
+	}
+	for _, si := range s.stacks.Stacks {
+		if si.SourceDir != "" {
+			paths[si.Source] = si.SourceDir
+		}
+	}
 	for i, st := range s.status.Engine.Stacks {
 		r := row(st.Name)
 		// Another source's entry of the name, such as one blocked by name-collision, adds only its findings.
 		if control.Primary(s.status.Engine.Stacks, i) {
+			source[st.Name] = st.Source
 			r.state = stateOf(st)
 			r.lastResult = st.LastRun
 		}
@@ -147,6 +161,9 @@ func buildRows(s snapshot) []stackRow {
 			continue
 		}
 		r := row(si.Name)
+		if _, ok := source[si.Name]; !ok {
+			source[si.Name] = si.Source
+		}
 		r.mode = si.Update
 		if si.Error != "" {
 			unreadable[si.Name] = true
@@ -193,6 +210,7 @@ func buildRows(s snapshot) []stackRow {
 	}
 	rows := make([]stackRow, 0, len(byName))
 	for name, r := range byName {
+		r.folder = cmp.Or(paths[source[name]], source[name])
 		if unreadable[name] && r.state < stateUnreadable {
 			r.state = stateUnreadable
 		}

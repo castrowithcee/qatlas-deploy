@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 2 3 [4 Einstellungen] 5                             
+--------------------------------------------------------
+  ! Den Klon /srv/clone-example mit der Adresse         
+    ssh://git.example.test/ops/stacks.git übernehmen?   
+                                                        
+  Als Nächstes wird der Hostschlüssel gezeigt und der   
+  Deploy-Schlüssel des Ordners geprüft. Vor der letzten 
+  Frage ändert sich nichts.                             
+                                                        
+    Ordner: /srv/clone-example                          
+    Fall: adopt-clone (ein Klon mit origin-Remote, der  
+    so übernommen wird)                                 
+    Eigentümer: admin, Gruppe: admin, Modus: 0755       
+    der Dienst kann ihn schreiben: nein                 
+    Rechte werden gesetzt: ja                           
+    der Dienst kann .git schreiben: nein                
+                                                        
+  Stacks (1)                                            
+    wiki (Ordner wiki)                                  
+      funktioniert: deploy                              
+                                                        
+  Änderungen nach Ja                                    
+y weiter  n/esc/enter abbrechen  up/down Scrollen  20/26

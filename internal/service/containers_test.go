@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,7 @@ const (
 	lblProject = "com.docker.compose.project"
 	lblDir     = "com.docker.compose.project.working_dir"
 	lblConfig  = "com.docker.compose.project.config_files"
+	lblEnvFile = "com.docker.compose.project.environment_file"
 )
 
 // fakeDocker implements service.Docker.
@@ -663,5 +665,49 @@ func TestContainerTextRedactsStackSecrets(t *testing.T) {
 	}
 	if !strings.HasPrefix(d.Labels["demo.tag"], "v-") || !strings.HasPrefix(g.Containers[0].Name, "leak-stack-") {
 		t.Fatalf("other text changed: %+v %+v", g, d.Labels)
+	}
+}
+
+func TestContainerEnvFilesFromLabels(t *testing.T) {
+	fd := &fakeDocker{details: map[string]docker.Details{}}
+	h := boundWith(t, nil, nil, withDocker(fd))
+	own := filepath.Join(h.dir, "demo-stack")
+	web := running("c1", "multi-web-1", map[string]string{lblProject: "multi", lblDir: "/srv/multi", lblConfig: "/srv/multi/a.yml",
+		lblEnvFile: "/srv/multi/.env, /srv/multi/secrets.env,"})
+	fd.list = []docker.Container{
+		web,
+		running("c2", "nolabel-web-1", map[string]string{lblProject: "nolabel", lblDir: "/srv/nolabel", lblConfig: "/srv/nolabel/a.yml"}),
+		running("c3", "demo-stack-app-1", map[string]string{lblProject: "demo-stack", lblDir: own, lblEnvFile: own + "/.env"}),
+	}
+	fd.details["multi-web-1"] = docker.Details{Container: web}
+	fd.details["demo-stack-app-1"] = docker.Details{Container: fd.list[2]}
+	var res control.ContainerListResult
+	if err := h.call(control.ContainerListCommand, control.ContainerListArgs{}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if g := groupByName(t, res, control.ContainerKindForeign, "multi"); !slices.Equal(g.EnvFiles, []string{"/srv/multi/.env", "/srv/multi/secrets.env"}) {
+		t.Fatalf("env files = %v", g.EnvFiles)
+	}
+	if g := groupByName(t, res, control.ContainerKindForeign, "nolabel"); g.EnvFiles != nil {
+		t.Fatalf("env files without label = %v", g.EnvFiles)
+	}
+	if g := groupByName(t, res, control.ContainerKindOwn, "demo-stack"); g.EnvFiles != nil || g.WorkingDir != "" {
+		t.Fatalf("own group = %+v", g)
+	}
+
+	var d control.ContainerDetail
+	if err := h.call(control.ContainerGetCommand, control.ContainerGetArgs{Name: "multi-web-1"}, &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.Kind != control.ContainerKindForeign || d.WorkingDir != "/srv/multi" || !slices.Equal(d.ConfigFiles, []string{"/srv/multi/a.yml"}) ||
+		!slices.Equal(d.EnvFiles, []string{"/srv/multi/.env", "/srv/multi/secrets.env"}) {
+		t.Fatalf("foreign detail = %+v", d)
+	}
+	var o control.ContainerDetail
+	if err := h.call(control.ContainerGetCommand, control.ContainerGetArgs{Name: "demo-stack-app-1"}, &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.WorkingDir != "" || o.ConfigFiles != nil || o.EnvFiles != nil {
+		t.Fatalf("own detail = %+v", o)
 	}
 }

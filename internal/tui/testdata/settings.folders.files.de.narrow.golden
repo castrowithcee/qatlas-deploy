@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+  1 2 3 [4 Einstellungen] 5                             
+--------------------------------------------------------
+  ! In /srv/files-example ein Git-Repository anlegen und
+    übernehmen?                                         
+                                                        
+  Ja prüft den Ordner noch einmal und nimmt die unten   
+  aufgeführten Änderungen nur vor, wenn seine Liste     
+  unverändert ist.                                      
+                                                        
+    Ordner: /srv/files-example                          
+    Fall: files (Dateien ohne Repository; ein erster    
+    Commit nimmt die aufgeführten Dateien)              
+    Eigentümer: root, Gruppe: root, Modus: 0755         
+    der Dienst kann ihn schreiben: nein                 
+    Rechte werden gesetzt: ja                           
+                                                        
+  Dateien des ersten Commits (2)                        
+    demo/.env                                           
+    demo/compose.yaml                                   
+                                                        
+  Ausgelassen (1), nur in .git/info/exclude vermerkt    
+y ja, ausführen  n/esc/enter abbrechen                  
+                                 up/down Scrollen  19/39

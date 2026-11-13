@@ -22,6 +22,8 @@ type Options struct {
 	// first is shown at start.
 	Prefs         uiprefs.Prefs
 	PrefsWarnings []string
+	// SavePrefs writes the preferences to the device; nil when this device has no place for them.
+	SavePrefs func(uiprefs.Prefs) error
 }
 
 // PrefsSchema is what the preferences file of the interface may hold.
@@ -45,7 +47,8 @@ func Run(opts Options) error {
 	profile := kittui.DetectColorProfile(opts.Out, env)
 	m, err := newModel(config{ctx: ctx, backend: opts.Backend, folders: opts.Folders, lang: uiprefs.Language(opts.Prefs.Language),
 		theme: opts.Prefs.Theme, profile: profile, charset: kittui.DetectCharsetMode(env),
-		start: kittui.AreaID(opts.Prefs.Start), loc: time.Local, warnings: opts.PrefsWarnings, mouse: opts.Prefs.MouseEnabled})
+		start: kittui.AreaID(opts.Prefs.Start), loc: time.Local, warnings: opts.PrefsWarnings, mouse: opts.Prefs.MouseEnabled,
+		prefs: opts.Prefs, savePrefs: opts.SavePrefs})
 	if err != nil {
 		return err
 	}

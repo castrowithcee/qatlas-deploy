@@ -66,7 +66,8 @@ type Backend interface {
 	// RepoProbe reads the host key the server of url presents; it stores nothing.
 	RepoProbe(ctx context.Context, url string) (control.RepoProbeResult, error)
 	RepoSet(ctx context.Context, args control.RepoSetArgs) (control.RepoSetResult, error)
-	RepoFetch(ctx context.Context) (control.RepoFetchResult, error)
+	// RepoFetch fetches one stack folder, or every one for an empty dir.
+	RepoFetch(ctx context.Context, dir string) (control.RepoFetchResult, error)
 	// The key calls take the stack folder the key is for; empty is the default key, the one of the folder bound
 	// first. KeyGenerate and KeySet keep an existing key and refuse unless replace is set.
 	KeyShow(ctx context.Context, dir string) (control.KeyResult, error)
@@ -85,6 +86,17 @@ type Backend interface {
 	// The stack-detail writes. The value of SecretSet travels only in this call.
 	SecretSet(ctx context.Context, stack, key, value string) (control.SecretResult, error)
 	SecretDelete(ctx context.Context, stack, key string) (control.SecretResult, error)
+	// The stack folder calls. SourceInspect, SourceCompare and SourceList only read; SourceAdd and SourceRemove
+	// the interface makes only after a confirmation, and SourceAdd only after the host side has granted the folder.
+
+	// SourceInspect classifies a folder; url is the SSH address to clone or to expect as origin, and may be empty.
+	SourceInspect(ctx context.Context, path, url string) (control.SourceInspectResult, error)
+	SourceCompare(ctx context.Context, args control.SourceCompareArgs) (control.SourceCompareResult, error)
+	SourceAdd(ctx context.Context, args control.SourceAddArgs) (control.SourceAddResult, error)
+	SourceList(ctx context.Context) (control.SourceListResult, error)
+	// SourceRemove releases a stack folder; no file of it is touched.
+	SourceRemove(ctx context.Context, path string) (control.SourceRemoveResult, error)
+
 	// BackupRestore replaces the data of a stack with a backup and starts the stack again.
 	BackupRestore(ctx context.Context, stack, id string) (control.BackupRestoreResult, error)
 }
@@ -251,8 +263,33 @@ func (b *ChannelBackend) RepoSet(ctx context.Context, args control.RepoSetArgs) 
 	return res, err
 }
 
-func (b *ChannelBackend) RepoFetch(ctx context.Context) (res control.RepoFetchResult, err error) {
-	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.RepoFetchCommand, nil, &res)
+func (b *ChannelBackend) RepoFetch(ctx context.Context, dir string) (res control.RepoFetchResult, err error) {
+	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.RepoFetchCommand, control.RepoFetchArgs{Dir: dir}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SourceInspect(ctx context.Context, path, url string) (res control.SourceInspectResult, err error) {
+	err = b.call(ctx, control.SourceInspectCommand, control.SourceInspectArgs{Path: path, URL: url}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SourceCompare(ctx context.Context, args control.SourceCompareArgs) (res control.SourceCompareResult, err error) {
+	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.SourceCompareCommand, args, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SourceAdd(ctx context.Context, args control.SourceAddArgs) (res control.SourceAddResult, err error) {
+	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.SourceAddCommand, args, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SourceList(ctx context.Context) (res control.SourceListResult, err error) {
+	err = b.call(ctx, control.SourceListCommand, nil, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SourceRemove(ctx context.Context, path string) (res control.SourceRemoveResult, err error) {
+	err = b.call(ctx, control.SourceRemoveCommand, control.SourceRemoveArgs{Path: path}, &res)
 	return res, err
 }
 
@@ -352,4 +389,31 @@ type Folders interface {
 	Missing(dir string) (bool, error)
 	// Grant creates the folder when create is set, which the person confirmed, and lets the service write to it.
 	Grant(ctx context.Context, dir string, create bool) error
+	// PlanPermissions works out which permissions the folder needs for the service to write it, from the
+	// answer of SourceInspect; it changes nothing. The plan is empty when the service can write already.
+	PlanPermissions(ctx context.Context, res control.SourceInspectResult) (PermPlan, error)
+	// ApplyPermissions carries out a plan the person confirmed.
+	ApplyPermissions(ctx context.Context, plan PermPlan) error
+	// ReadOnly reports whether the file system of the folder, or of its nearest existing parent, is read-only;
+	// only the host can tell, because the service sees every folder it may not write as read-only.
+	ReadOnly(path string) (bool, error)
 }
+
+// PermPlan is a plan of permission changes for a folder. Changed is the number of paths it changes and Summary
+// the lines to show the person; the handle is the host side's own data and opaque here.
+type PermPlan struct {
+	Changed int
+	Summary []string
+	handle  any
+}
+
+// NewPermPlan returns a plan that carries handle for the host side.
+func NewPermPlan(changed int, summary []string, handle any) PermPlan {
+	return PermPlan{Changed: changed, Summary: summary, handle: handle}
+}
+
+// Handle returns what NewPermPlan was given.
+func (p PermPlan) Handle() any { return p.handle }
+
+// Empty reports whether the plan changes nothing.
+func (p PermPlan) Empty() bool { return p.handle == nil }

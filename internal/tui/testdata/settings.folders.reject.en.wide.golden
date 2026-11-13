@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  /srv/reject-example cannot be taken over.                                                                             
+                                                                                                                        
+  Nothing was changed.                                                                                                  
+                                                                                                                        
+    folder: /srv/reject-example                                                                                         
+    case: reject (the folder cannot be taken over)                                                                      
+    reason: the folder is a repository whose origin is no SSH address                                                   
+    what to do: Set an SSH origin, or choose another folder.                                                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+n/esc/enter close                                                                                         up/down scroll

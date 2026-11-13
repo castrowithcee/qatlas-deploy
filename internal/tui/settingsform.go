@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,8 +17,7 @@ import (
 type formKind int
 
 const (
-	formRepo formKind = iota
-	formCred
+	formCred formKind = iota
 	formWindow
 	formNotifyBasics
 	formNotifyDetail
@@ -77,13 +75,6 @@ func textField(id string, label, hint kittui.TextID, value string) kittui.FormFi
 
 func maskedField(id string, label, hint kittui.TextID) kittui.FormField {
 	return kittui.FormField{ID: kittui.FieldID(id), Kind: kittui.FieldMasked, Label: label, Hint: hint}
-}
-
-func (m *Model) repoForm() *settingsForm {
-	return m.newSettingsForm(formRepo, textTitleBind, []kittui.FormField{
-		textField("url", textFieldURL, textHintURL, ""),
-		textField("dir", textFieldDir, textHintDir, ""),
-	})
 }
 
 func (m *Model) credentialForm() *settingsForm {
@@ -161,14 +152,18 @@ func (m *Model) notifyDetailForm(basics control.NotifyAddArgs) *settingsForm {
 // that does not hold up stays open with its problems under the fields.
 func (m *Model) submitForm() tea.Cmd {
 	f := m.set.form
-	if f == nil || m.settingsBusy() {
+	if f == nil || m.formBlocked() {
 		return nil
 	}
 	v := f.form.Values()
 	text := func(id string) string { return strings.TrimSpace(v[kittui.FieldID(id)].Text) }
 	switch f.kind {
-	case formRepo:
-		return m.submitRepo(f, text("url"), text("dir"))
+	case formGeneral:
+		return m.submitGeneral(f)
+	case formFolder:
+		return m.submitFolder(f, text("path"))
+	case formFolderURL:
+		return m.submitFolderURL(f, text("url"))
 	case formCred:
 		return m.submitCredential(f, string(v["kind"].Choice), text("host"), text("user"), v["token"].Text)
 	case formWindow:
@@ -191,54 +186,6 @@ func (m *Model) submitForm() tea.Cmd {
 
 func (m *Model) bad(field string, cause kittui.TextID, args ...any) kittui.FormProblem {
 	return kittui.FormProblem{Field: kittui.FieldID(field), Cause: m.text.Lookup(cause, args...), NextStep: m.text.Lookup(textFormFix)}
-}
-
-func (m *Model) submitRepo(f *settingsForm, url, dir string) tea.Cmd {
-	var ps []kittui.FormProblem
-	// Only the service knows which addresses it accepts; it answers the probe with the reason.
-	if url == "" || strings.ContainsFunc(url, unicode.IsSpace) {
-		ps = append(ps, m.bad("url", textProblemURL))
-	}
-	switch {
-	case dir == "":
-		ps = append(ps, m.bad("dir", textProblemDirRequired))
-	case !filepath.IsAbs(dir) || filepath.Clean(dir) != dir:
-		ps = append(ps, m.bad("dir", textProblemDir))
-	}
-	if len(ps) > 0 {
-		f.problems(ps...)
-		return nil
-	}
-	m.set.pending = bind{url: url, dir: dir}
-	if m.folders == nil {
-		return m.probeRepo()
-	}
-	absent, err := m.folders.Missing(dir)
-	if err != nil {
-		f.problem(m.serviceText(err), m.text.Lookup(textFormFix))
-		return nil
-	}
-	if absent {
-		// Nothing is created before the person has seen the exact path and said yes.
-		m.ask(textPageRepo, m.text.Lookup(textAskFolderCreate, dir), m.text.Lookup(textWhatFolderCreate), nil, false,
-			func() tea.Cmd { return m.grantFolder(true) })
-		return nil
-	}
-	return m.grantFolder(false)
-}
-
-// grantFolder prepares the stack folder; the probe of the repository follows when it is done.
-func (m *Model) grantFolder(create bool) tea.Cmd {
-	dir := m.set.pending.dir
-	return m.writeCall(opFolder, dir, func(Backend) (any, error) { return folderReady{}, m.folders.Grant(m.ctx, dir, create) })
-}
-
-// folderReady is the answer of a prepared stack folder.
-type folderReady struct{}
-
-func (m *Model) probeRepo() tea.Cmd {
-	url := m.set.pending.url
-	return m.writeCall(opProbe, "", func(b Backend) (any, error) { return b.RepoProbe(m.ctx, url) })
 }
 
 // The kinds of credential the form offers: the two names qdeploy reads.
@@ -439,17 +386,32 @@ func (m *Model) formAct(act kittui.ActionID, handled bool) (cmd tea.Cmd, done bo
 	return nil, handled
 }
 
+// dropForm closes the open form; the General page is nothing but its form, so it falls back to the menu.
+func (m *Model) dropForm() {
+	m.set.form = nil
+	if m.set.page == pageGeneral {
+		m.set.page = ""
+	}
+}
+
+// formBlocked says the open form takes no input: a write of the service is under way. The General form stays
+// usable, as saving it reaches no service.
+func (m *Model) formBlocked() bool {
+	f := m.set.form
+	return m.settingsBusy() && (f == nil || f.kind != formGeneral)
+}
+
 // discardForm ends the form; nothing is kept of it. A form with changes asks first and stays open until the
 // answer, the question names no value.
 func (m *Model) discardForm() tea.Cmd {
 	f := m.set.form
 	if !f.form.Changed() {
-		m.set.form = nil
+		m.dropForm()
 		return nil
 	}
 	m.ask(textTitleDiscard, m.text.Lookup(textAskDiscard), m.text.Lookup(textWhatDiscard), nil, true, func() tea.Cmd {
 		if m.set.form == f {
-			m.set.form = nil
+			m.dropForm()
 		}
 		return nil
 	})

@@ -1,0 +1,18 @@
+qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
+  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
+------------------------------------------------------------------------------------------------------------------------
+  Stack-Ordner /srv/stacks-example: Abruf fehlgeschlagen: cannot reach git.example.test: connection refused             
+        STACK        VERSION      VERFÜGBAR      MODUS        ZUSTAND   BEFUNDE                                         
+  v [ ] # /srv/local-example (1)                                                                                        
+>   [ ] local-app    -            -              keiner       deployt   keine                                           
+  v [ ] # /srv/stacks-example (6)                                                                                       
+    [ ] demo-stack   1.4.2        1.5.0          automatisch  deployt   1 Warnung                                       
+    [ ] mail-relay   3.1          aktuell        manuell      offen     keine                                           
+    [ ] old-tool     -            ungeprüft      -            entfernt  keine                                           
+    [ ] photo-album  2.0.1        Fehler         automatisch  Rollback  1 Fehler                                        
+    [ ] web-shop     5.2.0, 16.4  6.0.0 (Major)  automatisch  läuft     keine                                           
+    [ ] wiki         1.41.0       ungeprüft      keiner       gepinnt   1 Fehler, 2 Warnungen                           
+                                                                                                                        
+                                                                                                                        
+enter Details  / Suchen  space markieren  u update  d deploy  r Neu laden  1-5 Bereich  q Beenden                       
+                                                                                                  up/down Auswählen  1/7

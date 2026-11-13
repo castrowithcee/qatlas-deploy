@@ -42,18 +42,8 @@ func runService(t *testing.T, cfg Config) localipc.ServiceEndpoint {
 			t.Errorf("Run = %v", err)
 		}
 	})
-	path, err := cfg.Endpoint.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			return cfg.Endpoint
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
-	}
+	channeltest.WaitReady(t, cfg.Endpoint)
+	return cfg.Endpoint
 }
 
 func rawExchange(t *testing.T, ep localipc.ServiceEndpoint, payload string) control.Response {

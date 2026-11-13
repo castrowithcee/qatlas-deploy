@@ -1,0 +1,40 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]                                                
+------------------------------------------------------------------------------------------------------------------------
+  ! Das Repository /srv/demo-foreign als lokalen Stack-Ordner übernehmen?                                               
+                                                                                                                        
+  Ja nimmt die unten aufgeführten Änderungen vor.                                                                       
+                                                                                                                        
+    Ordner: /srv/demo-foreign                                                                                           
+    Fall: local (ein Repository ohne Remote, das so ausgerollt wird)                                                    
+                                                                                                                        
+  Fremdes Projekt                                                                                                       
+    Projekt: legacy-blog                                                                                                
+    Compose-Dateien (Labels): /srv/demo-foreign/compose.yaml                                                            
+    Env-Dateien (Labels): /srv/demo-foreign/.env                                                                        
+                                                                                                                        
+    Eigentümer: root, Gruppe: root, Modus: 0755                                                                         
+    der Dienst kann ihn schreiben: ja                                                                                   
+    Rechte werden gesetzt: nein                                                                                         
+                                                                                                                        
+  Stacks (1)                                                                                                            
+    legacy-blog (Ordner .)                                                                                              
+      funktioniert: deploy                                                                                              
+      funktioniert nicht: backup                                                                                        
+                                                                                                                        
+  Änderungen nach Ja                                                                                                    
+    Das Repository wird als lokaler Stack-Ordner übernommen.                                                            
+    Keine Rechteänderung: Der Dienst kann bereits schreiben.                                                            
+    Der Ordner wird in das systemd-Drop-in des Dienstes eingetragen, der einmal neu startet.                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+y ja, ausführen  n/esc/enter abbrechen                                                                  up/down Scrollen

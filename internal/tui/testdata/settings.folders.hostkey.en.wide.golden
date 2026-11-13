@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  Stack folders                                                                                                         
+                                                                                                                        
+  PATH                 KIND #= Add a stack folder =========================================#                            
+> /srv/stacks-example  remot| ! Trust this host key for                                    |                            
+  /srv/local-example   local|   ssh://git.example.test/ops/stacks.git?                     |                            
+                            |                                                              |                            
+  /srv/stacks-example       | Compare the fingerprint with the git platform first. Nothing |                            
+    address: ssh://git.examp| is stored yet; the key is passed on only after the last      |                            
+    last poll: Fri 2026-10-3| question.                                                    |                            
+                            | host: example.test                                           |                            
+                            | key type: ssh-ed25519                                        |                            
+                            | fingerprint: SHA256:ExampleFingerprintForTestsOnly0000000000 |                            
+                            | folder: /srv/clone-example                                   |                            
+                            |                                                              |                            
+                            | [ yes, do it ]  > cancel <                                   |                            
+                            | y yes, do it  n/esc/enter cancel                             |                            
+                            #==============================================================#                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                     1/2

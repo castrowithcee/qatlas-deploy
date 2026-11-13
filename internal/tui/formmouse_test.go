@@ -29,13 +29,13 @@ func clickOn(t *testing.T, m *Model, needle string) {
 }
 
 func TestAClickOnSaveActsLikeEnterOnSave(t *testing.T) {
-	m := newFormMouseModel(t, toRepo...)
-	send(m, "b")
+	m := newFormMouseModel(t, toFolders...)
+	send(m, "a")
 	clickOn(t, m, saveButton)
 	if !formOpen(m) || m.modal != nil {
 		t.Fatal("save of an empty form")
 	}
-	contains(t, m, "SSH address is required")
+	contains(t, m, "folder is required")
 
 	m = newFormMouseModel(t, secretFormKeysFromStart()...)
 	clickOn(t, m, saveButton)
@@ -45,8 +45,8 @@ func TestAClickOnSaveActsLikeEnterOnSave(t *testing.T) {
 }
 
 func TestAClickOnDiscardActsLikeEscape(t *testing.T) {
-	m := newFormMouseModel(t, toRepo...)
-	send(m, "b")
+	m := newFormMouseModel(t, toFolders...)
+	send(m, "a")
 	clickOn(t, m, discardButton)
 	if formOpen(m) || m.modal != nil {
 		t.Fatal("an unchanged form stays or asks")
@@ -75,10 +75,10 @@ func TestAClickOnDiscardActsLikeEscape(t *testing.T) {
 }
 
 func TestAClickOnATextFieldTakesTheFocusAndTypesNothing(t *testing.T) {
-	m := newFormMouseModel(t, seq(toRepo, keys("b"))...)
+	m := newFormMouseModel(t, seq(toCreds, keys("a"))...)
 	form := m.set.form.form
 	before := form.Focused()
-	clickOn(t, m, "Directory")
+	clickOn(t, m, "Registry user")
 	if form.Focused() == before {
 		t.Fatalf("the focus stayed on %s", before)
 	}
@@ -115,10 +115,10 @@ func TestTheWheelMovesTheFocusOfTheForm(t *testing.T) {
 }
 
 func TestNoClickActsWhileAKeyIsCaptured(t *testing.T) {
-	m := newFormMouseModel(t, seq(toRepo, keys("b"))...)
+	m := newFormMouseModel(t, seq(toFolders, keys("a"))...)
 	f := m.set.form
 	key, err := kittui.NewForm(kittui.FormSpec{Fields: []kittui.FormField{
-		{ID: "k", Kind: kittui.FieldKey, Label: textFieldDir},
+		{ID: "k", Kind: kittui.FieldKey, Label: textFieldFolderPath},
 	}, Keys: formKeys(), Buttons: []kittui.FormButton{{Action: actBack, Label: kittui.TextKeyDiscard}}}, m.keys, m.text)
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestNoClickActsWhileAKeyIsCaptured(t *testing.T) {
 }
 
 func TestAFormTargetOfAnEarlierFrameDoesNotAct(t *testing.T) {
-	m := newFormMouseModel(t, seq(toRepo, keys("b"))...)
+	m := newFormMouseModel(t, seq(toFolders, keys("a"))...)
 	x, y := cellOf(t, m, discardButton)
 	m.set.form = nil
 	m.render() // the Settings page: the old button target is gone

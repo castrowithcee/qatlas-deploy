@@ -186,11 +186,16 @@ func (m *Model) applyContainers(msg containersMsg) {
 		return
 	}
 	m.ct.err, m.ct.loaded, m.ct.groups = nil, true, msg.res.Groups
+	m.fillContainers()
+}
+
+// fillContainers sets the rows of the containers list from the groups read last.
+func (m *Model) fillContainers() {
 	clear(m.ctTones)
 	clear(m.ctNames)
 	var items []kittui.ListItem
 	var names []string
-	for _, g := range msg.res.Groups {
+	for _, g := range m.ct.groups {
 		title := m.groupTitle(g)
 		for _, c := range g.Containers {
 			word, tone := m.stateWord(c.State)
@@ -315,6 +320,14 @@ func (m *Model) containerLines(width int) []string {
 	if d.Health != "" {
 		fields = append(fields, field{t.Lookup(textCtFieldHealth), d.Health, kittui.StyleText})
 	}
+	foreign := d.Kind == control.ContainerKindForeign && (d.WorkingDir != "" || len(d.ConfigFiles) > 0 || len(d.EnvFiles) > 0)
+	if foreign {
+		dir := d.WorkingDir
+		if dir == "" {
+			dir = t.Lookup(textNoValue)
+		}
+		fields = append(fields, field{t.Lookup(textCtFieldDir), dir, kittui.StyleText})
+	}
 	lines = append(lines, m.fieldLines(fields, width)...)
 	section := func(key kittui.TextID, body []string) {
 		if len(body) == 0 {
@@ -322,6 +335,10 @@ func (m *Model) containerLines(width int) []string {
 		}
 		lines = append(lines, "", m.heading(key, width))
 		lines = append(lines, body...)
+	}
+	if foreign {
+		section(textCtComposeFiles, m.plainLines(d.ConfigFiles, width))
+		section(textCtEnvFiles, m.plainLines(d.EnvFiles, width))
 	}
 	section(textCtPorts, m.plainLines(portTexts(d.Ports), width))
 	section(textCtMounts, m.plainLines(m.mountTexts(d.Mounts), width))

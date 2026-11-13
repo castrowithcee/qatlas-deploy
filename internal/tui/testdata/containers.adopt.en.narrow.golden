@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                          [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]              
+--------------------------------------------------------------------------------
+  ! Take over the repository /srv/demo-foreign as a local stack folder?         
+                                                                                
+  Yes makes the changes listed below.                                           
+                                                                                
+    folder: /srv/demo-foreign                                                   
+    case: local (a repository without a remote, deployed as it is)              
+                                                                                
+  Foreign project                                                               
+    project: legacy-blog                                                        
+    compose files (labels): /srv/demo-foreign/compose.yaml                      
+    env files (labels): /srv/demo-foreign/.env                                  
+                                                                                
+    owner: root, group: root, mode: 0755                                        
+    the service can write it: yes                                               
+    permissions are set: no                                                     
+                                                                                
+  Stacks (1)                                                                    
+    legacy-blog (folder .)                                                      
+      works: deploy                                                             
+      does not work: backup                                                     
+y yes, do it  n/esc/enter cancel                           up/down scroll  20/26

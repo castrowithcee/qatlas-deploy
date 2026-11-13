@@ -14,6 +14,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-kit/i18n"
 	kittui "github.com/castrowithcee/qatlas-kit/tui"
+	"github.com/castrowithcee/qatlas-kit/uiprefs"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
@@ -28,8 +29,14 @@ const (
 // newTestModel builds a model on b in plain ASCII without colour, sized and loaded once.
 func newTestModel(t *testing.T, lang i18n.Lang, b Backend, width, height int) *Model {
 	t.Helper()
-	m, err := newModel(config{ctx: context.Background(), backend: b, lang: lang, theme: kittui.ThemeTerminal,
-		profile: kittui.ProfileNone, charset: kittui.CharsetASCII, loc: time.UTC})
+	var host Folders
+	if fb, ok := b.(*fakeBackend); ok && fb.host != nil {
+		host = fb.host
+	}
+	m, err := newModel(config{ctx: context.Background(), backend: b, folders: host, lang: lang, theme: kittui.ThemeTerminal,
+		profile: kittui.ProfileNone, charset: kittui.CharsetASCII, loc: time.UTC,
+		prefs: uiprefs.Prefs{Theme: kittui.ThemeTerminal, Start: string(areaStacks), Icons: uiprefs.IconsUnicode,
+			Language: uiprefs.LanguageEnglish, MouseEnabled: true}})
 	if err != nil {
 		t.Fatal(err)
 	}

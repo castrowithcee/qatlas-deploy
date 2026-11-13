@@ -1,16 +1,16 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
 --------------------------------------------------------
-  Stacks-Repository binden                              
+  Stack-Ordner hinzufügen                               
                                                         
-              #========================================#
-> SSH-URL     | git@example.test:ops/stacks.git_       |
-              #========================================#
+         #=============================================#
+> Ordner | /srv/stacks-example_                        |
+         #=============================================#
   #= Änderungen verwerfen ===========================#  
   | ! Die Änderungen an diesem Formular verwerfen?   |  
-  |                                                  |-+
-  | Die Änderungen, die Sie hier gemacht haben,      | |
-  | gehen verloren.                                  |-+
+  |                                                  |  
+  | Die Änderungen, die Sie hier gemacht haben,      |  
+  | gehen verloren.                                  |  
   |                                                  |  
   | [ ja, ausführen ]  > abbrechen <                 |  
   | y ja, ausführen  n/esc/enter abbrechen           |  

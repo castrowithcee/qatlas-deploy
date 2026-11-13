@@ -1,16 +1,16 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
 --------------------------------------------------------
-  Bind the stacks repository                            
+  Add a stack folder                                    
                                                         
-            #==========================================#
-> SSH URL   | git@example.test:ops/stacks.git_         |
-            #==========================================#
-            user@host:path or                           
+         #=============================================#
+> Folder | /srv/stacks-example_                        |
+         #=============================================#
+         absolute path; it is only inspected, nothing   
   #= Discard the changes ============================#  
-  | ! Discard the changes to this form?              |-+
-  |                                                  | |
-  | The changes you made here are lost.              |-+
+  | ! Discard the changes to this form?              |  
+  |                                                  |  
+  | The changes you made here are lost.              |  
   |                                                  |  
   | [ yes, do it ]  > cancel <                       |  
   | y yes, do it  n/esc/enter cancel                 |  

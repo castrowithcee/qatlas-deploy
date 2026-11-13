@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+------------------------------------------------------------------------------------------------------------------------
+  Stack folders                                                                                                         
+                                                                                                                        
+  PATH                 KIND    COMMIT   STATE   LAST POLL                                                               
+  /srv/stacks-example  remote  1111111  ok      2026-10-30 14:30                                                        
+> /srv/local-example   local   2222222  failed  2026-10-30 14:25                                                        
+                                                                                                                        
+  /srv/local-example                                                                                                    
+    last poll: Fri 2026-10-30 14:25                                                                                     
+    poll failed: the working copy has uncommitted changes in demo/compose.yaml                                          
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+a add  x release  esc back  r reload  1-5 area  q quit                                               up/down choose  2/2

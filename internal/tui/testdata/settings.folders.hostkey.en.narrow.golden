@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed  [esc] back  [?] help
+  1 2 3 [4 Settings] 5                                  
+--------------------------------------------------------
+  Stack folders                                         
+                                                        
+  #= Add a stack folder =============================#  
+> | ! Trust this host key for                        |  
+  |   ssh://git.example.test/ops/stacks.git?         |  
+  |                                                  |  
+  | Compare the fingerprint with the git platform    |  
+  | first. Nothing is stored yet; the key is passed  |  
+  | on only after the last question.                 |  
+  | host: example.test                               |  
+  | key type: ssh-ed25519                            |  
+  | fingerprint:                                     |  
+  | SHA256:ExampleFingerprintForTestsOnly0000000000  |  
+  | folder: /srv/clone-example                       |  
+  |                                                  |  
+  | [ yes, do it ]  > cancel <                       |  
+  | y yes, do it  n/esc/enter cancel                 |  
+  #==================================================#  
+                                                        
+                                                        
+                                                     1/2

@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+------------------------------------------------------------------------------------------------------------------------
+  Stack-Ordner                                                                                                          
+                                                                                                                        
+  PFAD                 ART     COMMIT   ZUSTAND  LETZTER ABRUF                                                          
+  /srv/stacks-example  remote  1111111  ok       2026-10-30 14:30                                                       
+> /srv/local-example   lokal   2222222  Fehler   2026-10-30 14:25                                                       
+                                                                                                                        
+  /srv/local-example                                                                                                    
+    letzter Abruf: Fr 2026-10-30 14:25                                                                                  
+    Abruf fehlgeschlagen: the working copy has uncommitted changes in demo/compose.yaml                                 
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+a hinzufügen  x lösen  esc Zurück  r Neu laden  1-5 Bereich  q Beenden                            up/down Auswählen  2/2

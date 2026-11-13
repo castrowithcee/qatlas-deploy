@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                              [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]        
+--------------------------------------------------------------------------------
+  ! Das Repository /srv/demo-foreign als lokalen Stack-Ordner übernehmen?       
+                                                                                
+  Ja nimmt die unten aufgeführten Änderungen vor.                               
+                                                                                
+    Ordner: /srv/demo-foreign                                                   
+    Fall: local (ein Repository ohne Remote, das so ausgerollt wird)            
+                                                                                
+  Fremdes Projekt                                                               
+    Projekt: legacy-blog                                                        
+    Compose-Dateien (Labels): /srv/demo-foreign/compose.yaml                    
+    Env-Dateien (Labels): /srv/demo-foreign/.env                                
+                                                                                
+  Warnung                                                                       
+    Projektname: Die laufenden Container gehören zu legacy-blog, ein Deploy     
+    nähme blog                                                                  
+    Compose-Dateien: Die laufenden Container nutzen /srv/demo-                  
+    foreign/compose.yaml, ein Deploy übergäbe /srv/demo-foreign/compose.yml     
+    Env-Dateien: Die laufenden Container nutzen /srv/demo-foreign/.env, ein     
+    Deploy übergäbe -                                                           
+    Der erste Deploy legte neue Container an, statt die laufenden zu übernehmen.
+y ja, ausführen  n/esc/enter abbrechen                   up/down Scrollen  20/35

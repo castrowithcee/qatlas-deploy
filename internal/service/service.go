@@ -174,6 +174,9 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config) error {
 	if err := registerContainerCommands(registry, repo, eng, secrets, dock, cfg.ContainerWait, log); err != nil {
 		return err
 	}
+	if err := registerInspectCommands(registry, repo, dock, log); err != nil {
+		return err
+	}
 	mon := newContainerMonitor(monitorConfig{
 		Docker: dock, Engine: eng, Clock: cfg.Clock, Interval: cfg.MonitorInterval, Log: log,
 		StackDirs: func() map[string]string { return repo.stackDirs(log, nil) },

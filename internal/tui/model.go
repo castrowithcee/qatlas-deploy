@@ -13,6 +13,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-kit/i18n"
 	kittui "github.com/castrowithcee/qatlas-kit/tui"
+	"github.com/castrowithcee/qatlas-kit/uiprefs"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
@@ -74,6 +75,9 @@ type config struct {
 	now      func() time.Time // clock of the log filter; nil takes time.Now
 	warnings []string
 	mouse    bool // the mouse preference
+	// prefs are the whole preferences as loaded; savePrefs writes them, nil when they cannot be saved.
+	prefs     uiprefs.Prefs
+	savePrefs func(uiprefs.Prefs) error
 }
 
 // tickMsg starts a periodic refresh.
@@ -87,9 +91,13 @@ type Model struct {
 	folders Folders
 	keys    *kittui.Keymap
 	text    kittui.Translator
+	lang    i18n.Lang
 	frame   *kittui.Frame
-	loc     *time.Location
-	now     func() time.Time
+	// prefs are the preferences as saved last; a save changes the chosen values and keeps the rest.
+	prefs     uiprefs.Prefs
+	savePrefs func(uiprefs.Prefs) error
+	loc       *time.Location
+	now       func() time.Time
 
 	themes         *kittui.ThemeSet
 	theme          string
@@ -169,7 +177,8 @@ func newModel(c config) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, frame: kittui.NewFrame(keys, text),
+	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, lang: c.lang, frame: kittui.NewFrame(keys, text),
+		prefs: c.prefs, savePrefs: c.savePrefs,
 		loc: c.loc, themes: themes, theme: c.theme, profile: c.profile, charset: c.charset, area: areaStacks,
 		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
 		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick,
@@ -187,25 +196,15 @@ func newModel(c config) (*Model, error) {
 	if slices.ContainsFunc(areas(), func(a kittui.Area) bool { return a.ID == c.start }) {
 		m.area = c.start
 	}
-	m.list, err = kittui.NewList(kittui.ListSpec{Columns: stackColumns(text, m.tones), Keys: stackListKeys(), Ticks: true,
-		Search: kittui.SearchByKey, Empty: textStacksEmpty}, keys, text)
-	if err != nil {
+	if m.list, err = m.newStackList(text); err != nil {
 		return nil, err
 	}
-	m.list.SetFocused(true)
-	m.runsList, err = kittui.NewList(kittui.ListSpec{Columns: runColumns(text, m.runTones), Keys: listKeys(),
-		Search: kittui.SearchByKey, Empty: textRunsEmpty}, keys, text)
-	if err != nil {
+	if m.runsList, err = m.newRunsList(text); err != nil {
 		return nil, err
 	}
-	m.runsList.SetFocused(true)
-	m.ctList, err = kittui.NewList(kittui.ListSpec{Columns: containerColumns(text, m.ctTones), Keys: listKeys(),
-		Search: kittui.SearchByKey, Empty: textCtEmpty}, keys, text)
-	if err != nil {
+	if m.ctList, err = m.newContainerList(text); err != nil {
 		return nil, err
 	}
-	m.ctList.SetFocused(true)
-	m.ctList.SetGrouped(true)
 	if m.set, err = newSettings(keys, text); err != nil {
 		return nil, err
 	}
@@ -216,6 +215,35 @@ func newModel(c config) (*Model, error) {
 		m.notice = text.Lookup(kittui.TextWarning, c.warnings[0])
 	}
 	return m, nil
+}
+
+// The three lists are built with the translator, so a change of language builds them again.
+func (m *Model) newStackList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: stackColumns(text, m.tones), Keys: stackListKeys(), Ticks: true,
+		Search: kittui.SearchByKey, Empty: textStacksEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+	}
+	return l, err
+}
+
+func (m *Model) newRunsList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: runColumns(text, m.runTones), Keys: listKeys(),
+		Search: kittui.SearchByKey, Empty: textRunsEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+	}
+	return l, err
+}
+
+func (m *Model) newContainerList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: containerColumns(text, m.ctTones), Keys: listKeys(),
+		Search: kittui.SearchByKey, Empty: textCtEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+		l.SetGrouped(true)
+	}
+	return l, err
 }
 
 // restyle resolves the styles of the theme under the terminal; false when the theme is unknown.
@@ -334,13 +362,25 @@ func (m *Model) apply(msg refreshMsg) {
 	if msg.problem != nil {
 		m.failure = m.errorText(msg.problem)
 	}
-	rows := buildRows(msg.snap)
+	m.fillStacks()
+	m.fillFolders()
+}
+
+// fillStacks sets the rows of the stacks list and of the runs list from the snapshot read last.
+func (m *Model) fillStacks() {
+	rows := buildRows(m.snap)
+	// The rows go under their stack folder once there is more than one; a single folder keeps the flat list.
+	grouped := len(m.snap.status.Engine.Sources) > 1
+	m.list.SetGrouped(grouped)
 	ids := itemIDs(rows)
 	clear(m.tones)
 	clear(m.rows)
 	items := make([]kittui.ListItem, len(rows))
 	for i, r := range rows {
 		items[i] = kittui.ListItem{ID: ids[i], Cells: cells(r, m.text, m.loc, m.tones)}
+		if grouped {
+			items[i].Group = r.folder
+		}
 		m.rows[ids[i]] = r
 	}
 	if err := m.list.SetItems(items); err != nil {
@@ -435,7 +475,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.modalKey(msg)
 	}
 	if (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil {
-		if m.set.busy {
+		if m.formBlocked() {
 			if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actForceQuit {
 				return tea.Quit
 			}
@@ -493,7 +533,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			if cmd, ok := m.openContainerLogs(); ok {
 				return cmd
 			}
-		case actBind, actFetch, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
+		case actFetch, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
 			switch m.area {
 			case areaSettings:
 				if cmd, handled := m.settingsAction(id); handled {
@@ -502,6 +542,12 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			case areaDetail:
 				if cmd, handled := m.detailAction(id); handled {
 					return cmd
+				}
+			case areaContainers:
+				if id == actAdd {
+					if cmd, ok := m.adoptAction(); ok {
+						return cmd
+					}
 				}
 			}
 		case actUpdate, actDeploy, actPause, actUnpause, actPin, actUnpin, actResume, actCheck,
@@ -758,10 +804,10 @@ func (m *Model) footer() []kittui.Hint {
 		return append(append(m.detailHints(), common...), scroll...)
 	case m.area == areaContainers && m.ctv.open:
 		return append(append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}, containerLogsHint()},
-			containerActionHints()...), common...), scrollHints()...)
+			append(containerActionHints(), m.adoptHints()...)...), common...), scrollHints()...)
 	case m.area == areaContainers:
 		if len(m.ctNames) > 0 {
-			common = append(append([]kittui.Hint{containerLogsHint()}, containerActionHints()...), common...)
+			common = append(append([]kittui.Hint{containerLogsHint()}, append(containerActionHints(), m.adoptHints()...)...), common...)
 		}
 		return m.listFooter(m.ctList, len(m.ctNames), textKeyDetails, common, nav)
 	case m.area == areaRuns && m.log.open:
@@ -1055,7 +1101,22 @@ func (m *Model) workspace(width, height int) string {
 	case areaRuns:
 		return m.runsView(width, height)
 	}
-	return m.listView(m.list, width, height, 0)
+	return m.stacksView(width, height)
+}
+
+// stacksView draws the Stacks area: a line for every stack folder whose last poll failed, then the list.
+func (m *Model) stacksView(width, height int) string {
+	var lines []string
+	for _, f := range m.snap.status.Engine.Sources {
+		if f.PollError != "" {
+			lines = append(lines, m.line(2, kittui.StyleFail, m.text.Lookup(textStacksFolderFailed, f.Path, f.PollError), width))
+		}
+	}
+	if len(lines) == 0 || height <= len(lines) {
+		return m.listView(m.list, width, height, 0)
+	}
+	view := m.listView(m.list, width, height-len(lines), len(lines))
+	return strings.Join(lines, "\n") + "\n" + view
 }
 
 // note is a dimmed sentence wrapped into width cells and indented like the rows of a list.

@@ -75,18 +75,7 @@ func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
 		done <- service.Run(ctx, slog.New(slog.NewTextHandler(h.logs, nil)), cfg)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	path, err := ep.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
-	}
+	channeltest.WaitReady(t, ep)
 	h.call = func(command string, args, result any) error {
 		cl, err := client.Dial(context.Background(), ep)
 		if err != nil {

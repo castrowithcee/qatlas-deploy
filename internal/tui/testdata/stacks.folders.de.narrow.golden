@@ -1,0 +1,18 @@
+qdeploy  Wartungsfenster zu                    [?] Hilfe
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+  Stack-Ordner /srv/stacks-example: Abruf fehlgeschlage~
+        STACK        VERSION  VERFÜGBAR  ZUSTAND  BEFUND
+  v [ ] # /srv/local-example (1)                        
+>   [ ] local-app    -        -          deployt  keine 
+  v [ ] # /srv/stacks-example (6)                       
+    [ ] demo-stack   1.4.2    1.5.0      deployt  1 War~
+    [ ] mail-relay   3.1      aktuell    offen    keine 
+    [ ] old-tool     -        ungeprüft  entfer~  keine 
+    [ ] photo-album  2.0.1    Fehler     Rollba~  1 Feh~
+    [ ] web-shop     5.2.0,~  6.0.0 (M~  läuft    keine 
+    [ ] wiki         1.41.0   ungeprüft  gepinnt  1 Feh~
+                                                        
+                                                        
+enter Details  / Suchen  space markieren  u update      
+d deploy  r Neu laden  1-5 Bereich  q Beenden        1/7

@@ -77,22 +77,23 @@ const (
 	textStateFailedS        kittui.TextID = "state.failed.short"
 	textAvailNotComparableS kittui.TextID = "avail.notcomparable.short"
 
-	textHeaderRefreshing  kittui.TextID = "header.refreshing"
-	textHeaderWindowOpen  kittui.TextID = "header.windowopen"
-	textHeaderWindowShut  kittui.TextID = "header.windowshut"
-	textHeaderWindowOpenS kittui.TextID = "header.windowopen.short"
-	textHeaderWindowShutS kittui.TextID = "header.windowshut.short"
-	textHeaderPollFailed  kittui.TextID = "header.pollfailed"
-	textHeaderPollFailedS kittui.TextID = "header.pollfailed.short"
-	textStacksLoading     kittui.TextID = "stacks.loading"
-	textStacksEmpty       kittui.TextID = "stacks.empty"
-	textDetailNone        kittui.TextID = "detail.none"
-	textErrNotRunning     kittui.TextID = "error.notrunning"
-	textErrNoAccess       kittui.TextID = "error.noaccess"
-	textErrService        kittui.TextID = "error.service"
-	textErrChannel        kittui.TextID = "error.channel"
-	textErrUnshownStacks  kittui.TextID = "error.unshownstacks"
-	textNoValue           kittui.TextID = "value.none"
+	textHeaderRefreshing   kittui.TextID = "header.refreshing"
+	textHeaderWindowOpen   kittui.TextID = "header.windowopen"
+	textHeaderWindowShut   kittui.TextID = "header.windowshut"
+	textHeaderWindowOpenS  kittui.TextID = "header.windowopen.short"
+	textHeaderWindowShutS  kittui.TextID = "header.windowshut.short"
+	textHeaderPollFailed   kittui.TextID = "header.pollfailed"
+	textHeaderPollFailedS  kittui.TextID = "header.pollfailed.short"
+	textStacksLoading      kittui.TextID = "stacks.loading"
+	textStacksEmpty        kittui.TextID = "stacks.empty"
+	textStacksFolderFailed kittui.TextID = "stacks.folderfailed"
+	textDetailNone         kittui.TextID = "detail.none"
+	textErrNotRunning      kittui.TextID = "error.notrunning"
+	textErrNoAccess        kittui.TextID = "error.noaccess"
+	textErrService         kittui.TextID = "error.service"
+	textErrChannel         kittui.TextID = "error.channel"
+	textErrUnshownStacks   kittui.TextID = "error.unshownstacks"
+	textNoValue            kittui.TextID = "value.none"
 
 	textKeyStackOnly     kittui.TextID = "key.stackonly"
 	textKeyAllStacks     kittui.TextID = "key.allstacks"
@@ -287,22 +288,23 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textFindingsWarningsOne:  "%d warning",
 			textFindingsWarningsMany: "%d warnings",
 
-			textHeaderRefreshing:  "refreshing",
-			textHeaderWindowOpen:  "maintenance window open",
-			textHeaderWindowShut:  "maintenance window closed",
-			textHeaderWindowOpenS: "window open",
-			textHeaderWindowShutS: "window closed",
-			textHeaderPollFailed:  "repository poll failed",
-			textHeaderPollFailedS: "poll failed",
-			textStacksLoading:     "Loading the stacks…",
-			textStacksEmpty:       "No stacks. Bind the stacks repository with 'sudo qdeploy repo set <ssh-url>', or add a stack to it.",
-			textDetailNone:        "No stack chosen. Choose one in Stacks and press {enter}.",
-			textErrNotRunning:     "the qdeploy service is not running; start it, then press {reload}",
-			textErrNoAccess:       "only root may use the qdeploy service; quit and run qdeploy with sudo",
-			textErrService:        "the service refused the request: %s",
-			textErrChannel:        "cannot talk to the service: %s",
-			textErrUnshownStacks:  "the stack list could not be shown: %s",
-			textNoValue:           "-",
+			textHeaderRefreshing:   "refreshing",
+			textHeaderWindowOpen:   "maintenance window open",
+			textHeaderWindowShut:   "maintenance window closed",
+			textHeaderWindowOpenS:  "window open",
+			textHeaderWindowShutS:  "window closed",
+			textHeaderPollFailed:   "repository poll failed",
+			textHeaderPollFailedS:  "poll failed",
+			textStacksLoading:      "Loading the stacks…",
+			textStacksFolderFailed: "Stack folder %s: poll failed: %s",
+			textStacksEmpty:        "No stacks. Bind the stacks repository with 'sudo qdeploy repo set <ssh-url>', or add a stack to it.",
+			textDetailNone:         "No stack chosen. Choose one in Stacks and press {enter}.",
+			textErrNotRunning:      "the qdeploy service is not running; start it, then press {reload}",
+			textErrNoAccess:        "only root may use the qdeploy service; quit and run qdeploy with sudo",
+			textErrService:         "the service refused the request: %s",
+			textErrChannel:         "cannot talk to the service: %s",
+			textErrUnshownStacks:   "the stack list could not be shown: %s",
+			textNoValue:            "-",
 
 			textKeyStackOnly:     "this stack",
 			textKeyAllStacks:     "all stacks",
@@ -480,22 +482,23 @@ func baseCatalog() i18n.Catalogs[kittui.TextID] {
 			textFindingsWarningsOne:  "%d Warnung",
 			textFindingsWarningsMany: "%d Warnungen",
 
-			textHeaderRefreshing:  "wird aktualisiert",
-			textHeaderWindowOpen:  "Wartungsfenster offen",
-			textHeaderWindowShut:  "Wartungsfenster zu",
-			textHeaderWindowOpenS: "Fenster offen",
-			textHeaderWindowShutS: "Fenster zu",
-			textHeaderPollFailed:  "Abruf des Repositorys fehlgeschlagen",
-			textHeaderPollFailedS: "Abruf fehlgeschlagen",
-			textStacksLoading:     "Stacks werden geladen…",
-			textStacksEmpty:       "Keine Stacks. Binde das Stacks-Repository mit 'sudo qdeploy repo set <ssh-url>' an oder lege dort einen Stack an.",
-			textDetailNone:        "Kein Stack gewählt. Wähle einen unter Stacks und drücke {enter}.",
-			textErrNotRunning:     "der qdeploy-Dienst läuft nicht; starte ihn und drücke dann {reload}",
-			textErrNoAccess:       "nur root darf den qdeploy-Dienst nutzen; beende und starte qdeploy mit sudo",
-			textErrService:        "der Dienst hat die Anfrage abgelehnt: %s",
-			textErrChannel:        "keine Verbindung zum Dienst: %s",
-			textErrUnshownStacks:  "die Stack-Liste ließ sich nicht anzeigen: %s",
-			textNoValue:           "-",
+			textHeaderRefreshing:   "wird aktualisiert",
+			textHeaderWindowOpen:   "Wartungsfenster offen",
+			textHeaderWindowShut:   "Wartungsfenster zu",
+			textHeaderWindowOpenS:  "Fenster offen",
+			textHeaderWindowShutS:  "Fenster zu",
+			textHeaderPollFailed:   "Abruf des Repositorys fehlgeschlagen",
+			textHeaderPollFailedS:  "Abruf fehlgeschlagen",
+			textStacksLoading:      "Stacks werden geladen…",
+			textStacksFolderFailed: "Stack-Ordner %s: Abruf fehlgeschlagen: %s",
+			textStacksEmpty:        "Keine Stacks. Binde das Stacks-Repository mit 'sudo qdeploy repo set <ssh-url>' an oder lege dort einen Stack an.",
+			textDetailNone:         "Kein Stack gewählt. Wähle einen unter Stacks und drücke {enter}.",
+			textErrNotRunning:      "der qdeploy-Dienst läuft nicht; starte ihn und drücke dann {reload}",
+			textErrNoAccess:        "nur root darf den qdeploy-Dienst nutzen; beende und starte qdeploy mit sudo",
+			textErrService:         "der Dienst hat die Anfrage abgelehnt: %s",
+			textErrChannel:         "keine Verbindung zum Dienst: %s",
+			textErrUnshownStacks:   "die Stack-Liste ließ sich nicht anzeigen: %s",
+			textNoValue:            "-",
 
 			textKeyStackOnly:     "dieser Stack",
 			textKeyAllStacks:     "alle Stacks",
