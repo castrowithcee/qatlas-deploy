@@ -1878,7 +1878,7 @@ scenario_observe_end() {
 	printf '%s' "$run_log" | grep -q ' result rolled-back' || fail "the rollback run did not end rolled-back: $run_log"
 	log "scenario: observe rollback steps: $(update_steps "$run_log")"
 	case ,$(update_steps "$run_log"), in
-	,stop,*restore,*revert,*up,check,) ;;
+	,rollback,stop,*restore,*revert,*up,check,) ;;
 	*) fail "unexpected steps of the rollback run: $(update_steps "$run_log")" ;;
 	esac
 	as_admin 'cd ~/stacks && git pull -q --ff-only'
