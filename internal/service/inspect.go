@@ -19,6 +19,7 @@ import (
 	"github.com/castrowithcee/qatlas-kit/docker"
 	"github.com/castrowithcee/qatlas-kit/redact"
 
+	"github.com/castrowithcee/qatlas-deploy/internal/compose"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/credentials"
 	"github.com/castrowithcee/qatlas-deploy/internal/gitrepo"
@@ -528,6 +529,10 @@ func (s *inspectService) addStacks(ctx context.Context, res *control.SourceInspe
 		for _, bm := range bindRoots(root, list[i:i+1]) {
 			out.BindMounts = append(out.BindMounts, maskControl(bm.Path))
 		}
+		if in, err := compose.InputsOf(list[i]); err == nil {
+			out.Project = text(in.Project)
+			out.ComposeFiles, out.EnvFiles = mapAll(in.ComposeFiles, text), mapAll(in.EnvFiles, text)
+		}
 		for _, f := range rep.Functions {
 			out.Functions = append(out.Functions, control.StackFunction{
 				Function: f.Name, Works: f.Works, Mode: f.Mode, Reason: text(f.Reason), Action: text(f.Action),
@@ -585,4 +590,13 @@ func (s *inspectService) conflicts(ctx context.Context, list []stacks.Stack) (ma
 		}
 	}
 	return out, nil
+}
+
+// mapAll applies f to every element; an empty list stays nil.
+func mapAll(v []string, f func(string) string) []string {
+	var out []string
+	for _, e := range v {
+		out = append(out, f(e))
+	}
+	return out
 }

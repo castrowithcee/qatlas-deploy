@@ -163,17 +163,7 @@ func (x *Executor) command(st stacks.Stack, project string, maxOutput int, words
 	if !projectName.MatchString(project) {
 		return Command{}, fmt.Errorf("stack name %q is not a valid Compose project name (lowercase letters, digits, - and _)", project)
 	}
-	if st.Dir == "" {
-		return Command{}, errors.New("stack has no directory")
-	}
-	dir, err := filepath.Abs(st.Dir)
-	if err != nil {
-		return Command{}, fmt.Errorf("stack directory: %w", err)
-	}
-	if len(st.ComposeFiles) == 0 {
-		return Command{}, errors.New("stack has no compose file")
-	}
-	envFiles, secretsSetName, err := envFilesOf(dir)
+	dir, envFiles, secretsSetName, err := inputsOf(st)
 	if err != nil {
 		return Command{}, err
 	}
@@ -186,13 +176,66 @@ func (x *Executor) command(st stacks.Stack, project string, maxOutput int, words
 		args = append(args, "--env-file", f)
 	}
 	for _, f := range st.ComposeFiles {
-		if err := composeFileName(f); err != nil {
-			return Command{}, fmt.Errorf("compose file %q: %w", f, err)
-		}
 		args = append(args, "-f", f)
 	}
 	args = append(args, words...)
 	return Command{Name: dockerProgram, Args: args, Dir: dir, Env: x.Env, MaxOutput: maxOutput}, nil
+}
+
+// inputsOf validates the files of st and returns its absolute folder and the env files qdeploy passes, relative
+// to it. It is the one place that decides which files a call gets.
+func inputsOf(st stacks.Stack) (dir string, envFiles []string, secretsSetName bool, err error) {
+	if st.Dir == "" {
+		return "", nil, false, errors.New("stack has no directory")
+	}
+	dir, err = filepath.Abs(st.Dir)
+	if err != nil {
+		return "", nil, false, fmt.Errorf("stack directory: %w", err)
+	}
+	if len(st.ComposeFiles) == 0 {
+		return "", nil, false, errors.New("stack has no compose file")
+	}
+	envFiles, secretsSetName, err = envFilesOf(dir)
+	if err != nil {
+		return "", nil, false, err
+	}
+	for _, f := range st.ComposeFiles {
+		if err := composeFileName(f); err != nil {
+			return "", nil, false, fmt.Errorf("compose file %q: %w", f, err)
+		}
+	}
+	return dir, envFiles, secretsSetName, nil
+}
+
+// DeployInputs is what qdeploy hands to docker compose for a stack, with absolute paths: the project name
+// the containers get and the files in the order of the call.
+type DeployInputs struct {
+	Project      string
+	ComposeFiles []string
+	EnvFiles     []string
+}
+
+// InputsOf returns the project name and the compose and env files a deploy of st passes to docker compose. It
+// fails for a stack that cannot be deployed, with the error of the deploy.
+func InputsOf(st stacks.Stack) (DeployInputs, error) {
+	if st.Err != nil {
+		return DeployInputs{}, fmt.Errorf("stack %s cannot be deployed: %w", st.Name, st.Err)
+	}
+	if !projectName.MatchString(st.Name) {
+		return DeployInputs{}, fmt.Errorf("stack name %q is not a valid Compose project name", st.Name)
+	}
+	dir, envFiles, _, err := inputsOf(st)
+	if err != nil {
+		return DeployInputs{}, err
+	}
+	in := DeployInputs{Project: st.Name}
+	for _, f := range envFiles {
+		in.EnvFiles = append(in.EnvFiles, filepath.Join(dir, f))
+	}
+	for _, f := range st.ComposeFiles {
+		in.ComposeFiles = append(in.ComposeFiles, filepath.Join(dir, f))
+	}
+	return in, nil
 }
 
 // composeFileName accepts only a clean relative path below the stack folder.

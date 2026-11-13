@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                              [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]        
+--------------------------------------------------------------------------------
+  Das Projekt legacy-blog kann nicht übernommen werden.                         
+                                                                                
+  Es wurde nichts geändert.                                                     
+                                                                                
+    Ordner: /srv/demo-foreign                                                   
+                                                                                
+  Fremdes Projekt                                                               
+    Projekt: legacy-blog                                                        
+    Compose-Dateien (Labels): /srv/demo-foreign/compose.yaml                    
+    Env-Dateien (Labels): /srv/elsewhere/blog.env                               
+    Grund: /srv/elsewhere/blog.env liegt außerhalb des Arbeitsverzeichnisses    
+    /srv/demo-foreign; ein Stack-Ordner enthält alle Dateien seines Stacks      
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+n/esc/enter schließen                                           up/down Scrollen

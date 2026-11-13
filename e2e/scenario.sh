@@ -1207,6 +1207,8 @@ scenario_stacks_repo() {
 
 	scenario_repair_end
 
+	scenario_adopt
+
 	scenario_tui_setup
 }
 
@@ -3095,6 +3097,121 @@ tui_commit_only_version() {
 
 health_is() {
 	[ "$(docker exec "$host" docker inspect -f '{{.State.Health.Status}}' "$1")" = "$2" ]
+}
+
+# tui_ct_cursor_to moves the cursor of the Containers list to the container $1.
+tui_ct_cursor_to() {
+	i=0
+	until tui_screen | grep -q "^> *$1 "; do
+		i=$((i + 1))
+		[ "$i" -lt 40 ] || fail "the cursor does not reach $1: $(tui_screen)"
+		tui_send Down
+		sleep 0.2
+	done
+}
+
+# scenario_adopt proves that the interface takes over a foreign Compose project: a person starts the project app
+# below /srv/qd-foreign with docker compose so that qdeploy would pass the same project name (Compose derives app
+# from the folder) and the same files (compose.yaml and .env, both directly in the folder, which Compose records
+# in its labels), so the interface shows no warning. The Containers area shows it as foreign with its folder and
+# files, a puts the question of the folder of files, and after yes the folder is a local source with exactly one
+# stack whose first deploy leaves the running containers alone (same ids). The project is shut down and the
+# source released at the end.
+scenario_adopt() {
+	base=/srv/qd-foreign/app
+	image=registry.$domain/demo/app
+	source_id=srv-qd-foreign-app
+
+	step 'a person starts a foreign Compose project below /srv/qd-foreign'
+	docker exec "$host" sh -ec "rm -rf /srv/qd-foreign && mkdir -p '$base' && chmod 0755 /srv/qd-foreign '$base'" || fail 'cannot create the foreign project folder'
+	cat <<EOF2 | docker exec -i "$host" sh -ec "cat >'$base/compose.yaml'"
+services:
+  app:
+    image: registry.$domain/demo/app:\${DEMO_APP_VERSION}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: foreign-app
+      DEMO_VERSION: \${DEMO_APP_VERSION}
+      DEMO_HEALTH: \${DEMO_HEALTH}
+EOF2
+	printf 'DEMO_APP_VERSION=1.0.0\nDEMO_HEALTH=ok\n' | docker exec -i "$host" sh -ec "cat >'$base/.env'"
+	docker exec "$host" sh -ec "chmod 0644 '$base/compose.yaml' '$base/.env'" || fail 'cannot set the modes of the foreign project files'
+	docker exec "$host" sh -ec "cd '$base' && docker compose up -d" >/dev/null 2>&1 || fail 'cannot start the foreign project'
+	wait_for 'the foreign project app' 60 stack_healthy app
+	ids_before=$(docker exec "$host" docker ps -q --no-trunc --filter label=com.docker.compose.project=app | sort)
+	[ -n "$ids_before" ] || fail 'the foreign project has no running container'
+	[ "$(docker exec "$host" docker ps --filter label=com.docker.compose.project=app --format '{{.Label "com.docker.compose.project.working_dir"}}')" = "$base" ] ||
+		fail 'the foreign project does not run from its folder'
+	if list_has_path "$base"; then fail 'the folder of the foreign project is bound before the takeover'; fi
+	[ -z "$(stack_field app source)" ] || fail 'a stack app exists before the takeover'
+
+	step 'the Containers area shows the project as foreign, with its folder and files'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait '1 Stacks' 30
+	tui_send 5
+	tui_wait 'foreign project app' 30
+	tui_ct_cursor_to app-app-1
+	tui_send Enter
+	tui_wait 'Compose files' 15
+	tui_wait "$base/compose.yaml" 10
+	tui_wait 'Env files' 10
+	tui_has "$base" || fail "the detail does not show the folder: $(tui_screen)"
+	log 'scenario: the detail of a container of the foreign project shows its folder and files:'
+	tui_excerpt 'folder' 8
+
+	step 'a opens the takeover; it shows the labels, no warning, and changes nothing before the answer'
+	tui_send a
+	tui_wait 'Start a git repository in /srv/qd-foreign/app and take it over?' 30
+	tui_wait 'Foreign project' 10
+	tui_wait 'project: app' 10
+	tui_wait "compose files (labels): $base/compose.yaml" 10
+	tui_wait "Compose reads the file .env of the folder" 10
+	if tui_has 'the running containers'; then fail "the takeover warns although qdeploy would pass the same project and files: $(tui_screen)"; fi
+	if tui_has 'create new containers'; then fail "the takeover warns about new containers: $(tui_screen)"; fi
+	if docker exec "$host" test -e "$base/.git"; then fail 'the question made a repository'; fi
+	if list_has_path "$base"; then fail 'the question bound the folder'; fi
+	[ "$(docker exec "$host" docker ps -q --no-trunc --filter label=com.docker.compose.project=app | sort)" = "$ids_before" ] ||
+		fail 'the question changed the containers'
+
+	step 'yes adds the folder as a local source with exactly one stack'
+	tui_send y
+	tui_wait "The stack folder $base is added" 120
+	tui_send Enter
+	wait_for 'the qdeploy service to answer' 30 qd status
+	list_has_path "$base" || fail "source list does not show the folder: $(qd --output json source list)"
+	[ "$(qd --output json source list | jq -r --arg p "$base" '.sources[] | select(.path == $p) | .kind')" = local ] || fail 'the folder is not a local source'
+	docker exec "$host" test -d "$base/.git" || fail 'the takeover made no repository'
+	out=$(qd --output json stack list) || fail "stack list failed: $out"
+	printf '%s' "$out" | jq -e --arg s "$source_id" '[.[] | select(.source == $s)] | (length == 1 and .[0].stack == "app")' >/dev/null ||
+		fail "stack list does not show exactly one stack app of the folder: $out"
+	out=$(qd --output json stack check app) || fail "stack check of app failed: $out"
+	printf '%s' "$out" | jq -e --arg s "$source_id" '.errors == 0 and (.stacks | length) == 1 and .stacks[0].stack == "app" and .stacks[0].source == $s' >/dev/null ||
+		fail "unexpected check of app: $out"
+
+	step 'the first deploy of app takes over the running containers: same ids, commit deployed'
+	i=0
+	until stack_settled app succeeded; do
+		i=$((i + 1))
+		[ "$(stack_field app last_run)" != failed ] || fail "the first run of app failed: $(qd stack log "$(newest_run app)")"
+		[ "$i" -lt 180 ] || fail "timeout waiting for the first run of app: $(qd --output json status | tr ',' '\n' | grep -e foreign -e '\.app\.')"
+		sleep 1
+	done
+	head=$(docker exec "$host" git -c safe.directory="$base" -C "$base" rev-parse HEAD)
+	[ "$(stack_field app deployed)" = "$head" ] || fail "app is not recorded as deployed at $head: $(stack_field app deployed)"
+	[ "$(stack_images app)" = "$image:1.0.0" ] || fail "app does not run 1.0.0: $(stack_images app)"
+	ids_after=$(docker exec "$host" docker ps -q --no-trunc --filter label=com.docker.compose.project=app | sort)
+	[ "$ids_after" = "$ids_before" ] || fail "the first deploy replaced the containers: $ids_before vs $ids_after"
+	log "scenario: the foreign project app was taken over through the interface; the deploy of $head kept the container ids"
+
+	step 'the project is shut down and the source released'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	out=$(qd --output json source remove "$base" --yes) || fail "source remove of the foreign folder failed: $out"
+	if list_has_path "$base"; then fail 'source list still shows the foreign folder'; fi
+	docker exec "$host" sh -ec "cd '$base' && docker compose down" >/dev/null 2>&1 || fail 'cannot shut down the foreign project'
+	docker exec "$host" rm -rf /srv/qd-foreign
+	wait_for 'the qdeploy service to answer' 30 qd status
 }
 
 # --- First setup of a fresh service through the terminal interface only ---

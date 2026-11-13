@@ -1,0 +1,40 @@
+qdeploy  maintenance window closed                                                                  [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]                                                      
+------------------------------------------------------------------------------------------------------------------------
+  The project legacy-blog cannot be taken over.                                                                         
+                                                                                                                        
+  Nothing was changed.                                                                                                  
+                                                                                                                        
+    folder: /srv/demo-foreign                                                                                           
+                                                                                                                        
+  Foreign project                                                                                                       
+    project: legacy-blog                                                                                                
+    compose files (labels): /srv/demo-foreign/compose.yaml                                                              
+    env files (labels): /srv/elsewhere/blog.env                                                                         
+    reason: /srv/elsewhere/blog.env lies outside the working directory /srv/demo-foreign; a stack folder holds all files
+    of its stack                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+n/esc/enter close                                                                                         up/down scroll

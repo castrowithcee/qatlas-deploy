@@ -543,6 +543,12 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 				if cmd, handled := m.detailAction(id); handled {
 					return cmd
 				}
+			case areaContainers:
+				if id == actAdd {
+					if cmd, ok := m.adoptAction(); ok {
+						return cmd
+					}
+				}
 			}
 		case actUpdate, actDeploy, actPause, actUnpause, actPin, actUnpin, actResume, actCheck,
 			actStackStart, actStackStop, actStackRestart:
@@ -798,10 +804,10 @@ func (m *Model) footer() []kittui.Hint {
 		return append(append(m.detailHints(), common...), scroll...)
 	case m.area == areaContainers && m.ctv.open:
 		return append(append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}, containerLogsHint()},
-			containerActionHints()...), common...), scrollHints()...)
+			append(containerActionHints(), m.adoptHints()...)...), common...), scrollHints()...)
 	case m.area == areaContainers:
 		if len(m.ctNames) > 0 {
-			common = append(append([]kittui.Hint{containerLogsHint()}, containerActionHints()...), common...)
+			common = append(append([]kittui.Hint{containerLogsHint()}, append(containerActionHints(), m.adoptHints()...)...), common...)
 		}
 		return m.listFooter(m.ctList, len(m.ctNames), textKeyDetails, common, nav)
 	case m.area == areaRuns && m.log.open:
