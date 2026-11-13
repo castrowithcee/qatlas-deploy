@@ -582,3 +582,52 @@ func TestInspectChangesNothing(t *testing.T) {
 		t.Fatalf("inspect acted on containers: %v", fd.calls())
 	}
 }
+
+func TestInspectNamesWhatADeployWouldPass(t *testing.T) {
+	h := realGitService(t)
+
+	// A one-stack folder: the compose file lies in its root; .env and secrets.env are passed when present.
+	one := newFolder(t)
+	writeTree(t, one, map[string]string{"compose.yaml": webCompose, ".env": "WEB_VERSION=1.2.3\n", "secrets.env": "DEMO_TOKEN=invented\n"})
+	res := h.inspect(one, "")
+	if len(res.Stacks) != 1 {
+		t.Fatalf("stacks = %+v", res.Stacks)
+	}
+	st := res.Stacks[0]
+	if st.Project != st.Name || st.Project == "" ||
+		!slices.Equal(st.ComposeFiles, []string{filepath.Join(one, "compose.yaml")}) ||
+		!slices.Equal(st.EnvFiles, []string{filepath.Join(one, ".env"), filepath.Join(one, "secrets.env")}) {
+		t.Fatalf("one-stack folder = %+v", st)
+	}
+	for _, f := range st.EnvFiles {
+		if strings.Contains(f, "invented") {
+			t.Fatalf("a value reached the answer: %q", f)
+		}
+	}
+
+	// Without env files none is named.
+	bare := newFolder(t)
+	writeTree(t, bare, map[string]string{"compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/web:1\n"})
+	if st := h.inspect(bare, "").Stacks[0]; len(st.EnvFiles) != 0 || len(st.ComposeFiles) != 1 {
+		t.Fatalf("bare folder = %+v", st)
+	}
+
+	// A folder with subfolders: each stack has its own folder, files and env files.
+	multi := newFolder(t)
+	writeTree(t, multi, map[string]string{
+		"web/compose.yaml": webCompose, "web/.env": "WEB_VERSION=1.2.3\n",
+		"db/compose.yaml": webCompose, "db/secrets.env": "DEMO_TOKEN=invented\n",
+		"cache/compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/cache:1\n",
+	})
+	res = h.inspect(multi, "")
+	for name, env := range map[string][]string{"web": {".env"}, "db": {"secrets.env"}, "cache": nil} {
+		s := inspectedStack(t, res, name)
+		var want []string
+		for _, e := range env {
+			want = append(want, filepath.Join(multi, name, e))
+		}
+		if s.Project != name || !slices.Equal(s.ComposeFiles, []string{filepath.Join(multi, name, "compose.yaml")}) || !slices.Equal(s.EnvFiles, want) {
+			t.Fatalf("stack %s = %+v, want env %v", name, s, want)
+		}
+	}
+}

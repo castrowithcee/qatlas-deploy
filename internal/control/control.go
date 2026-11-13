@@ -991,6 +991,12 @@ type SourceStack struct {
 	// BindMounts are the sources of the stack's bind mounts that lie in the folder, as paths below it; the
 	// root client leaves them out when it hands the folder to the service.
 	BindMounts []string `json:"bind_mounts,omitempty"`
+	// Project is the Compose project name a deploy of the stack uses. ComposeFiles and EnvFiles are the files
+	// a deploy passes to docker compose, as absolute paths in call order; they are empty for a stack that
+	// cannot be deployed.
+	Project      string   `json:"project,omitempty"`
+	ComposeFiles []string `json:"compose_files,omitempty"`
+	EnvFiles     []string `json:"env_files,omitempty"`
 }
 
 // SourceConflict is a container of another Compose project that runs in the folder of a stack.
@@ -1479,9 +1485,9 @@ type ContainerListResult struct {
 
 // ContainerGroup is one stack, Compose project or single container. Conflict marks a foreign project that has
 // the name of a stack of this host but was started from another folder. State is the worst state of its
-// containers; UptimeSeconds is the shortest one among running containers; Restarts is the sum. WorkingDir and
-// ConfigFiles come from the Compose labels of a foreign project. Metrics sums the readings of the containers
-// that have one.
+// containers; UptimeSeconds is the shortest one among running containers; Restarts is the sum. WorkingDir,
+// ConfigFiles and EnvFiles come from the Compose labels of a foreign project, as absolute paths. Metrics sums
+// the readings of the containers that have one.
 type ContainerGroup struct {
 	Kind          string             `json:"kind"`
 	Name          string             `json:"name"`
@@ -1491,6 +1497,7 @@ type ContainerGroup struct {
 	Restarts      int                `json:"restarts"`
 	WorkingDir    string             `json:"working_dir,omitempty"`
 	ConfigFiles   []string           `json:"config_files,omitempty"`
+	EnvFiles      []string           `json:"env_files,omitempty"`
 	Metrics       *ContainerMetrics  `json:"metrics,omitempty"`
 	Containers    []ContainerSummary `json:"containers"`
 }
@@ -1522,7 +1529,8 @@ type ContainerGetArgs struct {
 
 // ContainerDetail answers ContainerGetCommand. Project, Kind and Conflict classify the container like its
 // group in ContainerListResult. EnvNames are the names of the environment variables; their values never
-// leave the service.
+// leave the service. WorkingDir, ConfigFiles and EnvFiles come from the Compose labels of a container of a
+// foreign project, as in ContainerGroup.
 type ContainerDetail struct {
 	ContainerSummary
 	ID       string             `json:"id"`
@@ -1534,6 +1542,10 @@ type ContainerDetail struct {
 	Networks []ContainerNetwork `json:"networks"`
 	Labels   map[string]string  `json:"labels"`
 	EnvNames []string           `json:"env_names"`
+
+	WorkingDir  string   `json:"working_dir,omitempty"`
+	ConfigFiles []string `json:"config_files,omitempty"`
+	EnvFiles    []string `json:"env_files,omitempty"`
 }
 
 // ContainerPort is a port of a container; PublicPort and HostIP are zero or empty if it is not published.

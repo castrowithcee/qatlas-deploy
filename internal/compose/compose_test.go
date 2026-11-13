@@ -577,3 +577,28 @@ func TestDeployerBackupNeedsRulesAndBackups(t *testing.T) {
 		t.Fatalf("restore = %v %v", err, b.restored)
 	}
 }
+
+func TestInputsOfMatchesTheDeployCall(t *testing.T) {
+	dir := t.TempDir()
+	st := stacks.Stack{Name: "demo", Dir: dir, ComposeFiles: []string{"compose.yaml", "compose.override.yaml"}}
+	in, err := InputsOf(st)
+	if err != nil || in.Project != "demo" || len(in.EnvFiles) != 0 ||
+		strings.Join(in.ComposeFiles, "|") != filepath.Join(dir, "compose.yaml")+"|"+filepath.Join(dir, "compose.override.yaml") {
+		t.Fatalf("inputs = %+v, %v", in, err)
+	}
+	for _, f := range []string{".env", "secrets.env"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("DEMO_KEY=invented\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in, err = InputsOf(st)
+	if err != nil || strings.Join(in.EnvFiles, "|") != filepath.Join(dir, ".env")+"|"+filepath.Join(dir, "secrets.env") {
+		t.Fatalf("inputs with env files = %+v, %v", in, err)
+	}
+	if _, err := InputsOf(stacks.Stack{Name: "demo", Dir: dir, ComposeFiles: []string{"../x.yaml"}}); err == nil {
+		t.Fatal("a compose file outside the folder was accepted")
+	}
+	if _, err := InputsOf(stacks.Stack{Name: "Bad Name", Dir: dir, ComposeFiles: []string{"compose.yaml"}}); err == nil {
+		t.Fatal("an invalid project name was accepted")
+	}
+}

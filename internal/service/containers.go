@@ -60,6 +60,29 @@ type containerService struct {
 // text prepares engine text for an answer: secret values are redacted, then control characters masked.
 func (s *containerService) text(v string) string { return maskControl(s.secrets.Apply(v)) }
 
+// texts applies text to every element.
+func (s *containerService) texts(v []string) []string {
+	out := make([]string, len(v))
+	for i, e := range v {
+		out[i] = s.text(e)
+	}
+	return out
+}
+
+// labelEnvFiles is the Compose label with the env files of a project, as absolute paths separated by commas.
+const labelEnvFiles = "com.docker.compose.project.environment_file"
+
+// labelList splits a Compose label that holds a comma-separated list; empty entries are dropped.
+func labelList(v string) []string {
+	var out []string
+	for _, f := range strings.Split(v, ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 func registerContainerCommands(r *control.Registry, repo *repoService, eng *sourceSet, secrets *redact.Redactor, d Docker, wait time.Duration, log *slog.Logger) error {
 	if wait <= 0 {
 		wait = containerReadyWait
@@ -204,6 +227,12 @@ func (s *containerService) handleList(ctx context.Context, raw json.RawMessage) 
 			for _, f := range p.ConfigFiles {
 				g.ConfigFiles = append(g.ConfigFiles, s.text(f))
 			}
+			for _, c := range p.Containers {
+				if files := labelList(c.Labels[labelEnvFiles]); files != nil {
+					g.EnvFiles = s.texts(files)
+					break
+				}
+			}
 		}
 		entries = append(entries, entry{g, p.Containers})
 	}
@@ -318,6 +347,11 @@ func (s *containerService) handleGet(ctx context.Context, raw json.RawMessage) (
 		ContainerSummary: s.summary(d.Container), ID: s.text(d.ID), Kind: kind, Project: s.text(project), Conflict: conflict,
 		Ports: []control.ContainerPort{}, Mounts: []control.ContainerMount{}, Networks: []control.ContainerNetwork{},
 		Labels: map[string]string{}, EnvNames: []string{},
+	}
+	if kind == control.ContainerKindForeign {
+		res.WorkingDir = s.text(dir)
+		res.ConfigFiles = s.texts(labelList(d.Labels["com.docker.compose.project.config_files"]))
+		res.EnvFiles = s.texts(labelList(d.Labels[labelEnvFiles]))
 	}
 	for _, p := range d.Ports {
 		res.Ports = append(res.Ports, control.ContainerPort{PrivatePort: p.PrivatePort, PublicPort: p.PublicPort,
