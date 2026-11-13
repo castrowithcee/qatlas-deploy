@@ -1,0 +1,24 @@
+qdeploy  maintenance window closed                          [esc] back  [?] help
+   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]              
+--------------------------------------------------------------------------------
+  ! Take over the repository /srv/demo-foreign as a local stack folder?         
+                                                                                
+  Yes makes the changes listed below.                                           
+                                                                                
+    folder: /srv/demo-foreign                                                   
+    case: local (a repository without a remote, deployed as it is)              
+                                                                                
+  Foreign project                                                               
+    project: legacy-blog                                                        
+    compose files (labels): /srv/demo-foreign/compose.yaml                      
+    env files (labels): /srv/demo-foreign/.env                                  
+                                                                                
+  Warning                                                                       
+    project name: the running containers belong to legacy-blog, a deploy would  
+    use blog                                                                    
+    compose files: the running containers use /srv/demo-foreign/compose.yaml, a 
+    deploy would pass /srv/demo-foreign/compose.yml                             
+    env files: the running containers use /srv/demo-foreign/.env, a deploy would
+    pass -                                                                      
+    The first deploy would create new containers instead of taking over the     
+y yes, do it  n/esc/enter cancel                           up/down scroll  20/36

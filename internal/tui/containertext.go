@@ -44,6 +44,29 @@ const (
 
 	textDetailContainers kittui.TextID = "detail.containers"
 
+	textCtFieldDir     kittui.TextID = "ct.field.dir"
+	textCtComposeFiles kittui.TextID = "ct.composefiles"
+	textCtEnvFiles     kittui.TextID = "ct.envfiles"
+
+	textKeyAdopt          kittui.TextID = "key.adopt"
+	textTitleAdopt        kittui.TextID = "title.adopt"
+	textAskAdoptRejected  kittui.TextID = "ask.adoptrejected"
+	textHeadForeign       kittui.TextID = "head.foreign"
+	textHeadWarning       kittui.TextID = "head.warning"
+	textAdoptProject      kittui.TextID = "adopt.project"
+	textAdoptComposeFiles kittui.TextID = "adopt.composefiles"
+	textAdoptEnvFiles     kittui.TextID = "adopt.envfiles"
+	textAdoptWarnProject  kittui.TextID = "adopt.warn.project"
+	textAdoptWarnCompose  kittui.TextID = "adopt.warn.compose"
+	textAdoptWarnEnv      kittui.TextID = "adopt.warn.env"
+	textAdoptEnvImplicit  kittui.TextID = "adopt.envimplicit"
+	textAdoptWarnEffect   kittui.TextID = "adopt.warn.effect"
+	textAdoptNoDir        kittui.TextID = "adopt.nodir"
+	textAdoptDirRelative  kittui.TextID = "adopt.dirrelative"
+	textAdoptOutside      kittui.TextID = "adopt.outside"
+	textAdoptStacks       kittui.TextID = "adopt.stacks"
+	textAdoptNotRoot      kittui.TextID = "adopt.notroot"
+
 	textErrDockerUnreachable kittui.TextID = "error.dockerunreachable"
 	textErrDockerPermission  kittui.TextID = "error.dockerpermission"
 	textErrDockerTimeout     kittui.TextID = "error.dockertimeout"
@@ -125,6 +148,29 @@ func containerEnglish() map[kittui.TextID]string {
 		textCtEnvNames: "Environment variables (names only)",
 
 		textDetailContainers: "Containers",
+
+		textCtFieldDir:     "folder",
+		textCtComposeFiles: "Compose files",
+		textCtEnvFiles:     "Env files",
+
+		textKeyAdopt:          "adopt",
+		textTitleAdopt:        "Adopt a foreign project",
+		textAskAdoptRejected:  "The project %s cannot be taken over.",
+		textHeadForeign:       "Foreign project",
+		textHeadWarning:       "Warning",
+		textAdoptProject:      "project: %s",
+		textAdoptComposeFiles: "compose files (labels): %s",
+		textAdoptEnvFiles:     "env files (labels): %s",
+		textAdoptWarnProject:  "project name: the running containers belong to %s, a deploy would use %s",
+		textAdoptWarnCompose:  "compose files: the running containers use %s, a deploy would pass %s",
+		textAdoptEnvImplicit:  "none; Compose reads the file .env of the folder if it exists",
+		textAdoptWarnEnv:      "env files: the running containers use %s, a deploy would pass %s",
+		textAdoptWarnEffect:   "The first deploy would create new containers instead of taking over the running ones.",
+		textAdoptNoDir:        "the containers carry no working directory, so there is no folder to take over",
+		textAdoptDirRelative:  "the working directory %s is not an absolute path",
+		textAdoptOutside:      "%s lies outside the working directory %s; a stack folder holds all files of its stack",
+		textAdoptStacks:       "the folder must hold exactly one stack, the inspection found %d",
+		textAdoptNotRoot:      "the compose file must lie directly in the folder, not in its subfolder %s",
 
 		textErrDockerUnreachable: "the container engine is not reachable; start it, then press {reload}",
 		textErrDockerPermission:  "the service may not use the container engine; give its user access to the engine socket, then press {reload}",
@@ -208,6 +254,29 @@ func containerGerman() map[kittui.TextID]string {
 		textCtEnvNames: "Umgebungsvariablen (nur Namen)",
 
 		textDetailContainers: "Container",
+
+		textCtFieldDir:     "Ordner",
+		textCtComposeFiles: "Compose-Dateien",
+		textCtEnvFiles:     "Env-Dateien",
+
+		textKeyAdopt:          "übernehmen",
+		textTitleAdopt:        "Fremdes Projekt übernehmen",
+		textAskAdoptRejected:  "Das Projekt %s kann nicht übernommen werden.",
+		textHeadForeign:       "Fremdes Projekt",
+		textHeadWarning:       "Warnung",
+		textAdoptProject:      "Projekt: %s",
+		textAdoptComposeFiles: "Compose-Dateien (Labels): %s",
+		textAdoptEnvFiles:     "Env-Dateien (Labels): %s",
+		textAdoptWarnProject:  "Projektname: Die laufenden Container gehören zu %s, ein Deploy nähme %s",
+		textAdoptWarnCompose:  "Compose-Dateien: Die laufenden Container nutzen %s, ein Deploy übergäbe %s",
+		textAdoptEnvImplicit:  "keine; Compose liest die Datei .env des Ordners, wenn sie existiert",
+		textAdoptWarnEnv:      "Env-Dateien: Die laufenden Container nutzen %s, ein Deploy übergäbe %s",
+		textAdoptWarnEffect:   "Der erste Deploy legte neue Container an, statt die laufenden zu übernehmen.",
+		textAdoptNoDir:        "die Container tragen kein Arbeitsverzeichnis, es gibt also keinen Ordner zum Übernehmen",
+		textAdoptDirRelative:  "das Arbeitsverzeichnis %s ist kein absoluter Pfad",
+		textAdoptOutside:      "%s liegt außerhalb des Arbeitsverzeichnisses %s; ein Stack-Ordner enthält alle Dateien seines Stacks",
+		textAdoptStacks:       "der Ordner muss genau einen Stack enthalten, die Inspektion fand %d",
+		textAdoptNotRoot:      "die Compose-Datei muss direkt im Ordner liegen, nicht im Unterordner %s",
 
 		textErrDockerUnreachable: "die Container-Engine ist nicht erreichbar; starte sie und drücke dann {reload}",
 		textErrDockerPermission:  "der Dienst darf die Container-Engine nicht nutzen; gib seinem Benutzer Zugriff auf den Socket der Engine und drücke dann {reload}",

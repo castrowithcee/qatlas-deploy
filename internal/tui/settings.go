@@ -436,7 +436,7 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 	case control.RepoSetResult:
 		s.add = nil
 		done(t.Lookup(textDoneBound, res.Dir), t.Lookup(textDetailHead, short(res.Head)), t.Lookup(textDetailCloned, yesNo(t, res.Cloned)))
-		cmds = append(cmds, m.reloadNow())
+		cmds = append(cmds, m.reloadNow(), m.rereadForeign())
 	case control.SourceAddResult:
 		s.add = nil
 		details := []string{t.Lookup(textDetailKind, res.Kind), t.Lookup(textDetailHead, short(res.Head))}
@@ -444,7 +444,7 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 			details = append(details, t.Lookup(textDetailFiles, res.Files))
 		}
 		done(t.Lookup(textDoneFolderAdded, res.Path), details...)
-		cmds = append(cmds, m.reloadNow())
+		cmds = append(cmds, m.reloadNow(), m.rereadForeign())
 	case control.SourceRemoveResult:
 		done(t.Lookup(textDoneReleased, res.Path))
 		cmds = append(cmds, m.reloadNow())

@@ -40,6 +40,9 @@ type addFlow struct {
 	plan    PermPlan
 	url     string
 	probe   control.RepoProbeResult
+	// foreign is set when the folder is that of a foreign Compose project the person chose in the Containers
+	// area; the flow is the same, with the labels shown and compared.
+	foreign *foreignSource
 }
 
 // inspected is the answer of the inspection of a folder to add.
@@ -293,30 +296,36 @@ func inspectFolder(ctx context.Context, b Backend, host Folders, path string) (a
 
 // showInspection shows what the inspection found and asks for the next step of the case.
 func (m *Model) showInspection(flow *addFlow) {
-	t, res := m.text, flow.res
+	t, res, title := m.text, flow.res, flow.title()
 	body := func(width int) []string { return m.inspectionLines(flow, width) }
 	cont := []kittui.Answer{{Action: actYes, Label: textAnswerContinue}, {Action: actNo, Label: textAnswerCancel}}
 	yes := []kittui.Answer{{Action: actYes, Label: textAnswerYes}, {Action: actNo, Label: textAnswerCancel}}
+	if flow.foreign != nil {
+		if p, bad := adoptRejection(*flow.foreign, &res); bad {
+			m.askAdoptRejection(*flow.foreign, p, &res)
+			return
+		}
+	}
 	switch res.Case {
 	case control.SourceCaseClone:
-		m.askSheet(textTitleFolderAdd, t.Lookup(textAskFolderClone, res.Path), t.Lookup(textWhatFolderClone), body, cont,
+		m.askSheet(title, t.Lookup(textAskFolderClone, res.Path), t.Lookup(textWhatFolderClone), body, cont,
 			func() tea.Cmd { return m.openForm(m.folderURLForm()) })
 	case control.SourceCaseAdopt:
 		flow.url = res.URL
-		m.askSheet(textTitleFolderAdd, t.Lookup(textAskFolderAdopt, res.Path, res.URL), t.Lookup(textWhatFolderAdopt), body, cont,
+		m.askSheet(title, t.Lookup(textAskFolderAdopt, res.Path, res.URL), t.Lookup(textWhatFolderAdopt), body, cont,
 			m.probeFolder)
 	case control.SourceCaseLocal:
-		m.askSheet(textTitleFolderAdd, t.Lookup(textAskFolderLocal, res.Path), t.Lookup(textWhatFolderApply), body, yes,
+		m.askSheet(title, t.Lookup(textAskFolderLocal, res.Path), t.Lookup(textWhatFolderApply), body, yes,
 			func() tea.Cmd { return m.addFolder(flow) })
 	case control.SourceCaseFiles:
 		if len(res.PlannedFiles) == 0 {
-			m.askSheet(textTitleFolderAdd, t.Lookup(textAskFolderNoFiles, res.Path), t.Lookup(textWhatFolderNoFiles), body, nil, nil)
+			m.askSheet(title, t.Lookup(textAskFolderNoFiles, res.Path), t.Lookup(textWhatFolderNoFiles), body, nil, nil)
 			return
 		}
-		m.askSheet(textTitleFolderAdd, t.Lookup(textAskFolderFiles, res.Path), t.Lookup(textWhatFolderFiles), body, yes,
+		m.askSheet(title, t.Lookup(textAskFolderFiles, res.Path), t.Lookup(textWhatFolderFiles), body, yes,
 			func() tea.Cmd { return m.addFolder(flow) })
 	default:
-		m.askSheet(textTitleFolderAdd, t.Lookup(textAskFolderRejected, res.Path), t.Lookup(textWhatNothing), body, nil, nil)
+		m.askSheet(title, t.Lookup(textAskFolderRejected, res.Path), t.Lookup(textWhatNothing), body, nil, nil)
 	}
 }
 
@@ -359,7 +368,7 @@ func (m *Model) askHostKey() {
 	if flow.probe.Pinned {
 		consequence = t.Lookup(textWhatHostKeyPinned)
 	}
-	m.ask(textTitleFolderAdd, t.Lookup(textAskHostKey, flow.url), consequence, m.hostKeyDetails(flow), false, func() tea.Cmd {
+	m.ask(flow.title(), t.Lookup(textAskHostKey, flow.url), consequence, m.hostKeyDetails(flow), false, func() tea.Cmd {
 		return m.checkFolderKey(flow)
 	})
 }
@@ -413,9 +422,10 @@ func (m *Model) keyDone(found bool) tea.Cmd {
 		for _, d := range m.hostKeyDetails(flow) {
 			lines = append(lines, m.wrapped(detailIndent, kittui.StyleText, d, width)...)
 		}
+		lines = append(lines, m.warnLines(flow, width)...)
 		return append(lines, m.changeLines(flow, width)...)
 	}
-	m.askSheet(textTitleFolderAdd, question, t.Lookup(textWhatFolderFinal), body,
+	m.askSheet(flow.title(), question, t.Lookup(textWhatFolderFinal), body,
 		[]kittui.Answer{{Action: actYes, Label: textAnswerYes}, {Action: actNo, Label: textAnswerCancel}},
 		func() tea.Cmd { return m.addFolder(flow) })
 	return nil
@@ -488,6 +498,11 @@ func (m *Model) inspectionLines(flow *addFlow, width int) []string {
 	lines := []string{""}
 	lines = append(lines, text(kittui.StyleText, t.Lookup(textDetailDir, res.Path))...)
 	lines = append(lines, text(kittui.StyleText, t.Lookup(textDetailCase, t.Lookup(caseText(res.Case))))...)
+	if flow.foreign != nil {
+		lines = append(lines, m.foreignLines(*flow.foreign, width)...)
+		lines = append(lines, m.warnLines(flow, width)...)
+		lines = append(lines, "")
+	}
 	if res.Case == control.SourceCaseReject {
 		reason, fix := res.Reason, res.Fix
 		if flow.readOnly {
