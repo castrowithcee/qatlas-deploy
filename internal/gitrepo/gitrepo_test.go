@@ -21,6 +21,8 @@ func fixtureGit(t *testing.T, dir string, args ...string) string {
 		"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
 		"GIT_AUTHOR_NAME=Demo", "GIT_AUTHOR_EMAIL=demo@example.test",
 		"GIT_COMMITTER_NAME=Demo", "GIT_COMMITTER_EMAIL=demo@example.test",
+		// A commit otherwise starts a detached maintenance run that changes .git while a test compares it.
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=maintenance.auto", "GIT_CONFIG_VALUE_0=false",
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
