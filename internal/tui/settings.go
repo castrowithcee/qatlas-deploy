@@ -249,7 +249,7 @@ func (m *Model) applySettingsLoad(msg settingsLoadMsg) {
 	switch res := msg.res.(type) {
 	case control.KeyResult:
 		s.noKey = false
-		if errors.As(msg.err, &remote) && remote.Code == control.CodeNotFound {
+		if errors.As(msg.err, &remote) && remote.Code == control.CodeNoSuchKey {
 			// No key yet is a state of the page, not a failure.
 			s.noKey, p.err, p.loaded, s.keyRes = true, nil, true, control.KeyResult{}
 		} else if msg.err == nil {

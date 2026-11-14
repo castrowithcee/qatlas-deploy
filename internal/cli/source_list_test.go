@@ -121,7 +121,7 @@ func TestSourceRemoveReportsTheServiceRefusal(t *testing.T) {
 		refusal *control.Error
 		want    string
 	}{
-		"unknown folder": {control.NewError(control.CodeNotFound, "no source is bound to this folder"), "source list"},
+		"unknown folder": {control.NewError(control.CodeNoSuchSource, "no source is bound to this folder"), "source list"},
 		"active run":     {control.NewError(control.CodeRunActive, "a run is active"), "stack runs"},
 	} {
 		t.Run(name, func(t *testing.T) {

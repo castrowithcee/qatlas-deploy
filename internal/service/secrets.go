@@ -106,7 +106,7 @@ func registerSecretCommands(r *control.Registry, eng *sourceSet,
 		case errors.Is(err, stacks.ErrKeyInEnv):
 			return control.NewError(control.CodeKeyExists, err.Error())
 		case errors.Is(err, stacks.ErrNoSecret):
-			return control.NewError(control.CodeNotFound, err.Error())
+			return control.NewError(control.CodeNoSuchSecret, err.Error())
 		}
 		var ce *control.Error
 		if ans := runsAnswer(err); errors.As(ans, &ce) {

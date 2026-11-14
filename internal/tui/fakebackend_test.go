@@ -559,7 +559,7 @@ func (f *fakeBackend) KeyShow(_ context.Context, dir string) (control.KeyResult,
 	if k := f.keySlot(dir); k != nil {
 		return *k, nil
 	}
-	return control.KeyResult{}, control.NewError(control.CodeNotFound, "no deploy key exists")
+	return control.KeyResult{}, control.NewError(control.CodeNoSuchKey, "no deploy key exists")
 }
 
 func (f *fakeBackend) KeyGenerate(_ context.Context, dir string, replace bool) (control.KeyResult, error) {

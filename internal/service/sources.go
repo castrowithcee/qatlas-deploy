@@ -419,7 +419,7 @@ func (s *sourceSet) convert(old *source, c sourceConfig, conf sourcesConfig, rev
 	i := slices.IndexFunc(conf.Sources, func(o sourceConfig) bool { return o.ID == c.ID })
 	if i < 0 {
 		next.eng.Close()
-		return nil, control.NewError(control.CodeNotFound, "no source is bound to this folder")
+		return nil, control.NewError(control.CodeNoSuchSource, "no source is bound to this folder")
 	}
 	conf.Sources = slices.Clone(conf.Sources)
 	conf.Sources[i] = c

@@ -274,7 +274,7 @@ func (s *inspectService) handleRemote(ctx context.Context, raw json.RawMessage) 
 	src := r.set.byPath(a.Path)
 	switch {
 	case src == nil:
-		return nil, control.NewError(control.CodeNotFound, "no source is bound to this folder")
+		return nil, control.NewError(control.CodeNoSuchSource, "no source is bound to this folder")
 	case src.conf.Kind != kindLocal:
 		return nil, control.NewError(control.CodeInvalid, "the source runs against a remote already")
 	}

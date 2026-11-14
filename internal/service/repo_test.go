@@ -203,7 +203,7 @@ func TestSetRefusesAChangedHostKey(t *testing.T) {
 
 func TestSetNeedsADeployKey(t *testing.T) {
 	h := start(t)
-	wantCode(t, errOf(h.set(h.srv.Key().Fingerprint)), control.CodeNotFound)
+	wantCode(t, errOf(h.set(h.srv.Key().Fingerprint)), control.CodeNoSuchKey)
 	if h.knownHosts() != "" {
 		t.Fatal("a key was pinned without a deploy key")
 	}
@@ -486,7 +486,7 @@ func TestCheckRefusesUnknownStackAndMissingBinding(t *testing.T) {
 	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "nope"}, nil), control.CodeNotFound)
+	wantCode(t, h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "nope"}, nil), control.CodeNoSuchStack)
 	wantCode(t, h.call(control.StacksCheckCommand, map[string]string{"bogus": "x"}, nil), control.CodeBadRequest)
 }
 

@@ -142,7 +142,7 @@ func TestCredentialDelete(t *testing.T) {
 	if _, stdout, _ := run(t, "credential", "list"); strings.Contains(stdout, "registry") {
 		t.Fatalf("still listed: %q", stdout)
 	}
-	if code, _, stderr := run(t, "credential", "delete", "registry"); code != 1 || !strings.Contains(stderr, "no such credential") {
+	if code, _, stderr := run(t, "credential", "delete", "registry"); code != 1 || !strings.Contains(stderr, "no such credential") || !strings.Contains(stderr, "credential list") {
 		t.Fatalf("second delete: code %d, stderr %q", code, stderr)
 	}
 }
@@ -184,7 +184,7 @@ func TestKeyGenerateShowAndReplace(t *testing.T) {
 	dir := startServiceLogged(t, allow, &log)
 
 	code, stdout, stderr := run(t, "key", "show")
-	if code != 1 || !strings.Contains(stderr, "no deploy key") {
+	if code != 1 || !strings.Contains(stderr, "no deploy key") || !strings.Contains(stderr, "key generate") {
 		t.Fatalf("show without key: code %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	code, stdout, stderr = run(t, "key", "generate", "--output", "json")
