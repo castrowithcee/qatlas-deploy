@@ -203,6 +203,10 @@ func TestRepoFetchWithDirFetchesOnlyThatFolder(t *testing.T) {
 	d := &fakeDeployer{}
 	h := bound(t, d)
 	dir := h.addSource(moreStacks(false))
+	// The new folder's first poll fetches once on its own; count from after it.
+	h.waitStatus("the new folder has polled", func(st control.StatusResult) bool {
+		return len(st.Engine.Sources) == 2 && !st.Engine.Sources[1].LastPoll.IsZero()
+	})
 	first, second := h.git.Fetches(h.dir), h.git.Fetches(dir)
 
 	var res control.RepoFetchResult

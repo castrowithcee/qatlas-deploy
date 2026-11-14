@@ -58,7 +58,8 @@ func newHarness(t *testing.T) *harness {
 	return h
 }
 
-// run starts the service of the harness and waits for its channel.
+// run starts the service of the harness and returns once it has answered a request, which serve only does after
+// the store, its sweep and the migrations are done.
 func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
 	t := h.t
 	t.Helper()
@@ -83,6 +84,9 @@ func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
 		}
 		defer cl.Close()
 		return cl.Call(context.Background(), command, args, result)
+	}
+	if err := h.call(control.StatusCommand, nil, nil); err != nil {
+		t.Fatalf("service does not answer: %v", err)
 	}
 }
 
