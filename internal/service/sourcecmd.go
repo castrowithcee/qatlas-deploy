@@ -250,7 +250,7 @@ func (s *inspectService) handleRemove(_ context.Context, raw json.RawMessage) (a
 	defer s.repo.setMu.Unlock()
 	src := set.byPath(a.Path)
 	if src == nil {
-		return nil, control.NewError(control.CodeNotFound, "no source is bound to this folder")
+		return nil, control.NewError(control.CodeNoSuchSource, "no source is bound to this folder")
 	}
 	conf, rev, err := set.load()
 	if err != nil {

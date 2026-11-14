@@ -392,7 +392,7 @@ func (m *Model) checkFolderKey(flow *addFlow) tea.Cmd {
 		switch {
 		case err == nil:
 			return keyChecked{found: true}, nil
-		case errors.As(err, &remote) && remote.Code == control.CodeNotFound:
+		case errors.As(err, &remote) && remote.Code == control.CodeNoSuchKey:
 			return keyChecked{}, nil
 		}
 		return nil, err

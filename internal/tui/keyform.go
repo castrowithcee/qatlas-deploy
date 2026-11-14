@@ -163,7 +163,7 @@ func (m *Model) keyWrite(f *settingsForm, dir, label, key string, generate bool)
 			return keyExists{details: details, replace: func() tea.Cmd {
 				return m.writeCall(op, dir, func(b Backend) (any, error) { return send(b, true) })
 			}}, nil
-		case !errors.As(err, &remote) || remote.Code != control.CodeNotFound:
+		case !errors.As(err, &remote) || remote.Code != control.CodeNoSuchKey:
 			return nil, err
 		}
 		return send(b, false)

@@ -251,7 +251,7 @@ func (s *repoService) handleSet(ctx context.Context, raw json.RawMessage) (any, 
 func (s *repoService) requireKey(dir, key string) error {
 	if _, err := s.keys.ShowNamedKey(key); err != nil {
 		if errors.Is(err, credentials.ErrNoKey) {
-			return control.NewError(control.CodeNotFound, fmt.Sprintf(
+			return control.NewError(control.CodeNoSuchKey, fmt.Sprintf(
 				"no deploy key exists for stack folder %s; run 'qdeploy key generate --dir %s' (or 'qdeploy key set --dir %s' to store one you have) and enter it in the git platform", dir, dir, dir))
 		}
 		return answerOf(err)
@@ -363,7 +363,7 @@ func (s *repoService) handleFetch(ctx context.Context, raw json.RawMessage) (any
 	if a.Dir != "" {
 		i := slices.IndexFunc(srcs, func(src *source) bool { return src.conf.Path == a.Dir })
 		if i < 0 {
-			return nil, control.NewError(control.CodeNotFound, "no source is bound to this folder")
+			return nil, control.NewError(control.CodeNoSuchSource, "no source is bound to this folder")
 		}
 		srcs = srcs[i : i+1]
 	}
@@ -489,7 +489,7 @@ func (s *repoService) handleCheck(ctx context.Context, raw json.RawMessage) (any
 		bySource[ref.src] = append(bySource[ref.src], ref.st)
 	}
 	if a.Stack != "" && len(order) == 0 {
-		return nil, control.NewError(control.CodeNotFound, "no such stack in the working copy")
+		return nil, control.NewError(control.CodeNoSuchStack, "no such stack in the working copy")
 	}
 	type sourced struct {
 		stackcheck.Report

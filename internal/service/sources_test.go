@@ -92,7 +92,7 @@ func TestFurtherSourceHasItsOwnKeyStateAndFetch(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := h.call(control.RepoSetCommand, control.RepoSetArgs{URL: h.url, Dir: other, Fingerprint: h.srv.Key().Fingerprint}, nil)
-	wantCode(t, err, control.CodeNotFound)
+	wantCode(t, err, control.CodeNoSuchKey)
 	if !strings.Contains(err.Error(), "key generate --dir "+other) || h.git.Clones() != 1 {
 		t.Fatalf("a further folder without its key: %v, %d clones", err, h.git.Clones())
 	}
@@ -220,7 +220,7 @@ func TestRepoFetchWithDirFetchesOnlyThatFolder(t *testing.T) {
 		t.Fatalf("fetches: %d and %d, were %d and %d", h.git.Fetches(h.dir), h.git.Fetches(dir), first, second)
 	}
 
-	wantCode(t, h.call(control.RepoFetchCommand, control.RepoFetchArgs{Dir: filepath.Join(tempBase(t), "unknown")}, nil), control.CodeNotFound)
+	wantCode(t, h.call(control.RepoFetchCommand, control.RepoFetchArgs{Dir: filepath.Join(tempBase(t), "unknown")}, nil), control.CodeNoSuchSource)
 
 	// Without the argument every folder is fetched, as before.
 	res = control.RepoFetchResult{}

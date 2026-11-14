@@ -204,7 +204,7 @@ func TestSourceCompareChecksTheKeysBeforeAnyGitStep(t *testing.T) {
 
 	noKey := newRemoteTest(t, false)
 	_, err = noKey.compare(noKey.fp())
-	wantCode(t, err, control.CodeNotFound)
+	wantCode(t, err, control.CodeNoSuchKey)
 	if !strings.Contains(err.Error(), "key generate") || noKey.knownHosts() != "" || len(noKey.git.Ops()) != 0 {
 		t.Fatalf("missing key: %v, known hosts %q, ops %q", err, noKey.knownHosts(), noKey.git.Ops())
 	}
@@ -259,7 +259,7 @@ func TestSourceRemoteRefusesAChangedRemoteAndWhatIsNotLocal(t *testing.T) {
 		Path: other, URL: r.url, Fingerprint: r.fp(), ExpectState: "empty"}, &control.SourceRemoteResult{}); err == nil {
 		t.Fatal("a folder that is no source was connected")
 	} else {
-		wantCode(t, err, control.CodeNotFound)
+		wantCode(t, err, control.CodeNoSuchSource)
 	}
 	wantCode(t, r.call(control.SourceRemoteCommand, control.SourceRemoteArgs{
 		Path: r.dir, URL: r.url, Fingerprint: "SHA256:wrong", ExpectState: "equal", ExpectCommit: remoteTip}, &control.SourceRemoteResult{}),
@@ -280,7 +280,7 @@ func TestSourceRemoteRefusesAWrongFingerprintAndAMissingKeyWithoutEffect(t *test
 	noKey := newRemoteTest(t, false)
 	noKey.cmp(gitrepo.Comparison{State: gitrepo.RemoteEmpty, Branch: "main"}, gitrepo.Scan{})
 	_, err = noKey.connect("empty", "")
-	wantCode(t, err, control.CodeNotFound)
+	wantCode(t, err, control.CodeNoSuchKey)
 	if noKey.knownHosts() != "" || len(noKey.git.Ops()) != 0 {
 		t.Fatalf("pinned %q, steps %q", noKey.knownHosts(), noKey.git.Ops())
 	}
