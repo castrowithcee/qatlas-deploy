@@ -394,14 +394,14 @@ func TestLogKeys(t *testing.T) {
 	if m.log.view.Query() != "" || !m.log.open {
 		t.Fatal("esc did not clear the search first")
 	}
-	// Esc leaves the log, then the area.
+	// Esc leaves the log, then leads to the tab line.
 	press(m, "esc")
 	if m.log.open || m.area != areaRuns {
 		t.Fatalf("open %v, area %s", m.log.open, m.area)
 	}
 	press(m, "esc")
-	if m.area != areaStacks {
-		t.Fatalf("area %s", m.area)
+	if m.area != areaRuns || m.focus() != kittui.ZoneTabs {
+		t.Fatalf("area %s, zone %s", m.area, m.focus())
 	}
 	send(m, "3", "enter")
 	if !isQuit(press(m, "q")) {

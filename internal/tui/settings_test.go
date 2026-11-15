@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-kit/i18n"
+	kittui "github.com/castrowithcee/qatlas-kit/tui"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 )
@@ -96,14 +97,14 @@ func TestSettingsAreaListsItsPages(t *testing.T) {
 	contains(t, m, "General", "Stack folders", "Deploy key", "Credentials", "Maintenance window", "Notifications")
 	send(m, "down", "down", "down", "enter")
 	contains(t, m, "registry.docker.io", "github.com")
-	// Esc leaves the page, then the area.
+	// Esc leaves the page, then leads to the tab line.
 	send(m, "esc")
 	if m.area != areaSettings || m.set.page != "" {
 		t.Fatalf("area %s page %q", m.area, m.set.page)
 	}
 	send(m, "esc")
-	if m.area != areaStacks {
-		t.Fatalf("area %s", m.area)
+	if m.area != areaSettings || m.focus() != kittui.ZoneTabs {
+		t.Fatalf("area %s, zone %s", m.area, m.focus())
 	}
 }
 

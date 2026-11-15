@@ -352,7 +352,7 @@ func (m *Model) settingsAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 			s.page = ""
 			return nil, true
 		}
-		return m.enter(areaStacks), true
+		return nil, false
 	case s.page == "" && id == actEnter:
 		if item, ok := s.menu.Selected(); ok {
 			return m.openPage(settingsPage(item)), true

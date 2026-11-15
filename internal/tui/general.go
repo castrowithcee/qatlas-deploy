@@ -165,6 +165,7 @@ func (m *Model) relocalize(lang i18n.Lang) tea.Cmd {
 	}
 	// A picker keeps its rows only inside its list; the detail opens it again.
 	m.pick = nil
+	m.setZone(m.zone)
 	return m.relocalizeLogs()
 }
 

@@ -48,8 +48,10 @@ func newTUICommand(state *notRunning) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Open the terminal interface",
-		Long: "tui opens the terminal interface. It has five areas, switched with 1 to 5, or with tab and the left and right keys\n" +
-			"(tab moves the focus between the tab line and the content, left and right then switch the area):\n" +
+		Long: "tui opens the terminal interface. It has five areas, switched with 1 to 5, or with the left and right keys\n" +
+			"on the tab line, where the interface starts. Down or enter lead into the content; up in the first row or\n" +
+			"at the top of a text, and esc in a list, lead back to the tab line. Tab moves the focus between the two\n" +
+			"as well:\n" +
 			"Stacks lists every stack with its current and available version, update mode, state, last run and\n" +
 			"findings; Stack detail shows the chosen stack with its image versions, changelog, backups and last runs;\n" +
 			"Runs lists the runs, and enter opens the log of a run, which follows a run in progress; Settings holds\n" +

@@ -44,6 +44,8 @@ func newTestModel(t *testing.T, lang i18n.Lang, b Backend, width, height int) *M
 	timersOf[m] = &timers{}
 	m.after = timersOf[m].start
 	load(t, m)
+	// The model starts on the tab line; most tests act on the content.
+	m.setZone(kittui.ZoneRows)
 	return m
 }
 

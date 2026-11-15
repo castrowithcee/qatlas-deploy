@@ -208,6 +208,7 @@ func newModel(c config) (*Model, error) {
 	if m.set, err = newSettings(keys, text); err != nil {
 		return nil, err
 	}
+	m.setZone(kittui.ZoneTabs)
 	if !m.restyle() {
 		m.notice = text.Lookup(kittui.TextWarning, text.Lookup(kittui.TextThemeUnknown, c.theme, kittui.ThemeTerminal))
 	}
@@ -561,8 +562,15 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		case actBack:
 			switch m.area {
 			case areaSettings:
+				if m.set.page == "" {
+					m.back(m.set.menu, msg)
+					return nil
+				}
 				cmd, _ := m.settingsAction(actBack)
 				return cmd
+			case areaStacks:
+				m.back(m.list, msg)
+				return nil
 			case areaDetail:
 				if m.pick != nil {
 					if _, handled := m.pick.list.Update(msg); !handled {
@@ -576,9 +584,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 					m.ctv = containerView{gen: m.ctv.gen}
 					return nil
 				}
-				if _, handled := m.ctList.Update(msg); !handled {
-					return m.enter(areaStacks)
-				}
+				m.back(m.ctList, msg)
 				return nil
 			case areaRuns:
 				switch {
@@ -587,42 +593,67 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 						m.log.open = false
 					}
 				default:
-					if _, handled := m.runsList.Update(msg); !handled {
-						return m.enter(areaStacks)
-					}
+					m.back(m.runsList, msg)
 				}
 				return nil
 			}
 		}
 		if m.area == areaDetail && m.pick == nil {
+			if id == actUp && m.detail.top <= 0 {
+				m.setZone(kittui.ZoneTabs)
+				return nil
+			}
 			m.scrollDetail(id)
 			return nil
 		}
 		if m.area == areaContainers && m.ctv.open {
+			if id == actUp && m.ctv.top <= 0 {
+				m.setZone(kittui.ZoneTabs)
+				return nil
+			}
 			m.ctv.top = scrolled(m.ctv.top, m.ctv.total, m.ctv.rows, id)
 			return nil
 		}
 	}
 	switch {
 	case m.area == areaStacks:
-		open, _ := m.list.Update(msg)
+		open, handled := m.list.Update(msg)
+		m.topEdge(handled, msg)
 		return m.open(open)
 	case m.area == areaContainers && !m.ctv.open:
-		open, _ := m.ctList.Update(msg)
+		open, handled := m.ctList.Update(msg)
+		m.topEdge(handled, msg)
 		return m.openContainer(open)
 	case m.area == areaRuns && m.log.open:
 		m.log.view.Update(msg)
 	case m.area == areaRuns:
-		open, _ := m.runsList.Update(msg)
+		open, handled := m.runsList.Update(msg)
+		m.topEdge(handled, msg)
 		return m.openLog(open)
 	case m.area == areaSettings:
-		cmd, _ := m.settingsTyped(msg)
+		cmd, handled := m.settingsTyped(msg)
+		m.topEdge(handled, msg)
 		return cmd
 	case m.area == areaDetail && m.pick != nil:
 		open, _ := m.pick.list.Update(msg)
 		return m.picked(open)
 	}
 	return nil
+}
+
+// topEdge leads to the tab line when an up key found no row above it: a list reports the key as not handled
+// at its first row, and a text without a scroll position never handles it.
+func (m *Model) topEdge(handled bool, msg tea.KeyPressMsg) {
+	if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actUp && !handled {
+		m.setZone(kittui.ZoneTabs)
+	}
+}
+
+// back is Esc in a list of an area: it clears a search first, and leads to the tab line once none is left.
+func (m *Model) back(l *kittui.List, msg tea.KeyPressMsg) {
+	if _, handled := l.Update(msg); !handled {
+		m.setZone(kittui.ZoneTabs)
+	}
 }
 
 // reloadAll reads the service again; the detail and an open log are read again with it.
@@ -696,7 +727,7 @@ func (m *Model) setZone(z kittui.FocusZone) {
 	m.zone = z
 	lists := []*kittui.List{m.list, m.runsList, m.ctList}
 	if m.set != nil {
-		lists = append(lists, m.set.menu, m.set.credList, m.set.notifyList)
+		lists = append(lists, m.set.menu, m.set.credList, m.set.notifyList, m.set.folderList)
 	}
 	if m.pick != nil {
 		lists = append(lists, m.pick.list)
@@ -727,6 +758,8 @@ func (m *Model) navKey(id kittui.ActionID, msg tea.KeyPressMsg, focus kittui.Inp
 		m.setZone(kittui.CycleZone(zones, cur, 1))
 	case id == actPrev:
 		m.setZone(kittui.CycleZone(zones, cur, -1))
+	case tabs && id == actUp:
+		// nothing lies above the tab line; the unfocused content must not move under it
 	case tabs && (id == actLeft || id == actRight):
 		step := 1
 		if id == actLeft {
