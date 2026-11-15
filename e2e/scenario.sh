@@ -2652,6 +2652,8 @@ scenario_tui() {
 	tui_wait '1 Stacks' 30
 	for name in demo-stack demo-cache demo-paused demo-pinned; do tui_wait "$name" 30; done
 	tui_wait 'q quit' 10
+	# The interface opens with the focus on the tab line.
+	tui_wait 'next area' 10
 	log 'scenario: interface open, stacks listed'
 
 	step 'a click on a tab switches the area and a click on a stack row marks it'
@@ -2915,8 +2917,8 @@ scenario_tui() {
 	tui_send Escape
 	tui_wait 'own stack demo-stack' 10
 	tui_has 'demo tick' && fail "the log is still open after Escape: $(tui_screen)"
-	tui_send Escape
-	tui_wait '1 Stacks' 10
+	tui_send 1
+	tui_wait 'CURRENT' 10
 	tui_send Home
 	tui_cursor_to demo-stack
 	tui_send Enter
@@ -3029,6 +3031,29 @@ scenario_tui() {
 	tui_has 'next area' && fail "Tab does not lead back to the content: $(tui_screen)"
 	tui_screen | grep -qE '^ +(mode +|No stack chosen)' || fail "the area changed with Tab: $(tui_screen)"
 	log 'scenario: Tab, Right and Left switched the area without digits and Tab led back to the content'
+
+	step 'the arrows lead between the tab line and the content: Down into the list, Up in the first row back, Escape in Runs stays in Runs'
+	tui_send 1
+	tui_wait 'CURRENT' 10
+	tui_send Home
+	tui_send Up
+	tui_wait 'next area' 10
+	tui_send Right Right
+	tui_wait 'STARTED' 10
+	tui_has 'next area' || fail "Right did not keep the focus on the tab line: $(tui_screen)"
+	tui_send Down
+	sleep 0.5
+	tui_has 'next area' && fail "Down did not lead into the Runs list: $(tui_screen)"
+	tui_send Home
+	tui_send Up
+	tui_wait 'next area' 10
+	tui_send Down
+	sleep 0.5
+	tui_has 'next area' && fail "Down did not lead into the Runs list again: $(tui_screen)"
+	tui_send Escape
+	tui_wait 'next area' 10
+	tui_has 'STARTED' || fail "Escape in Runs left the area: $(tui_screen)"
+	log 'scenario: the arrows and Escape led between the tab line and the content'
 
 	step 'Settings General: Deutsch is saved and the interface switches at once, keeps it after a restart, and English is saved back'
 	tui_send Escape
