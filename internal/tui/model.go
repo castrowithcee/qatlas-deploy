@@ -930,14 +930,14 @@ func (m *Model) marks() []kittui.StatusMark {
 	}
 	if m.snap.status.Engine.PollError != "" {
 		marks = append(marks, kittui.StatusMark{Kind: kittui.StatusWarn, Text: t.Lookup(textHeaderPollFailed),
-			Short: t.Lookup(textHeaderPollFailedS)})
+			Short: []string{t.Lookup(textHeaderPollFailedS)}})
 	}
 	if w := m.snap.status.Window; w != nil {
 		if w.Open {
 			marks = append(marks, kittui.StatusMark{Kind: kittui.StatusOK, Text: t.Lookup(textHeaderWindowOpen),
-				Short: t.Lookup(textHeaderWindowOpenS)})
+				Short: []string{t.Lookup(textHeaderWindowOpenS)}})
 		} else {
-			marks = append(marks, kittui.StatusMark{Text: t.Lookup(textHeaderWindowShut), Short: t.Lookup(textHeaderWindowShutS)})
+			marks = append(marks, kittui.StatusMark{Text: t.Lookup(textHeaderWindowShut), Short: []string{t.Lookup(textHeaderWindowShutS)}})
 		}
 	}
 	return marks
