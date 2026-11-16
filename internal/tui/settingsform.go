@@ -369,8 +369,14 @@ func (m *Model) formKey(msg tea.KeyPressMsg) tea.Cmd {
 	if cmd, done := m.formAct(act, handled); done {
 		return cmd
 	}
-	if id, ok := m.keys.Match(msg, f.form.Input()); ok && id == actForceQuit {
-		return tea.Quit
+	if id, ok := m.keys.Match(msg, f.form.Input()); ok {
+		switch {
+		case id == actForceQuit:
+			return tea.Quit
+		case id == actUp && !handled && f.kind == formGeneral:
+			// Up above the first field leaves the form for the sub-tab line.
+			return m.leaveGeneral(func() tea.Cmd { m.setZone(kittui.ZoneSubtabs); return nil })
+		}
 	}
 	return nil
 }
@@ -386,13 +392,8 @@ func (m *Model) formAct(act kittui.ActionID, handled bool) (cmd tea.Cmd, done bo
 	return nil, handled
 }
 
-// dropForm closes the open form; the General page is nothing but its form, so it falls back to the menu.
-func (m *Model) dropForm() {
-	m.set.form = nil
-	if m.set.page == pageGeneral {
-		m.set.page = ""
-	}
-}
+// dropForm closes the open form.
+func (m *Model) dropForm() { m.set.form = nil }
 
 // formBlocked says the open form takes no input: a write of the service is under way. The General form stays
 // usable, as saving it reaches no service.
@@ -405,6 +406,10 @@ func (m *Model) formBlocked() bool {
 // answer, the question names no value.
 func (m *Model) discardForm() tea.Cmd {
 	f := m.set.form
+	if f.kind == formGeneral {
+		// The General page stays its form; discarding starts it again and leaves it for the sub-tab line.
+		return m.leaveGeneral(func() tea.Cmd { m.set.form = m.generalForm(); m.setZone(kittui.ZoneSubtabs); return nil })
+	}
 	if !f.form.Changed() {
 		m.dropForm()
 		return nil

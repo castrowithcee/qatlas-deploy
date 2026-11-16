@@ -1,5 +1,6 @@
 qdeploy  maintenance window closed                                                                            [esc] back
    1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+   General   Credentials   Maintenance window  [Notifications]                                                          
 ------------------------------------------------------------------------------------------------------------------------
   Settings of the channel                                                                                               
                                                                                                                         
@@ -10,7 +11,6 @@ qdeploy  maintenance window closed                                              
 > Signing key | ************************_                                                                              |
               #========================================================================================================#
               hidden; signs every message                                                                               
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

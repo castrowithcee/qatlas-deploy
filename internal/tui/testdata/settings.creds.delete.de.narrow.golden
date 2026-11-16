@@ -1,11 +1,12 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
+  [Zugangsdaten]                                        
 --------------------------------------------------------
-  Zugangsdaten                                          
-                                                        
   NAME                GESPEICHERT                       
 > registry.docker.io  2026-10-30 09:00                  
   github.com          2026-10-29 09:00                  
+                                                        
+                                                        
   #= Zugangsdaten ===================================#  
   | ! Die Zugangsdaten registry.docker.io löschen?   |  
   |                                                  |  
@@ -15,7 +16,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   | [ ja, ausführen ]  > abbrechen <                 |  
   | y ja, ausführen  n/esc/enter abbrechen           |  
   #==================================================#  
-                                                        
                                                         
                                                         
                                                         

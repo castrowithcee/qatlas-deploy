@@ -1,5 +1,6 @@
 qdeploy  maintenance window closed                                                                  [esc] back  [?] help
    1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+   General   Credentials   Maintenance window  [Notifications]                                                          
 ------------------------------------------------------------------------------------------------------------------------
   Settings of the channel                                                                                               
                                                                                                                         
@@ -15,7 +16,6 @@ qdeploy  maintenance window closed                                              
                             | [ yes, do it ]  > cancel <                                   |                            
                             | y yes, do it  n/esc/enter cancel                             |                            
                             #==============================================================#                            
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

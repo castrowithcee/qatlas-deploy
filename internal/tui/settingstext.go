@@ -14,17 +14,15 @@ const (
 	textKeyRemove             kittui.TextID = "key.remove"
 	textKeyEdit               kittui.TextID = "key.edit"
 	textKeyTest               kittui.TextID = "key.test"
-	textKeyOpen               kittui.TextID = "key.open"
 	textKeyCancelForm         kittui.TextID = "key.cancelform"
-	textColSetting            kittui.TextID = "col.setting"
-	textColAbout              kittui.TextID = "col.about"
 	textColName               kittui.TextID = "col.name"
 	textColModified           kittui.TextID = "col.modified"
 	textColType               kittui.TextID = "col.type"
 	textColEvents             kittui.TextID = "col.events"
 	textColTarget             kittui.TextID = "col.target"
+	textKeyPrevPage           kittui.TextID = "key.prevpage"
+	textKeyNextPage           kittui.TextID = "key.nextpage"
 	textPageGeneral           kittui.TextID = "page.general"
-	textAboutGeneral          kittui.TextID = "about.general"
 	textFieldTheme            kittui.TextID = "field.theme"
 	textHintTheme             kittui.TextID = "hint.theme"
 	textFieldStartArea        kittui.TextID = "field.startarea"
@@ -45,9 +43,6 @@ const (
 	textPageCreds             kittui.TextID = "page.creds"
 	textPageWindow            kittui.TextID = "page.window"
 	textPageNotify            kittui.TextID = "page.notify"
-	textAboutCreds            kittui.TextID = "about.creds"
-	textAboutWindow           kittui.TextID = "about.window"
-	textAboutNotify           kittui.TextID = "about.notify"
 	textCredsEmpty            kittui.TextID = "creds.empty"
 	textNotifyEmpty           kittui.TextID = "notify.empty"
 	textEventsAll             kittui.TextID = "events.all"
@@ -286,10 +281,7 @@ func settingsEnglish() map[kittui.TextID]string {
 		textKeyRemove:             "remove",
 		textKeyEdit:               "edit",
 		textKeyTest:               "send test",
-		textKeyOpen:               "open",
 		textKeyCancelForm:         "discard",
-		textColSetting:            "setting",
-		textColAbout:              "about",
 		textColName:               "name",
 		textColModified:           "stored",
 		textColType:               "type",
@@ -298,8 +290,9 @@ func settingsEnglish() map[kittui.TextID]string {
 		textPageCreds:             "Credentials",
 		textPageWindow:            "Maintenance window",
 		textPageNotify:            "Notifications",
+		textKeyPrevPage:           "previous page",
+		textKeyNextPage:           "next page",
 		textPageGeneral:           "General",
-		textAboutGeneral:          "theme, start area, language and mouse of this device",
 		textFieldTheme:            "Theme",
 		textHintTheme:             "the colors of the interface",
 		textFieldStartArea:        "Start area",
@@ -317,9 +310,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textGeneralSavedStart:     "The settings are saved. The start area applies from the next start.",
 		textGeneralCannotSave:     "The settings cannot be saved here: this device has no place for them.",
 		textGeneralSaveFailed:     "The settings could not be saved: %s",
-		textAboutCreds:            "registry logins and the GitHub token",
-		textAboutWindow:           "when updates run",
-		textAboutNotify:           "webhook, Slack, Telegram and e-mail channels",
 		textCredsEmpty:            "No credentials stored; qdeploy works anonymously. {add} adds one.",
 		textNotifyEmpty:           "No notification channels. {add} adds one.",
 		textEventsAll:             "all",
@@ -559,10 +549,7 @@ func settingsGerman() map[kittui.TextID]string {
 		textKeyRemove:             "entfernen",
 		textKeyEdit:               "ändern",
 		textKeyTest:               "Test senden",
-		textKeyOpen:               "öffnen",
 		textKeyCancelForm:         "verwerfen",
-		textColSetting:            "Einstellung",
-		textColAbout:              "Inhalt",
 		textColName:               "Name",
 		textColModified:           "gespeichert",
 		textColType:               "Typ",
@@ -571,8 +558,9 @@ func settingsGerman() map[kittui.TextID]string {
 		textPageCreds:             "Zugangsdaten",
 		textPageWindow:            "Wartungsfenster",
 		textPageNotify:            "Benachrichtigungen",
+		textKeyPrevPage:           "vorherige Seite",
+		textKeyNextPage:           "nächste Seite",
 		textPageGeneral:           "Allgemein",
-		textAboutGeneral:          "Design, Startbereich, Sprache und Maus dieses Geräts",
 		textFieldTheme:            "Design",
 		textHintTheme:             "die Farben der Oberfläche",
 		textFieldStartArea:        "Startbereich",
@@ -590,9 +578,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textGeneralSavedStart:     "Die Einstellungen sind gespeichert. Der Startbereich gilt ab dem nächsten Start.",
 		textGeneralCannotSave:     "Die Einstellungen können hier nicht gespeichert werden: Dieses Gerät hat keinen Ort dafür.",
 		textGeneralSaveFailed:     "Die Einstellungen konnten nicht gespeichert werden: %s",
-		textAboutCreds:            "Registry-Logins und GitHub-Token",
-		textAboutWindow:           "wann Updates laufen",
-		textAboutNotify:           "Kanäle für Webhook, Slack, Telegram und E-Mail",
 		textCredsEmpty:            "Keine Zugangsdaten gespeichert; qdeploy arbeitet anonym. {add} legt eine an.",
 		textNotifyEmpty:           "Keine Benachrichtigungskanäle. {add} legt einen an.",
 		textEventsAll:             "alle",

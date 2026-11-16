@@ -1,8 +1,7 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
+  [General]                                             
 --------------------------------------------------------
-  General                                               
-                                                        
              #=========================================#
 > Theme      | terminal                              v |
              #=========================================#
@@ -16,6 +15,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
              +-----------------------------------------+
   Mouse      | on                                    v |
              +-----------------------------------------+
+                                                        
                                                         
                                                         
                                                         

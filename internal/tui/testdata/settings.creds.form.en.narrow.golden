@@ -1,5 +1,6 @@
 qdeploy  maintenance window closed            [esc] back
   1 2 3 [4 Settings] 5                                  
+  [Credentials]                                         
 --------------------------------------------------------
   Set a credential                                      
                                                         
@@ -17,7 +18,6 @@ qdeploy  maintenance window closed            [esc] back
                 #======================================#
                 hidden; the registry token, or the      
                 GitHub token                            
-                                                        
                                                         
 [ F2 save ]  [ esc discard ]                            
 F2 save  esc discard                                    

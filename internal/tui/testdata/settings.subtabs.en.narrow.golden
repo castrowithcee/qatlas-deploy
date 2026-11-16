@@ -1,11 +1,10 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
-  1 2 3 [4 Einstellungen] 5                             
+qdeploy  maintenance window closed  [esc] back  [?] help
+  1 2 3 [4 Settings] 5                                  
+> [Credentials]                                         
 --------------------------------------------------------
-  EINSTELLUNG         INHALT                            
-> Allgemein           Design, Startbereich, Sprache und~
-  Zugangsdaten        Registry-Logins und GitHub-Token  
-  Wartungsfenster     wann Updates laufen               
-  Benachrichtigungen  Kanäle für Webhook, Slack, Telegr~
+  NAME                STORED                            
+  registry.docker.io  2026-10-30 09:00                  
+  github.com          2026-10-29 09:00                  
                                                         
                                                         
                                                         
@@ -20,5 +19,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
                                                         
                                                         
-enter öffnen  r Neu laden  1-5 Bereich  q Beenden       
-                                  up/down Auswählen  1/4
+                                                        
+left previous page  right next page  a add  x remove    
+esc back  r reload  1-5 area  q quit                 1/2

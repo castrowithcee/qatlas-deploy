@@ -1,23 +1,23 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
+  [Credentials]                                         
 --------------------------------------------------------
   Set a credential                                      
                                                         
                 +--------------------------------------+
   Credential    | registry login                     v |
-                +--------------------------------------+
   #= Set a credential ===============================#-+
-  | ! Store the credential                           | |
-  |   registry.registry.example.test-5000?           |-+
+  | ! Store the credential                           |-+
+  |   registry.registry.example.test-5000?           | |
   |                                                  |-+
-  | The service stores the value and never shows it  | |
-  | again. A credential of that name is replaced.    |-+
-  |                                                  |=#
-> | [ yes, do it ]  > cancel <                       | |
-  | y yes, do it  n/esc/enter cancel                 |=#
-  #==================================================#  
+  | The service stores the value and never shows it  |-+
+  | again. A credential of that name is replaced.    | |
+  |                                                  |-+
+  | [ yes, do it ]  > cancel <                       |=#
+> | y yes, do it  n/esc/enter cancel                 | |
+  #==================================================#=#
+                hidden; the registry token, or the      
                 GitHub token                            
-                                                        
                                                         
                                                         
 [ F2 save ]  [ esc discard ]                            

@@ -70,10 +70,9 @@ func TestDownAndEnterLeadFromTheTabLineIntoEveryKindOfView(t *testing.T) {
 
 func TestUpInTheFirstRowLeadsToTheTabLine(t *testing.T) {
 	for name, keys := range map[string][]string{
-		"stacks":        {"1"},
-		"runs":          {"3"},
-		"containers":    {"5"},
-		"settings menu": {"4"},
+		"stacks":     {"1"},
+		"runs":       {"3"},
+		"containers": {"5"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := newTestModel(t, i18n.English, containersBackend(), ctWide, ctWideRows)
@@ -92,13 +91,15 @@ func TestUpInTheFirstRowLeadsToTheTabLine(t *testing.T) {
 	}
 }
 
-func TestUpInASettingsListLeadsToTheTabLine(t *testing.T) {
+func TestUpInASettingsListLeadsToTheSubtabLineAndUpAgainToTheTabLine(t *testing.T) {
 	m := newTestModel(t, i18n.English, settingsBackend(), wideWidth, goldenRows)
 	send(m, toCreds...)
 	if m.set.page != pageCreds {
 		t.Fatalf("page %q", m.set.page)
 	}
 	wantZone(t, m, kittui.ZoneRows)
+	send(m, "up")
+	wantZone(t, m, kittui.ZoneSubtabs)
 	send(m, "up")
 	wantZone(t, m, kittui.ZoneTabs)
 	if m.set.page != pageCreds {
@@ -145,14 +146,14 @@ func TestUpAtTheTopOfATextLeadsToTheTabLine(t *testing.T) {
 	}
 }
 
-func TestUpInASettingsTextPageLeadsToTheTabLine(t *testing.T) {
+func TestUpInASettingsTextPageLeadsToTheSubtabLine(t *testing.T) {
 	m := newTestModel(t, i18n.English, demoBackend(), wideWidth, goldenRows)
-	send(m, "4", "down", "down", "enter")
+	send(m, toWindow...)
 	wantZone(t, m, kittui.ZoneDetail)
 	send(m, "up")
-	wantZone(t, m, kittui.ZoneTabs)
-	if m.set.page == "" {
-		t.Fatal("the page closed")
+	wantZone(t, m, kittui.ZoneSubtabs)
+	if m.set.page != pageWindow {
+		t.Fatalf("page %q", m.set.page)
 	}
 }
 
@@ -164,6 +165,11 @@ func TestEscInAnAreaListLeadsToTheTabLineAndStaysInTheArea(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			m := newTestModel(t, i18n.English, containersBackend(), ctWide, ctWideRows)
 			send(m, area.key, "esc")
+			if area.area == areaSettings {
+				// The sub-tab line lies between the content and the tab line.
+				wantZone(t, m, kittui.ZoneSubtabs)
+				send(m, "esc")
+			}
 			wantZone(t, m, kittui.ZoneTabs)
 			if m.area != area.area {
 				t.Fatalf("area %s", m.area)

@@ -1,11 +1,12 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
+  [Benachrichtigungen]                                  
 --------------------------------------------------------
-  Benachrichtigungen                                    
-                                                        
   NAME      TYP      EREIGNISSE          ZIEL           
 > ops-hook  webhook  failed,rolled-back  -              
   ops-mail  smtp     alle                mail.example.t~
+                                                        
+                                                        
   #= Benachrichtigungen =============================#  
   | ! Eine Testnachricht über ops-hook senden?       |  
   |                                                  |  
@@ -15,7 +16,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   | [ ja, ausführen ]  > abbrechen <                 |  
   | y ja, ausführen  n/esc/enter abbrechen           |  
   #==================================================#  
-                                                        
                                                         
                                                         
                                                         
