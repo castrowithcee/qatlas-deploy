@@ -1,6 +1,6 @@
-qdeploy                                                                [?] Hilfe
+◆ qdeploy                                                              [?] Hilfe
   [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container         
---------------------------------------------------------------------------------
+────────────────────────────────────────────────────────────────────────────────
       STACK                 VERSION         VERFÜGBAR      ZUSTAND   BEFUNDE    
 > [ ] a-running-media-srv   1.4.2           1.5.0          läuft     keine      
   [ ] b-rollback-media-srv  2.0.1           aktuell        Rollback  keine      
@@ -21,4 +21,4 @@ qdeploy                                                                [?] Hilfe
                                                                                 
                                                                                 
 enter Details  / Suchen  space markieren  u update  d deploy  a hinzufügen      
-r Neu laden  1-5 Bereich  q Beenden                      up/down Auswählen  1/13
+r Neu laden  1-5 Bereich  q Beenden                          ↑/↓ Auswählen  1/13

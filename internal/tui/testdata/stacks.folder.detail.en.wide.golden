@@ -1,9 +1,9 @@
-qdeploy  maintenance window closed                                                                              [?] help
-  [1 Stacks]  2 Stack detail   3 Runs   4 Settings   5 Containers                                                       
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  maintenance window closed                                                                            [?] help
+  [1 ▤ Stacks]  2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
         STACK                      CURRENT      AVAILABLE      MODE       STATE     FINDINGS                            
-  v [ ] # /srv/local-example (0)   local                                            poll failed: the working copy has u~
-> v [ ] # /srv/stacks-example (6)  clone                                            polled 2026-10-30 14:30             
+  ▾ [ ] ■ /srv/local-example (0)   local                                            poll failed: the working copy has u…
+> ▾ [ ] ■ /srv/stacks-example (6)  clone                                            polled 2026-10-30 14:30             
     [ ] demo-stack                 1.4.2        1.5.0          automatic  deployed  1 warning                           
     [ ] mail-relay                 3.1          up to date     manual     pending   none                                
     [ ] old-tool                   -            unchecked      -          removed   none                                
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed                                              
   /srv/stacks-example                                                                                                   
     address: ssh://git.example.test/ops/stacks.git                                                                      
     last poll: Fri 2026-10-30 14:30                                                                                     
-enter details  / search  F fetch now  e deploy key  x release  a add  r reload  1-5 area  q quit     up/down choose  1/6
+enter details  / search  F fetch now  e deploy key  x release  a add  r reload  1-5 area  q quit         ↑/↓ choose  1/6

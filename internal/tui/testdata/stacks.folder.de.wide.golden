@@ -1,8 +1,8 @@
-qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                                  [?] Hilfe
+  [1 ▤ Stacks]  2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
         STACK                      VERSION      VERFÜGBAR      MODUS        ZUSTAND   BEFUNDE                           
-  v [ ] # /srv/stacks-example (6)  Klon                                               abgerufen 2026-10-30 14:30        
+  ▾ [ ] ■ /srv/stacks-example (6)  Klon                                               abgerufen 2026-10-30 14:30        
 >   [ ] demo-stack                 1.4.2        1.5.0          automatisch  deployt   1 Warnung                         
     [ ] mail-relay                 3.1          aktuell        manuell      offen     keine                             
     [ ] old-tool                   -            ungeprüft      -            entfernt  keine                             
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
 enter Details  / Suchen  space markieren  u update  d deploy  a hinzufügen  r Neu laden  1-5 Bereich  q Beenden         
-                                                                                                  up/down Auswählen  1/6
+                                                                                                      ↑/↓ Auswählen  1/6

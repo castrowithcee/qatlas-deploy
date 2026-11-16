@@ -1,7 +1,7 @@
-qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
-  ! Den Klon /srv/clone-example mit der Adresse ssh://git.example.test/ops/stacks.git übernehmen?                       
+◆ qdeploy  Wartungsfenster zu                                                                                  [?] Hilfe
+  [1 ▤ Stacks]  2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ Den Klon /srv/clone-example mit der Adresse ssh://git.example.test/ops/stacks.git übernehmen?                       
                                                                                                                         
   Als Nächstes wird der Hostschlüssel gezeigt und der Deploy-Schlüssel des Ordners geprüft. Vor der letzten Frage ändert
   sich nichts.                                                                                                          
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                                                     
     Der Hostschlüssel wird gespeichert und der Klon mit seiner Adresse übernommen.                                      
     9 paths get the group of the service account with group write; the owner stays                                      
     Der Ordner wird in das systemd-Drop-in des Dienstes eingetragen, der einmal neu startet.                            
-y weiter  n/esc/enter abbrechen                                                                         up/down Scrollen
+y weiter  n/esc/enter abbrechen                                                                             ↑/↓ Scrollen

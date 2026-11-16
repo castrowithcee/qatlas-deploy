@@ -1,6 +1,6 @@
-qdeploy  Wartungsfenster zu                              [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
    1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]        
---------------------------------------------------------------------------------
+────────────────────────────────────────────────────────────────────────────────
   demo-stack-app-1                                                              
                                                                                 
   Gruppe     eigener Stack demo-stack                                           
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                              [esc] Zurück  [?] Hilf
     demo-stack_default 172.18.0.2                                               
                                                                                 
 esc Zurück  o Log  S start  X stop  Z restart  r Neu laden  1-5 Bereich         
-q Beenden                                                up/down Scrollen  19/26
+q Beenden                                                    ↑/↓ Scrollen  19/26

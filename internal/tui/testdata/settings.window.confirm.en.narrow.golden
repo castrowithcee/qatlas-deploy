@@ -1,22 +1,22 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
   [Maintenance window]                                  
---------------------------------------------------------
+────────────────────────────────────────────────────────
   Change the maintenance window                         
                                                         
-            +------------------------------------------+
-  Days      | sun                                      |
-            +------------------------------------------+
-  #= Change the maintenance window ==================#=#
-> | ! Change the maintenance window?                 | |
-  |                                                  |=#
-  | The running service follows at once.             |  
-  | start: 04:30                                     |-+
-  |                                                  | |
-  | [ yes, do it ]  > cancel <                       |-+
-  | y yes, do it  n/esc/enter cancel                 |-+
-  #==================================================# |
-            +------------------------------------------+
+            ╭──────────────────────────────────────────╮
+  Days      │ sun                                      │
+            ╰──────────────────────────────────────────╯
+  ╔═ Change the maintenance window ══════════════════╗═╗
+> ║ ⚠ Change the maintenance window?                 ║ ║
+  ║                                                  ║═╝
+  ║ The running service follows at once.             ║  
+  ║ start: 04:30                                     ║─╮
+  ║                                                  ║ │
+  ║ [ yes, do it ]  > cancel <                       ║─╯
+  ║ y yes, do it  n/esc/enter cancel                 ║─╮
+  ╚══════════════════════════════════════════════════╝ │
+            ╰──────────────────────────────────────────╯
                                                         
                                                         
                                                         

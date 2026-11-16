@@ -1,23 +1,23 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
   [General]                                             
---------------------------------------------------------
-             #=========================================#
-> Theme      | catppuccin mocha                      v |
-             #=========================================#
+────────────────────────────────────────────────────────
+             ╔═════════════════════════════════════════╗
+> Theme      ║ catppuccin mocha                      ▾ ║
+             ╚═════════════════════════════════════════╝
              the colors of the interface                
-             +-----------------------------------------+
-  #= Discard the changes ============================# |
-  | ! Discard the changes to this form?              |-+
-  |                                                  |-+
-  | The changes you made here are lost.              | |
-  |                                                  |-+
-  | [ yes, do it ]  > cancel <                       |-+
-  | y yes, do it  n/esc/enter cancel                 | |
-  #==================================================#-+
-                                                        
-                                                        
-                                                        
+             ╭─────────────────────────────────────────╮
+  ╔═ Discard the changes ════════════════════════════╗ │
+  ║ ⚠ Discard the changes to this form?              ║─╯
+  ║                                                  ║─╮
+  ║ The changes you made here are lost.              ║ │
+  ║                                                  ║─╯
+  ║ [ yes, do it ]  > cancel <                       ║─╮
+  ║ y yes, do it  n/esc/enter cancel                 ║ │
+  ╚══════════════════════════════════════════════════╝─╯
+             ╭─────────────────────────────────────────╮
+  Icons      │ Unicode                               ▾ │
+             ╰─────────────────────────────────────────╯
                                                         
                                                         
 [ F2 save ]  [ esc discard ]                            

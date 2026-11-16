@@ -34,6 +34,11 @@ const (
 	textLangEnglish           kittui.TextID = "lang.english"
 	textLangGerman            kittui.TextID = "lang.german"
 	textLangSystem            kittui.TextID = "lang.system"
+	textFieldIcons            kittui.TextID = "field.icons"
+	textHintIcons             kittui.TextID = "hint.icons"
+	textIconsUnicode          kittui.TextID = "icons.unicode"
+	textIconsNerdFont         kittui.TextID = "icons.nerdfont"
+	textIconsNone             kittui.TextID = "icons.none"
 	textMouseOn               kittui.TextID = "mouse.on"
 	textMouseOff              kittui.TextID = "mouse.off"
 	textGeneralSaved          kittui.TextID = "general.saved"
@@ -304,6 +309,11 @@ func settingsEnglish() map[kittui.TextID]string {
 		textLangEnglish:           "English",
 		textLangGerman:            "Deutsch",
 		textLangSystem:            "System",
+		textFieldIcons:            "Icons",
+		textHintIcons:             "nerd font needs a patched terminal font; ASCII terminals show none",
+		textIconsUnicode:          "Unicode",
+		textIconsNerdFont:         "Nerd Font",
+		textIconsNone:             "none",
 		textMouseOn:               "on",
 		textMouseOff:              "off",
 		textGeneralSaved:          "The settings are saved.",
@@ -572,6 +582,11 @@ func settingsGerman() map[kittui.TextID]string {
 		textLangEnglish:           "English",
 		textLangGerman:            "Deutsch",
 		textLangSystem:            "System",
+		textFieldIcons:            "Symbole",
+		textHintIcons:             "Nerd Font braucht eine gepatchte Terminalschrift; ASCII-Terminals zeigen keine",
+		textIconsUnicode:          "Unicode",
+		textIconsNerdFont:         "Nerd Font",
+		textIconsNone:             "keine",
 		textMouseOn:               "an",
 		textMouseOff:              "aus",
 		textGeneralSaved:          "Die Einstellungen sind gespeichert.",

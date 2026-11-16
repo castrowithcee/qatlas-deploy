@@ -1,7 +1,7 @@
-qdeploy  Wartungsfenster zu                    [?] Hilfe
+◆ qdeploy  Wartungsfenster zu                  [?] Hilfe
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
-  ! Den Klon /srv/clone-example mit der Adresse         
+────────────────────────────────────────────────────────
+  ⚠ Den Klon /srv/clone-example mit der Adresse         
     ssh://git.example.test/ops/stacks.git übernehmen?   
                                                         
   Als Nächstes wird der Hostschlüssel gezeigt und der   
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                    [?] Hilfe
       funktioniert: deploy                              
                                                         
   Änderungen nach Ja                                    
-y weiter  n/esc/enter abbrechen  up/down Scrollen  20/26
+y weiter  n/esc/enter abbrechen      ↑/↓ Scrollen  20/26

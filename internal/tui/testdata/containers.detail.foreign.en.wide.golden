@@ -1,6 +1,6 @@
-qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]                                                      
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks   2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings  [5 ▦ Containers]                                            
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   legacy-blog-db-1                                                                                                      
                                                                                                                         
   group     foreign project legacy-blog                                                                                 
@@ -37,4 +37,4 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-esc back  o log  S start  X stop  Z restart  a adopt  r reload  1-5 area  q quit                          up/down scroll
+esc back  o log  S start  X stop  Z restart  a adopt  r reload  1-5 area  q quit                              ↑/↓ scroll

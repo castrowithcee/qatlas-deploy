@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed                                                                              [?] help
-  [1 Stacks]  2 Stack detail   3 Runs   4 Settings   5 Containers                                                       
-------------------------------------------------------------------------------------------------------------------------
-  ! Take over the clone /srv/clone-example with the address ssh://git.example.test/ops/stacks.git?                      
+◆ qdeploy  maintenance window closed                                                                            [?] help
+  [1 ▤ Stacks]  2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ Take over the clone /srv/clone-example with the address ssh://git.example.test/ops/stacks.git?                      
                                                                                                                         
   Next the host key is shown and the deploy key of the folder is checked. Nothing changes before the last question.     
                                                                                                                         
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed                                              
     9 paths get the group of the service account with group write; the owner stays                                      
     The folder is added to the systemd drop-in of the service, which restarts once.                                     
                                                                                                                         
-y continue  n/esc/enter cancel                                                                            up/down scroll
+y continue  n/esc/enter cancel                                                                                ↑/↓ scroll

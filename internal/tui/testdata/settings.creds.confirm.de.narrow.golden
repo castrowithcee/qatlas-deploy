@@ -1,22 +1,22 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
   [Zugangsdaten]                                        
---------------------------------------------------------
+────────────────────────────────────────────────────────
   Zugangsdaten setzen                                   
                                                         
-                    +----------------------------------+
-  Zugangsdaten      | Registry-Login                 v |
-  #= Zugangsdaten setzen ============================#-+
-  | ! Die Zugangsdaten                               |-+
-  |   registry.registry.example.test-5000 speichern? | |
-  |                                                  |-+
-  | Der Dienst speichert den Wert und zeigt ihn nie  |-+
-  | wieder. Zugangsdaten gleichen Namens werden      | |
-  | ersetzt.                                         |-+
-  |                                                  |=#
-> | [ ja, ausführen ]  > abbrechen <                 | |
-  | y ja, ausführen  n/esc/enter abbrechen           |=#
-  #==================================================#  
+                    ╭──────────────────────────────────╮
+  Zugangsdaten      │ Registry-Login                 ▾ │
+  ╔═ Zugangsdaten setzen ════════════════════════════╗─╯
+  ║ ⚠ Die Zugangsdaten                               ║─╮
+  ║   registry.registry.example.test-5000 speichern? ║ │
+  ║                                                  ║─╯
+  ║ Der Dienst speichert den Wert und zeigt ihn nie  ║─╮
+  ║ wieder. Zugangsdaten gleichen Namens werden      ║ │
+  ║ ersetzt.                                         ║─╯
+  ║                                                  ║═╗
+> ║ [ ja, ausführen ]  > abbrechen <                 ║ ║
+  ║ y ja, ausführen  n/esc/enter abbrechen           ║═╝
+  ╚══════════════════════════════════════════════════╝  
                     das GitHub-Token                    
                                                         
                                                         

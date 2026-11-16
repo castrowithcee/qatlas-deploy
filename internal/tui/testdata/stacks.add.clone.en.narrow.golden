@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed              [?] help
+◆ qdeploy  maintenance window closed            [?] help
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
-  ! Clone a repository into /srv/new-example?           
+────────────────────────────────────────────────────────
+  ⚠ Clone a repository into /srv/new-example?           
                                                         
   Next the SSH address is asked and the host key shown. 
   Nothing changes before the last question.             
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed              [?] help
     The host key is stored and the repository is cloned 
     into the folder.                                    
     No permission changes: the service can write        
-y continue  n/esc/enter cancel     up/down scroll  20/23
+y continue  n/esc/enter cancel         ↑/↓ scroll  20/23

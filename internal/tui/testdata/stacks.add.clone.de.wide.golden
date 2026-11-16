@@ -1,7 +1,7 @@
-qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
-  ! Ein Repository nach /srv/new-example klonen?                                                                        
+◆ qdeploy  Wartungsfenster zu                                                                                  [?] Hilfe
+  [1 ▤ Stacks]  2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ Ein Repository nach /srv/new-example klonen?                                                                        
                                                                                                                         
   Als Nächstes werden die SSH-Adresse abgefragt und der Hostschlüssel gezeigt. Vor der letzten Frage ändert sich nichts.
                                                                                                                         
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-y weiter  n/esc/enter abbrechen                                                                         up/down Scrollen
+y weiter  n/esc/enter abbrechen                                                                             ↑/↓ Scrollen

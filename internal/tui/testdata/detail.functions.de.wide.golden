@@ -1,6 +1,6 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks  [2 ▣ Stack-Details]  3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
       0 B  unvollständig                                                                                                
                                                                                                                         
   Letzte Läufe                                                                                                          
@@ -25,4 +25,4 @@ qdeploy  Wartungsfenster zu                                                     
       secrets.env is not listed in .gitignore                                                                           
       Zu tun: Add the line 'secrets.env' to the .gitignore.                                                             
 o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden                
-                                                                                                 up/down Scrollen  58/58
+                                                                                                     ↑/↓ Scrollen  58/58

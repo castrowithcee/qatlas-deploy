@@ -1,6 +1,6 @@
-qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs   4 Settings   5 Containers                                                       
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   demo-stack                                                                                                            
                                                                                                                         
   mode      automatic                                                                                                   
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed                                              
     No containers of this stack.                                                                                        
                                                                                                                         
 m create data directories  o log  a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit           
-                                                                                                   up/down scroll  19/64
+                                                                                                       ↑/↓ scroll  19/64

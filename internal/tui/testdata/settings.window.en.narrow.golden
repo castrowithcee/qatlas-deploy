@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
   [Maintenance window]                                  
---------------------------------------------------------
+────────────────────────────────────────────────────────
     days: sun                                           
     start: 03:00                                        
     duration: 2h                                        

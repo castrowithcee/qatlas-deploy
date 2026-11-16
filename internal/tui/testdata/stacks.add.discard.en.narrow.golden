@@ -1,20 +1,20 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
+────────────────────────────────────────────────────────
   Add a stack folder                                    
                                                         
-         #=============================================#
-> Folder | /srv/stacks-example_                        |
-         #=============================================#
+         ╔═════════════════════════════════════════════╗
+> Folder ║ /srv/stacks-example_                        ║
+         ╚═════════════════════════════════════════════╝
          absolute path; it is only inspected, nothing   
-  #= Discard the changes ============================#  
-  | ! Discard the changes to this form?              |  
-  |                                                  |  
-  | The changes you made here are lost.              |  
-  |                                                  |  
-  | [ yes, do it ]  > cancel <                       |  
-  | y yes, do it  n/esc/enter cancel                 |  
-  #==================================================#  
+  ╔═ Discard the changes ════════════════════════════╗  
+  ║ ⚠ Discard the changes to this form?              ║  
+  ║                                                  ║  
+  ║ The changes you made here are lost.              ║  
+  ║                                                  ║  
+  ║ [ yes, do it ]  > cancel <                       ║  
+  ║ y yes, do it  n/esc/enter cancel                 ║  
+  ╚══════════════════════════════════════════════════╝  
                                                         
                                                         
                                                         

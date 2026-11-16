@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed                          [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]              
---------------------------------------------------------------------------------
-  ! Take over the repository /srv/demo-foreign as a local stack folder?         
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks   2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings  [5 ▦ Containers]    
+────────────────────────────────────────────────────────────────────────────────
+  ⚠ Take over the repository /srv/demo-foreign as a local stack folder?         
                                                                                 
   Yes makes the changes listed below.                                           
                                                                                 
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed                          [esc] back  [?] help
     legacy-blog (folder .)                                                      
       works: deploy                                                             
       does not work: backup                                                     
-y yes, do it  n/esc/enter cancel                           up/down scroll  20/26
+y yes, do it  n/esc/enter cancel                               ↑/↓ scroll  20/26

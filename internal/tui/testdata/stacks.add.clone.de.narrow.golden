@@ -1,7 +1,7 @@
-qdeploy  Wartungsfenster zu                    [?] Hilfe
+◆ qdeploy  Wartungsfenster zu                  [?] Hilfe
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
-  ! Ein Repository nach /srv/new-example klonen?        
+────────────────────────────────────────────────────────
+  ⚠ Ein Repository nach /srv/new-example klonen?        
                                                         
   Als Nächstes werden die SSH-Adresse abgefragt und der 
   Hostschlüssel gezeigt. Vor der letzten Frage ändert   
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                    [?] Hilfe
     Modus 0755 angelegt.                                
     Der Hostschlüssel wird gespeichert und das          
     Repository in den Ordner geklont.                   
-y weiter  n/esc/enter abbrechen  up/down Scrollen  20/24
+y weiter  n/esc/enter abbrechen      ↑/↓ Scrollen  20/24

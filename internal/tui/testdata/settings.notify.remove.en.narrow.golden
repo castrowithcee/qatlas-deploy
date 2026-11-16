@@ -1,20 +1,20 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
   [Notifications]                                       
---------------------------------------------------------
+────────────────────────────────────────────────────────
   NAME      TYPE     EVENTS              TARGET         
   ops-hook  webhook  failed,rolled-back  -              
-> ops-mail  smtp     all                 mail.example.t~
+> ops-mail  smtp     all                 mail.example.t…
                                                         
                                                         
-  #= Notifications ==================================#  
-  | ! Remove the channel ops-mail?                   |  
-  |                                                  |  
-  | The channel and its stored secrets are deleted.  |  
-  |                                                  |  
-  | [ yes, do it ]  > cancel <                       |  
-  | y yes, do it  n/esc/enter cancel                 |  
-  #==================================================#  
+  ╔═ Notifications ══════════════════════════════════╗  
+  ║ ⚠ Remove the channel ops-mail?                   ║  
+  ║                                                  ║  
+  ║ The channel and its stored secrets are deleted.  ║  
+  ║                                                  ║  
+  ║ [ yes, do it ]  > cancel <                       ║  
+  ║ y yes, do it  n/esc/enter cancel                 ║  
+  ╚══════════════════════════════════════════════════╝  
                                                         
                                                         
                                                         

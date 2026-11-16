@@ -168,7 +168,7 @@ acc_first_setup() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
 	tui_send 1
 	tui_wait 'No stack folders yet' 30
 

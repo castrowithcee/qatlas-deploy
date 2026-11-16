@@ -1,21 +1,21 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
   [Benachrichtigungen]                                  
---------------------------------------------------------
+────────────────────────────────────────────────────────
   NAME      TYP      EREIGNISSE          ZIEL           
   ops-hook  webhook  failed,rolled-back  -              
-> ops-mail  smtp     alle                mail.example.t~
+> ops-mail  smtp     alle                mail.example.t…
                                                         
                                                         
-  #= Benachrichtigungen =============================#  
-  | ! Den Kanal ops-mail entfernen?                  |  
-  |                                                  |  
-  | Der Kanal und seine gespeicherten Geheimnisse    |  
-  | werden gelöscht.                                 |  
-  |                                                  |  
-  | [ ja, ausführen ]  > abbrechen <                 |  
-  | y ja, ausführen  n/esc/enter abbrechen           |  
-  #==================================================#  
+  ╔═ Benachrichtigungen ═════════════════════════════╗  
+  ║ ⚠ Den Kanal ops-mail entfernen?                  ║  
+  ║                                                  ║  
+  ║ Der Kanal und seine gespeicherten Geheimnisse    ║  
+  ║ werden gelöscht.                                 ║  
+  ║                                                  ║  
+  ║ [ ja, ausführen ]  > abbrechen <                 ║  
+  ║ y ja, ausführen  n/esc/enter abbrechen           ║  
+  ╚══════════════════════════════════════════════════╝  
                                                         
                                                         
                                                         

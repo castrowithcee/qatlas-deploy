@@ -1,15 +1,15 @@
-qdeploy  Wartungsfenster zu                    [?] Hilfe
+◆ qdeploy  Wartungsfenster zu                  [?] Hilfe
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
+────────────────────────────────────────────────────────
         STACK                      VERSION  VERFÜGBAR  Z
-> v [ ] # /srv/local-example (0)   lokal               ~
-  v [ ] # /srv/stacks-example (6)  Klon                ~
-    [ ] demo-stack                 1.4.2    1.5.0      ~
-    [ ] mail-relay                 3.1      aktuell    ~
-    [ ] old-tool                   -        ungeprüft  ~
-    [ ] photo-album                2.0.1    Fehler     ~
-    [ ] web-shop                   5.2.0,~  6.0.0 (M~  ~
-    [ ] wiki                       1.41.0   ungeprüft  ~
+> ▾ [ ] ■ /srv/local-example (0)   lokal               …
+  ▾ [ ] ■ /srv/stacks-example (6)  Klon                …
+    [ ] demo-stack                 1.4.2    1.5.0      …
+    [ ] mail-relay                 3.1      aktuell    …
+    [ ] old-tool                   -        ungeprüft  …
+    [ ] photo-album                2.0.1    Fehler     …
+    [ ] web-shop                   5.2.0,…  6.0.0 (M…  …
+    [ ] wiki                       1.41.0   ungeprüft  …
                                                         
                                                         
                                                         
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                    [?] Hilfe
     Abruf fehlgeschlagen: the working copy has          
     uncommitted changes in demo/compose.yaml            
 enter Details  / Suchen  x lösen  a hinzufügen          
-r Neu laden  1-5 Bereich  q Beenden                  1/6
+r Neu laden  1-5 Bereich  q Beenden   ↑/↓ Auswählen  1/6

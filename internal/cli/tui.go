@@ -78,11 +78,14 @@ func newTUICommand(state *notRunning) *cobra.Command {
 			"The mouse works too: click a tab, a key in the header or footer, or a row, and turn the wheel to scroll.\n" +
 			"A click does what the key does, so every action still asks first. The mouse is on by default; with it\n" +
 			"on, hold Shift to select text. Settings, General switches it off.\n\n" +
+			"A small icon stands before the product name and before each area on the tab line. Settings, General\n" +
+			"chooses them under Icons: unicode (the default), nerdfont (needs a Nerd Font patched terminal font) or\n" +
+			"none. A terminal without Unicode shows no icons.\n\n" +
 			"It needs a terminal on both standard input and output and the running service; only root may use the\n" +
 			"service channel, so run it with sudo. Without a running service it ends with exit code 3 before it draws\n" +
 			"anything. Device-local preferences are read from ~/.qatlas/qdeploy/tui.yaml; a missing file means\n" +
-			"the defaults. Change them in Settings under General (theme, start area, language and mouse) instead of\n" +
-			"editing the file by hand.",
+			"the defaults. Change them in Settings under General (theme, start area, language, icons and mouse)\n" +
+			"instead of editing the file by hand.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			in, out, ok := terminalStreams(c.OutOrStdout())

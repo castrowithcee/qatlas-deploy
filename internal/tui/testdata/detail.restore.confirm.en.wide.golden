@@ -1,22 +1,22 @@
-qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks  [2 Stack detail]  3 Runs   4 Settings   5 Containers                                                       
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   demo-stack                                                                                                            
                                                                                                                         
   mode      automatic                                                                                                   
-  state     deployed        #= Restore a backup ===========================================#                            
-  findings  1 warning       | ! Restore the backup 20261023T031000Z-4567cdef of the stack  |                            
-                            |   demo-stack?                                                |                            
-  Image versions            |                                                              |                            
-    APP_VERSION  example/app| The stack is stopped and its current data is overwritten     |                            
-      1.4.2 -> 1.5.0  update| with the backup. The stack is started again afterwards. This |                            
-                            | cannot be undone.                                            |                            
-  Containers                | 10-23 03:10                                                  |                            
-    No containers of this st| 11.0 MiB                                                     |                            
-                            |                                                              |                            
-  Changelog                 | [ yes, do it ]  > cancel <                                   |                            
-    APP_VERSION  1.4.2 -> 1.| y yes, do it  n/esc/enter cancel                             |                            
-      source example/app    #==============================================================#                            
+  state     deployed        ╔═ Restore a backup ═══════════════════════════════════════════╗                            
+  findings  1 warning       ║ ⚠ Restore the backup 20261023T031000Z-4567cdef of the stack  ║                            
+                            ║   demo-stack?                                                ║                            
+  Image versions            ║                                                              ║                            
+    APP_VERSION  example/app║ The stack is stopped and its current data is overwritten     ║                            
+      1.4.2 -> 1.5.0  update║ with the backup. The stack is started again afterwards. This ║                            
+                            ║ cannot be undone.                                            ║                            
+  Containers                ║ 10-23 03:10                                                  ║                            
+    No containers of this st║ 11.0 MiB                                                     ║                            
+                            ║                                                              ║                            
+  Changelog                 ║ [ yes, do it ]  > cancel <                                   ║                            
+    APP_VERSION  1.4.2 -> 1.║ y yes, do it  n/esc/enter cancel                             ║                            
+      source example/app    ╚══════════════════════════════════════════════════════════════╝                            
       1.5.0  Spring release  2026-10-29                                                                                 
         Adds a dark theme.                                                                                              
                                                                                                                         

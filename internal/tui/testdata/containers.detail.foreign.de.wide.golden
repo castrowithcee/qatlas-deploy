@@ -1,6 +1,6 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]                                                
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks   2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen  [5 ▦ Container]                                      
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   legacy-blog-db-1                                                                                                      
                                                                                                                         
   Gruppe     fremdes Projekt legacy-blog                                                                                
@@ -37,4 +37,4 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-esc Zurück  o Log  S start  X stop  Z restart  a übernehmen  r Neu laden  1-5 Bereich  q Beenden        up/down Scrollen
+esc Zurück  o Log  S start  X stop  Z restart  a übernehmen  r Neu laden  1-5 Bereich  q Beenden            ↑/↓ Scrollen

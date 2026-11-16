@@ -1,10 +1,10 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
   [Notifications]                                       
---------------------------------------------------------
+────────────────────────────────────────────────────────
   NAME      TYPE     EVENTS              TARGET         
 > ops-hook  webhook  failed,rolled-back  -              
-  ops-mail  smtp     all                 mail.example.t~
+  ops-mail  smtp     all                 mail.example.t…
                                                         
                                                         
                                                         
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
 a add  s send test  x remove  esc back  r reload        
-1-5 area  q quit                     up/down choose  1/2
+1-5 area  q quit                         ↑/↓ choose  1/2

@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks   2 ▣ Stack detail   3 ▶ Runs  [4 ⚙ Settings]  5 ▦ Containers                                             
    General   Credentials   Maintenance window  [Notifications]                                                          
-------------------------------------------------------------------------------------------------------------------------
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   No notification channels. a adds one.                                                                                 
                                                                                                                         
                                                                                                                         
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-a add  s send test  x remove  esc back  r reload  1-5 area  q quit                                        up/down choose
+a add  s send test  x remove  esc back  r reload  1-5 area  q quit                                            ↑/↓ choose

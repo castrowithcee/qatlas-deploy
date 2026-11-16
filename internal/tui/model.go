@@ -1023,10 +1023,11 @@ func (m *Model) message() *kittui.Message {
 }
 
 func (m *Model) frameSpec() kittui.FrameSpec {
+	icons := iconsFor(m.prefs.Icons)
 	spec := kittui.FrameSpec{
-		Width: m.width, Height: m.height, Product: productName, Status: m.marks(),
+		Width: m.width, Height: m.height, Product: productName, Icon: icons.logo, Status: m.marks(),
 		HeaderKeys: []kittui.Hint{{Action: actHelp, Label: kittui.TextKeyHelp}},
-		Areas:      areas(), ActiveArea: m.area, ActiveTab: kittui.TabID(m.set.page), Focus: m.focus(), Input: m.input(),
+		Areas:      areasWith(icons), ActiveArea: m.area, ActiveTab: kittui.TabID(m.set.page), Focus: m.focus(), Input: m.input(),
 		Message: m.message(), Footer: m.footer(),
 	}
 	switch {

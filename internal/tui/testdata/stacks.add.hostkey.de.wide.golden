@@ -1,24 +1,24 @@
-qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                                  [?] Hilfe
+  [1 ▤ Stacks]  2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
         STACK                      VERSION      VERFÜGBAR      MODUS        ZUSTAND   BEFUNDE                           
-  v [ ] # /srv/local-example (0)   lokal                                              Abruf fehlgeschlagen: the working~
-  v [ ] # /srv/stacks-exampl#= Stack-Ordner hinzufügen ====================================#fen 2026-10-30 14:30        
->   [ ] demo-stack          | ! Diesem Hostschlüssel für                                   |ung                         
-    [ ] mail-relay          |   ssh://git.example.test/ops/stacks.git vertrauen?           |                            
-    [ ] old-tool            |                                                              |                            
-    [ ] photo-album         | Vergleiche den Fingerabdruck zuerst mit der Git-Plattform.   |er                          
-    [ ] web-shop            | Noch wird nichts gespeichert; der Schlüssel wird erst nach   |                            
-    [ ] wiki                | der letzten Frage weitergegeben.                             |ungen                       
-                            | Host: example.test                                           |                            
-                            | Schlüsseltyp: ssh-ed25519                                    |                            
-                            | Fingerabdruck:                                               |                            
-                            | SHA256:ExampleFingerprintForTestsOnly0000000000              |                            
-                            | Ordner: /srv/clone-example                                   |                            
-                            |                                                              |                            
-                            | [ ja, ausführen ]  > abbrechen <                             |                            
-                            | y ja, ausführen  n/esc/enter abbrechen                       |                            
-                            #==============================================================#                            
+  ▾ [ ] ■ /srv/local-example (0)   lokal                                              Abruf fehlgeschlagen: the working…
+  ▾ [ ] ■ /srv/stacks-exampl╔═ Stack-Ordner hinzufügen ════════════════════════════════════╗fen 2026-10-30 14:30        
+>   [ ] demo-stack          ║ ⚠ Diesem Hostschlüssel für                                   ║ung                         
+    [ ] mail-relay          ║   ssh://git.example.test/ops/stacks.git vertrauen?           ║                            
+    [ ] old-tool            ║                                                              ║                            
+    [ ] photo-album         ║ Vergleiche den Fingerabdruck zuerst mit der Git-Plattform.   ║er                          
+    [ ] web-shop            ║ Noch wird nichts gespeichert; der Schlüssel wird erst nach   ║                            
+    [ ] wiki                ║ der letzten Frage weitergegeben.                             ║ungen                       
+                            ║ Host: example.test                                           ║                            
+                            ║ Schlüsseltyp: ssh-ed25519                                    ║                            
+                            ║ Fingerabdruck:                                               ║                            
+                            ║ SHA256:ExampleFingerprintForTestsOnly0000000000              ║                            
+                            ║ Ordner: /srv/clone-example                                   ║                            
+                            ║                                                              ║                            
+                            ║ [ ja, ausführen ]  > abbrechen <                             ║                            
+                            ║ y ja, ausführen  n/esc/enter abbrechen                       ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
                                                                                                                         
                                                                                                                         
                                                                                                                      1/6
