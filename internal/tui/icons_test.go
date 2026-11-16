@@ -149,3 +149,18 @@ func TestGoldenStacksASCII(t *testing.T) {
 func TestGoldenStacksNerdFont(t *testing.T) {
 	goldenWith(t, "stacks.en.icons-nerdfont", uiprefs.IconsNerdFont, kittui.CharsetUnicode)
 }
+
+func TestGoldenDetailASCII(t *testing.T) {
+	for size, width := range goldenSizes {
+		t.Run(size, func(t *testing.T) {
+			m := newTestModelIn(t, i18n.English, demoBackend(), width, goldenRows, kittui.CharsetASCII)
+			send(m, "enter")
+			screen := m.render()
+			checkScreen(t, screen, width, goldenRows)
+			checkGolden(t, "detail.en.ascii."+size+".golden", screen+"\n")
+			if !strings.Contains(screen, "+- Image versions -") || strings.ContainsAny(screen, "╭╮╰╯│─") {
+				t.Errorf("the panels are not ASCII:\n%s", screen)
+			}
+		})
+	}
+}

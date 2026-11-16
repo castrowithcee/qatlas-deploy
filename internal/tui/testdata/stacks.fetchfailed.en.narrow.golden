@@ -13,10 +13,10 @@
                                                         
                                                         
                                                         
-                                                        
-  /srv/stacks-example                                   
-    address: ssh://git.example.test/ops/stacks.git      
-    last poll: Fri 2026-10-30 14:30                     
+╭─ /srv/stacks-example ────────────────────────────────╮
+│ address: ssh://git.example.test/ops/stacks.git       │
+│ last poll: Fri 2026-10-30 14:30                      │
+╰──────────────────────────────────────────────────────╯
 error: the fetch of /srv/stacks-example failed: the     
 service refused the request: cannot reach               
 git.example.test: connection refused                    

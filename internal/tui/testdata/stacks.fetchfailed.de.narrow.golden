@@ -13,10 +13,10 @@
                                                         
                                                         
                                                         
-                                                        
-  /srv/stacks-example                                   
-    Adresse: ssh://git.example.test/ops/stacks.git      
-    letzter Abruf: Fr 2026-10-30 14:30                  
+╭─ /srv/stacks-example ────────────────────────────────╮
+│ Adresse: ssh://git.example.test/ops/stacks.git       │
+│ letzter Abruf: Fr 2026-10-30 14:30                   │
+╰──────────────────────────────────────────────────────╯
 Fehler: der Abruf von /srv/stacks-example ist           
 fehlgeschlagen: der Dienst hat die Anfrage abgelehnt:   
 cannot reach git.example.test: connection refused       

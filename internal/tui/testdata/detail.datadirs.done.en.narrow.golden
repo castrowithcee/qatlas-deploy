@@ -7,18 +7,18 @@
   ╔═ Done ═══════════════════════════════════════════╗  
   ║ Data directories created for the stack demo-     ║  
   ║ stack.                                           ║  
-  ║                                                  ║  
-  ║ created: data/db                                 ║  
-  ║ parent directories: data                         ║  
-  ║ already existing: data/files                     ║  
-  ║ run 20261031T100000Z-demo-stack started at       ║  
-  ║ commit 222222222222                              ║  
-  ║                                                  ║  
-  ║ > close <                                        ║  
-  ║ n/esc/enter close                                ║  
-  ╚══════════════════════════════════════════════════╝  
-                                                        
-  Containers                                            
-    No containers of this stack.                        
-                                                        
-                                                   20/69
+╭─║                                                  ║─╮
+│ ║ created: data/db                                 ║ │
+│ ║ parent directories: data                         ║ │
+│ ║ already existing: data/files                     ║ │
+│ ║ run 20261031T100000Z-demo-stack started at       ║ │
+│ ║ commit 222222222222                              ║ │
+╰─║                                                  ║─╯
+╭─║ > close <                                        ║─╮
+│ ║ n/esc/enter close                                ║ │
+│ ╚══════════════════════════════════════════════════╝ │
+╰──────────────────────────────────────────────────────╯
+╭─ Containers ─────────────────────────────────────────╮
+│ No containers of this stack.                         │
+╰──────────────────────────────────────────────────────╯
+                                                   20/70

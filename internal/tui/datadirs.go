@@ -78,15 +78,17 @@ func (m *Model) dataDirSection(stack string, width int) []string {
 		return nil
 	}
 	t := m.text
-	lines := []string{"", m.heading(textDetailDataDirs, width)}
-	for _, d := range f.Dirs {
-		text := t.Lookup(textDataDirLineNoOwner, d.Path)
-		if d.Owner != "" {
-			text = t.Lookup(textDataDirLine, d.Path, d.Owner)
+	return m.framed(t.Lookup(textDetailDataDirs), "", width, 0, func(width int) []string {
+		var lines []string
+		for _, d := range f.Dirs {
+			text := t.Lookup(textDataDirLineNoOwner, d.Path)
+			if d.Owner != "" {
+				text = t.Lookup(textDataDirLine, d.Path, d.Owner)
+			}
+			lines = append(lines, m.line(detailIndent, kittui.StyleWarn, text, width))
 		}
-		lines = append(lines, m.line(detailIndent, kittui.StyleWarn, text, width))
-	}
-	return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textDataDirsHint), width)...)
+		return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textDataDirsHint), width)...)
+	})
 }
 
 // formDataDirLines are the paths a data directory form is about, shown above its fields.

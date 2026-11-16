@@ -7,18 +7,18 @@
   Zustand  deployt                                                              
   Befunde  1 Warnung                                                            
                                                                                 
-  Image-Versionen                                                               
-    APP_VERSION  example/app                                                    
-      1.4.2 -> 1.5.0  Update verfügbar                                          
-                                                                                
-  Container                                                                     
-    demo-stack-app-1  ok                                                        
-      example.invalid/app:1.4.2  3h2m                                           
-    demo-stack-db-1  ungesund                                                   
-      example.invalid/db:16  1m                                                 
-                                                                                
-  Changelog                                                                     
-    APP_VERSION  1.4.2 -> 1.5.0                                                 
-      Quelle example/app                                                        
+╭─ Image-Versionen ────────────────────────────────────────────────────────────╮
+│ APP_VERSION  example/app                                                     │
+│   1.4.2 -> 1.5.0  Update verfügbar                                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Container ──────────────────────────────────────────────────────────────────╮
+│ demo-stack-app-1  ok                                                         │
+│   example.invalid/app:1.4.2  3h2m                                            │
+│ demo-stack-db-1  ungesund                                                    │
+│   example.invalid/db:16  1m                                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Changelog ──────────────────────────────────────────────────────────────────╮
+│ APP_VERSION  1.4.2 -> 1.5.0                                                  │
+│   Quelle example/app                                                         │
 o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden
-1-5 Bereich  q Beenden                                       ↑/↓ Scrollen  19/62
+1-5 Bereich  q Beenden                                       ↑/↓ Scrollen  19/63

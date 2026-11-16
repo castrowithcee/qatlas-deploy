@@ -112,23 +112,25 @@ func (m *Model) selectedFolder() (control.SourceStatus, bool) {
 	return f, ok && found
 }
 
-// folderDetail is the address, the last poll and why it failed for one folder.
-func (m *Model) folderDetail(f control.SourceStatus, width int) []string {
+// folderDetail is the address, the last poll and why it failed for one folder, in a panel of at most rows rows.
+func (m *Model) folderDetail(f control.SourceStatus, width, rows int) []string {
 	t := m.text
-	lines := []string{m.line(detailMargin, kittui.StyleActive, f.Path, width)}
-	if f.URL != "" {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailURL, f.URL), width))
-	}
-	if !f.LastPoll.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastPoll, m.stamp(f.LastPoll.In(m.loc))), width))
-	}
-	if f.PollError != "" {
-		lines = append(lines, m.wrapped(detailIndent, kittui.StyleFail, t.Lookup(textDetailPollError, f.PollError), width)...)
-	}
-	if f.Note != "" {
-		lines = append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textDetailNote, f.Note), width)...)
-	}
-	return lines
+	return m.framed(f.Path, "", width, rows, func(width int) []string {
+		var lines []string
+		if f.URL != "" {
+			lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailURL, f.URL), width))
+		}
+		if !f.LastPoll.IsZero() {
+			lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastPoll, m.stamp(f.LastPoll.In(m.loc))), width))
+		}
+		if f.PollError != "" {
+			lines = append(lines, m.wrapped(detailIndent, kittui.StyleFail, t.Lookup(textDetailPollError, f.PollError), width)...)
+		}
+		if f.Note != "" {
+			lines = append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textDetailNote, f.Note), width)...)
+		}
+		return lines
+	})
 }
 
 // folderAction takes a key of the folder row in the Stacks area; handled is false where the key does nothing: on a

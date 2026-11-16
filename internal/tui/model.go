@@ -1216,9 +1216,10 @@ func (m *Model) stacksView(width, height int) string {
 	}
 	var detail []string
 	if f, ok := m.selectedFolder(); ok {
-		detail = append([]string{""}, m.folderDetail(f, width)...)
 		// The list keeps at least its header, the marked row and a few more.
-		detail = detail[:min(len(detail), max(height-minListRows, 0))]
+		if room := height - minListRows; room >= 3 {
+			detail = m.folderDetail(f, width, room)
+		}
 	}
 	view := m.listView(m.list, width, height-len(detail), 0)
 	return strings.Join(append([]string{view}, detail...), "\n")
@@ -1241,8 +1242,7 @@ func (m *Model) stacksEmpty(width, height int) string {
 
 // keyView draws the deploy key of the folder the key view was opened for.
 func (m *Model) keyView(width, height int) string {
-	lines := append([]string{m.heading(textTitleKey, width), ""}, m.keyLines(width)...)
-	return strings.Join(lines[:min(len(lines), height)], "\n")
+	return strings.Join(m.framed(m.text.Lookup(textTitleKey), "", width, height, m.keyLines), "\n")
 }
 
 // stacksFooter is the key line of the Stacks area: the keys of the marked row, and adding a folder in every case.

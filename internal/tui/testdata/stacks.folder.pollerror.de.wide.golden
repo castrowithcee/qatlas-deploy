@@ -17,8 +17,8 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
-  /srv/local-example                                                                                                    
-    letzter Abruf: Fr 2026-10-30 14:25                                                                                  
-    Abruf fehlgeschlagen: the working copy has uncommitted changes in demo/compose.yaml                                 
+╭─ /srv/local-example ─────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ letzter Abruf: Fr 2026-10-30 14:25                                                                                   │
+│ Abruf fehlgeschlagen: the working copy has uncommitted changes in demo/compose.yaml                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 enter Details  / Suchen  x lösen  a hinzufügen  r Neu laden  1-5 Bereich  q Beenden                   ↑/↓ Auswählen  1/6

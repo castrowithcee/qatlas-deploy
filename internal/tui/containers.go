@@ -329,22 +329,27 @@ func (m *Model) containerLines(width int) []string {
 		fields = append(fields, field{t.Lookup(textCtFieldDir), dir, kittui.StyleText})
 	}
 	lines = append(lines, m.fieldLines(fields, width)...)
-	section := func(key kittui.TextID, body []string) {
-		if len(body) == 0 {
-			body = []string{m.line(detailIndent, kittui.StyleHint, t.Lookup(textCtNone), width)}
-		}
-		lines = append(lines, "", m.heading(key, width))
-		lines = append(lines, body...)
+	lines = append(lines, "")
+	section := func(key kittui.TextID, texts func(width int) []string) {
+		lines = append(lines, m.framed(t.Lookup(key), "", width, 0, func(width int) []string {
+			if body := texts(width); len(body) > 0 {
+				return body
+			}
+			return []string{m.line(detailIndent, kittui.StyleHint, t.Lookup(textCtNone), width)}
+		})...)
+	}
+	plain := func(texts []string) func(width int) []string {
+		return func(width int) []string { return m.plainLines(texts, width) }
 	}
 	if foreign {
-		section(textCtComposeFiles, m.plainLines(d.ConfigFiles, width))
-		section(textCtEnvFiles, m.plainLines(d.EnvFiles, width))
+		section(textCtComposeFiles, plain(d.ConfigFiles))
+		section(textCtEnvFiles, plain(d.EnvFiles))
 	}
-	section(textCtPorts, m.plainLines(portTexts(d.Ports), width))
-	section(textCtMounts, m.plainLines(m.mountTexts(d.Mounts), width))
-	section(textCtNetworks, m.plainLines(networkTexts(d.Networks), width))
-	section(textCtLabels, m.plainLines(labelTexts(d.Labels), width))
-	section(textCtEnvNames, m.plainLines(d.EnvNames, width))
+	section(textCtPorts, plain(portTexts(d.Ports)))
+	section(textCtMounts, plain(m.mountTexts(d.Mounts)))
+	section(textCtNetworks, plain(networkTexts(d.Networks)))
+	section(textCtLabels, plain(labelTexts(d.Labels)))
+	section(textCtEnvNames, plain(d.EnvNames))
 	return lines
 }
 

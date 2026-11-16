@@ -2,14 +2,14 @@
   1 2 3 [4 Settings] 5                                  
   [Maintenance window]                                  
 ────────────────────────────────────────────────────────
-    days: sun                                           
-    start: 03:00                                        
-    duration: 2h                                        
-    time zone: UTC                                      
-    maintenance window closed                           
-    next opening: Sat 2026-10-31 03:00                  
-                                                        
-                                                        
+╭─ Maintenance window ─────────────────────────────────╮
+│ days: sun                                            │
+│ start: 03:00                                         │
+│ duration: 2h                                         │
+│ time zone: UTC                                       │
+│ maintenance window closed                            │
+│ next opening: Sat 2026-10-31 03:00                   │
+╰──────────────────────────────────────────────────────╯
                                                         
                                                         
                                                         

@@ -10,15 +10,15 @@
   Neustarts  0                                                                  
   Ordner     /srv/demo-foreign                                                  
                                                                                 
-  Compose-Dateien                                                               
-    /srv/demo-foreign/compose.yaml                                              
-                                                                                
-  Env-Dateien                                                                   
-    /srv/demo-foreign/.env                                                      
-                                                                                
-  Ports                                                                         
-    keine                                                                       
-                                                                                
-  Mounts                                                                        
+╭─ Compose-Dateien ────────────────────────────────────────────────────────────╮
+│ /srv/demo-foreign/compose.yaml                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Env-Dateien ────────────────────────────────────────────────────────────────╮
+│ /srv/demo-foreign/.env                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Ports ──────────────────────────────────────────────────────────────────────╮
+│ keine                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Mounts ─────────────────────────────────────────────────────────────────────╮
 esc Zurück  o Log  S start  X stop  Z restart  a übernehmen  r Neu laden        
-1-5 Bereich  q Beenden                                       ↑/↓ Scrollen  19/29
+1-5 Bereich  q Beenden                                       ↑/↓ Scrollen  19/30

@@ -22,7 +22,8 @@ var (
 	}}
 )
 
-// iconsFor returns the glyphs of the preference value; none and unknown values give no icons.
+// iconsFor returns the glyphs of the preference value; unknown values fall back to unicode, only none gives
+// no icons.
 func iconsFor(value string) iconSet {
 	switch value {
 	case uiprefs.IconsNerdFont:
