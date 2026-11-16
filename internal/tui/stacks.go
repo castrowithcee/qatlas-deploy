@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -73,6 +74,7 @@ const (
 	stateNeedsDirs
 	statePinned
 	stateContainerFailed
+	stateRepairHalted
 	statePaused
 	stateStopped
 	stateRemoved
@@ -96,7 +98,9 @@ const (
 
 // stackRow is one stack as the Stacks area shows it, before translation.
 type stackRow struct {
-	name      string
+	name string
+	// folder is the path of the stack folder the stack comes from; empty when the service named none.
+	folder    string
 	current   []string
 	avail     availability
 	available []string
@@ -128,10 +132,21 @@ func buildRows(s snapshot) []stackRow {
 		return r
 	}
 	unreadable := map[string]bool{}
+	source := map[string]string{}
+	paths := map[string]string{}
+	for _, src := range s.status.Engine.Sources {
+		paths[src.ID] = src.Path
+	}
+	for _, si := range s.stacks.Stacks {
+		if si.SourceDir != "" {
+			paths[si.Source] = si.SourceDir
+		}
+	}
 	for i, st := range s.status.Engine.Stacks {
 		r := row(st.Name)
 		// Another source's entry of the name, such as one blocked by name-collision, adds only its findings.
 		if control.Primary(s.status.Engine.Stacks, i) {
+			source[st.Name] = st.Source
 			r.state = stateOf(st)
 			r.lastResult = st.LastRun
 		}
@@ -146,6 +161,9 @@ func buildRows(s snapshot) []stackRow {
 			continue
 		}
 		r := row(si.Name)
+		if _, ok := source[si.Name]; !ok {
+			source[si.Name] = si.Source
+		}
 		r.mode = si.Update
 		if si.Error != "" {
 			unreadable[si.Name] = true
@@ -192,6 +210,7 @@ func buildRows(s snapshot) []stackRow {
 	}
 	rows := make([]stackRow, 0, len(byName))
 	for name, r := range byName {
+		r.folder = cmp.Or(paths[source[name]], source[name])
 		if unreadable[name] && r.state < stateUnreadable {
 			r.state = stateUnreadable
 		}
@@ -215,6 +234,8 @@ func stateOf(st control.StackStatus) stackState {
 		return statePaused
 	case st.Pinned != nil:
 		return statePinned
+	case st.Repair != nil && st.Repair.Halted != nil:
+		return stateRepairHalted
 	case st.Failure != nil:
 		return stateContainerFailed
 	case slices.ContainsFunc(st.Findings, func(f control.FindingInfo) bool { return f.Kind == findingDataDirMissing }):
@@ -301,7 +322,7 @@ func stackColumns(t kittui.Translator, tones map[string]kittui.TextStyle) []kitt
 		{Title: textColAvailable, Short: short(textAvailError, textAvailErrorS, textAvailNotComparable, textAvailNotComparableS)},
 		{Title: textColMode, Optional: true},
 		{Title: textColState, Tone: tone, Short: short(textStateRollbackPause, textStateRollbackPauseS,
-			textStateCtrFailed, textStateCtrFailedS, textStatePending, textStatePendingS, textStateNotDeployed, textStateNotDeployedS,
+			textStateCtrFailed, textStateCtrFailedS, textStateRepairHalted, textStateRepairHaltedS, textStatePending, textStatePendingS, textStateNotDeployed, textStateNotDeployedS,
 			textStateUnreadable, textStateUnreadableS, textStateNeedsDirs, textStateNeedsDirsS, textStateFailed, textStateFailedS)},
 		{Title: textColLastRun, Optional: true, Tone: tone},
 		{Title: textColFindings, Flex: true, Tone: tone},
@@ -311,16 +332,16 @@ func stackColumns(t kittui.Translator, tones map[string]kittui.TextStyle) []kitt
 var stateTexts = map[stackState]kittui.TextID{
 	stateRunning: textStateRunning, stateRollbackPause: textStateRollbackPause, stateUnreadable: textStateUnreadable,
 	stateRemoved: textStateRemoved, stateStopped: textStateStopped, statePaused: textStatePaused, statePinned: textStatePinned,
-	stateContainerFailed: textStateCtrFailed,
-	stateFailed:          textStateFailed, statePending: textStatePending, stateDeployed: textStateDeployed,
+	stateContainerFailed: textStateCtrFailed, stateRepairHalted: textStateRepairHalted,
+	stateFailed: textStateFailed, statePending: textStatePending, stateDeployed: textStateDeployed,
 	stateNotDeployed: textStateNotDeployed, stateNeedsDirs: textStateNeedsDirs,
 }
 
 var stateTones = map[stackState]kittui.TextStyle{
 	stateRunning: kittui.StyleActive, stateRollbackPause: kittui.StyleFail, stateUnreadable: kittui.StyleFail,
 	stateRemoved: kittui.StyleHint, stateStopped: kittui.StyleWarn, statePaused: kittui.StyleWarn, statePinned: kittui.StyleWarn,
-	stateContainerFailed: kittui.StyleFail,
-	stateFailed:          kittui.StyleFail, statePending: kittui.StyleWarn, stateDeployed: kittui.StyleOK,
+	stateContainerFailed: kittui.StyleFail, stateRepairHalted: kittui.StyleFail,
+	stateFailed: kittui.StyleFail, statePending: kittui.StyleWarn, stateDeployed: kittui.StyleOK,
 	stateNotDeployed: kittui.StyleHint, stateNeedsDirs: kittui.StyleWarn,
 }
 

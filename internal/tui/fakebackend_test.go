@@ -34,12 +34,29 @@ type fakeBackend struct {
 	holds      map[string]control.HoldResult
 
 	// The settings: what the service holds. A key name of errs such as "probe:" fails that call.
-	probe   control.RepoProbeResult
-	key     *control.KeyResult
+	probe control.RepoProbeResult
+	key   *control.KeyResult
+	// dirKeys are the keys of the other stack folders; keyArgs records every generate and set call.
+	dirKeys map[string]control.KeyResult
+	keyArgs []control.KeySetArgs
 	creds   []control.CredentialInfo
 	window  control.WindowResult
 	notify  []control.NotifyChannelInfo
 	repoSet []control.RepoSetArgs
+	// The stack folders: inspects answers by path (unknown paths are rejected), folderList is the bound list,
+	// compare the answer of source.compare. fetchDirs, sourceAdds and removes record the calls in order; the
+	// reads (inspect, compare, list) are only counted, so a test can tell that nothing changing was called.
+	inspects   map[string]control.SourceInspectResult
+	folderList control.SourceListResult
+	compare    control.SourceCompareResult
+	fetchDirs  []string
+	sourceAdds []control.SourceAddArgs
+	// compares records the comparisons asked for; remotes the source.remote calls, and remoteRes is their answer.
+	compares []control.SourceCompareArgs
+	remotes  []control.SourceRemoteArgs
+	removes  []string
+	// host is the host side the model gets; nil gives it none.
+	host *fakeFolders
 	// sent are the arguments of the credential and channel writes in order, kept to check what reached the
 	// service and that nothing else did.
 	credSets []control.CredentialSetArgs
@@ -243,7 +260,7 @@ func (f *fakeBackend) Resume(_ context.Context, stack string) (control.ResumeRes
 	if err := f.act("resume", stack); err != nil {
 		return control.ResumeResult{}, err
 	}
-	return control.ResumeResult{Stack: stack, Pause: control.PauseInfo{Since: at(29, 3, 12), Run: "20261029T031000Z-0000000a"}}, nil
+	return control.ResumeResult{Stack: stack, Pause: &control.PauseInfo{Since: at(29, 3, 12), Run: "20261029T031000Z-0000000a"}}, nil
 }
 
 func (f *fakeBackend) stackAction(call, stack string, stopped bool) (control.StackActionResult, error) {
@@ -456,38 +473,154 @@ func (f *fakeBackend) RepoSet(_ context.Context, args control.RepoSetArgs) (cont
 	return control.RepoSetResult{URL: args.URL, Dir: args.Dir, Fingerprint: args.Fingerprint, Head: commitA, Cloned: true}, nil
 }
 
-func (f *fakeBackend) RepoFetch(context.Context) (control.RepoFetchResult, error) {
-	if err := f.act("fetch", ""); err != nil {
+func (f *fakeBackend) RepoFetch(_ context.Context, dir string) (control.RepoFetchResult, error) {
+	if err := f.act("fetch", dir); err != nil {
 		return control.RepoFetchResult{}, err
 	}
+	f.mu.Lock()
+	f.fetchDirs = append(f.fetchDirs, dir)
+	f.mu.Unlock()
 	return control.RepoFetchResult{Dir: stackDir, Head: commitA, RemoteHead: commitB, UpdatesAvailable: true}, nil
 }
 
-func (f *fakeBackend) KeyShow(context.Context) (control.KeyResult, error) {
-	f.count("keyshow")
-	if err := f.fail("keyshow", ""); err != nil {
-		return control.KeyResult{}, err
+func (f *fakeBackend) SourceInspect(_ context.Context, path, url string) (control.SourceInspectResult, error) {
+	f.count("sourceinspect")
+	if err := f.fail("sourceinspect", path); err != nil {
+		return control.SourceInspectResult{}, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.key == nil {
-		return control.KeyResult{}, control.NewError(control.CodeNotFound, "no deploy key exists")
+	if res, ok := f.inspects[path]; ok {
+		return res, nil
 	}
-	return *f.key, nil
+	return control.SourceInspectResult{Path: path, Case: control.SourceCaseReject, Reason: "no such folder in the fake",
+		Stacks: []control.SourceStack{}}, nil
 }
 
-func (f *fakeBackend) KeyGenerate(context.Context) (control.KeyResult, error) {
-	if err := f.act("keygen", ""); err != nil {
+func (f *fakeBackend) SourceCompare(_ context.Context, args control.SourceCompareArgs) (control.SourceCompareResult, error) {
+	f.count("sourcecompare")
+	if err := f.fail("sourcecompare", args.Path); err != nil {
+		return control.SourceCompareResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.compares = append(f.compares, args)
+	return f.compare, nil
+}
+
+func (f *fakeBackend) SourceRemote(_ context.Context, args control.SourceRemoteArgs) (control.SourceRemoteResult, error) {
+	if err := f.act("sourceremote", args.Path); err != nil {
+		return control.SourceRemoteResult{}, err
+	}
+	f.mu.Lock()
+	f.remotes = append(f.remotes, args)
+	f.mu.Unlock()
+	return control.SourceRemoteResult{ID: "demo-id", Path: args.Path, URL: args.URL, State: args.ExpectState, Branch: "main",
+		Head: commitA, Pushed: args.ExpectState != control.SourceRemoteEqual}, nil
+}
+
+func (f *fakeBackend) SourceAdd(_ context.Context, args control.SourceAddArgs) (control.SourceAddResult, error) {
+	if err := f.act("sourceadd", args.Path); err != nil {
+		return control.SourceAddResult{}, err
+	}
+	f.mu.Lock()
+	f.sourceAdds = append(f.sourceAdds, args)
+	f.mu.Unlock()
+	return control.SourceAddResult{ID: "demo-id", Path: args.Path, Kind: "local", Head: commitA}, nil
+}
+
+func (f *fakeBackend) SourceList(context.Context) (control.SourceListResult, error) {
+	f.count("sourcelist")
+	if err := f.fail("sourcelist", ""); err != nil {
+		return control.SourceListResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.folderList, nil
+}
+
+func (f *fakeBackend) SourceRemove(_ context.Context, path string) (control.SourceRemoveResult, error) {
+	if err := f.act("sourceremove", path); err != nil {
+		return control.SourceRemoveResult{}, err
+	}
+	f.mu.Lock()
+	f.removes = append(f.removes, path)
+	f.mu.Unlock()
+	return control.SourceRemoveResult{ID: "demo-id", Path: path}, nil
+}
+
+// defaultKeyDir says dir names the default key: no folder, or the first bound one.
+func (f *fakeBackend) defaultKeyDir(dir string) bool {
+	src := f.status.Engine.Sources
+	return dir == "" || len(src) > 0 && dir == src[0].Path
+}
+
+// keySlot is the stored key of a stack folder: key for the default one, dirKeys for the others. The caller
+// holds f.mu.
+func (f *fakeBackend) keySlot(dir string) *control.KeyResult {
+	if f.defaultKeyDir(dir) {
+		return f.key
+	}
+	if k, ok := f.dirKeys[dir]; ok {
+		return &k
+	}
+	return nil
+}
+
+func (f *fakeBackend) putKey(dir string, k control.KeyResult) {
+	if f.defaultKeyDir(dir) {
+		f.key = &k
+		return
+	}
+	if f.dirKeys == nil {
+		f.dirKeys = map[string]control.KeyResult{}
+	}
+	f.dirKeys[dir] = k
+}
+
+func (f *fakeBackend) KeyShow(_ context.Context, dir string) (control.KeyResult, error) {
+	f.count("keyshow")
+	if err := f.fail("keyshow", dir); err != nil {
 		return control.KeyResult{}, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.key != nil {
+	if k := f.keySlot(dir); k != nil {
+		return *k, nil
+	}
+	return control.KeyResult{}, control.NewError(control.CodeNoSuchKey, "no deploy key exists")
+}
+
+func (f *fakeBackend) KeyGenerate(_ context.Context, dir string, replace bool) (control.KeyResult, error) {
+	if err := f.act("keygen", dir); err != nil {
+		return control.KeyResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.keyArgs = append(f.keyArgs, control.KeySetArgs{Replace: replace, Dir: dir})
+	if f.keySlot(dir) != nil && !replace {
 		return control.KeyResult{}, control.NewError(control.CodeKeyExists, "a deploy key already exists")
 	}
-	f.key = &control.KeyResult{PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTestsOnly qdeploy",
+	k := control.KeyResult{PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTestsOnly qdeploy",
 		Fingerprint: "SHA256:ExampleKeyFingerprintForTestsOnly000000000"}
-	return *f.key, nil
+	f.putKey(dir, k)
+	return k, nil
+}
+
+func (f *fakeBackend) KeySet(_ context.Context, dir, key string, replace bool) (control.KeyResult, error) {
+	if err := f.act("keyset", dir); err != nil {
+		return control.KeyResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.keyArgs = append(f.keyArgs, control.KeySetArgs{Key: key, Replace: replace, Dir: dir})
+	if f.keySlot(dir) != nil && !replace {
+		return control.KeyResult{}, control.NewError(control.CodeKeyExists, "a deploy key already exists")
+	}
+	k := control.KeyResult{PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIStoredKeyForTestsOnly stored",
+		Fingerprint: "SHA256:StoredKeyFingerprintForTestsOnly000000000"}
+	f.putKey(dir, k)
+	return k, nil
 }
 
 func (f *fakeBackend) Credentials(context.Context) (control.CredentialListResult, error) {

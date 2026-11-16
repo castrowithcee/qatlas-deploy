@@ -47,33 +47,39 @@ const (
 // The codes an answer's error carries. They are fixed words, never text built from a request, so an answer
 // cannot echo what a peer sent.
 const (
-	CodeNotRoot        = "not-root"
-	CodeBadRequest     = "bad-request"
-	CodeVersion        = "version"
-	CodeUnknownCommand = "unknown-command"
-	CodeTooLarge       = "too-large"
-	CodeBusy           = "busy"
-	CodeInternal       = "internal"
-	CodeInvalid        = "invalid-argument"
-	CodeNotFound       = "not-found"
-	CodeKeyExists      = "key-exists"
-	CodeNoRepo         = "no-repo"
-	CodeRepoBound      = "repo-bound"
-	CodeHostKey        = "host-key"
-	CodeRemote         = "remote-failed"
-	CodeRunActive      = "run-active"
-	CodeLocalChanges   = "local-changes"
-	CodeNoSuchStack    = "no-such-stack"
-	CodeNoSuchRun      = "no-such-run"
-	CodeUnreadable     = "stack-unreadable"
-	CodeNoDeployer     = "no-deployer"
-	CodePaused         = "paused"
-	CodeNotPaused      = "not-paused"
-	CodePinned         = "pinned"
-	CodeStackStopped   = "stack-stopped"
-	CodeStackAction    = "stack-action-failed"
-	CodeNameCollision  = "name-collision"
-	CodeNoSettings     = "no-settings"
+	CodeNotRoot          = "not-root"
+	CodeBadRequest       = "bad-request"
+	CodeVersion          = "version"
+	CodeUnknownCommand   = "unknown-command"
+	CodeTooLarge         = "too-large"
+	CodeBusy             = "busy"
+	CodeInternal         = "internal"
+	CodeInvalid          = "invalid-argument"
+	CodeNotFound         = "not-found"
+	CodeKeyExists        = "key-exists"
+	CodeNoRepo           = "no-repo"
+	CodeRepoBound        = "repo-bound"
+	CodeHostKey          = "host-key"
+	CodeRemote           = "remote-failed"
+	CodeRunActive        = "run-active"
+	CodeLocalChanges     = "local-changes"
+	CodeNoSuchStack      = "no-such-stack"
+	CodeNoSuchRun        = "no-such-run"
+	CodeNoSuchKey        = "no-such-key"
+	CodeNoSuchCredential = "no-such-credential"
+	CodeNoSuchSecret     = "no-such-secret"
+	CodeNoSuchSource     = "no-such-source"
+	CodeUnreadable       = "stack-unreadable"
+	CodeNoDeployer       = "no-deployer"
+	CodePaused           = "paused"
+	CodeNotPaused        = "not-paused"
+	CodePinned           = "pinned"
+	CodeStackStopped     = "stack-stopped"
+	CodeStackAction      = "stack-action-failed"
+	CodeNameCollision    = "name-collision"
+	CodeNoSettings       = "no-settings"
+	// CodeSecrets answers a push that would publish secret-like files; the message names the places, never a value.
+	CodeSecrets = "secrets-found"
 
 	CodeNoBackups     = "no-backups"
 	CodeNoBackupRules = "no-backup-rules"
@@ -194,12 +200,21 @@ type EngineStatus struct {
 	Stacks     []StackStatus  `json:"stacks"`
 }
 
+// The kinds SourceStatus.Kind takes. A remote source is a clone of a repository; a local one is a repository
+// without a remote that is deployed as it is.
+const (
+	SourceKindRemote = "remote"
+	SourceKindLocal  = "local"
+)
+
 // SourceStatus is the state of one stack folder as of its last poll. PollError tells why the poll, its fetch
 // included, could not complete; Note why the working copy was not brought up to date.
 type SourceStatus struct {
-	ID         string    `json:"id"`
-	Path       string    `json:"path"`
+	ID   string `json:"id"`
+	Path string `json:"path"`
+	// Kind is SourceKindRemote or SourceKindLocal; URL is the repository address and empty for a local one.
 	Kind       string    `json:"kind"`
+	URL        string    `json:"url,omitempty"`
 	LastPoll   time.Time `json:"last_poll,omitzero"`
 	PollError  string    `json:"poll_error,omitempty"`
 	Note       string    `json:"note,omitempty"`
@@ -252,6 +267,26 @@ type StackStatus struct {
 	Stopped *HoldInfo `json:"stopped,omitempty"`
 	// Failure is the container failure the monitoring found; it is cleared when the monitoring finds it recovered.
 	Failure *FailureInfo `json:"failure,omitempty"`
+	// Repair is the state of the automatic repair of a failure; nil when there is none.
+	Repair *RepairInfo `json:"repair,omitempty"`
+	// Observe is the update by qdeploy whose observation time is running; nil when none is.
+	Observe *ObserveInfo `json:"observe,omitempty"`
+}
+
+// ObserveInfo is a running observation time: the update commit and when the time ends.
+type ObserveInfo struct {
+	Commit string    `json:"commit"`
+	Until  time.Time `json:"until"`
+}
+
+// RepairInfo is the state of the automatic repair: the attempts made of Max, when the last was made and the
+// next is due (zero when none is due), and since when the repair is halted after Max failed attempts.
+type RepairInfo struct {
+	Attempts int       `json:"attempts"`
+	Max      int       `json:"max"`
+	Last     time.Time `json:"last,omitzero"`
+	Next     time.Time `json:"next,omitzero"`
+	Halted   *HoldInfo `json:"halted,omitempty"`
 }
 
 // FailureInfo is a failure of a stack's containers: exited, unhealthy, restart-loop or missing, the container
@@ -413,12 +448,14 @@ type StackComposeSettings struct {
 }
 
 // StackUpdateSettings say whether and how far the stack is updated. Mode is automatic or manual, Ceiling
-// patch, minor or major, Major direct or stepwise. Tags maps an image version variable to a regular
+// patch, minor or major, Major direct or stepwise. Observe is the observation time after an update in
+// minutes, from 0 (off) to 1440, 60 when left out. Tags maps an image version variable to a regular
 // expression its candidate tags must match; Changelog maps it to a GitHub repository (owner/name).
 type StackUpdateSettings struct {
 	Mode      string            `json:"mode,omitempty"`
 	Ceiling   string            `json:"ceiling,omitempty"`
 	Major     string            `json:"major,omitempty"`
+	Observe   *int              `json:"observe,omitempty"`
 	Tags      map[string]string `json:"tags,omitempty"`
 	Changelog map[string]string `json:"changelog,omitempty"`
 }
@@ -458,10 +495,11 @@ type ResumeArgs struct {
 	Stack string `json:"stack"`
 }
 
-// ResumeResult answers ResumeCommand with the pause that was cleared.
+// ResumeResult answers ResumeCommand with the pause that was cleared, nil when only the halt of the repair was
+// cleared.
 type ResumeResult struct {
-	Stack string    `json:"stack"`
-	Pause PauseInfo `json:"pause"`
+	Stack string     `json:"stack"`
+	Pause *PauseInfo `json:"pause,omitempty"`
 }
 
 // DeployArgs are the arguments of DeployCommand.
@@ -513,6 +551,7 @@ type LogResult struct {
 const (
 	KeyGenerateCommand      = "key.generate"
 	KeyShowCommand          = "key.show"
+	KeySetCommand           = "key.set"
 	CredentialSetCommand    = "credential.set"
 	CredentialListCommand   = "credential.list"
 	CredentialDeleteCommand = "credential.delete"
@@ -525,12 +564,20 @@ type KeyGenerateArgs struct {
 	Dir     string `json:"dir,omitempty"`
 }
 
+// KeySetArgs are the arguments of KeySetCommand: Key is the private key in OpenSSH format, the one place a
+// private key travels to the service. Replace and Dir as in KeyGenerateArgs.
+type KeySetArgs struct {
+	Key     string `json:"key"`
+	Replace bool   `json:"replace"`
+	Dir     string `json:"dir,omitempty"`
+}
+
 // KeyShowArgs are the arguments of KeyShowCommand; Dir as in KeyGenerateArgs.
 type KeyShowArgs struct {
 	Dir string `json:"dir,omitempty"`
 }
 
-// KeyResult answers KeyGenerateCommand and KeyShowCommand with the public part of the deploy key.
+// KeyResult answers KeyGenerateCommand, KeySetCommand and KeyShowCommand with the public part of the deploy key.
 type KeyResult struct {
 	PublicKey   string `json:"public_key"`
 	Fingerprint string `json:"fingerprint"`
@@ -598,6 +645,12 @@ type RepoSetResult struct {
 	Fingerprint string `json:"fingerprint"`
 	Head        string `json:"head"`
 	Cloned      bool   `json:"cloned"`
+}
+
+// RepoFetchArgs are the arguments of RepoFetchCommand. Dir fetches only that bound stack folder; empty fetches
+// every one.
+type RepoFetchArgs struct {
+	Dir string `json:"dir,omitempty"`
 }
 
 // RepoFetchResult answers RepoFetchCommand. Sources has one entry per stack folder, in the order they were
@@ -717,6 +770,265 @@ type CheckFinding struct {
 	Severity string `json:"severity"`
 	Cause    string `json:"cause"`
 	Fix      string `json:"fix"`
+}
+
+// SourceInspectCommand classifies a folder before it is taken over as a stack folder. It only reads.
+const SourceInspectCommand = "source.inspect"
+
+// The cases SourceInspectResult.Case takes. Exactly one applies to a folder.
+const (
+	// SourceCaseClone: the folder is missing or empty and gets a clone of the URL.
+	SourceCaseClone = "clone"
+	// SourceCaseAdopt: the folder is a clone with an origin remote that is taken over as it is.
+	SourceCaseAdopt = "adopt-clone"
+	// SourceCaseLocal: the folder is a repository without a remote and runs locally.
+	SourceCaseLocal = "local"
+	// SourceCaseFiles: the folder holds files and no repository; the first commit would take PlannedFiles.
+	SourceCaseFiles = "files"
+	// SourceCaseReject: the folder cannot be taken over; Reason says why and Fix what to do.
+	SourceCaseReject = "reject"
+)
+
+// The reasons a file or folder is left out of the first commit of a folder without a repository.
+const (
+	SourceExcludedBindMount  = "bind-mount"
+	SourceExcludedTooLarge   = "too-large"
+	SourceExcludedNotRegular = "not-regular"
+	SourceExcludedUnreadable = "unreadable"
+	SourceExcludedNestedRepo = "nested-repo"
+)
+
+// SourceInspectArgs are the arguments of SourceInspectCommand. Path is the folder; URL is the SSH address of the
+// repository to clone or to expect as origin and may be empty.
+type SourceInspectArgs struct {
+	Path string `json:"path"`
+	URL  string `json:"url,omitempty"`
+}
+
+// SourceInspectResult answers SourceInspectCommand.
+//
+// Case is one of the SourceCase constants. URL is the repository address of the clone, of the adopted clone and
+// of a folder of files that is to be joined with it. NeedsURL is set for a clone without a URL. Reason and Fix are set for a rejection. Access says who owns the
+// folder and what the service may do there; it is empty for a rejection. PlannedFiles and Excluded are set
+// for SourceCaseFiles only. Stacks holds the stacks the folder would bring, none for a clone or a rejection;
+// StacksError says they could not be read. ContainersChecked says the container engine was asked;
+// ContainersError says why it could not be, and then the rest of the answer still holds.
+type SourceInspectResult struct {
+	Path              string           `json:"path"`
+	Case              string           `json:"case"`
+	URL               string           `json:"url,omitempty"`
+	NeedsURL          bool             `json:"needs_url,omitempty"`
+	Reason            string           `json:"reason,omitempty"`
+	Fix               string           `json:"fix,omitempty"`
+	Access            *SourceAccess    `json:"access,omitempty"`
+	PlannedFiles      []string         `json:"planned_files,omitempty"`
+	Excluded          []SourceExcluded `json:"excluded,omitempty"`
+	Stacks            []SourceStack    `json:"stacks"`
+	StacksError       string           `json:"stacks_error,omitempty"`
+	ContainersChecked bool             `json:"containers_checked"`
+	ContainersError   string           `json:"containers_error,omitempty"`
+}
+
+// SourceAddCommand binds a repository without a remote as a local source. It does so only for a folder that
+// SourceInspectCommand classifies as SourceCaseLocal, or as SourceCaseFiles when the arguments confirm the file
+// list, and that the service can write; it clones nothing and changes no permission. With URL, a folder of
+// files is joined with the repository that already holds content at that address and bound as a remote source.
+const SourceAddCommand = "source.add"
+
+// SourceAddArgs are the arguments of SourceAddCommand. Files is the list of planned files the operator confirmed
+// for a folder without a repository (SourceCaseFiles); only then does the service start a repository with
+// exactly these files, and only if the list still matches what the folder holds.
+//
+// URL, Fingerprint, ExpectState and ExpectCommit connect that folder to a repository at URL: they are the
+// address, the confirmed host key and the SourceCompareResult (State and Commit) the operator was shown. The
+// service compares again and refuses, changing nothing, when the answer differs. A remote without commit
+// (SourceRemoteEmpty) is refused: take the folder without an address and use SourceRemoteCommand.
+type SourceAddArgs struct {
+	Path         string   `json:"path"`
+	Files        []string `json:"files,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	Fingerprint  string   `json:"fingerprint,omitempty"`
+	ExpectState  string   `json:"expect_state,omitempty"`
+	ExpectCommit string   `json:"expect_commit,omitempty"`
+}
+
+// SourceAddResult answers SourceAddCommand.
+type SourceAddResult struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+	Kind string `json:"kind"`
+	Head string `json:"head"`
+	// Files is the number of files of the first commit when the service started the repository.
+	Files int `json:"files,omitempty"`
+	// Pushed says the commit with the files of the folder was pushed to the remote.
+	Pushed bool `json:"pushed,omitempty"`
+}
+
+// SourceCompareCommand compares a folder with the repository at a URL. It changes nothing in the folder; its
+// only effect is pinning the host key the operator confirmed. The folder is a local source (SourceCaseLocal,
+// compared by the tree of its HEAD with the remote branch of the same name) or a folder of files without a
+// repository (SourceCaseFiles, compared by the planned files with the default branch of the remote).
+const SourceCompareCommand = "source.compare"
+
+// SourceCompareArgs are the arguments of SourceCompareCommand. Fingerprint is the host key the operator
+// confirmed (see RepoProbeCommand).
+type SourceCompareArgs struct {
+	Path        string `json:"path"`
+	URL         string `json:"url"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// How a remote branch relates to the files of the folder.
+const (
+	// SourceRemoteEmpty: the remote has no commit on the branch.
+	SourceRemoteEmpty = "empty"
+	// SourceRemoteEqual: the remote branch holds exactly the files of the folder.
+	SourceRemoteEqual = "equal"
+	// SourceRemoteDifferent: the files differ; Paths names them.
+	SourceRemoteDifferent = "different"
+)
+
+// SourceCompareResult answers SourceCompareCommand. Case is SourceCaseLocal or SourceCaseFiles. Branch is the
+// compared remote branch and Commit its commit, empty for SourceRemoteEmpty. Paths are the paths that differ,
+// a limited number of the PathCount that differ; they are data of the remote and the folder. PlannedFiles is
+// the file list of SourceCaseFiles that was compared. Secrets is set when a push would follow (a remote
+// without commit for a local source, a different remote) and holds the secret check of what that push would
+// publish.
+type SourceCompareResult struct {
+	Case         string         `json:"case"`
+	State        string         `json:"state"`
+	Branch       string         `json:"branch"`
+	Commit       string         `json:"commit,omitempty"`
+	Paths        []string       `json:"paths,omitempty"`
+	PathCount    int            `json:"path_count"`
+	PlannedFiles []string       `json:"planned_files,omitempty"`
+	Secrets      *SourceSecrets `json:"secrets,omitempty"`
+}
+
+// The kinds SourceSecretFinding.Kind takes.
+const (
+	SourceSecretFile       = "secrets-file"
+	SourceSecretEnv        = "env-secret"
+	SourceSecretPrivateKey = "private-key"
+)
+
+// SourceSecrets is the secret check of the commits a push would publish. Total counts all findings; Findings
+// holds the first ones. It names places only, never values.
+type SourceSecrets struct {
+	Total    int                   `json:"total"`
+	Findings []SourceSecretFinding `json:"findings,omitempty"`
+}
+
+// SourceSecretFinding is one secret-like file of one commit.
+type SourceSecretFinding struct {
+	Commit string `json:"commit"`
+	Path   string `json:"path"`
+	Kind   string `json:"kind"`
+}
+
+// SourceRemoteCommand gives a local source a remote and makes it a remote source. The service compares the
+// folder with the remote again and acts only if State and Commit are the ones the operator was shown
+// (ExpectState, ExpectCommit); otherwise it refuses and changes nothing. A remote without commit receives the
+// branch; an equal remote is followed without a push; a different remote is followed with one commit that
+// holds the files of the folder, which is pushed. The local history that a followed remote replaces stays under
+// a ref. Secret-like files in what would be pushed refuse the command with CodeSecrets; there is no way
+// around it. A run of the source that is active refuses it with CodeRunActive.
+const SourceRemoteCommand = "source.remote"
+
+// SourceRemoteArgs are the arguments of SourceRemoteCommand.
+type SourceRemoteArgs struct {
+	Path         string `json:"path"`
+	URL          string `json:"url"`
+	Fingerprint  string `json:"fingerprint"`
+	ExpectState  string `json:"expect_state"`
+	ExpectCommit string `json:"expect_commit,omitempty"`
+}
+
+// SourceRemoteResult answers SourceRemoteCommand. State is the state that was acted on, Head the commit the
+// branch is at now. Pushed says a commit was pushed. HistoryRef names the ref that keeps the local history that
+// the branch left, empty when none was saved.
+type SourceRemoteResult struct {
+	ID         string `json:"id"`
+	Path       string `json:"path"`
+	URL        string `json:"url"`
+	State      string `json:"state"`
+	Branch     string `json:"branch"`
+	Head       string `json:"head"`
+	Pushed     bool   `json:"pushed"`
+	HistoryRef string `json:"history_ref,omitempty"`
+}
+
+// SourceListCommand lists the bound stack folders.
+const SourceListCommand = "source.list"
+
+// SourceListResult answers SourceListCommand: every source in the order it was bound.
+type SourceListResult struct {
+	Sources []SourceStatus `json:"sources"`
+}
+
+// SourceRemoveCommand releases a stack folder: its engine stops and its state is dropped. No file of the folder
+// is touched, no container is stopped, and the deploy key and the pinned host keys stay.
+const SourceRemoveCommand = "source.remove"
+
+// SourceRemoveArgs are the arguments of SourceRemoveCommand.
+type SourceRemoveArgs struct {
+	Path string `json:"path"`
+}
+
+// SourceRemoveResult answers SourceRemoveCommand.
+type SourceRemoveResult struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+}
+
+// SourceAccess is the permission information of a folder. ModePath is the folder Mode belongs to: Path, or the
+// nearest existing parent while Path is missing. Owner and Group are empty when the id has no name.
+// ServiceCanWrite says the service may create files there; SetsPermissions says source add will then change the
+// permissions (group qdeploy, group write, setgid), which it does exactly when the service cannot write.
+// GitWritable is set for an existing repository and says the service may write its .git folder.
+type SourceAccess struct {
+	ModePath        string `json:"mode_path"`
+	OwnerID         uint32 `json:"owner_id"`
+	Owner           string `json:"owner,omitempty"`
+	GroupID         uint32 `json:"group_id"`
+	Group           string `json:"group,omitempty"`
+	Mode            string `json:"mode"`
+	ServiceCanWrite bool   `json:"service_can_write"`
+	SetsPermissions bool   `json:"sets_permissions"`
+	GitWritable     *bool  `json:"git_writable,omitempty"`
+}
+
+// SourceExcluded is a file or folder, as a path below the folder, that the first commit would leave out. Reason is
+// one of the SourceExcluded constants; Stack names the stack whose bind mount it is.
+type SourceExcluded struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+	Stack  string `json:"stack,omitempty"`
+}
+
+// SourceStack is the check of one stack the folder would bring, with the containers that would collide with
+// it: Compose containers of another project that run in the stack's folder.
+type SourceStack struct {
+	Name      string           `json:"name"`
+	Folder    string           `json:"folder"`
+	Functions []StackFunction  `json:"functions"`
+	Findings  []CheckFinding   `json:"findings"`
+	Conflicts []SourceConflict `json:"conflicts,omitempty"`
+	// BindMounts are the sources of the stack's bind mounts that lie in the folder, as paths below it; the
+	// root client leaves them out when it hands the folder to the service.
+	BindMounts []string `json:"bind_mounts,omitempty"`
+	// Project is the Compose project name a deploy of the stack uses. ComposeFiles and EnvFiles are the files
+	// a deploy passes to docker compose, as absolute paths in call order; they are empty for a stack that
+	// cannot be deployed.
+	Project      string   `json:"project,omitempty"`
+	ComposeFiles []string `json:"compose_files,omitempty"`
+	EnvFiles     []string `json:"env_files,omitempty"`
+}
+
+// SourceConflict is a container of another Compose project that runs in the folder of a stack.
+type SourceConflict struct {
+	Container string `json:"container"`
+	Project   string `json:"project"`
 }
 
 // The commands that save and restore the data of a stack.
@@ -1006,6 +1318,7 @@ const (
 	NotifyEventRollbackFailed  = "rollback-failed"
 	NotifyEventContainerFailed = "container-failed"
 	NotifyEventRecovered       = "recovered"
+	NotifyEventRecoveryFailed  = "recovery-failed"
 	NotifyEventUpdateAvailable = "update-available"
 )
 
@@ -1198,9 +1511,9 @@ type ContainerListResult struct {
 
 // ContainerGroup is one stack, Compose project or single container. Conflict marks a foreign project that has
 // the name of a stack of this host but was started from another folder. State is the worst state of its
-// containers; UptimeSeconds is the shortest one among running containers; Restarts is the sum. WorkingDir and
-// ConfigFiles come from the Compose labels of a foreign project. Metrics sums the readings of the containers
-// that have one.
+// containers; UptimeSeconds is the shortest one among running containers; Restarts is the sum. WorkingDir,
+// ConfigFiles and EnvFiles come from the Compose labels of a foreign project, as absolute paths. Metrics sums
+// the readings of the containers that have one.
 type ContainerGroup struct {
 	Kind          string             `json:"kind"`
 	Name          string             `json:"name"`
@@ -1210,6 +1523,7 @@ type ContainerGroup struct {
 	Restarts      int                `json:"restarts"`
 	WorkingDir    string             `json:"working_dir,omitempty"`
 	ConfigFiles   []string           `json:"config_files,omitempty"`
+	EnvFiles      []string           `json:"env_files,omitempty"`
 	Metrics       *ContainerMetrics  `json:"metrics,omitempty"`
 	Containers    []ContainerSummary `json:"containers"`
 }
@@ -1241,7 +1555,8 @@ type ContainerGetArgs struct {
 
 // ContainerDetail answers ContainerGetCommand. Project, Kind and Conflict classify the container like its
 // group in ContainerListResult. EnvNames are the names of the environment variables; their values never
-// leave the service.
+// leave the service. WorkingDir, ConfigFiles and EnvFiles come from the Compose labels of a container of a
+// foreign project, as in ContainerGroup.
 type ContainerDetail struct {
 	ContainerSummary
 	ID       string             `json:"id"`
@@ -1253,6 +1568,10 @@ type ContainerDetail struct {
 	Networks []ContainerNetwork `json:"networks"`
 	Labels   map[string]string  `json:"labels"`
 	EnvNames []string           `json:"env_names"`
+
+	WorkingDir  string   `json:"working_dir,omitempty"`
+	ConfigFiles []string `json:"config_files,omitempty"`
+	EnvFiles    []string `json:"env_files,omitempty"`
 }
 
 // ContainerPort is a port of a container; PublicPort and HostIP are zero or empty if it is not published.

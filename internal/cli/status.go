@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -32,7 +33,7 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Use:   "status",
 		Short: "Show whether the qdeploy service is running",
 		Long: "status asks the running service for its version and start time, the state of the last poll of each stack folder\n" +
-			"and, per stack, what is deployed, pending or running, the last run result, a pause after a failed rollback, the operator's pause and pin, and the findings,\n" +
+			"and, per stack, what is deployed, pending or running, the last run result, a pause after a failed rollback, the operator's pause and pin, the observation time after an update, and the findings,\n" +
 			"and whether the maintenance window is open and when it opens next (see 'qdeploy window'). A stack is listed as\n" +
 			"stack.<name>; when another stack folder holds its name, as source.<id>.stack.<name> (see 'qdeploy help sources').\n" +
 			"Only root may use the service channel, so run it with sudo. Without a running service it ends with exit code 3.",
@@ -124,8 +125,26 @@ func engineFields(e control.EngineStatus) []output.Field {
 		if s.Stopped != nil {
 			out = append(out, output.Field{Name: p + "stopped", Value: "since " + s.Stopped.Since.UTC().Format(time.RFC3339)})
 		}
+		if r := s.Repair; r != nil {
+			out = append(out, output.Field{Name: p + "repair", Value: repairText(r)})
+		}
+		if o := s.Observe; o != nil {
+			out = append(out, output.Field{Name: p + "observe", Value: "until " + o.Until.UTC().Format(time.RFC3339) + ", update " + o.Commit})
+		}
 	}
 	return out
+}
+
+// repairText is the repair state as one line: halted since when, or the attempts made and the next one due.
+func repairText(r *control.RepairInfo) string {
+	text := fmt.Sprintf("%d of %d attempts", r.Attempts, r.Max)
+	if r.Halted != nil {
+		return "halted since " + r.Halted.Since.UTC().Format(time.RFC3339) + " after " + text
+	}
+	if !r.Next.IsZero() {
+		text += ", next " + r.Next.UTC().Format(time.RFC3339)
+	}
+	return text
 }
 
 func call(ctx context.Context, ep localipc.ServiceEndpoint, command string, args, result any) error {
@@ -155,7 +174,23 @@ func failureOf(err error) error {
 			NextStep: "Fix the argument and run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNotFound:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
-			NextStep: "Create it first with 'qdeploy key generate' or 'qdeploy credential set <name>'.", Cause: err}
+			Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchKey:
+		f := &cli.Failure{Code: output.CodeNotFound, Message: remote.Message, Cause: err}
+		// The message of a stack folder's key already names the command with its --dir.
+		if !strings.Contains(remote.Message, "qdeploy key generate") {
+			f.NextStep = "Create it first with 'qdeploy key generate'."
+		}
+		return f
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchCredential:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the credentials with 'qdeploy credential list'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchSecret:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the secrets with 'qdeploy stack secret list <stack>'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchSource:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the bound folders with 'qdeploy source list'.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoRepo:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
 			NextStep: "Bind the stacks repository with 'qdeploy repo set <ssh-url>'.", Cause: err}
@@ -170,6 +205,10 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodeRemote:
 		return &cli.Failure{Code: output.CodeUnreachable, Message: remote.Message,
 			NextStep: "Check the URL, the network and that the deploy key is entered in the git platform ('qdeploy key show').", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeSecrets:
+		f := secretsFailure(remote.Message)
+		f.Cause = err
+		return f
 	case errors.As(err, &remote) && remote.Code == control.CodeRunActive:
 		return &cli.Failure{Code: output.CodeRuntime, Message: remote.Message,
 			NextStep: "Wait for the active run to end ('qdeploy stack runs'), then run the command again.", Cause: err}

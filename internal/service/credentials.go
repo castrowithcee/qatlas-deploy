@@ -27,12 +27,17 @@ func decodeArgs(raw json.RawMessage, into any) error {
 // answerOf turns a store error into the fixed answer of the channel; unknown errors stay internal.
 func answerOf(err error) error {
 	switch {
-	case errors.Is(err, credentials.ErrInvalidName), errors.Is(err, credentials.ErrInvalidValue):
+	case errors.Is(err, credentials.ErrInvalidName), errors.Is(err, credentials.ErrInvalidValue),
+		errors.Is(err, credentials.ErrKeyFormat), errors.Is(err, credentials.ErrKeyPassphrase),
+		errors.Is(err, credentials.ErrKeyType), errors.Is(err, credentials.ErrKeyTooSmall),
+		errors.Is(err, credentials.ErrKeyTooLarge):
 		return control.NewError(control.CodeInvalid, err.Error())
 	case errors.Is(err, credentials.ErrKeyExists):
 		return control.NewError(control.CodeKeyExists, err.Error())
-	case errors.Is(err, credentials.ErrNoKey), errors.Is(err, credentials.ErrNotFound):
-		return control.NewError(control.CodeNotFound, err.Error())
+	case errors.Is(err, credentials.ErrNoKey):
+		return control.NewError(control.CodeNoSuchKey, err.Error())
+	case errors.Is(err, credentials.ErrNotFound):
+		return control.NewError(control.CodeNoSuchCredential, err.Error())
 	}
 	return err
 }
@@ -53,7 +58,7 @@ func keyName(set *sourceSet, dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name := keyFor(conf, dir)
+	name := remoteKeyFor(conf, dir, set.keyExists)
 	if !credentials.ValidKeyName(name) {
 		return "", control.NewError(control.CodeInvalid, "the stack folder path is too long")
 	}
@@ -72,6 +77,21 @@ func registerCredentialCommands(r *control.Registry, st *credentials.Store, set 
 				return nil, err
 			}
 			k, err := st.GenerateNamedKey(name, a.Replace)
+			if err != nil {
+				return nil, answerOf(err)
+			}
+			return keyResult(k), nil
+		},
+		control.KeySetCommand: func(_ context.Context, raw json.RawMessage) (any, error) {
+			var a control.KeySetArgs
+			if err := decodeArgs(raw, &a); err != nil {
+				return nil, err
+			}
+			name, err := keyName(set, a.Dir)
+			if err != nil {
+				return nil, err
+			}
+			k, err := st.SetNamedKey(name, a.Key, a.Replace)
 			if err != nil {
 				return nil, answerOf(err)
 			}

@@ -186,11 +186,16 @@ func (m *Model) applyContainers(msg containersMsg) {
 		return
 	}
 	m.ct.err, m.ct.loaded, m.ct.groups = nil, true, msg.res.Groups
+	m.fillContainers()
+}
+
+// fillContainers sets the rows of the containers list from the groups read last.
+func (m *Model) fillContainers() {
 	clear(m.ctTones)
 	clear(m.ctNames)
 	var items []kittui.ListItem
 	var names []string
-	for _, g := range msg.res.Groups {
+	for _, g := range m.ct.groups {
 		title := m.groupTitle(g)
 		for _, c := range g.Containers {
 			word, tone := m.stateWord(c.State)
@@ -267,6 +272,7 @@ func (m *Model) containerDetailView(width, height int) string {
 	if v.total > v.rows {
 		m.scrollNote = fmt.Sprintf("%d/%d", v.top+v.rows, v.total)
 	}
+	m.textPart(func(steps int) { v.top = wheeled(v.top, v.total, v.rows, steps) }, width, height, 0)
 	return strings.Join(lines[v.top:min(v.top+height, len(lines))], "\n")
 }
 
@@ -314,19 +320,36 @@ func (m *Model) containerLines(width int) []string {
 	if d.Health != "" {
 		fields = append(fields, field{t.Lookup(textCtFieldHealth), d.Health, kittui.StyleText})
 	}
-	lines = append(lines, m.fieldLines(fields, width)...)
-	section := func(key kittui.TextID, body []string) {
-		if len(body) == 0 {
-			body = []string{m.line(detailIndent, kittui.StyleHint, t.Lookup(textCtNone), width)}
+	foreign := d.Kind == control.ContainerKindForeign && (d.WorkingDir != "" || len(d.ConfigFiles) > 0 || len(d.EnvFiles) > 0)
+	if foreign {
+		dir := d.WorkingDir
+		if dir == "" {
+			dir = t.Lookup(textNoValue)
 		}
-		lines = append(lines, "", m.heading(key, width))
-		lines = append(lines, body...)
+		fields = append(fields, field{t.Lookup(textCtFieldDir), dir, kittui.StyleText})
 	}
-	section(textCtPorts, m.plainLines(portTexts(d.Ports), width))
-	section(textCtMounts, m.plainLines(m.mountTexts(d.Mounts), width))
-	section(textCtNetworks, m.plainLines(networkTexts(d.Networks), width))
-	section(textCtLabels, m.plainLines(labelTexts(d.Labels), width))
-	section(textCtEnvNames, m.plainLines(d.EnvNames, width))
+	lines = append(lines, m.fieldLines(fields, width)...)
+	lines = append(lines, "")
+	section := func(key kittui.TextID, texts func(width int) []string) {
+		lines = append(lines, m.framed(t.Lookup(key), "", width, 0, func(width int) []string {
+			if body := texts(width); len(body) > 0 {
+				return body
+			}
+			return []string{m.line(detailIndent, kittui.StyleHint, t.Lookup(textCtNone), width)}
+		})...)
+	}
+	plain := func(texts []string) func(width int) []string {
+		return func(width int) []string { return m.plainLines(texts, width) }
+	}
+	if foreign {
+		section(textCtComposeFiles, plain(d.ConfigFiles))
+		section(textCtEnvFiles, plain(d.EnvFiles))
+	}
+	section(textCtPorts, plain(portTexts(d.Ports)))
+	section(textCtMounts, plain(m.mountTexts(d.Mounts)))
+	section(textCtNetworks, plain(networkTexts(d.Networks)))
+	section(textCtLabels, plain(labelTexts(d.Labels)))
+	section(textCtEnvNames, plain(d.EnvNames))
 	return lines
 }
 

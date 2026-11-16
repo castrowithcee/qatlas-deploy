@@ -2,6 +2,9 @@ package service_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/pem"
 	"errors"
 	"log/slog"
 	"net"
@@ -55,7 +58,8 @@ func newHarness(t *testing.T) *harness {
 	return h
 }
 
-// run starts the service of the harness and waits for its channel.
+// run starts the service of the harness and returns once it has answered a request, which serve only does after
+// the store, its sweep and the migrations are done.
 func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
 	t := h.t
 	t.Helper()
@@ -72,18 +76,7 @@ func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
 		done <- service.Run(ctx, slog.New(slog.NewTextHandler(h.logs, nil)), cfg)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	path, err := ep.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
-	}
+	channeltest.WaitReady(t, ep)
 	h.call = func(command string, args, result any) error {
 		cl, err := client.Dial(context.Background(), ep)
 		if err != nil {
@@ -91,6 +84,9 @@ func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
 		}
 		defer cl.Close()
 		return cl.Call(context.Background(), command, args, result)
+	}
+	if err := h.call(control.StatusCommand, nil, nil); err != nil {
+		t.Fatalf("service does not answer: %v", err)
 	}
 }
 
@@ -207,7 +203,7 @@ func TestSetRefusesAChangedHostKey(t *testing.T) {
 
 func TestSetNeedsADeployKey(t *testing.T) {
 	h := start(t)
-	wantCode(t, errOf(h.set(h.srv.Key().Fingerprint)), control.CodeNotFound)
+	wantCode(t, errOf(h.set(h.srv.Key().Fingerprint)), control.CodeNoSuchKey)
 	if h.knownHosts() != "" {
 		t.Fatal("a key was pinned without a deploy key")
 	}
@@ -490,7 +486,7 @@ func TestCheckRefusesUnknownStackAndMissingBinding(t *testing.T) {
 	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "nope"}, nil), control.CodeNotFound)
+	wantCode(t, h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "nope"}, nil), control.CodeNoSuchStack)
 	wantCode(t, h.call(control.StacksCheckCommand, map[string]string{"bogus": "x"}, nil), control.CodeBadRequest)
 }
 
@@ -527,3 +523,26 @@ func TestCheckReducesRepoTextToPrintable(t *testing.T) {
 
 // sourceID is the id the service derives from a stack folder.
 func sourceID(dir string) string { return strings.ReplaceAll(strings.TrimPrefix(dir, "/"), "/", "-") }
+
+func TestSetAcceptsAStoredRSAKey(t *testing.T) {
+	h := start(t)
+	if err := h.call(control.KeySetCommand, control.KeySetArgs{Key: rsaKeyPEM(t)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := h.set(h.srv.Key().Fingerprint); err != nil || !res.Cloned {
+		t.Fatalf("set = %+v, %v", res, err)
+	}
+}
+
+func rsaKeyPEM(t *testing.T) string {
+	t.Helper()
+	k, err := rsa.GenerateKey(rand.Reader, 3072)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := ssh.MarshalPrivateKey(k, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(pem.EncodeToMemory(block))
+}

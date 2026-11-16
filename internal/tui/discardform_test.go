@@ -10,8 +10,8 @@ func formOpen(m *Model) bool { return m.set.form != nil }
 
 func TestFormTabRunsOverFieldsThenButtons(t *testing.T) {
 	m := newSettingsModel(t, settingsBackend())
-	send(m, toRepo...)
-	send(m, "b")
+	send(m, toFolders...)
+	send(m, "a")
 	if _, on := m.set.form.form.FocusedButton(); on {
 		t.Fatal("a button has the focus at the start")
 	}
@@ -30,13 +30,13 @@ func TestFormTabRunsOverFieldsThenButtons(t *testing.T) {
 
 func TestEnterOnSaveSavesAndEnterOnDiscardClosesAnUnchangedForm(t *testing.T) {
 	m := newSettingsModel(t, settingsBackend())
-	send(m, toRepo...)
-	send(m, "b", "tab", "tab")
+	send(m, toFolders...)
+	send(m, "a", "tab")
 	send(m, "enter") // Save with no values: refused with a problem, the form stays.
 	if !formOpen(m) || m.modal != nil {
 		t.Fatal("save of an empty form")
 	}
-	contains(t, m, "SSH address is required")
+	contains(t, m, "folder is required")
 	// Tab wraps from Save to Discard on the next press.
 	for {
 		if act, on := m.set.form.form.FocusedButton(); on && act == actBack {
@@ -99,8 +99,8 @@ func secretFormKeysFromStart() []string {
 
 func TestEscOfAnUnchangedFormClosesWithoutAsking(t *testing.T) {
 	m := newSettingsModel(t, settingsBackend())
-	send(m, toRepo...)
-	send(m, "b", "esc")
+	send(m, toFolders...)
+	send(m, "a", "esc")
 	if formOpen(m) || m.modal != nil {
 		t.Fatal("unchanged form asked or stayed")
 	}

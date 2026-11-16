@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -74,18 +73,8 @@ func startServiceLogged(t *testing.T, check service.PeerCheck, logOut io.Writer)
 			service.Config{Version: "9.9.9", Endpoint: ep, StateDir: dir, PeerCheck: check, Git: testGit, Deployer: testDeployer, Backups: testBackups, Registry: testRegistry, Changelog: testChangelog, Docker: testDocker})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	path, err := ep.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			return dir
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
-	}
+	channeltest.WaitReady(t, ep)
+	return dir
 }
 
 func TestStatusJSON(t *testing.T) {
@@ -175,5 +164,35 @@ func TestStatusFieldsAreUniqueAcrossSources(t *testing.T) {
 		if got[name] != want {
 			t.Errorf("%s = %v, want %v", name, got[name], want)
 		}
+	}
+}
+
+func TestRepairText(t *testing.T) {
+	at := time.Date(2026, 5, 4, 3, 2, 1, 0, time.UTC)
+	for _, tt := range []struct {
+		r    control.RepairInfo
+		want string
+	}{
+		{control.RepairInfo{Attempts: 1, Max: 3, Next: at}, "1 of 3 attempts, next 2026-05-04T03:02:01Z"},
+		{control.RepairInfo{Attempts: 3, Max: 3}, "3 of 3 attempts"},
+		{control.RepairInfo{Attempts: 3, Max: 3, Halted: &control.HoldInfo{Since: at}}, "halted since 2026-05-04T03:02:01Z after 3 of 3 attempts"},
+	} {
+		if got := repairText(&tt.r); got != tt.want {
+			t.Errorf("repairText(%+v) = %q, want %q", tt.r, got, tt.want)
+		}
+	}
+}
+
+func TestObservationInStatusFields(t *testing.T) {
+	until := time.Date(2026, 5, 4, 3, 2, 1, 0, time.UTC)
+	commit := strings.Repeat("b", 40)
+	got := map[string]any{}
+	for _, f := range engineFields(control.EngineStatus{Stacks: []control.StackStatus{
+		{Name: "web", Source: "srv", Observe: &control.ObserveInfo{Commit: commit, Until: until}},
+	}}) {
+		got[f.Name] = f.Value
+	}
+	if want := "until 2026-05-04T03:02:01Z, update " + commit; got["stack.web.observe"] != want {
+		t.Errorf("observe = %v, want %q", got["stack.web.observe"], want)
 	}
 }

@@ -1,8 +1,7 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
---------------------------------------------------------
-  Benachrichtigungen                                    
-                                                        
+  [Benachrichtigungen]                                  
+────────────────────────────────────────────────────────
   Keine Benachrichtigungskanäle. a legt einen an.       
                                                         
                                                         
@@ -20,5 +19,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
                                                         
                                                         
+                                                        
 a hinzufügen  s Test senden  x entfernen  esc Zurück    
-r Neu laden  1-5 Bereich  q Beenden    up/down Auswählen
+r Neu laden  1-5 Bereich  q Beenden        ↑/↓ Auswählen

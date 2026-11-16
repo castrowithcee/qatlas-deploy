@@ -1,14 +1,14 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 [2 Stack detail] 3 4 5                              
---------------------------------------------------------
+────────────────────────────────────────────────────────
   Set a secret                                          
                                                         
-        +----------------------------------------------+
-  Name  | SERVICE_TOKEN                                |
-        +----------------------------------------------+
-        #==============================================#
-> Value | ************************_                    |
-        #==============================================#
+        ╭──────────────────────────────────────────────╮
+  Name  │ SERVICE_TOKEN                                │
+        ╰──────────────────────────────────────────────╯
+        ╔══════════════════════════════════════════════╗
+> Value ║ ••••••••••••••••••••••••_                    ║
+        ╚══════════════════════════════════════════════╝
         hidden; 4 to 8192 characters                    
                                                         
                                                         
@@ -18,14 +18,14 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
                                                         
-  #= Discard the changes ============================#  
-  | ! Discard the changes to this form?              |  
-  |                                                  |  
-  | The changes you made here are lost.              |  
-  |                                                  |  
-  | [ yes, do it ]  > cancel <                       |  
-  | y yes, do it  n/esc/enter cancel                 |  
-  #==================================================#  
+  ╔═ Discard the changes ════════════════════════════╗  
+  ║ ⚠ Discard the changes to this form?              ║  
+  ║                                                  ║  
+  ║ The changes you made here are lost.              ║  
+  ║                                                  ║  
+  ║ [ yes, do it ]  > cancel <                       ║  
+  ║ y yes, do it  n/esc/enter cancel                 ║  
+  ╚══════════════════════════════════════════════════╝  
                                                         
                                                         
                                                         

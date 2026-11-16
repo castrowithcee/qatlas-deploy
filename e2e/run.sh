@@ -44,6 +44,7 @@ hostname_=qdeploy-e2e-host
 admin=e2e-admin
 tags='1.0.0 1.0.1 1.1.0 2.0.0 2.1.0-rc.1 3.0.0 4.0.0 5.0.0'
 unhealthy_tags='4.0.0'
+# Tags of the repository demo/late: 1.0.0 is a healthy demo, 1.1.0 fails 100 seconds after its start.
 # Real images copied into the registry as "<source>|<path in the registry>:<tag>", and test images derived from
 # one of them as "<registry path>:<base tag>|<new tag>".
 real_images='n8nio/n8n:2.46.4|n8nio/n8n:2.46.4
@@ -360,6 +361,14 @@ push_images() {
 			docker build -q --target $target --build-arg VERSION=$tag -t registry.$domain/demo/app:$tag . >/dev/null
 			docker push -q registry.$domain/demo/app:$tag >/dev/null
 			docker rmi registry.$domain/demo/app:$tag >/dev/null"
+	done
+	for tag in 1.0.0 1.1.0; do
+		target=healthy
+		[ "$tag" != 1.1.0 ] || target=late
+		docker exec -w /tmp/demo-image "$host" sh -ec "
+			docker build -q --target $target --build-arg VERSION=$tag -t registry.$domain/demo/late:$tag . >/dev/null
+			docker push -q registry.$domain/demo/late:$tag >/dev/null
+			docker rmi registry.$domain/demo/late:$tag >/dev/null"
 	done
 	docker exec "$host" rm -rf /tmp/demo-image
 }

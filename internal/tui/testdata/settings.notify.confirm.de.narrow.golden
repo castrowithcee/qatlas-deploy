@@ -1,21 +1,21 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
---------------------------------------------------------
+  [Benachrichtigungen]                                  
+────────────────────────────────────────────────────────
   Einstellungen des Kanals                              
                                                         
-                    +----------------------------------+
-  Webhook-URL       | (eingegeben, verborgen)          |
-                    +----------------------------------+
-  #= Benachrichtigungskanal anlegen =================#=#
-> | ! Den Kanal deploy-hook (webhook) anlegen?       | |
-  |                                                  |=#
-  | Der Dienst speichert die geheimen Teile und      |  
-  | zeigt sie nie wieder.                            |  
-  |                                                  |  
-  | [ ja, ausführen ]  > abbrechen <                 |  
-  | y ja, ausführen  n/esc/enter abbrechen           |  
-  #==================================================#  
-                                                        
+                    ╭──────────────────────────────────╮
+  Webhook-URL       │ (eingegeben, verborgen)          │
+                    ╰──────────────────────────────────╯
+  ╔═ Benachrichtigungskanal anlegen ═════════════════╗═╗
+> ║ ⚠ Den Kanal deploy-hook (webhook) anlegen?       ║ ║
+  ║                                                  ║═╝
+  ║ Der Dienst speichert die geheimen Teile und      ║  
+  ║ zeigt sie nie wieder.                            ║  
+  ║                                                  ║  
+  ║ [ ja, ausführen ]  > abbrechen <                 ║  
+  ║ y ja, ausführen  n/esc/enter abbrechen           ║  
+  ╚══════════════════════════════════════════════════╝  
                                                         
                                                         
                                                         

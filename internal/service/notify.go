@@ -90,17 +90,21 @@ func (n *notifyService) close() { n.disp.Close() }
 
 // runEvent is the engine's event hook. It only queues, so it returns at once whatever the channels do.
 func (n *notifyService) runEvent(ev engine.Event) {
-	n.disp.Submit(notifier.Event{Type: ev.Kind, Stack: ev.Stack, Run: ev.Run, Commit: ev.Commit, Error: ev.Error})
+	n.disp.Submit(notifier.Event{Type: ev.Kind, Stack: ev.Stack, Run: ev.Run, Commit: ev.Commit, Error: ev.Error, Cause: ev.Cause})
 }
 
-// monitorEvent queues the notice of a failed or recovered container. It only queues, so it never holds the
-// monitor.
+// monitorEvent queues the notice of a failed or recovered container or of a halted repair. It only queues, so it
+// never holds the monitor.
 func (n *notifyService) monitorEvent(ev MonitorEvent) {
 	typ := notifier.EventContainerFailed
-	if ev.Recovered {
+	switch {
+	case ev.Recovered:
 		typ = notifier.EventRecovered
+	case ev.Halted:
+		typ = notifier.EventRecoveryFailed
 	}
-	n.disp.Submit(notifier.Event{Type: typ, Stack: ev.Stack, Kind: ev.Kind, Container: ev.Container, Since: ev.Since, Time: ev.Time})
+	n.disp.Submit(notifier.Event{Type: typ, Stack: ev.Stack, Kind: ev.Kind, Container: ev.Container, Since: ev.Since,
+		Time: ev.Time, Restarted: ev.Restarted, Attempts: ev.Attempts, Cause: ev.Cause, Error: ev.Error})
 }
 
 // updateAvailable queues an update notice for the versions no notice was made for yet. The window reports

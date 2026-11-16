@@ -1,6 +1,6 @@
-qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks   2 Stack detail  [3 Runs]  4 Settings   5 Containers                                                       
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks   2 ▣ Stack detail  [3 ▶ Runs]  4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   STACK        STARTED      RESULT           TRIGGER  DURATION  RUN                                                     
 > web-shop     10-30 15:00  running          manual   -         20261030T150000Z-0000000b                               
   demo-stack   10-30 14:02  succeeded        update   48s       20261030T140200Z-0000000c                               
@@ -11,4 +11,4 @@ qdeploy  maintenance window closed                                              
   wiki         10-27 03:10  succeeded        manual   12s       20261027T031000Z-0000000f                               
                                                                                                                         
                                                                                                                         
-enter log  / search  f this stack  r reload  1-5 area  q quit                                        up/down choose  1/7
+enter log  / search  f this stack  r reload  1-5 area  q quit                                            ↑/↓ choose  1/7

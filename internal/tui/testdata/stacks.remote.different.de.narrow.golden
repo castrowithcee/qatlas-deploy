@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                  [?] Hilfe
+  [1 Stacks] 2 3 4 5                                    
+────────────────────────────────────────────────────────
+  ⚠ Den Stand des Hosts in /srv/local-example als einen 
+    Commit auf Branch main von                          
+    ssh://git.example.test/ops/local-example.git setzen 
+    und pushen?                                         
+                                                        
+  Die Dateien unterscheiden sich. Ja fügt einen Commit  
+  mit den Dateien des Hosts auf die Historie des Remotes
+  und pusht ihn; die Historie des Remotes bleibt        
+  erhalten und wird nie überschrieben.                  
+                                                        
+    Ordner: /srv/local-example                          
+    Adresse: ssh://git.example.test/ops/local-          
+    example.git                                         
+    Branch: main                                        
+    Commit: 111111111111                                
+                                                        
+  Abweichende Pfade (12)                                
+    demo/compose.yaml                                   
+    demo/.env                                           
+y setzen und pushen  n/esc/enter abbrechen              
+                                     ↑/↓ Scrollen  19/34

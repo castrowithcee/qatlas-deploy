@@ -42,17 +42,23 @@ func runService(t *testing.T, cfg Config) localipc.ServiceEndpoint {
 			t.Errorf("Run = %v", err)
 		}
 	})
-	path, err := cfg.Endpoint.Path()
+	waitServing(t, cfg.Endpoint)
+	return cfg.Endpoint
+}
+
+// waitServing blocks until the service answers a request. Only serve answers, after the store, its sweep and the
+// migrations are done, so a test may touch the state directory from here on. A refused peer is an answer too.
+func waitServing(t *testing.T, ep localipc.ServiceEndpoint) {
+	t.Helper()
+	channeltest.WaitReady(t, ep)
+	cl, err := client.Dial(context.Background(), ep)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			return cfg.Endpoint
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
+	defer cl.Close()
+	var remote *control.Error
+	if err := cl.Call(context.Background(), control.StatusCommand, nil, nil); err != nil && !errors.As(err, &remote) {
+		t.Fatalf("service does not answer: %v", err)
 	}
 }
 

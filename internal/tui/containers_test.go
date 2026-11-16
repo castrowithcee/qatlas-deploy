@@ -231,14 +231,14 @@ func TestContainerDetailRefreshesAndNamesOnly(t *testing.T) {
 	if b.called("container") != reads+1 {
 		t.Errorf("the open detail was not read again")
 	}
-	// Esc closes the detail, a second esc leaves the area.
+	// Esc closes the detail, a second esc leads to the tab line and stays in the area.
 	send(m, "esc")
 	if m.ctv.open || m.area != areaContainers {
 		t.Fatalf("open %v, area %s", m.ctv.open, m.area)
 	}
 	send(m, "esc")
-	if m.area != areaStacks {
-		t.Fatalf("area %s", m.area)
+	if m.area != areaContainers || m.focus() != kittui.ZoneTabs {
+		t.Fatalf("area %s, zone %s", m.area, m.focus())
 	}
 }
 

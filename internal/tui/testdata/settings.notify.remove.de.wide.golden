@@ -1,21 +1,21 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
-  Benachrichtigungen                                                                                                    
-                                                                                                                        
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks   2 ▣ Stack-Details   3 ▶ Läufe  [4 ⚙ Einstellungen]  5 ▦ Container                                       
+   Allgemein   Zugangsdaten   Wartungsfenster  [Benachrichtigungen]                                                     
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   NAME      TYP      EREIGNISSE          ZIEL                                                                           
   ops-hook  webhook  failed,rolled-back  -                                                                              
 > ops-mail  smtp     alle                mail.example.test:587 -> ops@example.test                                      
-                            #= Benachrichtigungen =========================================#                            
-                            | ! Den Kanal ops-mail entfernen?                              |                            
-                            |                                                              |                            
-                            | Der Kanal und seine gespeicherten Geheimnisse werden         |                            
-                            | gelöscht.                                                    |                            
-                            |                                                              |                            
-                            | [ ja, ausführen ]  > abbrechen <                             |                            
-                            | y ja, ausführen  n/esc/enter abbrechen                       |                            
-                            #==============================================================#                            
                                                                                                                         
+                                                                                                                        
+                            ╔═ Benachrichtigungen ═════════════════════════════════════════╗                            
+                            ║ ⚠ Den Kanal ops-mail entfernen?                              ║                            
+                            ║                                                              ║                            
+                            ║ Der Kanal und seine gespeicherten Geheimnisse werden         ║                            
+                            ║ gelöscht.                                                    ║                            
+                            ║                                                              ║                            
+                            ║ [ ja, ausführen ]  > abbrechen <                             ║                            
+                            ║ y ja, ausführen  n/esc/enter abbrechen                       ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
                                                                                                                         
                                                                                                                         
                                                                                                                         

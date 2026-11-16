@@ -20,6 +20,77 @@ type monEngine struct {
 	states map[string]engine.StackState
 	active map[string]string
 	err    error
+	// repairs are the attempts made; stackRestarts counts those that restarted the whole stack.
+	repairs       []engine.Repair
+	stackRestarts int
+	// onRestart runs inside an attempt, as the restart would.
+	onRestart func()
+	// rollbacks are the updates rolled back, rollbackErr the refusal of RollbackUpdate.
+	rollbacks   []string
+	rollbackErr error
+	now         func() time.Time
+}
+
+// RollbackUpdate mirrors the engine: it refuses as Repair does and without the observation, otherwise the run
+// ends at once with the update rolled back and the observation gone.
+func (e *monEngine) RollbackUpdate(_ context.Context, stack, commit string, f engine.Failure) (engine.RunInfo, error) {
+	if e.rollbackErr != nil {
+		return engine.RunInfo{}, e.rollbackErr
+	}
+	if _, busy := e.active[stack]; busy {
+		return engine.RunInfo{}, engine.ErrRunActive
+	}
+	cur := e.states[stack]
+	if o := cur.Observe; o == nil || o.Commit != commit {
+		return engine.RunInfo{}, engine.ErrNoObservation
+	}
+	e.rollbacks = append(e.rollbacks, commit)
+	cur.Observe = nil
+	cur.LastRun = &engine.RunRecord{ID: "20260504T030000Z-0000abcd", Stack: stack, Trigger: engine.TriggerObserve,
+		Result: engine.ResultRolledBack, Started: e.now()}
+	e.states[stack] = cur
+	return engine.RunInfo{ID: cur.LastRun.ID, Stack: stack, Commit: commit}, nil
+}
+
+// Repair mirrors the engine: a busy slot refuses, an unrepairable stack refuses, otherwise the record is stored
+// before the restart.
+func (e *monEngine) Repair(ctx context.Context, stack string, rec engine.Repair, restart func(context.Context) error) (bool, error) {
+	if _, busy := e.active[stack]; busy {
+		return false, engine.ErrRunActive
+	}
+	cur, ok := e.states[stack]
+	if !ok || cur.Deployed == "" || cur.Removed || cur.Stopped != nil || cur.Paused != nil || cur.OperatorPause != nil ||
+		(cur.Repair != nil && cur.Repair.Halted != nil) {
+		return false, engine.ErrNotRepairable
+	}
+	cur.Repair = &rec
+	e.states[stack] = cur
+	e.repairs = append(e.repairs, rec)
+	if e.onRestart != nil {
+		e.onRestart()
+	}
+	if restart == nil {
+		e.stackRestarts++
+		return true, nil
+	}
+	return true, restart(ctx)
+}
+
+func (e *monEngine) RecordRepair(stack string, rec *engine.Repair) (bool, error) {
+	if e.err != nil {
+		return false, e.err
+	}
+	cur, ok := e.states[stack]
+	if !ok || (cur.Repair != nil && cur.Repair.Halted != nil) {
+		return false, nil
+	}
+	if rec != nil {
+		c := *rec
+		rec = &c
+	}
+	cur.Repair = rec
+	e.states[stack] = cur
+	return true, nil
 }
 
 func (e *monEngine) Snapshot() (engine.Snapshot, error) {
@@ -67,9 +138,20 @@ type monDocker struct {
 	Docker
 	list []docker.Container
 	err  error
+	// restarted are the container IDs restarted, in order.
+	restarted []string
 }
 
 func (d *monDocker) List(context.Context) ([]docker.Container, error) { return d.list, d.err }
+
+func (d *monDocker) Restart(_ context.Context, ref string, _ time.Duration) error {
+	d.restarted = append(d.restarted, ref)
+	return nil
+}
+
+func (d *monDocker) WaitHealthy(_ context.Context, refs []string, _ docker.WaitOptions) ([]docker.WaitResult, error) {
+	return nil, nil
+}
 
 type monClock struct{ now time.Time }
 
@@ -125,9 +207,10 @@ func (r *monRig) restart() {
 
 func (r *monRig) failedEvents() (failed, recovered int) {
 	for _, ev := range r.events {
-		if ev.Recovered {
+		switch {
+		case ev.Recovered:
 			recovered++
-		} else {
+		case !ev.Halted:
 			failed++
 		}
 	}
@@ -350,6 +433,9 @@ func TestMonitorSkipsWhatItMustNotEvaluate(t *testing.T) {
 			if r.eng.states["web"].Failure != nil {
 				t.Fatalf("failure stored: %+v", r.eng.states["web"].Failure)
 			}
+			if len(r.eng.repairs) != 0 || len(r.dock.restarted) != 0 {
+				t.Fatalf("repaired: %+v %v", r.eng.repairs, r.dock.restarted)
+			}
 		})
 	}
 }
@@ -444,6 +530,28 @@ func TestMonitorFailureShownInStatus(t *testing.T) {
 	}
 }
 
+func TestRepairShownInStatus(t *testing.T) {
+	last := time.Date(2026, 5, 4, 3, 2, 1, 0, time.UTC)
+	next := last.Add(5 * time.Minute)
+	snap := engine.Snapshot{State: engine.State{Stacks: map[string]engine.StackState{"web": {
+		Deployed: strings.Repeat("a", 40), Repair: &engine.Repair{Attempts: 1, Last: last, Next: next},
+	}}}}
+	want := control.RepairInfo{Attempts: 1, Max: engine.MaxRepairAttempts, Last: last, Next: next}
+	if r := stackStatuses(snap)[0].Repair; r == nil || *r != want {
+		t.Fatalf("repair = %+v, want %+v", r, want)
+	}
+	halted := last.Add(time.Minute)
+	snap.State.Stacks["web"] = engine.StackState{Repair: &engine.Repair{Attempts: 3, Last: last, Halted: &engine.Hold{Since: halted}}}
+	r := stackStatuses(snap)[0].Repair
+	if r == nil || r.Halted == nil || !r.Halted.Since.Equal(halted) || r.Attempts != 3 || !r.Next.IsZero() {
+		t.Fatalf("halted repair = %+v", r)
+	}
+	snap.State.Stacks["web"] = engine.StackState{}
+	if r := stackStatuses(snap)[0].Repair; r != nil {
+		t.Fatalf("repair without repair state = %+v", r)
+	}
+}
+
 func TestMonitorStopMarkSurvivesRestartAndEndsWithTheContainer(t *testing.T) {
 	r := newMonRig(t)
 	app, db := ctr("1", "app"), ctr("2", "db")
@@ -493,5 +601,25 @@ func TestMonitorExitedWithErrorOrUnparseableStatusIsFailure(t *testing.T) {
 		r.dock.list = []docker.Container{app}
 		r.poll(30 * time.Second)
 		r.wantEvents(1, 0)
+	}
+}
+
+func TestObservationShownInStatusOnlyWhileActive(t *testing.T) {
+	commit := strings.Repeat("b", 40)
+	until := time.Now().Add(time.Hour)
+	stack := func(deployed string, until time.Time) engine.Snapshot {
+		return engine.Snapshot{State: engine.State{Stacks: map[string]engine.StackState{"web": {
+			Deployed: deployed, Observe: &engine.Observation{Commit: commit, Until: until},
+		}}}}
+	}
+	o := stackStatuses(stack(commit, until))[0].Observe
+	if o == nil || o.Commit != commit || !o.Until.Equal(until) {
+		t.Fatalf("active observation = %+v", o)
+	}
+	if o := stackStatuses(stack(commit, time.Now().Add(-time.Minute)))[0].Observe; o != nil {
+		t.Fatalf("expired observation = %+v", o)
+	}
+	if o := stackStatuses(stack(strings.Repeat("c", 40), until))[0].Observe; o != nil {
+		t.Fatalf("observation of another commit = %+v", o)
 	}
 }

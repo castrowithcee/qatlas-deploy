@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,8 +17,7 @@ import (
 type formKind int
 
 const (
-	formRepo formKind = iota
-	formCred
+	formCred formKind = iota
 	formWindow
 	formNotifyBasics
 	formNotifyDetail
@@ -38,6 +36,8 @@ type settingsForm struct {
 	// dirs and stackDir are the missing directories and the stack folder a data directory form is about.
 	dirs     []control.DirInfo
 	stackDir string
+	// keyLabel is the stack folder named in the confirmation of a key; stackDir is the Dir to send.
+	keyLabel string
 }
 
 // problem shows a problem without a field above the form.
@@ -77,13 +77,6 @@ func maskedField(id string, label, hint kittui.TextID) kittui.FormField {
 	return kittui.FormField{ID: kittui.FieldID(id), Kind: kittui.FieldMasked, Label: label, Hint: hint}
 }
 
-func (m *Model) repoForm() *settingsForm {
-	return m.newSettingsForm(formRepo, textTitleBind, []kittui.FormField{
-		textField("url", textFieldURL, textHintURL, ""),
-		textField("dir", textFieldDir, textHintDir, ""),
-	})
-}
-
 func (m *Model) credentialForm() *settingsForm {
 	return m.newSettingsForm(formCred, textTitleCred, []kittui.FormField{
 		{ID: "kind", Kind: kittui.FieldChoice, Label: textFieldCredKind, Hint: textHintCredKind,
@@ -111,6 +104,7 @@ var notifyEvents = []struct {
 	{control.NotifyEventSucceeded, textEventSucceeded}, {control.NotifyEventFailed, textEventFailed},
 	{control.NotifyEventRolledBack, textEventRolledBack}, {control.NotifyEventRollbackFailed, textEventRollbackFailed},
 	{control.NotifyEventContainerFailed, textEventContainerFailed}, {control.NotifyEventRecovered, textEventRecovered},
+	{control.NotifyEventRecoveryFailed, textEventRecoveryFailed},
 	{control.NotifyEventUpdateAvailable, textEventUpdateAvailable},
 }
 
@@ -158,14 +152,18 @@ func (m *Model) notifyDetailForm(basics control.NotifyAddArgs) *settingsForm {
 // that does not hold up stays open with its problems under the fields.
 func (m *Model) submitForm() tea.Cmd {
 	f := m.set.form
-	if f == nil || m.settingsBusy() {
+	if f == nil || m.formBlocked() {
 		return nil
 	}
 	v := f.form.Values()
 	text := func(id string) string { return strings.TrimSpace(v[kittui.FieldID(id)].Text) }
 	switch f.kind {
-	case formRepo:
-		return m.submitRepo(f, text("url"), text("dir"))
+	case formGeneral:
+		return m.submitGeneral(f)
+	case formFolder:
+		return m.submitFolder(f, text("path"))
+	case formFolderURL:
+		return m.submitFolderURL(f, text("url"))
 	case formCred:
 		return m.submitCredential(f, string(v["kind"].Choice), text("host"), text("user"), v["token"].Text)
 	case formWindow:
@@ -178,60 +176,16 @@ func (m *Model) submitForm() tea.Cmd {
 		return m.submitSecret(f, text("key"), v["value"].Text)
 	case formDataDirs:
 		return m.submitDataDirs(f, text("owner"), text("mode"))
+	case formKeyChoice:
+		return m.submitKeyChoice(f, v)
+	case formKeyStore:
+		return m.submitKeyStore(f, v)
 	}
 	return nil
 }
 
 func (m *Model) bad(field string, cause kittui.TextID, args ...any) kittui.FormProblem {
 	return kittui.FormProblem{Field: kittui.FieldID(field), Cause: m.text.Lookup(cause, args...), NextStep: m.text.Lookup(textFormFix)}
-}
-
-func (m *Model) submitRepo(f *settingsForm, url, dir string) tea.Cmd {
-	var ps []kittui.FormProblem
-	// Only the service knows which addresses it accepts; it answers the probe with the reason.
-	if url == "" || strings.ContainsFunc(url, unicode.IsSpace) {
-		ps = append(ps, m.bad("url", textProblemURL))
-	}
-	switch {
-	case dir == "":
-		ps = append(ps, m.bad("dir", textProblemDirRequired))
-	case !filepath.IsAbs(dir) || filepath.Clean(dir) != dir:
-		ps = append(ps, m.bad("dir", textProblemDir))
-	}
-	if len(ps) > 0 {
-		f.problems(ps...)
-		return nil
-	}
-	m.set.pending = bind{url: url, dir: dir}
-	if m.folders == nil {
-		return m.probeRepo()
-	}
-	absent, err := m.folders.Missing(dir)
-	if err != nil {
-		f.problem(m.serviceText(err), m.text.Lookup(textFormFix))
-		return nil
-	}
-	if absent {
-		// Nothing is created before the person has seen the exact path and said yes.
-		m.ask(textPageRepo, m.text.Lookup(textAskFolderCreate, dir), m.text.Lookup(textWhatFolderCreate), nil, false,
-			func() tea.Cmd { return m.grantFolder(true) })
-		return nil
-	}
-	return m.grantFolder(false)
-}
-
-// grantFolder prepares the stack folder; the probe of the repository follows when it is done.
-func (m *Model) grantFolder(create bool) tea.Cmd {
-	dir := m.set.pending.dir
-	return m.writeCall(opFolder, dir, func(Backend) (any, error) { return folderReady{}, m.folders.Grant(m.ctx, dir, create) })
-}
-
-// folderReady is the answer of a prepared stack folder.
-type folderReady struct{}
-
-func (m *Model) probeRepo() tea.Cmd {
-	url := m.set.pending.url
-	return m.writeCall(opProbe, "", func(b Backend) (any, error) { return b.RepoProbe(m.ctx, url) })
 }
 
 // The kinds of credential the form offers: the two names qdeploy reads.
@@ -415,8 +369,14 @@ func (m *Model) formKey(msg tea.KeyPressMsg) tea.Cmd {
 	if cmd, done := m.formAct(act, handled); done {
 		return cmd
 	}
-	if id, ok := m.keys.Match(msg, f.form.Input()); ok && id == actForceQuit {
-		return tea.Quit
+	if id, ok := m.keys.Match(msg, f.form.Input()); ok {
+		switch {
+		case id == actForceQuit:
+			return tea.Quit
+		case id == actUp && !handled && f.kind == formGeneral:
+			// Up above the first field leaves the form for the sub-tab line.
+			return m.leaveGeneral(func() tea.Cmd { m.setZone(kittui.ZoneSubtabs); return nil })
+		}
 	}
 	return nil
 }
@@ -432,17 +392,31 @@ func (m *Model) formAct(act kittui.ActionID, handled bool) (cmd tea.Cmd, done bo
 	return nil, handled
 }
 
+// dropForm closes the open form.
+func (m *Model) dropForm() { m.set.form = nil }
+
+// formBlocked says the open form takes no input: a write of the service is under way. The General form stays
+// usable, as saving it reaches no service.
+func (m *Model) formBlocked() bool {
+	f := m.set.form
+	return m.settingsBusy() && (f == nil || f.kind != formGeneral)
+}
+
 // discardForm ends the form; nothing is kept of it. A form with changes asks first and stays open until the
 // answer, the question names no value.
 func (m *Model) discardForm() tea.Cmd {
 	f := m.set.form
+	if f.kind == formGeneral {
+		// The General page stays its form; discarding starts it again and leaves it for the sub-tab line.
+		return m.leaveGeneral(func() tea.Cmd { m.set.form = m.generalForm(); m.setZone(kittui.ZoneSubtabs); return nil })
+	}
 	if !f.form.Changed() {
-		m.set.form = nil
+		m.dropForm()
 		return nil
 	}
 	m.ask(textTitleDiscard, m.text.Lookup(textAskDiscard), m.text.Lookup(textWhatDiscard), nil, true, func() tea.Cmd {
 		if m.set.form == f {
-			m.set.form = nil
+			m.dropForm()
 		}
 		return nil
 	})

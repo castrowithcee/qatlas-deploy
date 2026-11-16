@@ -13,6 +13,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-kit/i18n"
 	kittui "github.com/castrowithcee/qatlas-kit/tui"
+	"github.com/castrowithcee/qatlas-kit/uiprefs"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
@@ -31,8 +32,8 @@ const (
 	areaStacks kittui.AreaID = "stacks"
 	areaDetail kittui.AreaID = "detail"
 	areaRuns   kittui.AreaID = "runs"
-	// areaSettings holds what a host needs to operate: the repository, the deploy key, credentials, the
-	// maintenance window and the notifications.
+	// areaSettings holds the preferences of the device, the credentials, the maintenance window and the
+	// notifications.
 	areaSettings kittui.AreaID = "settings"
 	// areaContainers lists every container of the host; it is the last area so the keys of the others stay.
 	areaContainers kittui.AreaID = "containers"
@@ -43,7 +44,7 @@ func areas() []kittui.Area {
 		{ID: areaStacks, Title: textAreaStacks},
 		{ID: areaDetail, Title: textAreaDetail},
 		{ID: areaRuns, Title: textAreaRuns},
-		{ID: areaSettings, Title: textAreaSettings},
+		{ID: areaSettings, Title: textAreaSettings, Tabs: settingsTabs()},
 		{ID: areaContainers, Title: textAreaContainers},
 	}
 }
@@ -74,6 +75,9 @@ type config struct {
 	now      func() time.Time // clock of the log filter; nil takes time.Now
 	warnings []string
 	mouse    bool // the mouse preference
+	// prefs are the whole preferences as loaded; savePrefs writes them, nil when they cannot be saved.
+	prefs     uiprefs.Prefs
+	savePrefs func(uiprefs.Prefs) error
 }
 
 // tickMsg starts a periodic refresh.
@@ -87,9 +91,13 @@ type Model struct {
 	folders Folders
 	keys    *kittui.Keymap
 	text    kittui.Translator
+	lang    i18n.Lang
 	frame   *kittui.Frame
-	loc     *time.Location
-	now     func() time.Time
+	// prefs are the preferences as saved last; a save changes the chosen values and keeps the rest.
+	prefs     uiprefs.Prefs
+	savePrefs func(uiprefs.Prefs) error
+	loc       *time.Location
+	now       func() time.Time
 
 	themes         *kittui.ThemeSet
 	theme          string
@@ -169,7 +177,8 @@ func newModel(c config) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, frame: kittui.NewFrame(keys, text),
+	m := &Model{ctx: c.ctx, backend: c.backend, folders: c.folders, keys: keys, text: text, lang: c.lang, frame: kittui.NewFrame(keys, text),
+		prefs: c.prefs, savePrefs: c.savePrefs,
 		loc: c.loc, themes: themes, theme: c.theme, profile: c.profile, charset: c.charset, area: areaStacks,
 		tones: map[string]kittui.TextStyle{}, rows: map[kittui.ItemID]stackRow{},
 		runTones: map[string]kittui.TextStyle{}, runByID: map[kittui.ItemID]runRow{}, after: tea.Tick,
@@ -187,28 +196,22 @@ func newModel(c config) (*Model, error) {
 	if slices.ContainsFunc(areas(), func(a kittui.Area) bool { return a.ID == c.start }) {
 		m.area = c.start
 	}
-	m.list, err = kittui.NewList(kittui.ListSpec{Columns: stackColumns(text, m.tones), Keys: stackListKeys(), Ticks: true,
-		Search: kittui.SearchByKey, Empty: textStacksEmpty}, keys, text)
-	if err != nil {
+	if m.list, err = m.newStackList(text); err != nil {
 		return nil, err
 	}
-	m.list.SetFocused(true)
-	m.runsList, err = kittui.NewList(kittui.ListSpec{Columns: runColumns(text, m.runTones), Keys: listKeys(),
-		Search: kittui.SearchByKey, Empty: textRunsEmpty}, keys, text)
-	if err != nil {
+	if m.runsList, err = m.newRunsList(text); err != nil {
 		return nil, err
 	}
-	m.runsList.SetFocused(true)
-	m.ctList, err = kittui.NewList(kittui.ListSpec{Columns: containerColumns(text, m.ctTones), Keys: listKeys(),
-		Search: kittui.SearchByKey, Empty: textCtEmpty}, keys, text)
-	if err != nil {
+	if m.ctList, err = m.newContainerList(text); err != nil {
 		return nil, err
 	}
-	m.ctList.SetFocused(true)
-	m.ctList.SetGrouped(true)
 	if m.set, err = newSettings(keys, text); err != nil {
 		return nil, err
 	}
+	if m.area == areaSettings {
+		m.showPage(false)
+	}
+	m.setZone(kittui.ZoneTabs)
 	if !m.restyle() {
 		m.notice = text.Lookup(kittui.TextWarning, text.Lookup(kittui.TextThemeUnknown, c.theme, kittui.ThemeTerminal))
 	}
@@ -216,6 +219,35 @@ func newModel(c config) (*Model, error) {
 		m.notice = text.Lookup(kittui.TextWarning, c.warnings[0])
 	}
 	return m, nil
+}
+
+// The three lists are built with the translator, so a change of language builds them again.
+func (m *Model) newStackList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: stackColumns(text, m.tones), Keys: stackListKeys(), Ticks: true,
+		Search: kittui.SearchByKey, Empty: textStacksEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+	}
+	return l, err
+}
+
+func (m *Model) newRunsList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: runColumns(text, m.runTones), Keys: listKeys(),
+		Search: kittui.SearchByKey, Empty: textRunsEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+	}
+	return l, err
+}
+
+func (m *Model) newContainerList(text kittui.Translator) (*kittui.List, error) {
+	l, err := kittui.NewList(kittui.ListSpec{Columns: containerColumns(text, m.ctTones), Keys: listKeys(),
+		Search: kittui.SearchByKey, Empty: textCtEmpty}, m.keys, text)
+	if err == nil {
+		l.SetFocused(true)
+		l.SetGrouped(true)
+	}
+	return l, err
 }
 
 // restyle resolves the styles of the theme under the terminal; false when the theme is unknown.
@@ -288,6 +320,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applySecrets(msg)
 	case settingsLoadMsg:
 		m.applySettingsLoad(msg)
+	case keyLoadMsg:
+		m.applyKeyLoad(msg)
 	case settingMsg:
 		return m, m.applySetting(msg)
 	case tea.PasteMsg:
@@ -334,18 +368,31 @@ func (m *Model) apply(msg refreshMsg) {
 	if msg.problem != nil {
 		m.failure = m.errorText(msg.problem)
 	}
-	rows := buildRows(msg.snap)
+	m.fillStacks()
+}
+
+// fillStacks sets the rows of the stacks list and of the runs list from the snapshot read last.
+func (m *Model) fillStacks() {
+	rows := buildRows(m.snap)
+	// The rows go under their stack folder, and a folder has its row even without a stack.
+	grouped := len(m.snap.status.Engine.Sources) > 0
+	m.list.SetGrouped(grouped)
 	ids := itemIDs(rows)
 	clear(m.tones)
 	clear(m.rows)
 	items := make([]kittui.ListItem, len(rows))
 	for i, r := range rows {
 		items[i] = kittui.ListItem{ID: ids[i], Cells: cells(r, m.text, m.loc, m.tones)}
+		if grouped {
+			items[i].Group = r.folder
+		}
 		m.rows[ids[i]] = r
 	}
 	if err := m.list.SetItems(items); err != nil {
 		m.failure = m.text.Lookup(kittui.TextError, m.text.Lookup(textErrUnshownStacks, err.Error()))
 	}
+	// The groups come after the rows, so a first reading marks the first stack, as a flat list does.
+	m.folderGroups()
 	m.rebuildRuns()
 }
 
@@ -391,6 +438,12 @@ func (m *Model) input() kittui.InputFocus {
 	case areaSettings:
 		return m.settingsInput()
 	case areaStacks:
+		switch {
+		case m.set.form != nil:
+			return m.set.form.form.Input()
+		case m.set.keyOpen:
+			return kittui.InputNavigation
+		}
 		return m.list.Input()
 	case areaContainers:
 		if m.ctv.open {
@@ -409,6 +462,8 @@ func (m *Model) input() kittui.InputFocus {
 // typed gives a key to the part that has the text focus; handled is false when it let the key pass.
 func (m *Model) typed(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
 	switch {
+	case m.area == areaStacks && m.set.keyOpen:
+		return nil, false
 	case m.area == areaStacks:
 		open, handled := m.list.Update(msg)
 		return m.open(open), handled
@@ -434,8 +489,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.modal != nil {
 		return m.modalKey(msg)
 	}
-	if (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil {
-		if m.set.busy {
+	if m.formFocused() {
+		if m.formBlocked() {
 			if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actForceQuit {
 				return tea.Quit
 			}
@@ -493,7 +548,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			if cmd, ok := m.openContainerLogs(); ok {
 				return cmd
 			}
-		case actBind, actFetch, actGenerate, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
+		case actFetch, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs, actRemote:
 			switch m.area {
 			case areaSettings:
 				if cmd, handled := m.settingsAction(id); handled {
@@ -501,6 +556,16 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 				}
 			case areaDetail:
 				if cmd, handled := m.detailAction(id); handled {
+					return cmd
+				}
+			case areaContainers:
+				if id == actAdd {
+					if cmd, ok := m.adoptAction(); ok {
+						return cmd
+					}
+				}
+			case areaStacks:
+				if cmd, handled := m.folderAction(id); handled {
 					return cmd
 				}
 			}
@@ -515,8 +580,25 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		case actBack:
 			switch m.area {
 			case areaSettings:
-				cmd, _ := m.settingsAction(actBack)
-				return cmd
+				switch m.focus() {
+				case kittui.ZoneTabs:
+				case kittui.ZoneSubtabs:
+					m.setZone(kittui.ZoneTabs)
+				default:
+					if l := m.set.activeList(); l != nil {
+						m.back(l, msg)
+					} else {
+						m.setZone(m.above())
+					}
+				}
+				return nil
+			case areaStacks:
+				if m.set.keyOpen {
+					m.closeKeyView()
+					return nil
+				}
+				m.back(m.list, msg)
+				return nil
 			case areaDetail:
 				if m.pick != nil {
 					if _, handled := m.pick.list.Update(msg); !handled {
@@ -530,9 +612,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 					m.ctv = containerView{gen: m.ctv.gen}
 					return nil
 				}
-				if _, handled := m.ctList.Update(msg); !handled {
-					return m.enter(areaStacks)
-				}
+				m.back(m.ctList, msg)
 				return nil
 			case areaRuns:
 				switch {
@@ -541,42 +621,78 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 						m.log.open = false
 					}
 				default:
-					if _, handled := m.runsList.Update(msg); !handled {
-						return m.enter(areaStacks)
-					}
+					m.back(m.runsList, msg)
 				}
 				return nil
 			}
 		}
 		if m.area == areaDetail && m.pick == nil {
+			if id == actUp && m.detail.top <= 0 {
+				m.setZone(kittui.ZoneTabs)
+				return nil
+			}
 			m.scrollDetail(id)
 			return nil
 		}
 		if m.area == areaContainers && m.ctv.open {
+			if id == actUp && m.ctv.top <= 0 {
+				m.setZone(kittui.ZoneTabs)
+				return nil
+			}
 			m.ctv.top = scrolled(m.ctv.top, m.ctv.total, m.ctv.rows, id)
 			return nil
 		}
 	}
 	switch {
+	case m.area == areaStacks && m.set.keyOpen:
+		m.topEdge(false, msg)
 	case m.area == areaStacks:
-		open, _ := m.list.Update(msg)
+		open, handled := m.list.Update(msg)
+		m.topEdge(handled, msg)
 		return m.open(open)
 	case m.area == areaContainers && !m.ctv.open:
-		open, _ := m.ctList.Update(msg)
+		open, handled := m.ctList.Update(msg)
+		m.topEdge(handled, msg)
 		return m.openContainer(open)
 	case m.area == areaRuns && m.log.open:
 		m.log.view.Update(msg)
 	case m.area == areaRuns:
-		open, _ := m.runsList.Update(msg)
+		open, handled := m.runsList.Update(msg)
+		m.topEdge(handled, msg)
 		return m.openLog(open)
-	case m.area == areaSettings:
-		cmd, _ := m.settingsTyped(msg)
+	case m.area == areaSettings && m.focus() != kittui.ZoneTabs && m.focus() != kittui.ZoneSubtabs:
+		cmd, handled := m.settingsTyped(msg)
+		m.topEdge(handled, msg)
 		return cmd
 	case m.area == areaDetail && m.pick != nil:
 		open, _ := m.pick.list.Update(msg)
 		return m.picked(open)
 	}
 	return nil
+}
+
+// above is the zone over the content: the sub-tab line where the area has one, else the tab line.
+func (m *Model) above() kittui.FocusZone {
+	if m.area == areaSettings {
+		return kittui.ZoneSubtabs
+	}
+	return kittui.ZoneTabs
+}
+
+// topEdge leads to the zone above the content when an up key found no row above it: a list reports the key as
+// not handled at its first row, and a text without a scroll position never handles it.
+func (m *Model) topEdge(handled bool, msg tea.KeyPressMsg) {
+	if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actUp && !handled {
+		m.setZone(m.above())
+	}
+}
+
+// back is Esc in a list of an area: it clears a search first, and leads to the zone above the content once none
+// is left.
+func (m *Model) back(l *kittui.List, msg tea.KeyPressMsg) {
+	if _, handled := l.Update(msg); !handled {
+		m.setZone(m.above())
+	}
 }
 
 // reloadAll reads the service again; the detail and an open log are read again with it.
@@ -590,6 +706,8 @@ func (m *Model) reloadAll() tea.Cmd {
 		cmds = append(cmds, m.loadDetail(true), m.readContainers())
 	case m.area == areaContainers:
 		cmds = append(cmds, m.readContainers(), m.readContainer())
+	case m.area == areaStacks && m.set.keyOpen:
+		cmds = append(cmds, m.loadKey())
 	case m.area == areaSettings:
 		cmds = append(cmds, m.loadPage(true))
 	case m.area == areaRuns && m.log.open && !m.log.busy:
@@ -601,6 +719,14 @@ func (m *Model) reloadAll() tea.Cmd {
 
 // enter shows an area and starts what that area reads on its own.
 func (m *Model) enter(area kittui.AreaID) tea.Cmd {
+	if m.area == areaSettings && area != areaSettings {
+		if f := m.set.form; f != nil && f.kind == formGeneral && f.form.Changed() {
+			return m.leaveGeneral(func() tea.Cmd { return m.enter(area) })
+		}
+		if f := m.set.form; f != nil && f.kind == formGeneral {
+			m.set.form = nil
+		}
+	}
 	m.setZone(kittui.ZoneRows)
 	if m.clog.open && area != m.clog.area {
 		m.closeContainerLog()
@@ -609,6 +735,7 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 		m.pick = nil
 	}
 	m.area = area
+	m.set.keyOpen, m.set.keyFor = false, ""
 	switch area {
 	case areaDetail:
 		return tea.Batch(m.loadDetail(false), m.readContainers())
@@ -617,7 +744,7 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 	case areaRuns:
 		return m.followLog()
 	case areaSettings:
-		return m.loadPage(false)
+		return m.showPage(false)
 	}
 	return nil
 }
@@ -625,12 +752,19 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 // zones are the focus zones of the screen in their fixed order: the tab line and the content.
 func (m *Model) zones() []kittui.FocusZone {
 	switch {
-	case (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil:
+	case m.formShown() && m.set.form.kind == formGeneral:
+		// The General page is its form, and the focus can leave it for the lines above.
+		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneSubtabs, kittui.ZoneForm}
+	case m.formShown():
 		return []kittui.FocusZone{kittui.ZoneForm}
 	case m.clogShown():
+	case m.area == areaSettings && m.set.activeList() == nil:
+		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneSubtabs, kittui.ZoneDetail}
+	case m.area == areaSettings:
+		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneSubtabs, kittui.ZoneRows}
 	case m.area == areaDetail && m.pick == nil,
-		m.area == areaContainers && m.ctv.open,
-		m.area == areaSettings && m.set.activeList() == nil && m.set.page != "":
+		m.area == areaStacks && m.set.keyOpen,
+		m.area == areaContainers && m.ctv.open:
 		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneDetail}
 	}
 	return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneRows}
@@ -645,19 +779,19 @@ func (m *Model) focus() kittui.FocusZone {
 	return zones[len(zones)-1]
 }
 
-// setZone moves the focus; a list shows its marked row as focused only outside the tab line.
+// setZone moves the focus; a list shows its marked row as focused only outside the tab and sub-tab lines.
 func (m *Model) setZone(z kittui.FocusZone) {
 	m.zone = z
 	lists := []*kittui.List{m.list, m.runsList, m.ctList}
 	if m.set != nil {
-		lists = append(lists, m.set.menu, m.set.credList, m.set.notifyList)
+		lists = append(lists, m.set.credList, m.set.notifyList)
 	}
 	if m.pick != nil {
 		lists = append(lists, m.pick.list)
 	}
 	for _, l := range lists {
 		if l != nil {
-			l.SetFocused(z != kittui.ZoneTabs)
+			l.SetFocused(z != kittui.ZoneTabs && z != kittui.ZoneSubtabs)
 		}
 	}
 }
@@ -675,12 +809,22 @@ func (m *Model) navKey(id kittui.ActionID, msg tea.KeyPressMsg, focus kittui.Inp
 		return nil, false
 	}
 	zones, cur := m.zones(), m.focus()
-	tabs := cur == kittui.ZoneTabs
+	tabs, sub := cur == kittui.ZoneTabs, cur == kittui.ZoneSubtabs
 	switch {
-	case id == actNext, tabs && (id == actDown || id == actEnter):
+	case id == actNext, (tabs || sub) && (id == actDown || id == actEnter):
 		m.setZone(kittui.CycleZone(zones, cur, 1))
 	case id == actPrev:
 		m.setZone(kittui.CycleZone(zones, cur, -1))
+	case tabs && id == actUp:
+		// nothing lies above the tab line; the unfocused content must not move under it
+	case sub && id == actUp:
+		m.setZone(kittui.ZoneTabs)
+	case sub && (id == actLeft || id == actRight):
+		step := 1
+		if id == actLeft {
+			step = -1
+		}
+		return m.stepTab(step), true
 	case tabs && (id == actLeft || id == actRight):
 		step := 1
 		if id == actLeft {
@@ -745,8 +889,11 @@ func (m *Model) footer() []kittui.Hint {
 		return append(m.clog.view.Hints(), common...)
 	case m.area == areaSettings:
 		return m.settingsFooter(common, nav)
-	case m.area == areaDetail && m.set.form != nil:
+	case (m.area == areaDetail || m.area == areaStacks) && m.set.form != nil:
 		return append(m.set.form.form.Hints(), kittui.Hint{Action: actBack, Label: textKeyCancelForm})
+	case m.area == areaStacks && m.set.keyOpen:
+		return append([]kittui.Hint{{Action: actEdit, Label: textKeySetKey, Priority: 3},
+			{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}}, common...)
 	case m.area == areaDetail && m.pick != nil:
 		return append(append([]kittui.Hint{{Action: actEnter, Label: textKeyPick}, {Action: actBack, Label: kittui.TextKeyBack, Priority: 1}},
 			common...), nav...)
@@ -758,10 +905,10 @@ func (m *Model) footer() []kittui.Hint {
 		return append(append(m.detailHints(), common...), scroll...)
 	case m.area == areaContainers && m.ctv.open:
 		return append(append(append([]kittui.Hint{{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}, containerLogsHint()},
-			containerActionHints()...), common...), scrollHints()...)
+			append(containerActionHints(), m.adoptHints()...)...), common...), scrollHints()...)
 	case m.area == areaContainers:
 		if len(m.ctNames) > 0 {
-			common = append(append([]kittui.Hint{containerLogsHint()}, containerActionHints()...), common...)
+			common = append(append([]kittui.Hint{containerLogsHint()}, append(containerActionHints(), m.adoptHints()...)...), common...)
 		}
 		return m.listFooter(m.ctList, len(m.ctNames), textKeyDetails, common, nav)
 	case m.area == areaRuns && m.log.open:
@@ -773,10 +920,7 @@ func (m *Model) footer() []kittui.Hint {
 		return m.listFooter(m.runsList, len(m.runByID), textKeyLog, append(
 			[]kittui.Hint{m.stackOnlyHint()}, common...), nav)
 	case m.area == areaStacks:
-		if len(m.rows) > 0 {
-			common = append(m.actionHints(), common...)
-		}
-		return m.listFooter(m.list, len(m.rows), textKeyDetails, common, nav)
+		return m.stacksFooter(common, nav)
 	}
 	return common
 }
@@ -851,14 +995,14 @@ func (m *Model) marks() []kittui.StatusMark {
 	}
 	if m.snap.status.Engine.PollError != "" {
 		marks = append(marks, kittui.StatusMark{Kind: kittui.StatusWarn, Text: t.Lookup(textHeaderPollFailed),
-			Short: t.Lookup(textHeaderPollFailedS)})
+			Short: []string{t.Lookup(textHeaderPollFailedS)}})
 	}
 	if w := m.snap.status.Window; w != nil {
 		if w.Open {
 			marks = append(marks, kittui.StatusMark{Kind: kittui.StatusOK, Text: t.Lookup(textHeaderWindowOpen),
-				Short: t.Lookup(textHeaderWindowOpenS)})
+				Short: []string{t.Lookup(textHeaderWindowOpenS)}})
 		} else {
-			marks = append(marks, kittui.StatusMark{Text: t.Lookup(textHeaderWindowShut), Short: t.Lookup(textHeaderWindowShutS)})
+			marks = append(marks, kittui.StatusMark{Text: t.Lookup(textHeaderWindowShut), Short: []string{t.Lookup(textHeaderWindowShutS)}})
 		}
 	}
 	return marks
@@ -879,14 +1023,17 @@ func (m *Model) message() *kittui.Message {
 }
 
 func (m *Model) frameSpec() kittui.FrameSpec {
+	icons := iconsFor(m.prefs.Icons)
 	spec := kittui.FrameSpec{
-		Width: m.width, Height: m.height, Product: productName, Status: m.marks(),
+		Width: m.width, Height: m.height, Product: productName, Icon: icons.logo, Status: m.marks(),
 		HeaderKeys: []kittui.Hint{{Action: actHelp, Label: kittui.TextKeyHelp}},
-		Areas:      areas(), ActiveArea: m.area, Focus: m.focus(), Input: m.input(),
+		Areas:      areasWith(icons), ActiveArea: m.area, ActiveTab: kittui.TabID(m.set.page), Focus: m.focus(), Input: m.input(),
 		Message: m.message(), Footer: m.footer(),
 	}
 	switch {
 	case m.clogShown():
+		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
+	case m.area == areaStacks && (m.set.keyOpen || m.set.form != nil):
 		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
 	case m.area == areaStacks:
 		spec.Position = m.list.Position()
@@ -945,9 +1092,14 @@ func (m *Model) render() string {
 		spec.Position = m.scrollNote
 	}
 	view, targets := m.frame.Render(m.styles, spec)
+	frameTargets := targets
 	if m.modal != nil {
-		// Nothing of the screen beneath takes a click while a question or a sheet is open.
+		// Nothing of the screen beneath takes a click while a question or a sheet is open; a sheet keeps the
+		// answers of its footer.
 		targets = nil
+		if m.modal.sheet() {
+			targets = answerTargets(m.modal.dialog, frameTargets)
+		}
 	}
 	if m.modal != nil && !m.modal.sheet() {
 		if over, ot, ok := m.modal.dialog.Overlay(m.styles, view, m.width, m.height, room); ok {
@@ -957,8 +1109,9 @@ func (m *Model) render() string {
 			room = m.frame.Workspace(spec)
 			var wt []kittui.Target
 			spec.Workspace, wt = m.modal.dialog.View(m.styles, room.Width, room.Height)
-			view, _ = m.frame.Render(m.styles, spec)
-			targets = kittui.OffsetTargets(wt, room.X, room.Y)
+			var ft []kittui.Target
+			view, ft = m.frame.Render(m.styles, spec)
+			targets = append(kittui.OffsetTargets(wt, room.X, room.Y), answerTargets(m.modal.dialog, ft)...)
 		}
 	}
 	if lv := m.filteringLogView(); lv != nil {
@@ -1030,7 +1183,7 @@ func (m *Model) workspace(width, height int) string {
 	if m.area == areaSettings {
 		return m.settingsView(width, height)
 	}
-	if m.area == areaDetail && m.set.form != nil {
+	if m.formShown() && m.area != areaSettings {
 		return m.formView(width, height)
 	}
 	if m.area == areaContainers {
@@ -1049,7 +1202,72 @@ func (m *Model) workspace(width, height int) string {
 	case areaRuns:
 		return m.runsView(width, height)
 	}
-	return m.listView(m.list, width, height, 0)
+	return m.stacksView(width, height)
+}
+
+// stacksView draws the Stacks area: the list with a row for every stack folder and, below it, the detail of
+// the marked folder. Without a folder it points to adding one.
+func (m *Model) stacksView(width, height int) string {
+	if m.set.keyOpen {
+		return m.keyView(width, height)
+	}
+	if len(m.snap.status.Engine.Sources) == 0 && len(m.rows) == 0 {
+		return m.stacksEmpty(width, height)
+	}
+	var detail []string
+	if f, ok := m.selectedFolder(); ok {
+		// The list keeps at least its header, the marked row and a few more.
+		if room := height - minListRows; room >= 3 {
+			detail = m.folderDetail(f, width, room)
+		}
+	}
+	view := m.listView(m.list, width, height-len(detail), 0)
+	return strings.Join(append([]string{view}, detail...), "\n")
+}
+
+// minListRows is what the list keeps of the workspace when the detail of a folder is long.
+const minListRows = 5
+
+// stacksEmpty says that there is no stack folder and how to add one; a click on it is the key.
+func (m *Model) stacksEmpty(width, height int) string {
+	lines := kittui.Wrap(kittui.Escape(m.text.Lookup(textStacksEmpty)), max(width-2, 1))
+	lines = lines[:min(len(lines), max(height, 1))]
+	for i, l := range lines {
+		lines[i] = "  " + m.styles.Render(kittui.StyleHint, l)
+	}
+	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Width: width, Height: len(lines)},
+		targets: []kittui.Target{{Rect: kittui.Rect{Width: width, Height: len(lines)}, Zone: kittui.ZoneRows, Action: actAdd}}})
+	return strings.Join(lines, "\n")
+}
+
+// keyView draws the deploy key of the folder the key view was opened for.
+func (m *Model) keyView(width, height int) string {
+	return strings.Join(m.framed(m.text.Lookup(textTitleKey), "", width, height, m.keyLines), "\n")
+}
+
+// stacksFooter is the key line of the Stacks area: the keys of the marked row, and adding a folder in every case.
+func (m *Model) stacksFooter(common, nav []kittui.Hint) []kittui.Hint {
+	add := kittui.Hint{Action: actAdd, Label: textKeyAdd, Priority: 3}
+	f, onFolder := m.selectedFolder()
+	switch {
+	case onFolder:
+		var own []kittui.Hint
+		// Fetch and the deploy key exist only for a folder with a remote.
+		if f.Kind == control.SourceKindRemote {
+			own = append(own, kittui.Hint{Action: actFetch, Label: textKeyFetch, Priority: 3},
+				kittui.Hint{Action: actEdit, Label: textKeyDeployKey, Priority: 3})
+		}
+		if f.Kind != control.SourceKindRemote {
+			own = append(own, kittui.Hint{Action: actRemote, Label: textKeyRemote, Priority: 3})
+		}
+		own = append(own, kittui.Hint{Action: actRemove, Label: textKeyRelease, Priority: 3}, add)
+		common = append(own, common...)
+	case len(m.rows) > 0:
+		common = append(append(m.actionHints(), add), common...)
+	default:
+		common = append([]kittui.Hint{add}, common...)
+	}
+	return m.listFooter(m.list, len(m.rows)+len(m.set.folderData), textKeyDetails, common, nav)
 }
 
 // note is a dimmed sentence wrapped into width cells and indented like the rows of a list.

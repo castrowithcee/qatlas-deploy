@@ -16,21 +16,32 @@ import (
 func (m *Model) setMouse(targets []kittui.Target) {
 	in := m.input()
 	on := in == kittui.InputNavigation || in == kittui.InputText && m.formShown()
+	if m.modal != nil {
+		// The dialog decides, not the form behind it: its own text input takes no click.
+		on = m.modal.dialog.Input() == kittui.InputNavigation
+	}
 	m.mouseMap = kittui.NewMouseMap(targets, m.mouseOn && on)
 }
 
-// formShown reports whether a form of the Settings area or of the detail is open.
+// formShown reports whether a form of the Settings area, the Stacks area or the detail is open.
 func (m *Model) formShown() bool {
-	return (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil
+	return (m.area == areaSettings || m.area == areaDetail || m.area == areaStacks) && m.set.form != nil
 }
 
-// mousePart is a widget of the workspace that takes clicks and the wheel itself: a list or a log view, with
-// its place on the screen.
+// formFocused reports whether the open form takes the keys. The General form shares the screen with the tab and
+// sub-tab lines and takes keys only while it has the focus; every other form takes them all.
+func (m *Model) formFocused() bool {
+	return m.formShown() && (m.set.form.kind != formGeneral || m.focus() == kittui.ZoneForm)
+}
+
+// mousePart is a widget of the workspace that takes clicks and the wheel itself: a list, a log view, a form
+// or a scrolled text, with its place on the screen.
 type mousePart struct {
 	rect    kittui.Rect
 	list    *kittui.List
 	log     *kittui.LogView
 	form    *kittui.Form
+	scroll  func(steps int) // a scrolled text; it takes the wheel only
 	targets []kittui.Target
 }
 
@@ -47,9 +58,16 @@ func (m *Model) formPart(form *kittui.Form, targets []kittui.Target, width, heig
 	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, form: form, targets: targets})
 }
 
-// logPart registers the log view drawn at row y of the workspace for the wheel. Its buttons stay unregistered.
-func (m *Model) logPart(view *kittui.LogView, width, height, y int) {
-	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, log: view})
+// logPart registers the log view drawn at row y of the workspace with the targets its View returned: the
+// wheel scrolls it, and a click on a button takes the way of the key it stands for.
+func (m *Model) logPart(view *kittui.LogView, targets []kittui.Target, width, height, y int) {
+	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, log: view, targets: targets})
+}
+
+// textPart registers the scrolled text drawn at row y of the workspace for the wheel. The wheel moves the
+// text only; the focus stays where it is.
+func (m *Model) textPart(scroll func(steps int), width, height, y int) {
+	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Y: y, Width: width, Height: height}, scroll: scroll})
 }
 
 // partTargets are the targets of the registered parts as the screen shows them, and the parts themselves
@@ -75,17 +93,23 @@ func (m *Model) partAt(x, y int) (mousePart, bool) {
 	return mousePart{}, false
 }
 
-// overlayOpen reports whether a question or the period form covers the screen. Their targets are the only
-// ones in the map then, and they are not acted on yet. The help is the exception, see helpMouse.
+// overlayOpen reports whether the period form covers the screen. Its targets are the only ones in the map
+// then, and they are not acted on yet. A question or sheet has modalMouse, the help helpMouse.
 func (m *Model) overlayOpen() bool {
-	return m.modal != nil || m.filteringLogView() != nil
+	return m.filteringLogView() != nil
 }
 
 // mouse acts on one mouse event. Every click is turned into the key press it stands for and takes the way of
 // that key, so the mouse can never do more than a key does.
 func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 	res := m.mouseMap.Handle(msg)
-	if !res.Handled || m.overlayOpen() {
+	if !res.Handled {
+		return nil
+	}
+	if m.modal != nil {
+		return m.modalMouse(res)
+	}
+	if m.overlayOpen() {
 		return nil
 	}
 	if m.helpOpen {
@@ -100,6 +124,8 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 				p.list.Wheel(res.WheelSteps)
 			case p.log != nil:
 				p.log.Wheel(res.WheelSteps)
+			case p.scroll != nil:
+				p.scroll(res.WheelSteps)
 			case p.form != nil && m.formTakesMouse(p.form):
 				p.form.Wheel(res.WheelSteps)
 			}
@@ -111,11 +137,20 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 				return m.rowClick(p.list, res)
 			case p.form != nil && m.formTakesMouse(p.form):
 				act, handled := p.form.Click(res)
+				if m.set.form.kind == formGeneral {
+					m.setZone(kittui.ZoneForm)
+				}
 				cmd, _ := m.formAct(act, handled)
 				return cmd
 			}
 		}
+	case res.Tab != "":
+		return m.selectTab(res.Tab)
 	case res.Area != "":
+		if m.formShown() && m.set.form.kind == formGeneral {
+			// A key would go to the form, which is no way to another area.
+			return m.enter(res.Area)
+		}
 		if i := slices.IndexFunc(areas(), func(a kittui.Area) bool { return a.ID == res.Area }); i >= 0 && i < len(areaKeys) {
 			return m.pressName(areaKeys[i])
 		}
@@ -125,15 +160,49 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		}
 	case res.Zone != "":
 		if slices.Contains(m.zones(), res.Zone) {
+			if res.Zone != kittui.ZoneForm && m.formFocused() && m.set.form.kind == formGeneral {
+				return m.leaveGeneral(func() tea.Cmd { m.setZone(res.Zone); return nil })
+			}
 			m.setZone(res.Zone)
 		}
 	}
 	return nil
 }
 
+// modalMouse is the mouse while a question or sheet is open: only the answers of its dialog take clicks, and
+// the wheel scrolls a sheet, never the screen behind. An answer takes the way of its key.
+func (m *Model) modalMouse(res kittui.MouseResult) tea.Cmd {
+	md := m.modal
+	if res.WheelSteps != 0 {
+		if md.sheet() {
+			md.wheel(res.WheelSteps)
+		}
+		return nil
+	}
+	if answer, _ := md.dialog.Click(res); answer != "" {
+		m.notice, m.result = "", ""
+		return m.answer(answer)
+	}
+	return nil
+}
+
+// answerTargets are the targets of ts that give an answer of the dialog; the rest of a frame behind a
+// question takes no click.
+func answerTargets(d *kittui.Dialog, ts []kittui.Target) []kittui.Target {
+	var out []kittui.Target
+	for _, h := range d.Hints() {
+		for _, t := range ts {
+			if t.Action == h.Action {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
+}
+
 // formTakesMouse reports whether form is the open form and takes input now, as for the keyboard.
 func (m *Model) formTakesMouse(form *kittui.Form) bool {
-	return m.formShown() && m.set.form.form == form && !m.set.busy && m.modal == nil
+	return m.formShown() && m.set.form.form == form && !m.formBlocked() && m.modal == nil
 }
 
 // rowClick marks the clicked row and gives the rows the focus. A second click on the marked row opens it by

@@ -7,45 +7,16 @@ import "testing"
 
 const settingsRows = 24
 
-func TestGoldenSettingsMenu(t *testing.T) {
-	goldenScreens(t, "settings.menu", settingsRows, settingsBackend, toMenu...)
+func TestGoldenSettingsFocusedSubtabLine(t *testing.T) {
+	goldenScreens(t, "settings.subtabs", settingsRows, settingsBackend, seq(toSubtabs, keys("right"))...)
 }
 
-func TestGoldenSettingsRepo(t *testing.T) {
-	goldenScreens(t, "settings.repo", settingsRows, settingsBackend, toRepo...)
+func TestGoldenSettingsGeneralDiscardQuestion(t *testing.T) {
+	goldenScreens(t, "settings.general.discard", settingsRows, settingsBackend, seq(toGeneral, keys("right", "up"))...)
 }
 
-func TestGoldenSettingsRepoWithoutRepository(t *testing.T) {
-	goldenScreens(t, "settings.repo.none", settingsRows, func() *fakeBackend {
-		b := settingsBackend()
-		b.status.Engine.Stacks = nil
-		b.stacksErr = noRepoError()
-		return b
-	}, toRepo...)
-}
-
-func TestGoldenSettingsRepoForm(t *testing.T) {
-	goldenScreens(t, "settings.repo.form", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("tab"), typed(stackDir))...)
-}
-
-func TestGoldenSettingsRepoFormProblem(t *testing.T) {
-	goldenScreens(t, "settings.repo.problem", settingsRows, settingsBackend, seq(toRepo, keys("b", "f2"))...)
-}
-
-func TestGoldenSettingsBindQuestion(t *testing.T) {
-	goldenScreens(t, "settings.repo.bind", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("tab"), typed(stackDir), keys("f2"))...)
-}
-
-func TestGoldenSettingsFetched(t *testing.T) {
-	goldenScreens(t, "settings.repo.fetched", settingsRows, settingsBackend, seq(toRepo, keys("F", "y"))...)
-}
-
-func TestGoldenSettingsKeyNone(t *testing.T) {
-	goldenScreens(t, "settings.key.none", settingsRows, settingsBackend, toKey...)
-}
-
-func TestGoldenSettingsKeyShown(t *testing.T) {
-	goldenScreens(t, "settings.key.shown", settingsRows, settingsBackend, seq(toKey, keys("G", "y", "enter"))...)
+func TestGoldenSettingsGeneralForm(t *testing.T) {
+	goldenScreens(t, "settings.general", settingsRows, settingsBackend, toGeneral...)
 }
 
 func TestGoldenSettingsCredentials(t *testing.T) {
@@ -133,10 +104,6 @@ func TestGoldenSettingsNotifyTestQuestion(t *testing.T) {
 
 func TestGoldenSettingsNotifyRemoveQuestion(t *testing.T) {
 	goldenScreens(t, "settings.notify.remove", settingsRows, settingsBackend, seq(toNotify, keys("down", "x"))...)
-}
-
-func TestGoldenSettingsDiscardQuestion(t *testing.T) {
-	goldenScreens(t, "settings.discard", settingsRows, settingsBackend, seq(toRepo, keys("b"), typed(repoURL), keys("esc"))...)
 }
 
 func TestGoldenDetailDiscardQuestion(t *testing.T) {

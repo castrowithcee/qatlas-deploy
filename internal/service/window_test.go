@@ -110,7 +110,9 @@ func windowHarness(t *testing.T, dep engine.Deployer, files map[string]string) (
 	t.Helper()
 	srv := registrytest.New(t, registrytest.Config{Repos: map[string][]string{"demo/app": {"0.9.1", "0.9.2", "1.2.3", "1.3.0", "2.0.0", "2.1.0-rc.1"}}})
 	clock, notices := &svcClock{now: noon}, &noticeLog{}
-	h := boundWith(t, dep, files, withRegistry(srv.URL), withClock(clock, notices))
+	// The failure monitor shares the clock; a jump would let it start repairs of the fake's missing containers.
+	quietMonitor := func(c *service.Config) { c.MonitorInterval = 24 * time.Hour }
+	h := boundWith(t, dep, files, withRegistry(srv.URL), withClock(clock, notices), quietMonitor)
 	return h, clock, notices
 }
 

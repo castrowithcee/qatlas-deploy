@@ -40,17 +40,19 @@ const (
 	// The answers of a question, and of a result that started runs.
 	actYes kittui.ActionID = "yes"
 	// The keys of the Settings area and of its forms.
-	actNext     kittui.ActionID = "next"
-	actPrev     kittui.ActionID = "prev"
-	actSave     kittui.ActionID = "save"
-	actBind     kittui.ActionID = "bind"
-	actFetch    kittui.ActionID = "fetch"
-	actGenerate kittui.ActionID = "generate"
-	actAdd      kittui.ActionID = "add"
-	actRemove   kittui.ActionID = "remove"
-	actEdit     kittui.ActionID = "edit"
-	actTest     kittui.ActionID = "test"
-	actNo       kittui.ActionID = "no"
+	actNext   kittui.ActionID = "next"
+	actPrev   kittui.ActionID = "prev"
+	actSave   kittui.ActionID = "save"
+	actFetch  kittui.ActionID = "fetch"
+	actAdd    kittui.ActionID = "add"
+	actRemove kittui.ActionID = "remove"
+	actEdit   kittui.ActionID = "edit"
+	// actRemote gives a local stack folder a remote; actWithRemote is the answer that adds a folder of files
+	// together with the repository at an address.
+	actRemote     kittui.ActionID = "remote"
+	actWithRemote kittui.ActionID = "withremote"
+	actTest       kittui.ActionID = "test"
+	actNo         kittui.ActionID = "no"
 	// actRestore opens the choice of a backup in the stack detail.
 	actRestore kittui.ActionID = "restore"
 	actShowLog kittui.ActionID = "showlog"
@@ -100,13 +102,13 @@ func keyTable() []kittui.Action {
 		act(actNext, kittui.LevelMove, textKeyNext, "tab"),
 		act(actPrev, kittui.LevelMove, textKeyPrev, "shift+tab"),
 		act(actSave, kittui.LevelGlobal, textKeySave, "f2"),
-		act(actBind, kittui.LevelLetter, textKeyBind, "b"),
 		act(actFetch, kittui.LevelLetter, textKeyFetch, "F"),
-		act(actGenerate, kittui.LevelLetter, textKeyGenerate, "G"),
 		act(actAdd, kittui.LevelLetter, textKeyAdd, "a"),
 		act(actRemove, kittui.LevelLetter, textKeyRemove, "x"),
 		act(actEdit, kittui.LevelLetter, textKeyEdit, "e"),
 		act(actTest, kittui.LevelLetter, textKeyTest, "s"),
+		act(actRemote, kittui.LevelLetter, textKeyRemote, "O"),
+		act(actWithRemote, kittui.LevelConfirm, textAnswerWithRemote, "w"),
 		act(actRestore, kittui.LevelLetter, textKeyRestore, "R"),
 		act(actDataDirs, kittui.LevelLetter, textKeyDataDirs, "m"),
 		act(actContainerLogs, kittui.LevelLetter, textKeyLog, "o"),

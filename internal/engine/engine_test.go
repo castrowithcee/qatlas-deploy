@@ -285,6 +285,8 @@ type fakeDeployer struct {
 	trace func(string)
 	// backedUp lists the deployed commit of every backup.
 	backedUp []string
+	// gone are the backup ids HasBackup reports missing.
+	gone []string
 }
 
 func (d *fakeDeployer) do(ctx context.Context, step string, st stacks.Stack) error {
@@ -376,6 +378,13 @@ func (d *fakeDeployer) Check(ctx context.Context, st stacks.Stack, _ *Log) error
 
 func (d *fakeDeployer) Restore(ctx context.Context, st stacks.Stack, id string, _ *Log) error {
 	return d.do(ctx, "restore "+id, st)
+}
+
+func (d *fakeDeployer) HasBackup(_ context.Context, st stacks.Stack, id string) (bool, error) {
+	d.mu.Lock()
+	d.steps = append(d.steps, st.Name+":has "+id)
+	defer d.mu.Unlock()
+	return !slices.Contains(d.gone, id), nil
 }
 
 func (d *fakeDeployer) got() []call {

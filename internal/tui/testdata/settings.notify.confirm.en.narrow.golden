@@ -1,21 +1,21 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
---------------------------------------------------------
+  [Notifications]                                       
+────────────────────────────────────────────────────────
   Settings of the channel                               
                                                         
-              +----------------------------------------+
-  Webhook URL | (entered, hidden)                      |
-              +----------------------------------------+
-  #= Add a notification channel =====================#=#
-> | ! Add the channel deploy-hook (webhook)?         | |
-  |                                                  |=#
-  | The service stores the secret parts and never    |  
-  | shows them again.                                |  
-  |                                                  |  
-  | [ yes, do it ]  > cancel <                       |  
-  | y yes, do it  n/esc/enter cancel                 |  
-  #==================================================#  
-                                                        
+              ╭────────────────────────────────────────╮
+  Webhook URL │ (entered, hidden)                      │
+              ╰────────────────────────────────────────╯
+  ╔═ Add a notification channel ═════════════════════╗═╗
+> ║ ⚠ Add the channel deploy-hook (webhook)?         ║ ║
+  ║                                                  ║═╝
+  ║ The service stores the secret parts and never    ║  
+  ║ shows them again.                                ║  
+  ║                                                  ║  
+  ║ [ yes, do it ]  > cancel <                       ║  
+  ║ y yes, do it  n/esc/enter cancel                 ║  
+  ╚══════════════════════════════════════════════════╝  
                                                         
                                                         
                                                         

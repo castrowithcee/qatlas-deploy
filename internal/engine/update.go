@@ -122,8 +122,13 @@ func (e *Engine) UpdateWhile(ctx context.Context, name string, steps []VersionSt
 	if err != nil {
 		return nil, err
 	}
-	held := true
-	defer func() { e.free(name, held) }()
+	held, slotFree := true, false
+	defer func() {
+		if !slotFree {
+			e.unslot(name)
+		}
+		e.finish(held)
+	}()
 
 	results := make([]StepResult, len(steps))
 	for i, s := range steps {
@@ -142,7 +147,11 @@ func (e *Engine) UpdateWhile(ctx context.Context, name string, steps []VersionSt
 		r.held, r.change = held, &steps[i]
 		out := r.perform()
 		held = r.held
-		rec := r.record(out)
+		// The last step, or a failing one that ends the update, gives up the slot with its result; the steps
+		// before hold it.
+		last := i == len(steps)-1 || out.result != ResultSucceeded
+		rec := r.record(out, last)
+		slotFree = last
 		e.notify(Event{Kind: rec.Result, Stack: rec.Stack, Run: rec.ID, Commit: rec.Commit, Error: rec.Error})
 		results[i].Run, results[i].Commit, results[i].Result, results[i].Error = rec.ID, rec.Commit, rec.Result, rec.Error
 		if rec.Result != ResultSucceeded {

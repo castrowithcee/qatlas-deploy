@@ -1,8 +1,7 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
---------------------------------------------------------
-  Credentials                                           
-                                                        
+  [Credentials]                                         
+────────────────────────────────────────────────────────
   NAME                STORED                            
 > registry.docker.io  2026-10-30 09:00                  
   github.com          2026-10-29 09:00                  
@@ -20,5 +19,6 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
                                                         
+                                                        
 a add  x remove  esc back  r reload  1-5 area  q quit   
-                                     up/down choose  1/2
+                                         ↑/↓ choose  1/2

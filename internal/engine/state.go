@@ -37,6 +37,9 @@ const (
 	TriggerManual = "manual"
 	// TriggerUpdate is a step of an update, see Engine.Update.
 	TriggerUpdate = "update"
+	// TriggerObserve is the rollback of an update whose stack failed in its observation time, see
+	// Engine.RollbackUpdate.
+	TriggerObserve = "observe"
 )
 
 // Kinds of findings. The poll replaces the findings of a stack as a whole in every cycle.
@@ -132,6 +135,38 @@ type StackState struct {
 	// StoppedContainers are the IDs of containers stopped through qdeploy; the monitor does not report them
 	// until they run again or are gone.
 	StoppedContainers []string `json:"stopped_containers,omitempty"`
+	// Repair is the monitor's repair of the stack's failures by restarts; nil while none is planned or counts.
+	Repair *Repair `json:"repair,omitempty"`
+	// Observe is the update under observation, set by the last run when it was a successful update step and
+	// the stack's observation time is not zero. It stays after Until has passed, until the next run.
+	Observe *Observation `json:"observe,omitempty"`
+}
+
+// Observation is an update by qdeploy and its observation time: a failure of the stack from Since until before
+// Until rolls back exactly this update. Run made it, From is the commit the stack ran at before it, Commit its
+// commit and Backup the backup it made, empty when the stack had no backup rules.
+type Observation struct {
+	Run    string    `json:"run"`
+	From   string    `json:"from"`
+	Commit string    `json:"commit"`
+	Backup string    `json:"backup,omitempty"`
+	Since  time.Time `json:"since"`
+	Until  time.Time `json:"until"`
+}
+
+// MaxRepairAttempts is how many restarts the monitor makes before it halts the repair of a stack.
+const MaxRepairAttempts = 3
+
+// Repair is how far the container monitor got in repairing a stack's failures by restarts. Attempts counts the
+// restarts since the stack last ran an hour without failure; Last is when the latest was made and Next when the
+// next is due, zero when none is due. StableSince is when the readings became clean again, zero while a failure
+// is detected. Halted is set when the restarts did not help: no restart is made until Resume clears it.
+type Repair struct {
+	Attempts    int       `json:"attempts,omitempty"`
+	Last        time.Time `json:"last,omitzero"`
+	Next        time.Time `json:"next,omitzero"`
+	StableSince time.Time `json:"stable_since,omitzero"`
+	Halted      *Hold     `json:"halted,omitempty"`
 }
 
 // MaxMonitorServices bounds Services.
@@ -291,6 +326,10 @@ func validateState(s State) error {
 		if err := validateMonitor(st); err != nil {
 			return err
 		}
+		if o := st.Observe; o != nil && (!runIDRe.MatchString(o.Run) || !commitRe.MatchString(o.From) ||
+			!commitRe.MatchString(o.Commit) || len(o.Backup) > maxNameLen || o.Since.IsZero() || !o.Until.After(o.Since)) {
+			return errors.New("invalid observation")
+		}
 	}
 	for _, r := range s.Runs {
 		if !runIDRe.MatchString(r.ID) {
@@ -341,6 +380,9 @@ func validateMonitor(st StackState) error {
 		if id == "" || len(id) > maxNameLen {
 			return errors.New("invalid container id")
 		}
+	}
+	if r := st.Repair; r != nil && (r.Attempts < 0 || r.Attempts > MaxRepairAttempts || (r.Halted != nil && r.Halted.Since.IsZero())) {
+		return errors.New("invalid repair")
 	}
 	return nil
 }
@@ -429,6 +471,18 @@ func (s State) clone() State {
 		}
 		v.Services = append([]string(nil), v.Services...)
 		v.StoppedContainers = append([]string(nil), v.StoppedContainers...)
+		if v.Repair != nil {
+			r := *v.Repair
+			if r.Halted != nil {
+				h := *r.Halted
+				r.Halted = &h
+			}
+			v.Repair = &r
+		}
+		if v.Observe != nil {
+			o := *v.Observe
+			v.Observe = &o
+		}
 		out.Stacks[k] = v
 	}
 	out.Runs = append([]RunRecord(nil), s.Runs...)

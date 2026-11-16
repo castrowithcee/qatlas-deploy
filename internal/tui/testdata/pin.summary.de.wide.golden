@@ -1,6 +1,6 @@
-qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                                  [?] Hilfe
+  [1 ▤ Stacks]  2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   pin beendet: 2 ok, 1 fehlgeschlagen                                                                                   
                                                                                                                         
   demo-stack  ok                                                                                                        
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-n/esc/enter schließen                                                                                   up/down Scrollen
+n/esc/enter schließen                                                                                       ↑/↓ Scrollen

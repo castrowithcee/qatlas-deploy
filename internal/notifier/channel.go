@@ -27,8 +27,8 @@ const (
 	TypeSMTP     = "smtp"
 )
 
-// The events a channel can select. The first four are the result words of a run; container-failed and
-// recovered come from the failure monitor.
+// The events a channel can select. The first four are the result words of a run; container-failed, recovered
+// and recovery-failed come from the failure monitor.
 const (
 	EventSucceeded       = "succeeded"
 	EventFailed          = "failed"
@@ -36,11 +36,22 @@ const (
 	EventRollbackFailed  = "rollback-failed"
 	EventContainerFailed = "container-failed"
 	EventRecovered       = "recovered"
+	EventRecoveryFailed  = "recovery-failed"
 	EventUpdateAvailable = "update-available"
 )
 
+// The causes an event carries in addition to its type.
+const (
+	// CauseObservation is a rolled-back or rollback-failed run that rolled back an update because the stack
+	// failed in its observation time.
+	CauseObservation = "observation"
+	// CauseBackupMissing is a recovery-failed whose update was not rolled back because its backup is gone.
+	CauseBackupMissing = "backup-missing"
+)
+
 // AllEvents lists every event in the order settings and answers show them.
-var AllEvents = []string{EventSucceeded, EventFailed, EventRolledBack, EventRollbackFailed, EventContainerFailed, EventRecovered, EventUpdateAvailable}
+var AllEvents = []string{EventSucceeded, EventFailed, EventRolledBack, EventRollbackFailed, EventContainerFailed, EventRecovered,
+	EventRecoveryFailed, EventUpdateAvailable}
 
 // The security of an SMTP channel.
 const (
@@ -122,7 +133,7 @@ func NormalizeEvents(events []string) ([]string, error) {
 	}
 	for _, e := range events {
 		if !slices.Contains(AllEvents, e) {
-			return nil, invalid("an event is not one of succeeded, failed, rolled-back, rollback-failed, container-failed, recovered, update-available")
+			return nil, invalid("an event is not one of succeeded, failed, rolled-back, rollback-failed, container-failed, recovered, recovery-failed, update-available")
 		}
 	}
 	return out, nil

@@ -1,20 +1,20 @@
-qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
-------------------------------------------------------------------------------------------------------------------------
-  Notifications                                                                                                         
-                                                                                                                        
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks   2 ▣ Stack detail   3 ▶ Runs  [4 ⚙ Settings]  5 ▦ Containers                                             
+   General   Credentials   Maintenance window  [Notifications]                                                          
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   NAME      TYPE     EVENTS              TARGET                                                                         
 > ops-hook  webhook  failed,rolled-back  -                                                                              
   ops-mail  smtp     all                 mail.example.test:587 -> ops@example.test                                      
                                                                                                                         
-                            #= Notifications ==============================================#                            
-                            | ! Send a test message through ops-hook?                      |                            
-                            |                                                              |                            
-                            | One short message is sent to the channel, without retries.   |                            
-                            |                                                              |                            
-                            | [ yes, do it ]  > cancel <                                   |                            
-                            | y yes, do it  n/esc/enter cancel                             |                            
-                            #==============================================================#                            
+                                                                                                                        
+                            ╔═ Notifications ══════════════════════════════════════════════╗                            
+                            ║ ⚠ Send a test message through ops-hook?                      ║                            
+                            ║                                                              ║                            
+                            ║ One short message is sent to the channel, without retries.   ║                            
+                            ║                                                              ║                            
+                            ║ [ yes, do it ]  > cancel <                                   ║                            
+                            ║ y yes, do it  n/esc/enter cancel                             ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
                                                                                                                         
                                                                                                                         
                                                                                                                         

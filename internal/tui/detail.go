@@ -186,6 +186,11 @@ func scrolled(top, total, rows int, id kittui.ActionID) int {
 	return max(min(top, total-rows), 0)
 }
 
+// wheeled is the first shown line after steps notches of the wheel, kept inside the text like a key.
+func wheeled(top, total, rows, steps int) int {
+	return max(min(top+steps*kittui.WheelTextLines, total-rows), 0)
+}
+
 // detailView is the stack chosen in Stacks: its versions, changelogs, backups, last runs and functions,
 // scrolled to the first shown line.
 func (m *Model) detailView(width, height int) string {
@@ -201,6 +206,7 @@ func (m *Model) detailView(width, height int) string {
 	if d.total > d.rows {
 		m.scrollNote = fmt.Sprintf("%d/%d", d.top+d.rows, d.total)
 	}
+	m.textPart(func(steps int) { d.top = wheeled(d.top, d.total, d.rows, steps) }, width, height, 0)
 	return strings.Join(lines[d.top:min(d.top+height, len(lines))], "\n")
 }
 
@@ -224,23 +230,43 @@ func (m *Model) heading(key kittui.TextID, width int) string {
 	return m.line(detailMargin, kittui.StyleActive, m.text.Lookup(key), width)
 }
 
+// panelChrome is what a panel takes of its width: a border and a cell of padding on each side.
+const panelChrome = 4
+
+// framed draws one section in a panel of width cells; the height follows the content, and rows above zero is
+// the most it may take. build lays the content out for the width it is given: the builders indent their
+// lines by detailIndent, so they get that much more than the inside of the panel and the indent is taken off
+// again, which keeps nested indents relative to the inside.
+func (m *Model) framed(title, note string, width, rows int, build func(width int) []string) []string {
+	inner := max(width-panelChrome, 1)
+	body := build(inner + detailIndent)
+	for i, l := range body {
+		body[i] = strings.TrimPrefix(l, strings.Repeat(" ", detailIndent))
+	}
+	height := len(body) + 2
+	if rows > 0 {
+		height = min(height, rows)
+	}
+	return m.styles.Panel(title, note, body, width, height, false)
+}
+
 // detailLines is the whole detail of a stack in width cells.
 func (m *Model) detailLines(r stackRow, width int) []string {
 	lines := []string{"  " + m.styles.TitleLine(r.name, "", max(width-2, 1)), ""}
 	lines = append(lines, m.summaryLines(r, width)...)
+	lines = append(lines, "")
 	lines = append(lines, m.stoppedSection(r, width)...)
 	lines = append(lines, m.dataDirSection(r.name, width)...)
-	section := func(key kittui.TextID, body []string) {
-		lines = append(lines, "", m.heading(key, width))
-		lines = append(lines, body...)
+	section := func(key kittui.TextID, build func(width int) []string) {
+		lines = append(lines, m.framed(m.text.Lookup(key), "", width, 0, build)...)
 	}
-	section(textDetailVersions, m.versionLines(r.name, width))
-	section(textDetailContainers, m.stackContainerLines(r.name, width))
-	section(textDetailChangelog, m.changelogLines(width))
-	section(textDetailSecrets, m.secretLines(width))
-	section(textDetailBackups, m.backupLines(width))
-	section(textDetailRuns, m.runLines(r.name, width))
-	section(textDetailCapabilities, m.capabilityLines(r.name, width))
+	section(textDetailVersions, func(w int) []string { return m.versionLines(r.name, w) })
+	section(textDetailContainers, func(w int) []string { return m.stackContainerLines(r.name, w) })
+	section(textDetailChangelog, m.changelogLines)
+	section(textDetailSecrets, m.secretLines)
+	section(textDetailBackups, m.backupLines)
+	section(textDetailRuns, func(w int) []string { return m.runLines(r.name, w) })
+	section(textDetailCapabilities, func(w int) []string { return m.capabilityLines(r.name, w) })
 	return lines
 }
 
@@ -256,11 +282,13 @@ func (m *Model) stoppedSection(r stackRow, width int) []string {
 			since = st.Stopped.Since
 		}
 	}
-	lines := []string{"", m.heading(textDetailStopped, width)}
-	if !since.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleWarn, t.Lookup(textStoppedSince, since.In(m.loc).Format(lastRunLayout)), width))
-	}
-	return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textStoppedHint), width)...)
+	return m.framed(t.Lookup(textDetailStopped), "", width, 0, func(width int) []string {
+		var lines []string
+		if !since.IsZero() {
+			lines = append(lines, m.line(detailIndent, kittui.StyleWarn, t.Lookup(textStoppedSince, since.In(m.loc).Format(lastRunLayout)), width))
+		}
+		return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textStoppedHint), width)...)
+	})
 }
 
 // summaryLines are the update mode, the state and the findings of the stack as the Stacks area has them.
@@ -279,6 +307,16 @@ func (m *Model) summaryLines(r stackRow, width int) []string {
 	if failure != nil {
 		labelWidth = max(labelWidth, lipgloss.Width(failLabel))
 	}
+	repair := m.repairOf(r.name)
+	repairLabel := kittui.Escape(m.text.Lookup(textDetailRepair))
+	if repair != nil {
+		labelWidth = max(labelWidth, lipgloss.Width(repairLabel))
+	}
+	observe := m.observeOf(r.name)
+	observeLabel := kittui.Escape(m.text.Lookup(textDetailObserve))
+	if observe != nil {
+		labelWidth = max(labelWidth, lipgloss.Width(observeLabel))
+	}
 	row := func(label string, style kittui.TextStyle, value string) string {
 		return "  " + m.styles.Render(kittui.StyleHint, kittui.Pad(label, labelWidth)) + "  " +
 			m.styles.Render(style, m.styles.Truncate(kittui.Escape(value), max(width-labelWidth-4, 1)))
@@ -290,7 +328,47 @@ func (m *Model) summaryLines(r stackRow, width int) []string {
 	if failure != nil {
 		out = append(out, row(failLabel, kittui.StyleFail, m.failureText(*failure)))
 	}
+	if repair != nil {
+		style, text := m.repairText(*repair)
+		out = append(out, row(repairLabel, style, text))
+	}
+	if observe != nil {
+		out = append(out, row(observeLabel, kittui.StyleWarn,
+			m.text.Lookup(textObserveUntil, short(observe.Commit), observe.Until.In(m.loc).Format(lastRunLayout))))
+	}
 	return out
+}
+
+// observeOf is the running observation time the status reports for a stack, nil when it reports none.
+func (m *Model) observeOf(stack string) *control.ObserveInfo {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name == stack && control.Primary(m.snap.status.Engine.Stacks, i) {
+			return st.Observe
+		}
+	}
+	return nil
+}
+
+// repairOf is the automatic repair the status reports for a stack, nil when it reports none.
+func (m *Model) repairOf(stack string) *control.RepairInfo {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name == stack && control.Primary(m.snap.status.Engine.Stacks, i) {
+			return st.Repair
+		}
+	}
+	return nil
+}
+
+// repairText is the repair state as one line: halted, or the attempts made and the next one due.
+func (m *Model) repairText(r control.RepairInfo) (kittui.TextStyle, string) {
+	t := m.text
+	switch {
+	case r.Halted != nil:
+		return kittui.StyleFail, t.Lookup(textRepairHalted, r.Halted.Since.In(m.loc).Format(lastRunLayout), r.Attempts, r.Max)
+	case !r.Next.IsZero():
+		return kittui.StyleWarn, t.Lookup(textRepairNext, r.Attempts, r.Max, r.Next.In(m.loc).Format(lastRunLayout))
+	}
+	return kittui.StyleWarn, t.Lookup(textRepairAttempts, r.Attempts, r.Max)
 }
 
 // failureOf is the container failure the status reports for a stack, nil when it reports none.

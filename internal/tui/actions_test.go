@@ -61,7 +61,7 @@ func TestResumeIsOnlyForAStackPausedAfterRollback(t *testing.T) {
 		t.Error("resume is offered for a stack that is not paused after a rollback")
 	}
 	send(m, "g")
-	if m.modal != nil || !strings.Contains(m.render(), "demo-stack is not paused after a rollback") {
+	if m.modal != nil || !strings.Contains(m.render(), "demo-stack is neither paused after a rollback nor halted in its repair") {
 		t.Fatalf("resume was not refused:\n%s", m.render())
 	}
 	// A ticked stack that is not paused refuses the whole action, whatever the cursor is on.
@@ -71,6 +71,29 @@ func TestResumeIsOnlyForAStackPausedAfterRollback(t *testing.T) {
 	}
 	if !strings.Contains(m.render(), "g resume") {
 		t.Error("resume is not offered for the stack paused after a rollback")
+	}
+}
+
+func TestResumeReleasesAHaltedRepair(t *testing.T) {
+	b := demoBackend()
+	b.status.Engine.Stacks[1].Failure = &control.FailureInfo{Kind: "unhealthy", Container: "mail-relay-relay-1", Since: at(30, 11, 5)}
+	b.status.Engine.Stacks[1].Repair = &control.RepairInfo{Attempts: 3, Max: 3, Last: at(30, 11, 30),
+		Halted: &control.HoldInfo{Since: at(30, 11, 31)}}
+	if got := stateOf(b.status.Engine.Stacks[1]); got != stateRepairHalted {
+		t.Fatalf("state = %d, want %d", got, stateRepairHalted)
+	}
+	m := newActionModel(t, b)
+	send(m, "down")
+	if !strings.Contains(m.render(), "g resume") {
+		t.Errorf("resume is not offered for the stack with a halted repair:\n%s", m.render())
+	}
+	send(m, "g")
+	if m.modal == nil {
+		t.Fatalf("no question for resume:\n%s", m.render())
+	}
+	send(m, "y")
+	if got := b.actions(); !slices.Equal(got, []string{"resume:mail-relay"}) {
+		t.Fatalf("calls = %v", got)
 	}
 }
 
@@ -85,7 +108,7 @@ func TestResumeOnTheCursorStack(t *testing.T) {
 	if got := b.actions(); !slices.Equal(got, []string{"resume:photo-album"}) {
 		t.Fatalf("calls = %v", got)
 	}
-	if !strings.Contains(m.render(), "pause cleared, nothing started") {
+	if !strings.Contains(m.render(), "pause or repair halt cleared, nothing started") {
 		t.Errorf("summary:\n%s", m.render())
 	}
 }

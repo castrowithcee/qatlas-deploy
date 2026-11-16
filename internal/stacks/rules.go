@@ -33,6 +33,12 @@ const (
 	MajorStepwise = "stepwise"
 )
 
+// The observation time after an update, in minutes: its default and its upper bound, a day.
+const (
+	DefaultObserveMinutes = 60
+	MaxObserveMinutes     = 1440
+)
+
 // Rules are the validated settings of a stack with defaults applied.
 type Rules struct {
 	Update Update
@@ -49,6 +55,9 @@ type Update struct {
 	Ceiling string
 	// Major is how a major jump is taken: directly, or one major version at a time.
 	Major string
+	// Observe is how long after an update by qdeploy a failure of the stack rolls that update back; zero
+	// turns it off.
+	Observe time.Duration
 	// Tags restricts the candidate tags per image variable.
 	Tags map[string]*regexp.Regexp
 	// Changelog names the GitHub repository ("owner/name") whose releases describe the versions of an image
@@ -104,6 +113,7 @@ type UpdateSettings struct {
 	Mode      *string           `yaml:"mode,omitempty" json:"mode,omitempty"`
 	Ceiling   *string           `yaml:"ceiling,omitempty" json:"ceiling,omitempty"`
 	Major     *string           `yaml:"major,omitempty" json:"major,omitempty"`
+	Observe   *int              `yaml:"observe,omitempty" json:"observe,omitempty"`
 	Tags      map[string]string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	Changelog map[string]string `yaml:"changelog,omitempty" json:"changelog,omitempty"`
 }
@@ -192,6 +202,7 @@ func (r *Rules) Settings() Settings {
 	one := 1
 	s := Settings{Version: &one, Update: &UpdateSettings{
 		Mode: ptr(r.Update.Mode), Ceiling: ptr(r.Update.Ceiling), Major: ptr(r.Update.Major),
+		Observe: ptr(int(r.Update.Observe / time.Minute)),
 	}}
 	if r.ComposeFiles != nil {
 		s.Compose = &ComposeSettings{Files: slices.Clone(r.ComposeFiles)}
@@ -256,7 +267,8 @@ func validateRules(raw Settings) (*Rules, error) {
 	if *raw.Version != 1 {
 		return nil, fmt.Errorf("version: unsupported value %d (use 1)", *raw.Version)
 	}
-	r := &Rules{Update: Update{Mode: ModeManual, Ceiling: CeilingMinor, Major: MajorStepwise}, Check: Check{Containers: true}}
+	r := &Rules{Update: Update{Mode: ModeManual, Ceiling: CeilingMinor, Major: MajorStepwise, Observe: DefaultObserveMinutes * time.Minute},
+		Check: Check{Containers: true}}
 
 	if c := raw.Compose; c != nil {
 		if len(c.Files) == 0 {
@@ -299,6 +311,12 @@ func validateRules(raw Settings) (*Rules, error) {
 				return nil, err
 			}
 			*f.out = *f.in
+		}
+		if o := u.Observe; o != nil {
+			if *o < 0 || *o > MaxObserveMinutes {
+				return nil, fmt.Errorf("update.observe: must be minutes from 0 to %d, 0 turns it off (got %d)", MaxObserveMinutes, *o)
+			}
+			r.Update.Observe = time.Duration(*o) * time.Minute
 		}
 		keys := make([]string, 0, len(u.Tags))
 		for k := range u.Tags {

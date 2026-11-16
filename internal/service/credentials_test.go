@@ -83,7 +83,7 @@ func TestCredentialAnswersCarryFixedTexts(t *testing.T) {
 		strings.Contains(ce.Message, demoToken) || strings.Contains(ce.Message, "..") {
 		t.Fatalf("bad name: %v", ce)
 	}
-	if ce := call(control.KeyShowCommand, nil); ce.Code != control.CodeNotFound {
+	if ce := call(control.KeyShowCommand, nil); ce.Code != control.CodeNoSuchKey {
 		t.Fatalf("show: %v", ce)
 	}
 	if err := cl.Call(context.Background(), control.KeyGenerateCommand, control.KeyGenerateArgs{}, nil); err != nil {
@@ -92,7 +92,7 @@ func TestCredentialAnswersCarryFixedTexts(t *testing.T) {
 	if ce := call(control.KeyGenerateCommand, control.KeyGenerateArgs{}); ce.Code != control.CodeKeyExists {
 		t.Fatalf("second generate: %v", ce)
 	}
-	if ce := call(control.CredentialDeleteCommand, control.CredentialNameArgs{Name: "missing"}); ce.Code != control.CodeNotFound {
+	if ce := call(control.CredentialDeleteCommand, control.CredentialNameArgs{Name: "missing"}); ce.Code != control.CodeNoSuchCredential {
 		t.Fatalf("delete: %v", ce)
 	}
 }

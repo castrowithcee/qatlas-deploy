@@ -6,10 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/channeltest"
 	"github.com/castrowithcee/qatlas-deploy/internal/client"
@@ -27,18 +25,7 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 			Endpoint: ep, StateDir: filepath.Join(t.TempDir(), "state"), PeerCheck: func(net.Conn) error { return nil }})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	path, err := ep.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		if _, err := os.Lstat(path); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("service channel did not appear")
-		}
-	}
+	channeltest.WaitReady(t, ep)
 
 	b := NewBackend(ep)
 	st, err := b.Status(ctx)
@@ -67,9 +54,17 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 		// The settings calls get arguments the service refuses or answers harmlessly in its temporary state.
 		"probe":         func() error { _, err := b.RepoProbe(ctx, "https://git.example.test/stacks.git"); return err },
 		"reposet":       func() error { _, err := b.RepoSet(ctx, control.RepoSetArgs{}); return err },
-		"fetch":         func() error { _, err := b.RepoFetch(ctx); return err },
-		"keyshow":       func() error { _, err := b.KeyShow(ctx); return err },
-		"keygenerate":   func() error { _, err := b.KeyGenerate(ctx); return err },
+		"fetch":         func() error { _, err := b.RepoFetch(ctx, ""); return err },
+		"fetchdir":      func() error { _, err := b.RepoFetch(ctx, "/var/tmp/demo-stacks"); return err },
+		"sourceinspect": func() error { _, err := b.SourceInspect(ctx, "/var/tmp/demo-stacks", ""); return err },
+		"sourcecompare": func() error { _, err := b.SourceCompare(ctx, control.SourceCompareArgs{}); return err },
+		"sourceadd":     func() error { _, err := b.SourceAdd(ctx, control.SourceAddArgs{}); return err },
+		"sourceremote":  func() error { _, err := b.SourceRemote(ctx, control.SourceRemoteArgs{}); return err },
+		"sourcelist":    func() error { _, err := b.SourceList(ctx); return err },
+		"sourceremove":  func() error { _, err := b.SourceRemove(ctx, "/var/tmp/demo-stacks"); return err },
+		"keyshow":       func() error { _, err := b.KeyShow(ctx, ""); return err },
+		"keygenerate":   func() error { _, err := b.KeyGenerate(ctx, "", false); return err },
+		"keyset":        func() error { _, err := b.KeySet(ctx, "", "not-a-key", false); return err },
 		"credentials":   func() error { _, err := b.Credentials(ctx); return err },
 		"credentialset": func() error { return b.CredentialSet(ctx, "backend-test", "example-value") },
 		"credentialdel": func() error { return b.CredentialDelete(ctx, "backend-test") },

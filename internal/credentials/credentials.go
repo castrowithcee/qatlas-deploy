@@ -3,8 +3,10 @@
 package credentials
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
@@ -32,6 +34,9 @@ import (
 const (
 	MaxValueBytes = 8 << 10
 	minValueBytes = 4
+	// MaxKeyBytes bounds a deploy key given to SetNamedKey so that it safely fits one request frame.
+	MaxKeyBytes = 16 << 10
+	minRSABits  = 3072
 )
 
 const (
@@ -51,6 +56,12 @@ var (
 	ErrKeyExists    = errors.New("a deploy key already exists")
 	ErrNoKey        = errors.New("no deploy key exists")
 	ErrNotFound     = errors.New("no such credential")
+	// The refusals of SetNamedKey. Their texts never carry key material.
+	ErrKeyFormat     = errors.New("the key is not an unencrypted OpenSSH private key (BEGIN OPENSSH PRIVATE KEY); convert it with ssh-keygen -p -m RFC4716 or export it in OpenSSH format")
+	ErrKeyPassphrase = errors.New("the key is protected by a passphrase; the service works unattended, so store a key without passphrase")
+	ErrKeyType       = errors.New("the key type is not supported; use Ed25519 or RSA of at least 3072 bits")
+	ErrKeyTooSmall   = errors.New("the RSA key is smaller than 3072 bits")
+	ErrKeyTooLarge   = errors.New("the key is larger than 16 KiB")
 	// ErrUnsafe means the store is not as the service left it: wrong owner, mode, type or link count.
 	ErrUnsafe = errors.New("the credential store is not private to the service")
 )
@@ -296,6 +307,78 @@ func (s *Store) GenerateNamedKey(name string, replace bool) (PublicKey, error) {
 	return publicOf(sshPub), nil
 }
 
+// SetNamedKey stores an existing private key as the deploy key name. The key must be an unencrypted OpenSSH
+// private key, Ed25519 or RSA of at least 3072 bits, and at most MaxKeyBytes. An existing key is replaced
+// only with replace; otherwise it is ErrKeyExists. Errors never contain key material.
+func (s *Store) SetNamedKey(name, key string, replace bool) (PublicKey, error) {
+	if !ValidKeyName(name) {
+		return PublicKey{}, ErrInvalidName
+	}
+	block, encoded, pub, err := parseDeployKey(key)
+	if err != nil {
+		return PublicKey{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := filepath.Join(s.dir, name)
+	if !replace {
+		if _, err := os.Lstat(path); err == nil {
+			return PublicKey{}, ErrKeyExists
+		}
+	}
+	s.register(keySecrets(block, encoded)...)
+	if err := s.write(path, encoded, replace); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return PublicKey{}, ErrKeyExists
+		}
+		return PublicKey{}, err
+	}
+	return publicOf(pub), nil
+}
+
+// parseDeployKey validates key and returns it in the form that is stored: line ends normalized, one trailing
+// newline.
+func parseDeployKey(key string) (*pem.Block, []byte, ssh.PublicKey, error) {
+	if len(key) > MaxKeyBytes {
+		return nil, nil, nil, ErrKeyTooLarge
+	}
+	text := strings.TrimSpace(strings.ReplaceAll(key, "\r\n", "\n")) + "\n"
+	block, rest := pem.Decode([]byte(text))
+	if block == nil || block.Type != "OPENSSH PRIVATE KEY" || len(bytes.TrimSpace(rest)) != 0 {
+		return nil, nil, nil, ErrKeyFormat
+	}
+	raw, err := ssh.ParseRawPrivateKey([]byte(text))
+	if err != nil {
+		var missing *ssh.PassphraseMissingError
+		if errors.As(err, &missing) {
+			return nil, nil, nil, ErrKeyPassphrase
+		}
+		if strings.Contains(err.Error(), "unsupported key type") {
+			return nil, nil, nil, ErrKeyType
+		}
+		return nil, nil, nil, ErrKeyFormat
+	}
+	var pub any
+	switch k := raw.(type) {
+	case *ed25519.PrivateKey:
+		pub = k.Public()
+	case ed25519.PrivateKey:
+		pub = k.Public()
+	case *rsa.PrivateKey:
+		if k.N.BitLen() < minRSABits {
+			return nil, nil, nil, ErrKeyTooSmall
+		}
+		pub = &k.PublicKey
+	default:
+		return nil, nil, nil, ErrKeyType
+	}
+	sshPub, err := ssh.NewPublicKey(pub)
+	if err != nil {
+		return nil, nil, nil, ErrKeyType
+	}
+	return block, []byte(text), sshPub, nil
+}
+
 // KeyPath is where the private default deploy key lives, see NamedKeyPath.
 func (s *Store) KeyPath() string { return s.NamedKeyPath(DefaultKey) }
 
@@ -323,8 +406,8 @@ func (s *Store) ShowNamedKey(name string) (PublicKey, error) {
 	if err != nil {
 		return PublicKey{}, errors.New("the stored deploy key cannot be read")
 	}
-	if signer.PublicKey().Type() != ssh.KeyAlgoED25519 {
-		return PublicKey{}, errors.New("the stored deploy key is not an Ed25519 key")
+	if t := signer.PublicKey().Type(); t != ssh.KeyAlgoED25519 && t != ssh.KeyAlgoRSA {
+		return PublicKey{}, errors.New("the stored deploy key is neither an Ed25519 nor an RSA key")
 	}
 	return publicOf(signer.PublicKey()), nil
 }

@@ -2,13 +2,13 @@ package tui
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-kit/i18n"
+	kittui "github.com/castrowithcee/qatlas-kit/tui"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 )
@@ -21,7 +21,7 @@ const (
 )
 
 const (
-	repoURL     = "git@example.test:ops/stacks.git"
+	repoURL     = "ssh://git.example.test/ops/stacks.git"
 	stackDir    = "/srv/stacks-example"
 	fingerprint = "SHA256:ExampleFingerprintForTestsOnly0000000000"
 )
@@ -47,14 +47,20 @@ func seq(parts ...[]string) []string { return slices.Concat(parts...) }
 
 func keys(k ...string) []string { return k }
 
-// The ways to a page of the Settings area from the Stacks area.
+// The ways to a page of the Settings area from the Stacks area: the area opens on the General form; up leaves
+// it for the sub-tab line, the arrows choose a sub-tab, and down enters its content.
 var (
-	toMenu   = keys("4")
-	toRepo   = keys("4", "enter")
-	toKey    = keys("4", "down", "enter")
-	toCreds  = keys("4", "down", "down", "enter")
-	toWindow = keys("4", "down", "down", "down", "enter")
-	toNotify = keys("4", "down", "down", "down", "down", "enter")
+	toSubtabs = keys("4", "up")
+	toGeneral = keys("4")
+	toCreds   = keys("4", "up", "right", "down")
+	toWindow  = keys("4", "up", "right", "right", "down")
+	toNotify  = keys("4", "up", "right", "right", "right", "down")
+)
+
+// The ways to the folders in the Stacks area: the area itself, and the key view of the first folder.
+var (
+	toFolders = keys("1")
+	toKey     = keys("1", "up", "e")
 )
 
 func newSettingsModel(t *testing.T, b *fakeBackend) *Model {
@@ -90,150 +96,67 @@ func contains(t *testing.T, m *Model, want ...string) {
 	}
 }
 
-func TestSettingsAreaListsItsPages(t *testing.T) {
+func TestSettingsAreaShowsItsPagesAsSubtabs(t *testing.T) {
 	m := newSettingsModel(t, settingsBackend())
-	send(m, toMenu...)
-	contains(t, m, "Stacks repository", "Deploy key", "Credentials", "Maintenance window", "Notifications")
-	send(m, "down", "down", "enter")
-	contains(t, m, "registry.docker.io", "github.com")
-	// Esc leaves the page, then the area.
+	send(m, "4")
+	contains(t, m, "General", "Credentials", "Maintenance window", "Notifications", "Theme")
+	if screen := m.render(); strings.Contains(screen, "Stack folders") || strings.Contains(screen, "Deploy key") {
+		t.Fatalf("a sub-tab offers a page that lives in Stacks:\n%s", screen)
+	}
+	if n := len(settingsPages); n != 4 {
+		t.Fatalf("%d pages", n)
+	}
+	// Every page shows its content as soon as its sub-tab is chosen, without enter.
+	send(m, "up")
+	for _, c := range []struct {
+		step string
+		page settingsPage
+		want string
+	}{{"right", pageCreds, "registry.docker.io"}, {"right", pageWindow, "days: sun"}, {"right", pageNotify, "ops-hook"},
+		{"right", pageGeneral, "Theme"}, {"left", pageNotify, "ops-mail"}} {
+		send(m, c.step)
+		if m.set.page != c.page || m.focus() != kittui.ZoneSubtabs {
+			t.Fatalf("page %q, zone %s", m.set.page, m.focus())
+		}
+		contains(t, m, c.want)
+	}
+}
+
+func TestEscInASettingsPageLeadsToTheSubtabLineThenToTheTabLine(t *testing.T) {
+	m := newSettingsModel(t, settingsBackend())
+	send(m, toCreds...)
+	wantZone(t, m, kittui.ZoneRows)
 	send(m, "esc")
-	if m.area != areaSettings || m.set.page != "" {
+	wantZone(t, m, kittui.ZoneSubtabs)
+	if m.area != areaSettings || m.set.page != pageCreds {
 		t.Fatalf("area %s page %q", m.area, m.set.page)
 	}
 	send(m, "esc")
-	if m.area != areaStacks {
-		t.Fatalf("area %s", m.area)
+	wantZone(t, m, kittui.ZoneTabs)
+	if m.area != areaSettings || m.set.page != pageCreds {
+		t.Fatalf("area %s page %q", m.area, m.set.page)
 	}
 }
 
-func TestRepoBindAsksForTheFingerprintBeforeStoringIt(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	// Leaving the question keeps the form, and nothing is stored.
-	send(m, "f2")
-	contains(t, m, "host: example.test", fingerprint, "ssh-ed25519")
-	if got := b.actions(); !slices.Equal(got, []string{"probe:" + repoURL}) {
-		t.Fatalf("calls = %v", got)
-	}
-	send(m, "n")
-	if m.set.form == nil || len(b.repoSet) != 0 {
-		t.Fatalf("form %v, binds %v", m.set.form, b.repoSet)
-	}
-	send(m, "f2", "enter") // enter is the default answer, which is cancel
-	if len(b.repoSet) != 0 {
-		t.Fatalf("enter confirmed the host key: %v", b.repoSet)
-	}
-	send(m, "f2", "y")
-	want := control.RepoSetArgs{URL: repoURL, Dir: stackDir, Fingerprint: fingerprint}
-	if len(b.repoSet) != 1 || b.repoSet[0] != want {
-		t.Fatalf("binds = %+v, want %+v", b.repoSet, want)
-	}
-	contains(t, m, "The stacks repository is bound")
-	if m.set.form != nil {
-		t.Fatal("the form stays open after the bind")
-	}
-}
-
-func TestRepoBindOfAPinnedHostSaysSo(t *testing.T) {
-	b := settingsBackend()
-	b.probe.Pinned = true
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	send(m, "f2")
-	contains(t, m, "already trusts exactly this host key")
-}
-
-func TestRepoBindRefusesAMissingURLAndRelativeDirectoryBeforeAskingTheServer(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, "f2")
-	contains(t, m, "SSH address is required")
-	if len(b.actions()) != 0 || m.modal != nil {
-		t.Fatalf("calls %v, question %v", b.actions(), m.modal)
-	}
-	// A directory that is not absolute is refused the same way.
-	send(m, "esc", "b")
-	send(m, typed(repoURL)...)
-	// The stack folder is required, and it must be an absolute path.
-	send(m, "f2")
-	contains(t, m, "stack folder is required")
-	send(m, "tab")
-	send(m, typed("stacks")...)
-	send(m, "f2")
-	contains(t, m, "absolute")
-	if len(b.actions()) != 0 {
-		t.Fatalf("calls %v", b.actions())
-	}
-}
-
-func TestRepoBindShowsWhyTheProbeFailed(t *testing.T) {
-	b := settingsBackend()
-	b.errs["probe:"+repoURL] = control.NewError(control.CodeRemote, "cannot reach the server")
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	send(m, "f2")
-	contains(t, m, "cannot reach the server")
-	if m.modal != nil || len(b.repoSet) != 0 {
-		t.Fatal("a failed probe went on")
-	}
-}
-
-func TestRepoFetchAsksFirst(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "F", "n")
-	if len(b.actions()) != 0 {
-		t.Fatalf("calls %v", b.actions())
-	}
-	send(m, "F", "y")
-	if got := b.actions(); !slices.Equal(got, []string{"fetch:"}) {
-		t.Fatalf("calls = %v", got)
-	}
-	contains(t, m, "newer commits")
-}
-
-func TestDeployKeyIsGeneratedOnceAndShown(t *testing.T) {
-	b := settingsBackend()
+func TestDeployKeyIsGeneratedFromTheFormAndShown(t *testing.T) {
+	b := keyBackend()
 	m := newSettingsModel(t, b)
 	send(m, toKey...)
 	contains(t, m, "No deploy key yet")
-	send(m, "G", "n")
-	if len(b.actions()) != 0 {
-		t.Fatalf("calls %v", b.actions())
+	send(m, "e", "right", "esc", "y")
+	if m.set.form != nil || len(b.actions()) != 0 {
+		t.Fatalf("a discarded form acted: %v", b.actions())
 	}
-	send(m, "G", "y")
-	if got := b.actions(); !slices.Equal(got, []string{"keygen:"}) {
+	send(m, "e", "right", "f2")
+	if got := b.actions(); !slices.Equal(got, []string{"keygen:" + stackDir}) {
 		t.Fatalf("calls = %v", got)
 	}
 	send(m, "enter")
 	contains(t, m, "ssh-ed25519 AAAAC3", "SHA256:ExampleKey")
-	// An existing key is never replaced from here.
-	send(m, "G")
-	if m.modal != nil || len(b.actions()) != 1 {
-		t.Fatalf("a second generate went on: %v", b.actions())
-	}
-	contains(t, m, "qdeploy key generate --replace")
 }
 
 func TestDeployKeyIsShownWhenOneExists(t *testing.T) {
-	b := settingsBackend()
+	b := keyBackend()
 	b.key = &control.KeyResult{PublicKey: "ssh-ed25519 AAAAexamplekey qdeploy", Fingerprint: fingerprint}
 	m := newSettingsModel(t, b)
 	send(m, toKey...)
@@ -276,7 +199,7 @@ func TestCredentialIsSetWithADerivedNameAndNeverShown(t *testing.T) {
 	sendHidden(t, m, hidden, typed("alice")...)
 	sendHidden(t, m, hidden, "down")
 	sendHidden(t, m, hidden, typed(hiddenA)...)
-	contains(t, m, "************************")
+	contains(t, m, strings.Repeat("•", 24))
 	sendHidden(t, m, hidden, "f2")
 	contains(t, m, "registry.registry.example.test-5000")
 	if len(b.credSets) != 0 {
@@ -530,30 +453,30 @@ func TestServiceFailuresOfSettingsAreShownWithoutAValue(t *testing.T) {
 func TestSettingsKeysDoNothingOutsideTheirPage(t *testing.T) {
 	b := settingsBackend()
 	m := newSettingsModel(t, b)
-	send(m, "a", "x", "e", "b", "F", "G", "s")
+	send(m, "x", "e", "b", "F", "G", "s")
 	if m.modal != nil || m.set.form != nil || len(b.actions()) != 0 {
 		t.Fatal("a settings key acted in the Stacks area")
 	}
-	send(m, toMenu...)
-	send(m, "a", "x", "e", "b", "F", "G", "s")
-	if m.modal != nil || m.set.form != nil || len(b.actions()) != 0 {
-		t.Fatal("a settings key acted on the menu")
+	send(m, toSubtabs...)
+	send(m, "right", "right")
+	send(m, "a", "x", "b", "F", "G", "s")
+	if m.modal != nil || m.set.form != nil || len(b.actions()) != 0 || m.set.page != pageWindow {
+		t.Fatalf("a settings key acted outside its page: page %q", m.set.page)
 	}
 }
 
 func TestWritesRefuseAKeyWhileOneIsUnderWay(t *testing.T) {
 	b := settingsBackend()
 	m := newSettingsModel(t, b)
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
+	m.folders = &fakeFolders{}
+	send(m, toFolders...)
+	send(m, "a")
 	send(m, typed(stackDir)...)
 	cmd := press(m, "f2")
 	if !m.set.busy {
 		t.Fatal("no write under way")
 	}
-	// A key while the probe runs changes nothing.
+	// A key while the inspection runs changes nothing.
 	press(m, "x", "esc")
 	if m.set.form == nil {
 		t.Fatal("the form was closed under a write")
@@ -564,10 +487,13 @@ func TestWritesRefuseAKeyWhileOneIsUnderWay(t *testing.T) {
 	}
 }
 
-// fakeFolders records the host side of binding a stack folder.
+// fakeFolders records the host side of adding a stack folder. plans are the permission plans by folder; a
+// folder without one needs none.
 type fakeFolders struct {
 	absent   bool
+	readOnly bool
 	grantErr error
+	plans    map[string]PermPlan
 	calls    []string
 }
 
@@ -581,72 +507,30 @@ func (f *fakeFolders) Grant(_ context.Context, dir string, create bool) error {
 	return f.grantErr
 }
 
-func TestRepoBindCreatesAMissingFolderOnlyAfterConfirmation(t *testing.T) {
-	for _, lang := range []struct {
-		lang i18n.Lang
-		want string
-	}{{i18n.English, "Create the stack folder " + stackDir}, {i18n.German, "Stack-Ordner " + stackDir + " anlegen"}} {
-		b := settingsBackend()
-		m := newTestModel(t, lang.lang, b, wideWidth, settingsRows)
-		f := &fakeFolders{absent: true}
-		m.folders = f
-		send(m, toRepo...)
-		send(m, "b")
-		send(m, typed(repoURL)...)
-		send(m, "tab")
-		send(m, typed(stackDir)...)
-		send(m, "f2")
-		contains(t, m, lang.want)
-		if got := f.calls; !slices.Equal(got, []string{"missing:" + stackDir}) || len(b.actions()) != 0 {
-			t.Fatalf("before the answer: folder calls %v, backend calls %v", got, b.actions())
-		}
-		send(m, "n")
-		send(m, "f2", "enter") // enter is the default answer, which is cancel
-		if len(f.calls) != 2 || len(b.actions()) != 0 {
-			t.Fatalf("a declined folder had an effect: %v, %v", f.calls, b.actions())
-		}
-		send(m, "f2", "y")
-		want := []string{"missing:" + stackDir, "missing:" + stackDir, "missing:" + stackDir, "grant:" + stackDir + ":true"}
-		if !slices.Equal(f.calls, want) {
-			t.Fatalf("folder calls = %v, want %v", f.calls, want)
-		}
-		if got := b.actions(); !slices.Equal(got, []string{"probe:" + repoURL}) {
-			t.Fatalf("the probe does not follow the folder: %v", got)
-		}
-	}
+func (f *fakeFolders) PlanPermissions(_ context.Context, res control.SourceInspectResult) (PermPlan, error) {
+	f.calls = append(f.calls, "plan:"+res.Path)
+	return f.plans[res.Path], nil
 }
 
-func TestRepoBindOfAnExistingFolderOnlyGrantsIt(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	f := &fakeFolders{}
-	m.folders = f
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	send(m, "f2")
-	if want := []string{"missing:" + stackDir, "grant:" + stackDir + ":false"}; !slices.Equal(f.calls, want) {
-		t.Fatalf("folder calls = %v, want %v", f.calls, want)
-	}
-	contains(t, m, "host: example.test")
+func (f *fakeFolders) ApplyPermissions(_ context.Context, p PermPlan) error {
+	f.calls = append(f.calls, fmt.Sprintf("apply:%d", p.Changed))
+	return nil
 }
 
-func TestRepoBindStopsWhenTheFolderCannotBeGranted(t *testing.T) {
-	b := settingsBackend()
-	m := newSettingsModel(t, b)
-	m.folders = &fakeFolders{grantErr: errors.New("the service manager refused")}
-	send(m, toRepo...)
-	send(m, "b")
-	send(m, typed(repoURL)...)
-	send(m, "tab")
-	send(m, typed(stackDir)...)
-	send(m, "f2")
-	contains(t, m, "the service manager refused")
-	if len(b.actions()) != 0 || m.modal != nil {
-		t.Fatalf("the bind went on: %v", b.actions())
+func (f *fakeFolders) ReadOnly(path string) (bool, error) {
+	f.calls = append(f.calls, "readonly:"+path)
+	return f.readOnly, nil
+}
+
+// changes are the calls that changed the host.
+func (f *fakeFolders) changes() []string {
+	var out []string
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "grant:") || strings.HasPrefix(c, "apply:") {
+			out = append(out, c)
+		}
 	}
+	return out
 }
 
 func TestWindowDaysInUILanguage(t *testing.T) {

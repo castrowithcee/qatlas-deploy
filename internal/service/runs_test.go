@@ -297,7 +297,7 @@ func TestFailedRollbackPausesUntilResumed(t *testing.T) {
 	if err := h.call(control.ResumeCommand, control.ResumeArgs{Stack: "plain-stack"}, &res); err != nil {
 		t.Fatal(err)
 	}
-	if res.Stack != "plain-stack" || res.Pause.Run != dep.ID || res.Pause.Since.IsZero() {
+	if res.Stack != "plain-stack" || res.Pause == nil || res.Pause.Run != dep.ID || res.Pause.Since.IsZero() {
 		t.Fatalf("resume = %+v", res)
 	}
 	if s := stackStatus(t, h, "plain-stack"); s.Paused != nil || s.ActiveRun != "" {

@@ -1,6 +1,6 @@
-qdeploy  maintenance window closed                          [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]              
---------------------------------------------------------------------------------
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks   2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings  [5 ▦ Containers]    
+────────────────────────────────────────────────────────────────────────────────
   demo-stack-app-1                                                              
                                                                                 
   group     own stack demo-stack                                                
@@ -9,16 +9,16 @@ qdeploy  maintenance window closed                          [esc] back  [?] help
   uptime    3h2m                                                                
   restarts  0                                                                   
                                                                                 
-  Ports                                                                         
-    127.0.0.1:8080->8080/tcp                                                    
-    9000/tcp                                                                    
-                                                                                
-  Mounts                                                                        
-    bind /srv/example/data:/data                                                
-    volume demo-config:/config (read-only)                                      
-                                                                                
-  Networks                                                                      
-    demo-stack_default 172.18.0.2                                               
-                                                                                
+╭─ Ports ──────────────────────────────────────────────────────────────────────╮
+│ 127.0.0.1:8080->8080/tcp                                                     │
+│ 9000/tcp                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Mounts ─────────────────────────────────────────────────────────────────────╮
+│ bind /srv/example/data:/data                                                 │
+│ volume demo-config:/config (read-only)                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Networks ───────────────────────────────────────────────────────────────────╮
+│ demo-stack_default 172.18.0.2                                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
 esc back  o log  S start  X stop  Z restart  r reload  1-5 area  q quit         
-                                                           up/down scroll  19/26
+                                                               ↑/↓ scroll  19/27

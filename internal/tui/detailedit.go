@@ -214,13 +214,19 @@ func (m *Model) pickView(width, height int) string {
 func (m *Model) formView(width, height int) string {
 	m.scrollNote = ""
 	f := m.set.form
-	head := []string{m.heading(f.title, width), ""}
+	var head []string
+	if f.kind != formGeneral {
+		head = []string{m.heading(f.title, width), ""}
+	}
 	if f.kind == formDataDirs {
 		head = append(head, m.formDataDirLines(f, width)...)
 	}
 	room := max(height-len(head), 1)
 	view, targets := f.form.View(m.styles, width, room)
 	m.formPart(f.form, targets, width, room, len(head))
+	if len(head) == 0 {
+		return view
+	}
 	return strings.Join(head, "\n") + "\n" + view
 }
 

@@ -11,7 +11,7 @@ func All() []helptopics.Topic {
 		{Name: "qdeploy", Short: "What qdeploy is and what it is for", Text: overview},
 		{Name: "credentials", Short: "The deploy keys and stored credentials", Text: credentialsTopic},
 		{Name: "repository", Short: "Binding the stacks repository and trusting its host key", Text: repositoryTopic},
-		{Name: "sources", Short: "Several stack folders on one host: ids, deploy keys and unique stack names", Text: sourcesTopic},
+		{Name: "sources", Short: "Several stack folders on one host: taking over a folder, ids, deploy keys and unique stack names", Text: sourcesTopic},
 		{Name: "stack-capabilities", Short: "What qdeploy can do with a stack's files, and what qdeploy stack check reports", Text: stackCapabilitiesTopic},
 		{Name: "stack-settings", Short: "Stack settings", Text: stackSettingsTopic},
 		{Name: "backups", Short: "Backing up and restoring the data of a stack", Text: backupsTopic},
@@ -25,17 +25,22 @@ const overview = `qdeploy runs as a service on a Linux host and keeps the Docker
 
 Commands:
 - qdeploy run: run the service in the foreground until it receives SIGTERM or SIGINT
-- qdeploy tui, or qdeploy without a command at a terminal: open the terminal interface with the areas Stacks, Stack detail, Runs, Settings and Containers; it shows each stack's versions, state, last run and findings, follows the log of a running run, and offers update, deploy, pause, pin, resume, start, stop and restart (a stopped stack shows as stopped) and the registry query on the cursor stack or on stacks ticked with space; the stack detail sets and deletes the stack's secrets (value hidden) and restores an older backup; Settings binds the repository, generates and shows the deploy key, sets credentials, changes the maintenance window and adds, tests and removes notification channels; Containers lists every container of the host by own stack, foreign project and single container with state and a detail, and reads again every 5 seconds while it is shown, and S, X and Z there start, stop and restart the container on the cursor or in the detail after a question, also a foreign or single one; the stack detail lists the containers of its stack; o opens the output of the container on the cursor, or in the stack detail of all containers of the stack, which follows once a second and takes a period with T and a search with /; every change comes after a confirmation (run with sudo)
+- qdeploy tui, or qdeploy without a command at a terminal: open the terminal interface with the areas Stacks, Stack detail, Runs, Settings and Containers; it shows each stack's versions, state, last run and findings, follows the log of a running run, and offers update, deploy, pause, pin, resume, start, stop and restart (a stopped stack shows as stopped) and the registry query on the cursor stack or on stacks ticked with space; the stack detail sets and deletes the stack's secrets (value hidden) and restores an older backup; Stacks groups the stacks under a row for each stack folder, and a adds a folder, F fetches the folder on the cursor, x releases it and e generates, stores and shows its deploy key; Settings shows what applies to the whole host or device on four sub-tabs under the tab line (arrow down leads to them, left and right choose one): General sets the preferences of this device, Credentials sets credentials, Maintenance window changes the maintenance window and Notifications adds, tests and removes notification channels; Containers lists every container of the host by own stack, foreign project and single container with state and a detail, and reads again every 5 seconds while it is shown, and S, X and Z there start, stop and restart the container on the cursor or in the detail after a question, also a foreign or single one, and a on a foreign project takes it over as a stack folder (see qdeploy help sources); the stack detail lists the containers of its stack; o opens the output of the container on the cursor, or in the stack detail of all containers of the stack, which follows once a second and takes a period with T and a search with /; every change comes after a confirmation (run with sudo)
 - qdeploy status: show whether the service is running, its version and start time, the last poll and the state of each stack (run with sudo)
-- qdeploy key generate|show [--dir <path>]: create the SSH deploy key of a stack folder and show its public part (run with sudo)
+- qdeploy key generate|set|show [--dir <path>]: create or store the SSH deploy key of a stack folder and show its public part (run with sudo)
 - qdeploy repo set <ssh-url> [--dir <path>]: bind a stacks repository to a stack folder, confirm its host key and clone it; a further folder becomes a further source (run with sudo; see qdeploy help sources)
 - qdeploy repo fetch: fetch new commits of every stack folder without touching the working copies (run with sudo)
+- qdeploy source inspect <path> [--url <ssh-url>]: classify a folder before it is taken over as a stack folder (clone, adopt-clone, local, files or reject), with its permissions, the files and stacks it would bring and container conflicts; changes nothing (run with sudo; see qdeploy help sources)
+- qdeploy source add <path> [--url <ssh-url>] [--fingerprint <fp>] [--yes]: take over a folder as a stack folder (a clone to make, an existing clone, a repository without a remote or a folder of files, which --url can join with a remote) and give the service the access it needs, after a preview and a confirmation (run with sudo; see qdeploy help sources)
+- qdeploy source remote <path> <ssh-url> [--fingerprint <fp>] [--yes]: give a local source a remote repository after comparing the folder with it; secret-like files in what would be pushed stop it (run with sudo; see qdeploy help sources)
+- qdeploy source list: list the bound stack folders with kind, address, head and the state of the last poll (run with sudo)
+- qdeploy source remove <path> [--yes]: release a stack folder after a question; no file is deleted and no container is stopped (run with sudo; see qdeploy help sources)
 - qdeploy stack list: list the stacks of the working copy with image versions, update mode and whether the stack is stopped (run with sudo)
 - qdeploy stack check [stack]: show per stack of the working copy whether deploy, update, rollback with data, backup and the redaction of secrets work with its files, why not and what to change, and the findings; exit code 1 on errors (run with sudo; see qdeploy help stack-capabilities)
 - qdeploy stack deploy <stack>: start a manual run of a stack at the commit the working copy has; the stack is named by its Compose project (see qdeploy help stack-capabilities), and for a stack with the finding project-renamed this decides to start the new project, next to the old one, which keeps running (run with sudo)
 - qdeploy stack runs [stack]: list the recorded runs, newest first (run with sudo)
 - qdeploy stack log <run>: print the log of a run (run with sudo)
-- qdeploy stack resume <stack>: clear the pause a failed rollback left on a stack; it starts no run (run with sudo)
+- qdeploy stack resume <stack>: clear the pause a failed rollback left on a stack, and release a halted automatic repair; it starts no run (run with sudo)
 - qdeploy stack pause|unpause <stack>: keep the maintenance window from running a stack, or lift that; unrelated to the pause of a failed rollback (run with sudo)
 - qdeploy stack pin|unpin <stack>: hold the image versions of a stack, so the maintenance window and qdeploy stack update leave them alone, or release them (run with sudo)
 - qdeploy stack start|stop|restart <stack> [--yes]: start, stop or restart the containers of a stack after a question; a stop keeps the stack stopped against new commits and the maintenance window until a start, and qdeploy status and stack list show it (run with sudo; see qdeploy help containers)
@@ -61,8 +66,9 @@ Deploy keys:
 - Every remote stack folder has its own key, because a git platform accepts a deploy key in one repository only. The first folder uses the key without --dir; every further one needs its own before qdeploy repo set binds it.
 - qdeploy key generate [--dir <path>]: create an Ed25519 key in the service for the stack folder and print its public part and SHA256 fingerprint; the folder need not be bound yet
 - qdeploy key generate --replace: replace an existing key; without --replace an existing key is kept and the command refuses
+- qdeploy key set [--dir <path>] [--file <path>]: store an existing key, for example from a password manager, instead of generating one; paste it at the prompt (hidden, ends with the END line), pipe it on standard input, or name a key file. It must be an OpenSSH private key without passphrase, Ed25519 or RSA of at least 3072 bits, at most 16 KiB. It prints the public part like generate; --replace replaces an existing key.
 - qdeploy key show [--dir <path>]: print the public part again
-- Enter the public part as a deploy key in the git platform of that folder's repository. The private key never leaves the service.
+- Enter the public part as a deploy key in the git platform of that folder's repository. A folder whose key pushes (a version change or revert, qdeploy source remote) needs write access to the repository. The private key never leaves the service.
 
 Credentials:
 - qdeploy credential set <name>: store a registry token or notification credential; the value is read without echo at a terminal, or from standard input when piped, and never from an argument
@@ -79,9 +85,45 @@ Sources:
 - qdeploy repo set <ssh-url> --dir <path> binds a further folder next to those bound earlier; a bound folder is never rebound to another URL, and folders may not lie inside each other (see qdeploy help repository).
 - The id of a source comes from its path and never changes: /opt/stacks becomes opt-stacks, /srv/services/stacks becomes srv-services-stacks.
 - Each subfolder of a source with a compose file is a stack. When the root of the source holds a compose file, found as in a subfolder, the source is exactly one stack instead: the whole folder except .qatlas/, named by its Compose project, else by the folder's name. Its subfolders are then part of it, and those with a compose file of their own get the finding ignored-stack-folder.
-- Every remote source has its own deploy key: qdeploy key generate --dir <path> before qdeploy repo set (see qdeploy help credentials).
+- Every remote source has its own deploy key: qdeploy key generate --dir <path> or qdeploy key set --dir <path> before qdeploy repo set (see qdeploy help credentials).
 - A source whose fetch or poll fails keeps its state; the other sources go on. qdeploy status shows each source with its last poll, error and commits, and each stack with its source.
 - The maintenance window and qdeploy stack updates cover the stacks of every source.
+
+Taking over a folder:
+- qdeploy source inspect <path> [--url <ssh-url>] classifies a folder and changes nothing: no file, permission, repository or container is touched, and no value of an env file is shown. --url is the SSH address to clone, or the one the folder must have as origin. It exits 0 for every case, a rejection included; read the case, or the case field of --output json.
+- clone: the folder is missing or empty and would get a clone of the URL; without --url the answer says an address is needed.
+- adopt-clone: the folder is a clone with an origin remote, and is taken over as it is; a --url must equal that origin.
+- local: the folder is a repository without a remote and runs locally, never pushed. A --url is rejected here, as for a folder with files.
+- files: the folder holds files and no repository. The answer lists the files a first commit would take and what it would leave out with the reason: bind-mount (the data folder of a stack), too-large, not-regular (not a plain file or folder), unreadable and nested-repo (a folder with a repository of its own). source add takes it over (see below).
+- reject: the folder cannot be taken over. The answer gives the reason and what to do, for example a symbolic link in the path, a folder inside another repository or overlapping another source, a repository with remotes but no origin, an address that differs from the origin, or a folder on a read-only file system.
+- Every answer except a rejection shows the owner, group and mode of the folder (or of its nearest existing parent while it is missing), whether the service can write there, and whether permissions would have to be set. For a repository it also says whether the service can write its .git folder.
+- For each stack the folder would bring it shows the functions and findings as qdeploy stack check does, and the containers of other Compose projects that already run in the stack's folder: deploying the stack would create duplicates of them. When the stacks or the container engine cannot be read, the answer says why and the rest still holds.
+
+Source add:
+- qdeploy source add <path> [--url <ssh-url>] [--fingerprint <fp>] [--yes] inspects the folder, shows the case and the changes it would make, and applies them only after you confirm: at a terminal by answering the question, without a terminal with --yes. A rejected folder is refused and nothing changes.
+- clone and adopt-clone work like qdeploy repo set (see qdeploy help repository): the host key is confirmed at the terminal or with --fingerprint, and the folder needs its deploy key. --yes never confirms a host key.
+- local binds the repository without a remote and without a deploy key. The service deploys the commits that people make there and rolls a failing one back with a revert commit in the same folder; nothing is pushed until qdeploy source remote gives it a remote.
+- files shows the list of files and what is left out with the reason (the first 50 of each), and starts a repository only after you confirm: git init with branch main and core.sharedRepository=group, the files left out only in .git/info/exclude (never .gitignore), a first commit of the listed files as qdeploy, and no file in the folder written. The folder is then bound as local, or as remote with --url (see below). Permissions are set for the folder, the folders of listed files and the listed files. Before it changes anything, source add looks at the folder again and stops if the list or the left-out files differ from what was shown. Files left out are not in the repository: one a stack needs to read stays in the folder and must be readable by the service.
+- Permissions are set only when the service cannot write the folder or its .git, as root and without changing an owner: the group of the service account qdeploy for the folder, .git and every folder with versioned files; group write and setgid on those folders; group read and write on versioned files (for files, the listed ones); core.sharedRepository=group. Never changed: the sources of bind mounts and everything below them, unversioned files, symbolic links, files with further hard links and paths outside the folder. An unversioned file the stacks need, such as secrets.env, must therefore already be readable by the service, for example with the group qdeploy and mode 0640.
+- The folder is then added to the systemd drop-in and the service restarts once, as repo set does.
+- qdeploy source list shows every bound folder with path, id, kind, address (none for a local one), head, last poll, poll error and note.
+- qdeploy source remove <path> [--yes] asks first. It releases only the binding and drops the engine state of the source: no file in the folder is deleted, no container is stopped, and the permissions, the drop-in entry and the deploy key stay, so source add binds the folder again. A source with an active run is refused.
+
+Remote for a folder:
+- qdeploy source remote <path> <ssh-url> [--fingerprint <fp>] [--yes] gives a local source a remote repository. qdeploy source add <path> --url <ssh-url> does it for a folder of files in one step, but only for a repository that already holds commits; take the folder over without --url first for an empty one. The host key is confirmed as for repo set and --yes never confirms it. The folder needs its deploy key first, also while it is a local source (qdeploy key generate --dir <path> or qdeploy key set --dir <path>), with write access to the repository (see qdeploy help credentials).
+- Both compare the folder with the branch of the remote and show the state before anything changes. empty (source remote only): the local history is pushed as the branch. equal (the same files): the history of the remote is taken over and no commit is made; the former local history stays under refs/qdeploy/local-before-remote. different: the paths that differ are listed (the first 50 and their number), and the state of the host becomes one commit on the remote branch and is pushed, or you cancel. The host never overwrites the remote and nothing is forced.
+- After your confirmation the service acts only on the state and commit that were shown and changes nothing if the remote moved. The source is then remote; for a folder of files the repository starts on the history of the remote.
+- Secret check: every commit the push would publish is checked for secrets files, env files with values and private keys. A finding stops the command with secrets-found before anything changes. It names commit, path and kind, never a value, and cannot be overridden: clean the history yourself, then run the command again.
+
+Foreign Compose projects:
+- A Compose project that was started outside qdeploy shows in the Containers area of the TUI as a foreign project, with the folder and the Compose and env files its containers were started with. a on its group, one of its containers or its detail opens the adoption: it only inspects the folder, shows the project, the files from the labels and what works with them, and goes on with the questions of the case (local, files or adopt-clone) as qdeploy source add does. Nothing changes before the last yes.
+- The folder becomes a source of exactly one stack: its compose file must lie directly in the folder. The adoption is refused, with the cause, when the containers carry no absolute working directory, when a Compose or env file lies outside that folder, when the inspection rejects the folder or does not find exactly one stack.
+- A warning, which does not block, appears when the project name or the Compose or env files of the running containers differ from those a deploy would pass to Compose: the first deploy then creates new containers instead of taking over the running ones.
+- Without the TUI, qdeploy container list shows the folder and the Compose files, and qdeploy source add <folder> takes the folder over.
+
+Commits of people in a local folder:
+- A person commits as a member of the group qdeploy (usermod -aG qdeploy <user>, then a new login) or as the service account with sudo -u qdeploy git -c safe.directory=<path> .... The folder belongs to another user, so git refuses it until it is marked safe; a group member does that once with git config --global --add safe.directory <path>.
+- A person who creates new folders should work with umask 002: a folder made with the usual umask 022 is not group-writable, and the service could not write into it when a revert has to restore files there.
 
 Stack names:
 - Compose tells stacks apart only by project name, so a name is deployed from one source alone. When two sources list the same name, the stack already deployed keeps it, else the one of the source bound first; the other gets the finding name-collision and is never deployed until one of them gets another project name.
@@ -93,14 +135,15 @@ Earlier installations:
 const repositoryTopic = `The service clones the stacks repository of the host over SSH with its own deploy key and checks the server with its own known_hosts file; the system's SSH configuration and known hosts are not used. Host key checking is always strict.
 
 Binding:
-- qdeploy key generate, then enter the public key as a deploy key with write access in the git platform; qdeploy pushes its version and revert commits with it
+- qdeploy key generate (or qdeploy key set for a key you already have), then enter the public key as a deploy key with write access in the git platform; qdeploy pushes its version and revert commits with it
 - qdeploy repo set <ssh-url> --dir <path>: the URL is user@host:path or ssh://[user@]host[:port]/path; --dir names the stack folder, is required and has no default
 - On first contact the host key and its SHA256 fingerprint are shown. At a terminal you confirm it by answering the question (default no). Without a terminal, pass the expected fingerprint: --fingerprint SHA256:...
 - Compare the fingerprint with the one the git platform publishes before you confirm it.
-- The stack folder is any absolute path, for example on another disk; each host chooses its own. It must be empty or already a clone of the same URL. Another folder becomes a further stack folder next to the earlier ones, with its own deploy key from qdeploy key generate --dir <path>; a bound folder is never rebound to another URL.
+- The stack folder is any absolute path, for example on another disk; each host chooses its own. It must be empty or already a clone of the same URL. Another folder becomes a further stack folder next to the earlier ones, with its own deploy key from qdeploy key generate --dir <path> or qdeploy key set --dir <path>; a bound folder is never rebound to another URL.
 - A folder that does not exist is created only after you confirmed its exact path: answer the question at a terminal, or pass --create without one. It gets the owner qdeploy:qdeploy and mode 0755. Neither the installer, the service nor an update creates a stack folder.
 - The service runs sandboxed and may write only where the systemd drop-in /etc/systemd/system/qdeploy.service.d/10-stack-folders.conf allows it. repo set adds the folder there as ReadWritePaths=-<path> (entries are only ever added), reloads systemd and restarts the service once. A bound folder without that entry, as after an update from an older release, is added when you next run qdeploy as root.
 - The same steps are offered by sudo qdeploy in the Settings area.
+- qdeploy repo set is the short form of qdeploy source add for cloning into an empty or missing folder and for taking over an existing clone; source add also binds a repository without a remote (see qdeploy help sources).
 
 Afterwards:
 - qdeploy repo fetch: fetch new commits into the remote-tracking branch and report whether the working copy is behind; the working copy itself is not changed
@@ -117,6 +160,7 @@ Fields (all optional except version):
 - update.mode: manual (default) or automatic
 - update.ceiling: patch, minor (default) or major; the largest version step taken; versions are MAJOR.MINOR.PATCH (SemVer or CalVer), and with CalVer the first part, for example the year, counts as major
 - update.major: stepwise (default, one major version at a time) or direct
+- update.observe: observation time in minutes after an update by qdeploy (default 60, 0 off, at most 1440); a failure of the stack in it rolls the update back (see qdeploy help containers); a commit that did not come from qdeploy starts none; qdeploy status shows a running one as observe with its end and the update commit
 - update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
 - update.changelog.<VARIABLE>: GitHub repository (owner/name or a github.com address) whose releases are shown as changelog; it takes precedence over the image label org.opencontainers.image.source
 - backup.paths: data directories below data/ in the stack folder, for example data/db; other paths are refused when a backup runs
@@ -230,14 +274,15 @@ const notificationsTopic = `A notification channel receives the events it select
 Events (--events takes a comma list; without it a new channel receives all; a stored channel keeps the events it selected):
 - succeeded: a run deployed a commit
 - failed: a run failed and no rollback was made
-- rolled-back: a run failed and the stack was rolled back to the previous state
+- rolled-back: a run failed and the stack was rolled back to the previous state; with cause observation, the stack failed in the observation time after an update and qdeploy rolled that update back
 - rollback-failed: a run failed and the rollback failed too; the stack is stopped and paused
 - container-failed: the failure monitor found a container of an own stack failed (see qdeploy help containers); one message per failure with stack, kind, container and the time since which it failed
-- recovered: that failure ended; names the same container and how long it lasted
+- recovered: that failure ended; names the same container and how long it lasted, and whether qdeploy restarted it
+- recovery-failed: three repair attempts did not end the failure (see qdeploy help containers); sent once, names stack, kind, container, the time since which it failed and the number of attempts; with cause backup-missing, the stack failed in the observation time but the backup of the update is missing, so the update was not rolled back and nothing was changed
 - update-available: a newer image version was found for a stack in manual mode, once per version
 
 Channel types and settings:
-- webhook: posts JSON (event, stack, run, commit, error, items; for container-failed and recovered kind, container, since and, on recovered, at) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
+- webhook: posts JSON (event, stack, run, commit, error, items; for container-failed, recovered and recovery-failed also kind, container and since; recovered and recovery-failed also at; recovered also restarted, recovery-failed also attempts; cause is observation for rolled-back and rollback-failed after a failure in the observation time, backup-missing with error for recovery-failed) to an https URL (plain http only to the local machine), signed with a key. The headers X-Qdeploy-Event, X-Qdeploy-Timestamp and X-Qdeploy-Signature carry the event, the Unix time and the signature over the timestamp and the body.
 - slack: posts text to an incoming-webhook URL.
 - telegram: sends text to a chat; needs --chat-id, and --base-url for a Bot API server of your own.
 - smtp: sends an e-mail; needs --host, --from and --to (comma list or repeated); --port (default 587 with starttls, 465 with tls), --security starttls (default) or tls, and --user for a login. The connection is always encrypted.
@@ -277,6 +322,7 @@ Failure monitor: every 30 seconds the service checks the containers of own stack
 - unhealthy: its health check has been failing for more than 60 seconds
 - restart-loop: its restart count rose by 3 or more within 5 minutes
 - missing: a service that was running at the last good reading is gone
-Nothing is checked while a run or an action of the stack is active, nor for stopped (qdeploy stack stop), paused (either pause) and foreign stacks. A container stopped with qdeploy container stop is no failure. The monitor only reports; it never acts on a container.
+Nothing is checked while a run or an action of the stack is active, nor for stopped (qdeploy stack stop), paused (either pause) and foreign stacks. A container stopped with qdeploy container stop is no failure.
+Repair: the monitor also repairs a failure by restarts, each under the run slot of the stack. Attempt 1 comes one minute after the failure began and restarts the failed containers; attempts 2 and 3 come 5 and 15 minutes after the previous one and restart the stack. In the observation time after an update by qdeploy (qdeploy help stack-settings, update.observe), a failure gets only attempt 1; if it lasts until attempt 2 would be due, qdeploy rolls that update back instead of attempts 2 and 3: it stops the stack, restores the backup of the update, reverts the update commit and starts and checks the stack again. Data written since the update is lost. A failed rollback stops and pauses the stack; a missing backup halts the repair without any change. If the failure persists after the third, the repair is halted: qdeploy status shows "repair" as halted, recovery-failed is sent once and no further attempt is made until qdeploy stack resume releases it. The attempts count until the stack has run an hour without a failure. Stopped (qdeploy stack stop), paused (either pause) and foreign stacks are not repaired; a stop or pause ends a repair under way, its count stays.
 
 Environment: only the names of the variables are shown, never their values.`

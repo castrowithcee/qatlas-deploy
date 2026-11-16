@@ -102,7 +102,12 @@ func registerRunCommands(r *control.Registry, eng *sourceSet, version string, st
 				}
 				return nil, errors.New("the engine state cannot be written")
 			}
-			return control.ResumeResult{Stack: printable(a.Stack), Pause: pauseInfo(p)}, nil
+			res := control.ResumeResult{Stack: printable(a.Stack)}
+			if !p.Time.IsZero() {
+				info := pauseInfo(p)
+				res.Pause = &info
+			}
+			return res, nil
 		},
 		control.PauseCommand:   holdHandler(eng.SetPause, true),
 		control.UnpauseCommand: holdHandler(eng.SetPause, false),
@@ -157,7 +162,7 @@ func engineStatus(snaps []sourceSnapshot) control.EngineStatus {
 	for _, ss := range snaps {
 		st := ss.snap.State
 		res.Sources = append(res.Sources, control.SourceStatus{
-			ID: ss.conf.ID, Path: ss.conf.Path, Kind: ss.conf.Kind, LastPoll: st.LastPoll, PollError: printable(st.PollError),
+			ID: ss.conf.ID, Path: ss.conf.Path, Kind: ss.conf.Kind, URL: ss.conf.URL, LastPoll: st.LastPoll, PollError: printable(st.PollError),
 			Note: printable(st.Note), Head: printable(st.Head), RemoteHead: printable(st.RemoteHead),
 		})
 		for _, item := range stackStatuses(ss.snap) {
@@ -226,6 +231,15 @@ func stackStatuses(snap engine.Snapshot) []control.StackStatus {
 			}
 			item.Findings = append(item.Findings, control.FindingInfo{Kind: engine.FindingContainerFailed, Detail: printable(detail)})
 			item.Failure = &control.FailureInfo{Kind: printable(f.Kind), Container: printable(f.Container), Since: f.Since}
+		}
+		if r := s.Repair; r != nil {
+			item.Repair = &control.RepairInfo{Attempts: r.Attempts, Max: engine.MaxRepairAttempts, Last: r.Last, Next: r.Next}
+			if r.Halted != nil {
+				item.Repair.Halted = &control.HoldInfo{Since: r.Halted.Since}
+			}
+		}
+		if o := s.Observe; o != nil && time.Now().Before(o.Until) && o.Commit == s.Deployed {
+			item.Observe = &control.ObserveInfo{Commit: printable(o.Commit), Until: o.Until}
 		}
 		res = append(res, item)
 	}

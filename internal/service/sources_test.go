@@ -92,7 +92,7 @@ func TestFurtherSourceHasItsOwnKeyStateAndFetch(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := h.call(control.RepoSetCommand, control.RepoSetArgs{URL: h.url, Dir: other, Fingerprint: h.srv.Key().Fingerprint}, nil)
-	wantCode(t, err, control.CodeNotFound)
+	wantCode(t, err, control.CodeNoSuchKey)
 	if !strings.Contains(err.Error(), "key generate --dir "+other) || h.git.Clones() != 1 {
 		t.Fatalf("a further folder without its key: %v, %d clones", err, h.git.Clones())
 	}
@@ -197,6 +197,36 @@ func TestFetchErrorOfOneSourceLeavesTheOther(t *testing.T) {
 	}
 	h.git.SetFetchErrFor(dir, errors.New("fetch failed: connection timed out"))
 	wantCode(t, h.call(control.RepoFetchCommand, nil, nil), control.CodeRemote)
+}
+
+func TestRepoFetchWithDirFetchesOnlyThatFolder(t *testing.T) {
+	d := &fakeDeployer{}
+	h := bound(t, d)
+	dir := h.addSource(moreStacks(false))
+	// The new folder's first poll fetches once on its own; count from after it.
+	h.waitStatus("the new folder has polled", func(st control.StatusResult) bool {
+		return len(st.Engine.Sources) == 2 && !st.Engine.Sources[1].LastPoll.IsZero()
+	})
+	first, second := h.git.Fetches(h.dir), h.git.Fetches(dir)
+
+	var res control.RepoFetchResult
+	if err := h.call(control.RepoFetchCommand, control.RepoFetchArgs{Dir: dir}, &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Sources) != 1 || res.Sources[0].Dir != dir || res.Dir != dir || res.Head != h.git.Head {
+		t.Fatalf("fetch = %+v", res)
+	}
+	if h.git.Fetches(dir) != second+1 || h.git.Fetches(h.dir) != first {
+		t.Fatalf("fetches: %d and %d, were %d and %d", h.git.Fetches(h.dir), h.git.Fetches(dir), first, second)
+	}
+
+	wantCode(t, h.call(control.RepoFetchCommand, control.RepoFetchArgs{Dir: filepath.Join(tempBase(t), "unknown")}, nil), control.CodeNoSuchSource)
+
+	// Without the argument every folder is fetched, as before.
+	res = control.RepoFetchResult{}
+	if err := h.call(control.RepoFetchCommand, nil, &res); err != nil || len(res.Sources) != 2 {
+		t.Fatalf("fetch = %+v, %v", res, err)
+	}
 }
 
 func TestNameCollisionKeepsTheDeployedStack(t *testing.T) {

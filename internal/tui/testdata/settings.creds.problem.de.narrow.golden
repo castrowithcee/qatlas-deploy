@@ -1,27 +1,27 @@
-qdeploy  Wartungsfenster zu                 [esc] Zurück
+◆ qdeploy  Wartungsfenster zu               [esc] Zurück
   1 2 3 [4 Einstellungen] 5                             
---------------------------------------------------------
+  [Zugangsdaten]                                        
+────────────────────────────────────────────────────────
   Zugangsdaten setzen                                   
                                                         
-                    +----------------------------------+
-  Zugangsdaten      | Registry-Login                 v |
-                    +----------------------------------+
-                    #==================================#
-> Registry-Host     | _                                |
-                    #==================================#
+                    ╭──────────────────────────────────╮
+  Zugangsdaten      │ Registry-Login                 ▾ │
+                    ╰──────────────────────────────────╯
+                    ╔══════════════════════════════════╗
+> Registry-Host     ║ _                                ║
+                    ╚══════════════════════════════════╝
                     nur beim Registry-Login; mit Port   
                     als host:port, Docker Hub als       
                     docker.io                           
                     [!] Das ist kein Registry-Host. -   
                     Korrigiere das Feld.                
-                    +----------------------------------+
-  Registry-Benutzer | leer                             |
-                    +----------------------------------+
+                    ╭──────────────────────────────────╮
+  Registry-Benutzer │ leer                             │
+                    ╰──────────────────────────────────╯
                     [!] Der Benutzer ist nötig und      
                     enthält keinen Doppelpunkt. -       
                     Korrigiere das Feld.                
-  ~                                                     
-                                                        
+  …                                                     
                                                         
                                                         
                                                         

@@ -28,7 +28,8 @@ const (
 	sourcesFile    = "sources.json"
 	sourcesVersion = 2
 	sourcesDir     = "sources"
-	kindRemote     = "remote"
+	kindRemote     = control.SourceKindRemote
+	kindLocal      = control.SourceKindLocal
 	maxSourceID    = 200
 
 	// legacyFile and legacyEngineDir are the single binding and its engine state of earlier versions.
@@ -39,6 +40,7 @@ const (
 
 // sourceConfig is one stack folder the service deploys from. ID is derived from Path when the source is added
 // and never changes: the source's engine state lives below sources/<id>/ and its deploy key is named after it.
+// A local source is a repository without a remote: it has neither URL nor deploy key.
 type sourceConfig struct {
 	ID   string `json:"id"`
 	Path string `json:"path"`
@@ -68,19 +70,26 @@ func validateSources(c sourcesConfig) error {
 		if err := checkDirShape(src.Path); err != nil {
 			return err
 		}
-		switch {
-		case src.ID != sourceID(src.Path) || len(src.ID) > maxSourceID:
+		if src.ID != sourceID(src.Path) || len(src.ID) > maxSourceID {
 			return errors.New("a source id does not match its folder")
-		case src.Kind != kindRemote:
-			return fmt.Errorf("unsupported source kind %q", src.Kind)
-		case src.Key != credentials.DefaultKey && src.Key != credentials.SourceKey(src.ID):
-			return errors.New("a source names a deploy key that is not its own")
 		}
-		if err := gitrepo.ValidateURL(src.URL); err != nil {
-			return err
+		switch src.Kind {
+		case kindRemote:
+			if src.Key != credentials.DefaultKey && src.Key != credentials.SourceKey(src.ID) {
+				return errors.New("a source names a deploy key that is not its own")
+			}
+			if err := gitrepo.ValidateURL(src.URL); err != nil {
+				return err
+			}
+		case kindLocal:
+			if src.URL != "" || src.Key != "" {
+				return errors.New("a local source has neither an address nor a deploy key")
+			}
+		default:
+			return fmt.Errorf("unsupported source kind %q", src.Kind)
 		}
 		for _, other := range c.Sources[:i] {
-			if other.ID == src.ID || other.Key == src.Key || overlaps(other.Path, src.Path) {
+			if other.ID == src.ID || src.Key != "" && other.Key == src.Key || overlaps(other.Path, src.Path) {
 				return errors.New("two sources share an id, a deploy key or a folder")
 			}
 		}
@@ -218,6 +227,10 @@ type source struct {
 	mu   sync.Mutex
 	refs sync.Mutex
 	eng  *engine.Engine
+	// cancel stops the engine's loop and done closes when it has ended; both are set by start, under the
+	// source set's lock, and nil until then.
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 // sourceSet holds the sources in the order they were bound and maps stack names to them.
@@ -291,6 +304,9 @@ func (s *sourceSet) newSource(c sourceConfig) (*source, error) {
 }
 
 func (s *sourceSet) gitConfig(c sourceConfig) gitrepo.Config {
+	if c.Kind == kindLocal {
+		return gitrepo.Config{Local: true}
+	}
 	return gitrepo.Config{KeyFile: s.keys.NamedKeyPath(c.Key), KnownHosts: filepath.Join(s.stateDir, knownHostsFile)}
 }
 
@@ -319,21 +335,44 @@ func (s *sourceSet) byPath(dir string) *source {
 	return nil
 }
 
-// keyFor names the deploy key of the stack folder dir: the key of the source bound there, else the default
-// key while no source uses it, else a key of the folder's own.
-func keyFor(conf sourcesConfig, dir string) string {
+// keyFor names the deploy key of the stack folder dir: the key of the source bound there, else the key the
+// folder had before (its own, when the store holds it), else the default key while no source uses it, else a
+// key of the folder's own. exists tells whether the store holds a key; it keeps a folder that was released and is
+// bound again from taking the default key, which belongs to another folder by then.
+func keyFor(conf sourcesConfig, dir string, exists func(name string) bool) string {
 	if i := slices.IndexFunc(conf.Sources, func(c sourceConfig) bool { return c.Path == dir }); i >= 0 {
 		return conf.Sources[i].Key
+	}
+	own := credentials.SourceKey(sourceID(dir))
+	if exists(own) {
+		return own
 	}
 	if !slices.ContainsFunc(conf.Sources, func(c sourceConfig) bool { return c.Key == credentials.DefaultKey }) {
 		return credentials.DefaultKey
 	}
-	return credentials.SourceKey(sourceID(dir))
+	return own
+}
+
+// remoteKeyFor names the deploy key the folder dir has as a remote source. A local source of the folder has no
+// key of its own yet and does not count, so its key can be made before source remote needs it.
+func remoteKeyFor(conf sourcesConfig, dir string, exists func(name string) bool) string {
+	conf.Sources = slices.DeleteFunc(slices.Clone(conf.Sources), func(c sourceConfig) bool { return c.Path == dir && c.Kind == kindLocal })
+	return keyFor(conf, dir, exists)
+}
+
+// keyExists tells whether the credential store holds the deploy key name.
+func (s *sourceSet) keyExists(name string) bool {
+	_, err := s.keys.ShowNamedKey(name)
+	return err == nil
 }
 
 // newSourceConfig describes a further source at dir, refusing one that clashes with a source bound earlier.
-func newSourceConfig(conf sourcesConfig, url, dir string) (sourceConfig, error) {
-	c := sourceConfig{ID: sourceID(dir), Path: dir, Kind: kindRemote, URL: url, Key: keyFor(conf, dir)}
+// A local source has no URL and no key.
+func (s *sourceSet) newSourceConfig(conf sourcesConfig, url, dir string) (sourceConfig, error) {
+	c := sourceConfig{ID: sourceID(dir), Path: dir, Kind: kindLocal}
+	if url != "" {
+		c = sourceConfig{ID: c.ID, Path: dir, Kind: kindRemote, URL: url, Key: keyFor(conf, dir, s.keyExists)}
+	}
 	if len(c.ID) > maxSourceID {
 		return sourceConfig{}, control.NewError(control.CodeInvalid, "the stack folder path is too long")
 	}
@@ -369,6 +408,74 @@ func (s *sourceSet) add(c sourceConfig, conf sourcesConfig, rev configfile.Revis
 	return src, nil
 }
 
+// convert replaces the stored source that has the id of c with c and runs a new engine on the state the old one
+// leaves below sources/<id>/, so nothing it has deployed is deployed again. The caller holds neither lock of the
+// old source: stopping its engine waits for work that needs them.
+func (s *sourceSet) convert(old *source, c sourceConfig, conf sourcesConfig, rev configfile.Revision) (*source, error) {
+	next, err := s.newSource(c)
+	if err != nil {
+		return nil, err
+	}
+	i := slices.IndexFunc(conf.Sources, func(o sourceConfig) bool { return o.ID == c.ID })
+	if i < 0 {
+		next.eng.Close()
+		return nil, control.NewError(control.CodeNoSuchSource, "no source is bound to this folder")
+	}
+	conf.Sources = slices.Clone(conf.Sources)
+	conf.Sources[i] = c
+	if _, err := s.store.SaveIfUnchanged(conf, rev); err != nil {
+		next.eng.Close()
+		return nil, errors.New("the source configuration cannot be written")
+	}
+	s.mu.Lock()
+	if j := slices.Index(s.list, old); j >= 0 {
+		s.list[j] = next
+	}
+	cancel, done := old.cancel, old.done
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+		<-done
+	}
+	old.eng.Close()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ctx != nil && !s.closed {
+		s.start(next)
+	}
+	return next, nil
+}
+
+// remove releases src: it is dropped from the stored sources and the routing, its engine stops, and its state
+// below sources/<id>/ is removed. The folder, the containers and the keys are not touched. It refuses while a run
+// of one of the source's stacks is active. A run that starts between that check and the stop is cancelled
+// with the engine.
+func (s *sourceSet) remove(src *source, conf sourcesConfig, rev configfile.Revision) error {
+	if snap, err := src.eng.Snapshot(); err != nil {
+		return errors.New("the engine state cannot be read")
+	} else if len(snap.Active) > 0 {
+		return control.NewError(control.CodeRunActive, "a run of a stack of this source is active; remove the source when it has finished")
+	}
+	conf.Sources = slices.DeleteFunc(slices.Clone(conf.Sources), func(c sourceConfig) bool { return c.ID == src.conf.ID })
+	if _, err := s.store.SaveIfUnchanged(conf, rev); err != nil {
+		return errors.New("the source configuration cannot be written")
+	}
+	s.mu.Lock()
+	s.list = slices.DeleteFunc(s.list, func(o *source) bool { return o == src })
+	cancel, done := src.cancel, src.done
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+		<-done
+	}
+	src.eng.Close()
+	if err := os.RemoveAll(filepath.Join(s.stateDir, sourcesDir, src.conf.ID)); err != nil {
+		return errors.New("the engine state of the source cannot be removed")
+	}
+	syncDir(filepath.Join(s.stateDir, sourcesDir))
+	return nil
+}
+
 // run runs the engine of every source, also of those added meanwhile, until ctx ends.
 func (s *sourceSet) run(ctx context.Context) {
 	s.mu.Lock()
@@ -384,12 +491,15 @@ func (s *sourceSet) run(ctx context.Context) {
 	s.wg.Wait()
 }
 
-// start runs the engine of src; the caller holds mu.
+// start runs the engine of src until ctx ends or src is removed; the caller holds mu.
 func (s *sourceSet) start(src *source) {
+	ctx, cancel := context.WithCancel(s.ctx)
+	src.cancel, src.done = cancel, make(chan struct{})
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		if err := src.eng.Run(s.ctx); err != nil {
+		defer close(src.done)
+		if err := src.eng.Run(ctx); err != nil {
 			s.log.Error("engine stopped", "source", src.conf.ID, "error", err)
 		}
 	}()
@@ -667,6 +777,18 @@ func (s *sourceSet) RecordUpdates(name string, check engine.UpdateCheck) error {
 
 func (s *sourceSet) RecordMonitor(name string, failure *engine.Failure, services []string) error {
 	return routedErr(s, name, func(e *engine.Engine) error { return e.RecordMonitor(name, failure, services) })
+}
+
+func (s *sourceSet) Repair(ctx context.Context, name string, rec engine.Repair, restart func(ctx context.Context) error) (bool, error) {
+	return routed(s, name, func(e *engine.Engine) (bool, error) { return e.Repair(ctx, name, rec, restart) })
+}
+
+func (s *sourceSet) RecordRepair(name string, rec *engine.Repair) (bool, error) {
+	return routed(s, name, func(e *engine.Engine) (bool, error) { return e.RecordRepair(name, rec) })
+}
+
+func (s *sourceSet) RollbackUpdate(ctx context.Context, name, commit string, f engine.Failure) (engine.RunInfo, error) {
+	return routed(s, name, func(e *engine.Engine) (engine.RunInfo, error) { return e.RollbackUpdate(ctx, name, commit, f) })
 }
 
 func (s *sourceSet) WindowEligibility(name string) (engine.WindowVerdict, error) {

@@ -101,6 +101,8 @@ const (
 	modalPreview
 	// modalSummary is the result of an action; it fills the workspace.
 	modalSummary
+	// modalSheet is a question of the settings with more to read than a dialog holds; it fills the workspace.
+	modalSheet
 )
 
 // changelogEntry is the changelog of one stack read for the update preview.
@@ -118,11 +120,16 @@ type modal struct {
 	// gen separates the answers of a preview that was left from the current one.
 	gen int
 	// yes, when set, replaces the plan of the stacks: it is what a confirmed change of the settings does.
-	yes        func() tea.Cmd
+	yes func() tea.Cmd
+	// alt is what the answer actWithRemote does, for a question that offers it.
+	alt        func() tea.Cmd
 	changelogs map[string]*changelogEntry
 	// summary
 	title    string
 	outcomes []outcome
+	// sheet: the question, what follows from it and the lines to read below.
+	question, consequence string
+	body                  func(width int) []string
 	// top is the first shown line of a modal that fills the workspace; total and rows are what the last
 	// drawing found.
 	top, total, rows int
@@ -188,10 +195,10 @@ func (m *Model) beginAction(kind actionKind) tea.Cmd {
 		}
 	}
 	if kind == kindResume {
-		// Only a stack paused after a failed rollback is resumed; the narrower reading refuses the whole
-		// action rather than leaving a ticked stack out unseen.
+		// Only a stack paused after a failed rollback or halted in its repair is resumed; the narrower reading
+		// refuses the whole action rather than leaving a ticked stack out unseen.
 		for _, name := range p.stacks {
-			if r := m.rowNamed(name); r.state != stateRollbackPause {
+			if !m.resumable(name) {
 				m.warn(m.text.Lookup(textActionNotResumable, name))
 				return nil
 			}
@@ -216,6 +223,16 @@ func (m *Model) beginAction(kind actionKind) tea.Cmd {
 	}
 	m.modal = &modal{kind: modalAsk, dialog: dialog, plan: p}
 	return nil
+}
+
+// resumable reports whether the status shows a pause after a rollback or a halted repair for the stack.
+func (m *Model) resumable(name string) bool {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name == name && control.Primary(m.snap.status.Engine.Stacks, i) {
+			return st.Paused != nil || st.Repair != nil && st.Repair.Halted != nil
+		}
+	}
+	return false
 }
 
 func (m *Model) rowNamed(name string) stackRow {
@@ -381,6 +398,11 @@ func (md *modal) scroll(id kittui.ActionID) {
 	md.top = max(min(md.top, md.total-md.rows), 0)
 }
 
+// wheel scrolls a sheet by the notches of the wheel and stops at both ends.
+func (md *modal) wheel(steps int) {
+	md.top = max(min(md.top+steps*kittui.WheelTextLines, md.total-md.rows), 0)
+}
+
 func (m *Model) answer(answer kittui.ActionID) tea.Cmd {
 	md := m.modal
 	m.modal = nil
@@ -390,6 +412,10 @@ func (m *Model) answer(answer kittui.ActionID) tea.Cmd {
 			return md.yes()
 		}
 		return m.start(md.plan)
+	case actWithRemote:
+		if md.alt != nil {
+			return md.alt()
+		}
 	case actShowLog:
 		return m.showRuns(md.runs())
 	}
@@ -658,7 +684,7 @@ func (m *Model) actionHints() []kittui.Hint {
 		{Action: actUpdate, Label: textKeyUpdate, Priority: 2},
 		{Action: actDeploy, Label: textKeyDeploy, Priority: 2},
 	}
-	if id, ok := m.list.Selected(); ok && m.rows[id].state == stateRollbackPause {
+	if id, ok := m.list.Selected(); ok && m.resumable(m.rows[id].name) {
 		hints = append(hints, kittui.Hint{Action: actResume, Label: textKeyResume, Priority: 2})
 	}
 	return hints
@@ -673,7 +699,7 @@ func (m *Model) moreActionHints() []kittui.Hint {
 		{Action: actStackStart, Label: textKeyStart}, {Action: actStackStop, Label: textKeyStop},
 		{Action: actStackRestart, Label: textKeyRestart},
 	}
-	if id, ok := m.list.Selected(); !ok || m.rows[id].state != stateRollbackPause {
+	if id, ok := m.list.Selected(); !ok || !m.resumable(m.rows[id].name) {
 		hints = append(hints, kittui.Hint{Action: actResume, Label: textKeyResume})
 	}
 	return hints
@@ -688,7 +714,7 @@ func (m *Model) busyMark() kittui.StatusMark {
 	if r.plan.kind != kindCheck {
 		text = t.Lookup(textBusyRun, word, n, r.plan.steps(), r.plan.stacks[n-1])
 	}
-	return kittui.StatusMark{Kind: kittui.StatusBusy, Text: text, Short: t.Lookup(textBusyShort, word, n, r.plan.steps())}
+	return kittui.StatusMark{Kind: kittui.StatusBusy, Text: text, Short: []string{t.Lookup(textBusyShort, word, n, r.plan.steps())}}
 }
 
 // modalFooter is the key line of a result or a question that fills the workspace.
@@ -702,9 +728,12 @@ func (m *Model) modalFooter() []kittui.Hint {
 func (m *Model) modalView(width, height int) string {
 	md := m.modal
 	var lines []string
-	if md.kind == modalPreview {
+	switch md.kind {
+	case modalPreview:
 		lines = m.previewLines(width)
-	} else {
+	case modalSheet:
+		lines = append(m.questionLines(md.question, md.consequence, width, md.yes != nil), md.body(width)...)
+	default:
 		lines = m.summaryLinesOf(width)
 	}
 	md.total, md.rows = len(lines), height

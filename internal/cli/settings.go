@@ -25,7 +25,7 @@ const settingsFields = "The settings are one object with these members, each opt
 	"  version: 1\n" +
 	"  compose.files: the compose files in merge order, relative to the stack folder\n" +
 	"  update.mode: automatic or manual (manual); update.ceiling: patch, minor or major (minor);\n" +
-	"  update.major: direct or stepwise (stepwise); update.tags: image version variable to a regular\n" +
+	"  update.major: direct or stepwise (stepwise); update.observe: minutes, 0 off, at most 1440 (60); update.tags: image version variable to a regular\n" +
 	"  expression its tags must match; update.changelog: image version variable to a GitHub repository\n" +
 	"  backup.paths, backup.volumes, backup.command: data directories below the stack folder, named volumes\n" +
 	"  and an argument vector; backup.retention.keep and backup.retention.max_age_days (keep 7)\n" +
@@ -203,6 +203,9 @@ func settingsOutput(format output.Format, s control.StackSettings) []output.Fiel
 		add("update.mode", u.Mode)
 		add("update.ceiling", u.Ceiling)
 		add("update.major", u.Major)
+		if u.Observe != nil {
+			add("update.observe", *u.Observe)
+		}
 		byKey("update.tags", u.Tags)
 		byKey("update.changelog", u.Changelog)
 	}
