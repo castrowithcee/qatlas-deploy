@@ -20,5 +20,5 @@ qdeploy  maintenance window closed              [?] help
                                                         
   Left out (1), recorded only in .git/info/exclude      
     demo/data: bind-mount (stack demo)                  
-                                                        
-y yes, do it  n/esc/enter cancel   up/down scroll  20/38
+y yes, do it  w with a remote  n/esc/enter cancel       
+                                   up/down scroll  19/38

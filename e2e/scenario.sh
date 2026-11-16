@@ -16,7 +16,8 @@
 # tmux pane, an update shows its changelog before it is confirmed and then runs, and two ticked stacks are updated
 # one after another with one confirmation. Notification channels (webhook, Slack, Telegram, e-mail) are
 # added with qdeploy notify: a webhook hears of a deployed and of a rolled-back run, and every channel
-# type delivers a test message. Docker integration tests of the deployer run inside the host
+# type delivers a test message. A local stack folder gets a remote in the terminal interface: an empty repository
+# receives its history, a differing one is shown and left alone without the confirmation. Docker integration tests of the deployer run inside the host
 # before all that. The last section resets the service to a fresh state and does the first setup only through
 # the terminal interface: deploy key, registry credential, maintenance window, notification channel with its
 # test, repository with a confirmed host key, a stack secret and the first deploy; then it restores an older
@@ -1205,6 +1206,8 @@ scenario_stacks_repo() {
 
 	scenario_source_remote
 
+	scenario_tui_remote
+
 	scenario_repair_end
 
 	scenario_adopt
@@ -1863,6 +1866,125 @@ EOF2
 	[ "$(remote_head "$url3")" = "$repo_head3" ] || fail 'a refused source add changed the repository'
 	docker exec "$host" rm -rf "$diff_dir" /srv/qd-secret "$equal"
 	log 'scenario: source add --url took over the history of an equal repository and left a differing folder alone'
+}
+
+# scenario_tui_remote proves the remote of a local stack folder in the Stacks area of the interface. A local folder
+# below /srv/qd-tr-a has no deploy key: the interface leads to the key view, the generated key is entered at the git
+# server, and the folder then pushes its history to an empty repository after the confirmation. A local folder below
+# /srv/qd-tr-b is compared with the repository of /opt/stacks3, which holds other files: the paths are listed and the
+# answer to cancel leaves the folder, the service and the repository as they were.
+scenario_tui_remote() {
+	tui_log=$work/tui-remote-screens.log
+	: >"$tui_log"
+	tr_a=/srv/qd-tr-a
+	tr_b=/srv/qd-tr-b
+	tr_url6=git.$domain:stacks6.git
+	tr_url3=git.$domain:stacks3.git
+
+	step 'two local folders without a remote are bound'
+	for tr_dir in "$tr_a" "$tr_b"; do
+		docker exec "$host" sh -ec "rm -rf '$tr_dir' && mkdir -p '$tr_dir/notes' && chmod 0755 '$tr_dir' '$tr_dir/notes' &&
+			printf 'notes of %s\n' '$tr_dir' >'$tr_dir/notes/readme.txt' && chmod 0644 '$tr_dir/notes/readme.txt' &&
+			cd '$tr_dir' && git init -q -b main && git add -A &&
+			git -c user.name='E2E Root' -c user.email=root.qdeploye2e.test commit -q -m 'Add the notes'" ||
+			fail "cannot create the local folder $tr_dir"
+		out=$(qd --output json source add "$tr_dir" --yes) || fail "source add of $tr_dir failed: $out"
+		printf '%s\n' "$out" | tail -n 1 | jq -e '.kind == "local"' >/dev/null || fail "unexpected source add result: $out"
+		wait_for 'the qdeploy service to answer' 30 qd status
+	done
+	repo_head3=$(remote_head "$tr_url3")
+	[ -n "$repo_head3" ] || fail 'stacks3 has no head'
+	[ -z "$(remote_head "$tr_url6")" ] || fail 'stacks6 is not empty'
+	tr_head_a=$(folder_git "$tr_a" rev-parse HEAD)
+
+	step 'the interface leads to the key view for a folder without a deploy key and compares nothing before it exists'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait '1 Stacks' 30
+	tui_send 1
+	tui_folder_to "$tr_a"
+	tui_wait 'add remote' 10
+	tui_send O
+	tui_wait 'Add a remote' 10
+	tui_type "$tr_url6"
+	tui_send F2
+	tui_wait 'Trust this host key for' 30
+	tui_has "$(git_ed25519_fingerprint)" || fail "the host key question does not show the fingerprint: $(tui_screen)"
+	tui_send y
+	tui_wait 'has no deploy key yet' 30
+	tui_send Enter
+	tui_wait "stack folder: $tr_a" 10
+	tui_key_generate
+	tr_out=$(qd --output json key show --dir "$tr_a") || fail "key show --dir $tr_a failed: $tr_out"
+	tr_pub=$(key_pub_field "$tr_out")
+	case $tr_pub in ssh-ed25519\ *) ;; *) fail "no public key of $tr_a: $tr_out" ;; esac
+	[ -z "$(remote_head "$tr_url6")" ] || fail 'the interface pushed before the question'
+	[ -z "$(folder_git "$tr_a" remote)" ] || fail 'the interface gave the folder a remote before the question'
+	printf '%s\n' "$tr_pub" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+
+	step 'with the key in place the empty repository is compared, n changes nothing and y pushes'
+	tui_send Escape
+	tui_folder_to "$tr_a"
+	tui_send O
+	tui_wait 'Add a remote' 10
+	tui_type "$tr_url6"
+	tui_send F2
+	tui_wait 'Trust this host key for' 30
+	tui_send y
+	tui_wait 'Push the history of' 30
+	tui_has "$tr_a" || fail "the question does not name the folder: $(tui_screen)"
+	tui_has 'branch: main' || fail "the comparison does not show the branch: $(tui_screen)"
+	tui_send n
+	sleep 1
+	[ -z "$(remote_head "$tr_url6")" ] || fail 'the answer n pushed'
+	[ -z "$(folder_git "$tr_a" remote)" ] || fail 'the answer n gave the folder a remote'
+	tui_folder_to "$tr_a"
+	tui_send O
+	tui_wait 'Add a remote' 10
+	tui_type "$tr_url6"
+	tui_send F2
+	tui_wait 'Trust this host key for' 30
+	tui_send y
+	tui_wait 'Push the history of' 30
+	tui_send y
+	tui_wait 'runs against' 60
+	tui_send Enter
+	[ "$(remote_head "$tr_url6")" = "$tr_head_a" ] || fail "the repository does not hold the head of the folder: $(remote_head "$tr_url6")"
+	[ "$(qd --output json source list | jq -r --arg p "$tr_a" '.sources[] | select(.path == $p) | .kind')" = remote ] ||
+		fail "the folder is not a remote source: $(qd --output json source list)"
+	[ "$(folder_git "$tr_a" rev-parse HEAD)" = "$tr_head_a" ] || fail 'the push moved the head of the folder'
+
+	step 'a repository with other files is listed and cancel changes nothing'
+	register_folder_key "$tr_b"
+	tui_folder_to "$tr_b"
+	tui_send O
+	tui_wait 'Add a remote' 10
+	tui_type "$tr_url3"
+	tui_send F2
+	tui_wait 'Trust this host key for' 30
+	tui_send y
+	tui_wait 'Put the state of the host' 30
+	tui_has 'Paths that differ' || fail "the comparison does not list the paths: $(tui_screen)"
+	tui_has "$tr_b" || fail "the question does not name the folder: $(tui_screen)"
+	tui_send Enter
+	sleep 1
+	[ "$(remote_head "$tr_url3")" = "$repo_head3" ] || fail 'the answer cancel changed the repository'
+	[ -z "$(folder_git "$tr_b" remote)" ] || fail 'the answer cancel gave the folder a remote'
+	[ "$(qd --output json source list | jq -r --arg p "$tr_b" '.sources[] | select(.path == $p) | .kind')" = local ] ||
+		fail 'the answer cancel changed the kind of the source'
+	tui_send Escape
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+
+	step 'the folders are released and removed'
+	for tr_dir in "$tr_a" "$tr_b"; do
+		out=$(qd --output json source remove "$tr_dir" --yes) || fail "source remove of $tr_dir failed: $out"
+	done
+	docker exec "$host" rm -rf "$tr_a" "$tr_b"
+	wait_for 'the qdeploy service to answer' 30 qd status
+	log 'scenario: the interface pushed a local folder to an empty remote and left a differing remote alone without the confirmation'
 }
 
 # key_pub_field prints the public part (type and key, without comment) of the qdeploy key output $1.

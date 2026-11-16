@@ -21,4 +21,4 @@ qdeploy  maintenance window closed                                              
   /srv/local-example                                                                                                    
     last poll: Fri 2026-10-30 14:25                                                                                     
     poll failed: the working copy has uncommitted changes in demo/compose.yaml                                          
-enter details  / search  x release  a add  r reload  1-5 area  q quit                                up/down choose  1/6
+enter details  / search  O add remote  x release  a add  r reload  1-5 area  q quit                  up/down choose  1/6
