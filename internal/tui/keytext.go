@@ -7,8 +7,6 @@ const (
 	textKeySetKey        kittui.TextID = "key.setkey"
 	textTitleKey         kittui.TextID = "title.key"
 	textTitleKeyStore    kittui.TextID = "title.keystore"
-	textFieldKeyFolder   kittui.TextID = "field.keyfolder"
-	textHintKeyFolder    kittui.TextID = "hint.keyfolder"
 	textFieldKeyMode     kittui.TextID = "field.keymode"
 	textHintKeyMode      kittui.TextID = "hint.keymode"
 	textKeyModeStore     kittui.TextID = "key.modestore"
@@ -33,8 +31,6 @@ func keyEnglish() map[kittui.TextID]string {
 		textKeySetKey:        "set key",
 		textTitleKey:         "Deploy key",
 		textTitleKeyStore:    "Store the deploy key",
-		textFieldKeyFolder:   "Stack folder",
-		textHintKeyFolder:    "the folder the key is for; left and right choose",
 		textFieldKeyMode:     "Key",
 		textHintKeyMode:      "store a key you have, or let the service create a new one",
 		textKeyModeStore:     "store an existing key",
@@ -60,8 +56,6 @@ func keyGerman() map[kittui.TextID]string {
 		textKeySetKey:        "Schlüssel setzen",
 		textTitleKey:         "Deploy-Schlüssel",
 		textTitleKeyStore:    "Deploy-Schlüssel hinterlegen",
-		textFieldKeyFolder:   "Stack-Ordner",
-		textHintKeyFolder:    "der Ordner, für den der Schlüssel gilt; links und rechts wählen",
 		textFieldKeyMode:     "Schlüssel",
 		textHintKeyMode:      "einen vorhandenen Schlüssel hinterlegen oder vom Dienst einen neuen erzeugen lassen",
 		textKeyModeStore:     "vorhandenen Schlüssel hinterlegen",

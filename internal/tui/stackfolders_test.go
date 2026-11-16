@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
@@ -46,32 +45,5 @@ func TestRowsNameTheirFolder(t *testing.T) {
 		if folders[name] != folder {
 			t.Errorf("%s: folder %q, want %q", name, folders[name], folder)
 		}
-	}
-}
-
-// The folder column and the line for a failed poll appear with the second folder; one folder keeps the list
-// as it was.
-func TestFolderColumnFollowsTheNumberOfFolders(t *testing.T) {
-	m := newTestModel(t, goldenLangs["en"], demoBackend(), wideWidth, goldenRows)
-	if s := m.render(); strings.Contains(s, "FOLDER") || strings.Contains(s, "poll failed:") {
-		t.Fatalf("one folder shows the column or an error:\n%s", s)
-	}
-	send(m, "down", "down")
-	b := twoFoldersBackend()
-	m.backend = b
-	load(t, m)
-	s := m.render()
-	for _, want := range []string{stackDir, localDir, "local-app", "Stack folder " + stackDir + ": poll failed: cannot reach"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("screen lacks %q:\n%s", want, s)
-		}
-	}
-	if id, _ := m.list.Selected(); id != "old-tool" {
-		t.Errorf("the cursor moved to %q when the column came", id)
-	}
-	m.backend = demoBackend()
-	load(t, m)
-	if s := m.render(); strings.Contains(s, "FOLDER") {
-		t.Errorf("the column stays after the second folder is gone:\n%s", s)
 	}
 }

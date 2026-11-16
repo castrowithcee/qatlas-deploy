@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                    [?] Hilfe
+  [1 Stacks] 2 3 4 5                                    
+--------------------------------------------------------
+        STACK                      VERSION  VERFÜGBAR  Z
+  v [ ] # /srv/local-example (0)   lokal               ~
+> v [ ] # /srv/stacks-example (6)  Klon                ~
+    [ ] demo-stack                 1.4.2    1.5.0      ~
+    [ ] mail-relay                 3.1      aktuell    ~
+    [ ] old-tool                   -        ungeprüft  ~
+    [ ] photo-album                2.0.1    Fehler     ~
+    [ ] web-shop                   5.2.0,~  6.0.0 (M~  ~
+    [ ] wiki                       1.41.0   ungeprüft  ~
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+  /srv/stacks-example                                   
+    Adresse: ssh://git.example.test/ops/stacks.git      
+    letzter Abruf: Fr 2026-10-30 14:30                  
+enter Details  / Suchen  F jetzt abrufen                
+e Deploy-Schlüssel  x lösen  r Neu laden  q Beenden     

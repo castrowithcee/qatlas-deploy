@@ -3,8 +3,6 @@ qdeploy  maintenance window closed  [esc] back  [?] help
 --------------------------------------------------------
   SETTING             ABOUT                             
 > General             theme, start area, language and m~
-  Stack folders       list, add, fetch and release the ~
-  Deploy key          store or generate the key for the~
   Credentials         registry logins and the GitHub to~
   Maintenance window  when updates run                  
   Notifications       webhook, Slack, Telegram and e-ma~
@@ -20,5 +18,7 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
                                                         
+                                                        
+                                                        
 enter open  r reload  1-5 area  q quit                  
-                                     up/down choose  1/6
+                                     up/down choose  1/4

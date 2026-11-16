@@ -3,8 +3,6 @@ qdeploy  Wartungsfenster zu                                                     
 ------------------------------------------------------------------------------------------------------------------------
   EINSTELLUNG         INHALT                                                                                            
 > Allgemein           Design, Startbereich, Sprache und Maus dieses Geräts                                              
-  Stack-Ordner        Stack-Ordner anzeigen, hinzufügen, abrufen und lösen                                              
-  Deploy-Schlüssel    Schlüssel für die Git-Plattform hinterlegen oder erzeugen                                         
   Zugangsdaten        Registry-Logins und GitHub-Token                                                                  
   Wartungsfenster     wann Updates laufen                                                                               
   Benachrichtigungen  Kanäle für Webhook, Slack, Telegram und E-Mail                                                    
@@ -21,4 +19,6 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-enter öffnen  r Neu laden  1-5 Bereich  q Beenden                                                 up/down Auswählen  1/6
+                                                                                                                        
+                                                                                                                        
+enter öffnen  r Neu laden  1-5 Bereich  q Beenden                                                 up/down Auswählen  1/4

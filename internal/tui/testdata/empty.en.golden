@@ -1,8 +1,8 @@
 qdeploy  maintenance window closed              [?] help
   [1 Stacks] 2 3 4 5                                    
 --------------------------------------------------------
-  No stacks. Bind the stacks repository with 'sudo      
-  qdeploy repo set <ssh-url>', or add a stack to it.    
+  No stack folders yet. a adds one; on the command line:
+  sudo qdeploy source add <path>                        
                                                         
                                                         
                                                         
@@ -11,4 +11,4 @@ qdeploy  maintenance window closed              [?] help
                                                         
                                                         
                                                         
-r reload  1-5 area  q quit                              
+a add  r reload  1-5 area  q quit                       

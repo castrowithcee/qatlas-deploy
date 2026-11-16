@@ -93,15 +93,15 @@ func TestUpInTheFirstRowLeadsToTheTabLine(t *testing.T) {
 }
 
 func TestUpInASettingsListLeadsToTheTabLine(t *testing.T) {
-	m := newTestModel(t, i18n.English, demoBackend(), wideWidth, goldenRows)
-	send(m, "4", "down", "enter")
-	if m.set.page != pageFolders {
+	m := newTestModel(t, i18n.English, settingsBackend(), wideWidth, goldenRows)
+	send(m, toCreds...)
+	if m.set.page != pageCreds {
 		t.Fatalf("page %q", m.set.page)
 	}
 	wantZone(t, m, kittui.ZoneRows)
 	send(m, "up")
 	wantZone(t, m, kittui.ZoneTabs)
-	if m.set.page != pageFolders {
+	if m.set.page != pageCreds {
 		t.Fatalf("page %q", m.set.page)
 	}
 }

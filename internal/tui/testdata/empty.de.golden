@@ -1,9 +1,8 @@
 qdeploy  Wartungsfenster zu                    [?] Hilfe
   [1 Stacks] 2 3 4 5                                    
 --------------------------------------------------------
-  Keine Stacks. Binde das Stacks-Repository mit 'sudo   
-  qdeploy repo set <ssh-url>' an oder lege dort einen   
-  Stack an.                                             
+  Noch keine Stack-Ordner. a fügt einen hinzu; auf der  
+  Kommandozeile: sudo qdeploy source add <path>         
                                                         
                                                         
                                                         
@@ -11,4 +10,5 @@ qdeploy  Wartungsfenster zu                    [?] Hilfe
                                                         
                                                         
                                                         
-r Neu laden  1-5 Bereich  q Beenden                     
+                                                        
+a hinzufügen  r Neu laden  1-5 Bereich  q Beenden       

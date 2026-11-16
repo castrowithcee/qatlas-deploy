@@ -53,10 +53,11 @@ func newTUICommand(state *notRunning) *cobra.Command {
 			"at the top of a text, and esc in a list, lead back to the tab line. Tab moves the focus between the two\n" +
 			"as well:\n" +
 			"Stacks lists every stack with its current and available version, update mode, state, last run and\n" +
-			"findings; Stack detail shows the chosen stack with its image versions, changelog, backups and last runs;\n" +
-			"Runs lists the runs, and enter opens the log of a run, which follows a run in progress; Settings holds\n" +
-			"the host configuration; Containers lists every container of the host. ? opens the help, r reads the\n" +
-			"service again, q quits.\n\n" +
+			"findings, under a row for each stack folder with its kind and last poll; Stack detail shows the chosen\n" +
+			"stack with its image versions, changelog, backups and last runs; Runs lists the runs, and enter opens\n" +
+			"the log of a run, which follows a run in progress; Settings holds the general preferences, the\n" +
+			"credentials, the maintenance window and the notification channels; Containers lists every container of\n" +
+			"the host. ? opens the help, r reads the service again, q quits.\n\n" +
 			"In Stacks the keys act on the stack under the cursor, or on the stacks ticked with space, one stack\n" +
 			"after another: u update, d deploy, p pause, P unpause, i pin, I unpin, g resume (only for a stack paused\n" +
 			"after a failed rollback) and c asking the registries now about all stacks. Every action first asks:\n" +
@@ -64,6 +65,10 @@ func newTUICommand(state *notRunning) *cobra.Command {
 			"the changelog, and a newer major version is flagged as not installed automatically. A failed stack does\n" +
 			"not stop the others; the result lists every stack, the stacks that failed stay ticked, and l opens the\n" +
 			"log of the run an action started, or the Runs list when it started several. One action runs at a time.\n\n" +
+			"The stack folders are managed in Stacks too: a adds a folder (with the steps of qdeploy source add; an\n" +
+			"empty host starts there), and on a folder row F fetches it, x releases it after a question and e shows,\n" +
+			"generates or stores its deploy key; a folder with no remote has no key to offer. The private key is\n" +
+			"never shown.\n\n" +
 			"The mouse works too: click a tab, a key in the header or footer, or a row, and turn the wheel to scroll.\n" +
 			"A click does what the key does, so every action still asks first. The mouse is on by default; with it\n" +
 			"on, hold Shift to select text. Settings, General switches it off.\n\n" +

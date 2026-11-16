@@ -708,7 +708,7 @@ func (m *Model) busyMark() kittui.StatusMark {
 	if r.plan.kind != kindCheck {
 		text = t.Lookup(textBusyRun, word, n, r.plan.steps(), r.plan.stacks[n-1])
 	}
-	return kittui.StatusMark{Kind: kittui.StatusBusy, Text: text, Short: t.Lookup(textBusyShort, word, n, r.plan.steps())}
+	return kittui.StatusMark{Kind: kittui.StatusBusy, Text: text, Short: []string{t.Lookup(textBusyShort, word, n, r.plan.steps())}}
 }
 
 // modalFooter is the key line of a result or a question that fills the workspace.

@@ -37,44 +37,16 @@ type keyExists struct {
 	replace func() tea.Cmd
 }
 
-// keySources are the stack folders the form can choose from, in the order they were bound.
-func (m *Model) keySources() []control.SourceStatus { return m.snap.status.Engine.Sources }
-
-// keyDir is the Dir to send for a chosen folder: empty for the first folder, as the commands do without --dir.
-func (m *Model) keyDir(chosen string) string {
-	if src := m.keySources(); len(src) == 0 || chosen == src[0].Path {
-		return ""
-	}
-	return chosen
-}
-
-// openKeyForm asks for the key; the folder is chosen only on the page of the default key, as the page of one
-// folder is for that folder alone.
+// openKeyForm asks how to set the key of the folder the key view shows.
 func (m *Model) openKeyForm() tea.Cmd {
-	var fields []kittui.FormField
-	if src := m.keySources(); len(src) > 1 && m.set.keyFor == "" {
-		choices := make([]kittui.Choice, len(src))
-		for i, s := range src {
-			// A path is its own label: the translator returns an unknown text as it is.
-			choices[i] = kittui.Choice{ID: kittui.ChoiceID(s.Path), Label: kittui.TextID(s.Path)}
-		}
-		fields = append(fields, kittui.FormField{ID: "folder", Kind: kittui.FieldChoice, Label: textFieldKeyFolder,
-			Hint: textHintKeyFolder, Choices: choices})
-	}
-	fields = append(fields, kittui.FormField{ID: "mode", Kind: kittui.FieldChoice, Label: textFieldKeyMode, Hint: textHintKeyMode,
-		Choices: []kittui.Choice{choice(keyModeStore, textKeyModeStore), choice(keyModeGenerate, textKeyModeGenerate)}})
+	fields := []kittui.FormField{{ID: "mode", Kind: kittui.FieldChoice, Label: textFieldKeyMode, Hint: textHintKeyMode,
+		Choices: []kittui.Choice{choice(keyModeStore, textKeyModeStore), choice(keyModeGenerate, textKeyModeGenerate)}}}
 	return m.openForm(m.newSettingsForm(formKeyChoice, textTitleKey, fields))
 }
 
 func (m *Model) submitKeyChoice(f *settingsForm, v map[kittui.FieldID]kittui.FormValue) tea.Cmd {
-	dir := m.keyDir(string(v["folder"].Choice))
-	label := string(v["folder"].Choice)
-	switch {
-	case m.set.keyFor != "":
-		dir, label = m.set.keyFor, m.set.keyFor
-	case label == "":
-		label = m.firstSourcePath()
-	}
+	dir := m.set.keyFor
+	label := dir
 	if v["mode"].Choice == keyModeGenerate {
 		return m.keyWrite(f, dir, label, "", true)
 	}
@@ -86,13 +58,6 @@ func (m *Model) submitKeyChoice(f *settingsForm, v map[kittui.FieldID]kittui.For
 		next.stackDir, next.keyLabel = dir, label
 	}
 	return m.openForm(next)
-}
-
-func (m *Model) firstSourcePath() string {
-	if src := m.keySources(); len(src) > 0 {
-		return src[0].Path
-	}
-	return ""
 }
 
 func (m *Model) submitKeyStore(f *settingsForm, v map[kittui.FieldID]kittui.FormValue) tea.Cmd {
