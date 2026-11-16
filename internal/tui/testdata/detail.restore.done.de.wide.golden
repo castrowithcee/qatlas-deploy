@@ -20,5 +20,5 @@
 │   1.5.0  Spring release  2026-10-29                                                                                  │
 │     Adds a dark theme.                                                                                               │
 Backup 20261023T031000Z-4567cdef für den Stack demo-stack eingespielt.                                                  
-e Update-Regeln  b Backup  C Compose  o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  
-1-5 Bereich  q Beenden                                                                               ↑/↓ Scrollen  18/59
+e Update-Regeln  b Backup  C Compose  k Prüfung  E Einstellungen entfernen  o Log  a Geheimnis setzen                   
+x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden                        ↑/↓ Scrollen  18/59

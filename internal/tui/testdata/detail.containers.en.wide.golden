@@ -36,5 +36,5 @@
 ╭─ Backups ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ 20261030T140100Z-0123abcd                                                                                            │
 │   10-30 14:01  12.0 MiB                                                                                              │
-e update rules  b backup  C compose  o log  a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit 
-                                                                                                       ↑/↓ scroll  35/62
+e update rules  b backup  C compose  k checks  E clear settings  o log  a set secret  x delete secret  R restore backup 
+r reload  1-5 area  q quit                                                                             ↑/↓ scroll  35/62

@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  demo-stack                                                                    
+                                                                                
+  Modus    automatisch                                                          
+  Zustand  deployt                                                              
+  Befunde  1 Warnung                                                            
+                                                                                
+╭─ Image-Versionen ────────────────────────────────────────────────────────────╮
+│ APP_VERSION  example/app                                                     │
+│   1.4.2 -> 1.5.0  Update verfügbar                                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Container ──────────────────────────────────────────────────────────────────╮
+│ Keine Container dieses Stacks.                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Changelog ──────────────────────────────────────────────────────────────────╮
+│ APP_VERSION  1.4.2 -> 1.5.0                                                  │
+│   Quelle example/app                                                         │
+│   1.5.0  Spring release  2026-10-29                                          │
+Warnung: Der Stack demo-stack hat keine Einstellungen. Er ist schon nur Deploy; 
+es wurde nichts entfernt.                                                       
+e Update-Regeln  b Backup  C Compose  k Prüfung  o Log  a Geheimnis setzen      
+x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden   

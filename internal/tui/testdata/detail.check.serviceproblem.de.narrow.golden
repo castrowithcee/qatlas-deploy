@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                                       [esc] Zurück
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  Prüfung eines Stacks                                                          
+                                                                                
+  Prüfung des Stacks demo-stack. Update-Regeln, Backup und Compose-Dateien      
+  bleiben unverändert.                                                          
+                                                                                
+  …                                                                             
+                    ╔══════════════════════════════════════════════════════════╗
+> Adresse (URL)     ║ http://localhost:8080/health_                            ║
+                    ╚══════════════════════════════════════════════════════════╝
+                    Eine absolute http- oder https-URL, zum Beispiel            
+                    http://localhost:8080/health.                               
+                    [!] der Dienst hat die Anfrage abgelehnt: stack settings:   
+                    check.http.url: must be an absolute http or https URL (got  
+                    "x") - Korrigiere das Feld.                                 
+                    ╭──────────────────────────────────────────────────────────╮
+  Erwarteter Status │ 200                                                      │
+                    ╰──────────────────────────────────────────────────────────╯
+  …                                                                             
+                                                                                
+[ F2 speichern ]  [ esc Verwerfen ]                                             
+F2 Speichern  esc verwerfen            tab Nächstes Feld  shift+tab Voriges Feld
