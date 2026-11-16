@@ -705,11 +705,13 @@ type StackInfo struct {
 	Name string `json:"name"`
 	// Folder is the directory of the stack below Dir, "." for a root stack that is the whole stack folder; it
 	// differs from Name when the Compose file names the project.
-	Folder   string      `json:"folder"`
-	Update   string      `json:"update"`
-	Images   []ImageInfo `json:"images"`
-	Findings int         `json:"findings"`
-	Error    string      `json:"error,omitempty"`
+	Folder string      `json:"folder"`
+	Update string      `json:"update"`
+	Images []ImageInfo `json:"images"`
+	// Volumes are the names of the named volumes of the stack's compose files, sorted.
+	Volumes  []string `json:"volumes,omitempty"`
+	Findings int      `json:"findings"`
+	Error    string   `json:"error,omitempty"`
 	// Stopped is set while the stack was stopped through qdeploy.
 	Stopped *HoldInfo `json:"stopped,omitempty"`
 	// Source and SourceDir are the id and the path of the stack folder the stack comes from.

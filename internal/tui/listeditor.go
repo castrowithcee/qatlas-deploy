@@ -28,6 +28,8 @@ type listEditorSpec struct {
 	keyLabel, keyHint     kittui.TextID
 	valueLabel, valueHint kittui.TextID
 	intro, empty          kittui.TextID
+	// ordered lists give the order a meaning and can be moved; repeat lets one value stand more than once.
+	ordered, repeat bool
 	// choices are the keys a pair can take, shown as a choice; none asks for the key as text.
 	choices []string
 	// check returns the problems of one entry, by field "key" or "value".
@@ -191,8 +193,33 @@ func (m *Model) editorKey(f *settingsForm, msg tea.KeyPressMsg) tea.Cmd {
 				e.set(slices.Delete(slices.Clone(e.entries), i, i+1))
 			}
 		}
+	case actMoveUp, actMoveDown:
+		if !e.spec.ordered {
+			return nil
+		}
+		by := 1
+		if id == actMoveUp {
+			by = -1
+		}
+		if sel, ok := e.list.Selected(); ok {
+			if i, err := strconv.Atoi(string(sel)); err == nil && i < len(e.entries) {
+				e.move(i, by)
+			}
+		}
 	}
 	return nil
+}
+
+// move swaps the entry at i with its neighbour in the direction by and keeps the cursor on it.
+func (e *listEditor) move(i, by int) {
+	j := i + by
+	if j < 0 || j >= len(e.entries) {
+		return
+	}
+	entries := slices.Clone(e.entries)
+	entries[i], entries[j] = entries[j], entries[i]
+	e.set(entries)
+	e.list.Select(kittui.ItemID(strconv.Itoa(j)))
 }
 
 // submitEntry checks the entry of the open form and, when it holds up, takes it into the list.
@@ -216,7 +243,7 @@ func (m *Model) submitEntry(e *listEditor) {
 		ps = append(ps, m.bad("value", textProblemRequired))
 	}
 	for i, other := range e.entries {
-		if i != e.editing && other.key == en.key && en.key != "" {
+		if !e.spec.repeat && i != e.editing && other.key == en.key && en.key != "" {
 			ps = append(ps, m.bad("key", textProblemListTwice, en.key))
 		}
 	}
@@ -276,6 +303,11 @@ func (m *Model) editorHints(e *listEditor) []kittui.Hint {
 	if e.entry != nil {
 		return append(e.entry.Hints(), kittui.Hint{Action: actBack, Label: textKeyCancelForm})
 	}
-	return []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}, {Action: actEdit, Label: textKeyEdit, Priority: 3},
-		{Action: actRemove, Label: textKeyRemove, Priority: 3}, {Action: actBack, Label: textKeyDone, Priority: 1}}
+	hints := []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}, {Action: actEdit, Label: textKeyEdit, Priority: 3},
+		{Action: actRemove, Label: textKeyRemove, Priority: 3}}
+	if e.spec.ordered {
+		hints = append(hints, kittui.Hint{Action: actMoveUp, Label: textKeyMoveUp, Priority: 3},
+			kittui.Hint{Action: actMoveDown, Label: textKeyMoveDown, Priority: 3})
+	}
+	return append(hints, kittui.Hint{Action: actBack, Label: textKeyDone, Priority: 1})
 }

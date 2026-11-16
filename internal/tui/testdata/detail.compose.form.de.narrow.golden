@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  Compose-Dateien eines Stacks                                                  
+                                                                                
+  Compose-Dateien des Stacks demo-stack. Update-Regeln, Backup und Prüfung      
+  bleiben unverändert.                                                          
+                                                                                
+          ╔════════════════════════════════════════════════════════════════════╗
+> Dateien ║ compose.yaml, compose.prod.yaml                                    ║
+          ╚════════════════════════════════════════════════════════════════════╝
+          in Merge-Reihenfolge, relativ zum Stack-Ordner; leer nutzt die        
+          Dateien, die Compose selbst findet                                    
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+[ F2 speichern ]  [ esc Verwerfen ]                                             
+enter Bearbeiten  F2 Speichern  esc verwerfen                                   
+                                       tab Nächstes Feld  shift+tab Voriges Feld

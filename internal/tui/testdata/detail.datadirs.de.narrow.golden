@@ -20,5 +20,5 @@
 ╰──────────────────────────────────────────────────────╯
 ╭─ Container ──────────────────────────────────────────╮
 │ Keine Container dieses Stacks.                       │
-m Datenordner anlegen  e Update-Regeln  o Log           
-a Geheimnis setzen  r Neu laden  q Beenden              
+m Datenordner anlegen  e Update-Regeln  b Backup        
+C Compose  o Log  r Neu laden  q Beenden                

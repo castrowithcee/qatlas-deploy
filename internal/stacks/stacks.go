@@ -69,6 +69,9 @@ type Stack struct {
 	// BindMounts are the sorted host paths, relative to Dir, that a service of the compose files mounts as a bind
 	// mount and that lie below Dir. A source with a variable, one outside Dir and Dir itself are left out.
 	BindMounts []string
+	// Volumes are the sorted names of the named volumes of the compose files: the top-level volumes and the
+	// volume sources of the services that are no paths. Names are as written; Compose prefixes the project.
+	Volumes []string
 	// Env holds the values of .env; never of secrets.env.
 	Env map[string]string
 	// Images lists every service image whose tag is a variable.
@@ -305,6 +308,7 @@ func loadStack(root, folder string, settingsOf func(name string) (*Rules, error)
 	}
 	s.ComposeFiles = files
 	s.BindMounts = readBindMounts(dir, files)
+	s.Volumes = readVolumes(dir, files)
 
 	if s.EnvErr == nil {
 		images, err := readImages(dir, files)

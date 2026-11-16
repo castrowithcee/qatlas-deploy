@@ -1,0 +1,40 @@
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Backup command                                                                                                        
+  The program and its arguments, in order. K and J move the entry.                                                      
+                                                                                                                        
+  ARGUMENT                                                                                                              
+> pg_dump                                                                                                               
+  --clean                                                                                                               
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+a add  e edit  x remove  K move up  J move down  esc done                                                               

@@ -1,0 +1,40 @@
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks  [2 ▣ Stack-Details]  3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Backup eines Stacks                                                                                                   
+                                                                                                                        
+  Backup des Stacks demo-stack. Update-Regeln, Prüfung und Compose-Dateien bleiben unverändert.                         
+                                                                                                                        
+                       ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+> Datenordner          ║ data/db                                                                                       ║
+                       ╚═══════════════════════════════════════════════════════════════════════════════════════════════╝
+                       Ordner unterhalb des Stack-Ordners, die gesichert werden                                         
+                       ╭───────────────────────────────────────────────────────────────────────────────────────────────╮
+  Volumes              │  [x] app-data  [x] old-volume (!)  [ ] db-data                                                │
+                       ╰────╔═ Backup eines Stacks ════════════════════════════════════════╗───────────────────────────╯
+                       ╭────║ ⚠ Das Backup des Stacks demo-stack speichern?                ║───────────────────────────╮
+  Befehl               │ pg_║                                                              ║                           │
+                       ╰────║ Im Stack-Repository entsteht ein Commit mit den neuen        ║───────────────────────────╯
+                       ╭────║ Einstellungen und wird zum Remote gepusht. Das Backup wirkt  ║───────────────────────────╮
+  Aufbewahren (Anzahl) │ 3  ║ beim nächsten Update.                                        ║                           │
+                       ╰────║ Datenordner: data/db                                         ║───────────────────────────╯
+                       ╭────║ Volumes: app-data, old-volume                                ║───────────────────────────╮
+  Höchstalter (Tage)   │ 30 ║ Befehl: pg_dump --clean                                      ║                           │
+                       ╰────║ die neuesten 3 behalten                                      ║───────────────────────────╯
+                            ║ nach 30 Tagen entfernen                                      ║                            
+                            ║                                                              ║                            
+                            ║ [ ja, ausführen ]  > abbrechen <                             ║                            
+                            ║ y ja, ausführen  n/esc/enter abbrechen                       ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                                                                                     
+                                                                                                                        

@@ -1,0 +1,40 @@
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks  [2 ▣ Stack-Details]  3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Backup eines Stacks                                                                                                   
+                                                                                                                        
+  Backup des Stacks demo-stack. Update-Regeln, Prüfung und Compose-Dateien bleiben unverändert.                         
+                                                                                                                        
+                       ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+> Datenordner          ║ keine                                                                                         ║
+                       ╚═══════════════════════════════════════════════════════════════════════════════════════════════╝
+                       Ordner unterhalb des Stack-Ordners, die gesichert werden                                         
+                       [!] Ein Backup braucht mindestens einen Datenordner, ein Volume oder einen Befehl. - Korrigiere  
+                       das Feld.                                                                                        
+                       ╭───────────────────────────────────────────────────────────────────────────────────────────────╮
+  Volumes              │ keine in den Compose-Dateien (benannte Volumes der Compose-Dateien; Leertaste hakt ab)        │
+                       ╰───────────────────────────────────────────────────────────────────────────────────────────────╯
+                       ╭───────────────────────────────────────────────────────────────────────────────────────────────╮
+  Befehl               │ keine                                                                                         │
+                       ╰───────────────────────────────────────────────────────────────────────────────────────────────╯
+                       ╭───────────────────────────────────────────────────────────────────────────────────────────────╮
+  Aufbewahren (Anzahl) │ 7                                                                                             │
+                       ╰───────────────────────────────────────────────────────────────────────────────────────────────╯
+                       ╭───────────────────────────────────────────────────────────────────────────────────────────────╮
+  Höchstalter (Tage)   │ leer                                                                                          │
+                       ╰───────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                                                                                     
+enter Bearbeiten  F2 Speichern  esc verwerfen                                  tab Nächstes Feld  shift+tab Voriges Feld

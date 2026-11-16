@@ -1,24 +1,24 @@
-◆ qdeploy  window closed            [esc] back  [?] help
-  1 [2 Stack detail] 3 4 5                              
-────────────────────────────────────────────────────────
-  Update rules of a stack                               
-                                                        
-  Rules of the stack demo-stack. Backup, check and      
-  compose files stay as they are.                       
-                                                        
-                     ╔═════════════════════════════════╗
-> Mode               ║ manual                        ▾ ║
-                     ╚═════════════════════════════════╝
-                     automatic updates in the           
-                     maintenance window, manual only on 
-                     request                            
-                     ╭─────────────────────────────────╮
-  Ceiling            │ minor                         ▾ │
-                     ╰─────────────────────────────────╯
-  …                                                     
-                                                        
-                                                        
-                                                        
-[ F2 save ]  [ esc discard ]                            
-enter choose  F2 save  esc discard                      
-                tab next field  shift+tab previous field
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  Update rules of a stack                                                       
+                                                                                
+  Rules of the stack demo-stack. Backup, check and compose files stay as they   
+  are.                                                                          
+                                                                                
+                         ╔═════════════════════════════════════════════════════╗
+> Mode                   ║ manual                                            ▾ ║
+                         ╚═════════════════════════════════════════════════════╝
+                         automatic updates in the maintenance window, manual    
+                         only on request                                        
+                         ╭─────────────────────────────────────────────────────╮
+  Ceiling                │ minor                                             ▾ │
+                         ╰─────────────────────────────────────────────────────╯
+                         ╭─────────────────────────────────────────────────────╮
+  Major jump             │ stepwise                                          ▾ │
+                         ╰─────────────────────────────────────────────────────╯
+  …                                                                             
+                                                                                
+                                                                                
+[ F2 save ]  [ esc discard ]                                                    
+enter choose  F2 save  esc discard      tab next field  shift+tab previous field

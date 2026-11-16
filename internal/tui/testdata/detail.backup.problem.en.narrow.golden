@@ -1,0 +1,24 @@
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  Backup of a stack                                                             
+                                                                                
+  Backup of the stack demo-stack. Update rules, check and compose files stay as 
+  they are.                                                                     
+                                                                                
+                     ╔═════════════════════════════════════════════════════════╗
+> Data directories   ║ none                                                    ║
+                     ╚═════════════════════════════════════════════════════════╝
+                     folders below the stack folder that are saved              
+                     [!] A backup needs at least one data directory, volume or  
+                     command. - Correct the field.                              
+                     ╭─────────────────────────────────────────────────────────╮
+  Volumes            │ none in the compose files (named volumes of the compose │
+                     │ files; space ticks)                                     │
+                     ╰─────────────────────────────────────────────────────────╯
+  …                                                                             
+                                                                                
+                                                                                
+                                                                                
+[ F2 save ]  [ esc discard ]                                                    
+enter edit  F2 save  esc discard        tab next field  shift+tab previous field

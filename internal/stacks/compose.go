@@ -127,6 +127,64 @@ func readBindMounts(dir string, files []string) []string {
 	return out
 }
 
+// readVolumes returns the sorted names of the named volumes of the compose files: the keys of the top-level
+// volumes and the sources of the services' volumes that are no bind mounts. A source with a variable is left
+// out, as its name is not known here. A file that cannot be read or parsed adds nothing.
+func readVolumes(dir string, files []string) []string {
+	set := map[string]bool{}
+	for _, f := range files {
+		data, err := readBounded(dir, f)
+		if err != nil {
+			continue
+		}
+		var doc struct {
+			Volumes  map[string]any `yaml:"volumes"`
+			Services map[string]struct {
+				Volumes []any `yaml:"volumes"`
+			} `yaml:"services"`
+		}
+		if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&doc); err != nil {
+			continue
+		}
+		for name := range doc.Volumes {
+			set[name] = true
+		}
+		for _, svc := range doc.Services {
+			for _, v := range svc.Volumes {
+				if name, ok := volumeSource(v); ok {
+					set[name] = true
+				}
+			}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for n := range set {
+		if volumeName.MatchString(n) {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// volumeSource returns the source of a named volume mount in the short syntax "name:/container[:mode]" and the
+// long syntax with type volume. A short source is a path when it starts with "." or "/".
+func volumeSource(v any) (string, bool) {
+	switch m := v.(type) {
+	case string:
+		src, _, ok := strings.Cut(m, ":")
+		if !ok || src == "" || strings.HasPrefix(src, ".") || strings.HasPrefix(src, "/") {
+			return "", false
+		}
+		return src, true
+	case map[string]any:
+		typ, _ := m["type"].(string)
+		src, _ := m["source"].(string)
+		return src, typ == "volume" && src != ""
+	}
+	return "", false
+}
+
 // bindSource returns the source of a bind mount as a path relative to dir, for the short syntax
 // "./host:/container[:mode]" and the long syntax with type bind. Compose takes a short source as a path only
 // when it starts with "." or "/"; anything else is a named volume.

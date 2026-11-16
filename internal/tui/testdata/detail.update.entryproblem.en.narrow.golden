@@ -1,24 +1,24 @@
-◆ qdeploy  maintenance window closed          [esc] back
-  1 [2 Stack detail] 3 4 5                              
-────────────────────────────────────────────────────────
-  Changelog repositories                                
-                                                        
-             ╭─────────────────────────────────────────╮
-  Variable   │ APP_VERSION                           ▾ │
-             ╰─────────────────────────────────────────╯
-             ╔═════════════════════════════════════════╗
-> Repository ║ nowhere_                                ║
-             ╚═════════════════════════════════════════╝
-             owner/name on GitHub                       
-             [!] Use a GitHub repository as owner/name. 
-             Correct the field.                         
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
-                                                        
-[ F2 apply ]  [ esc discard ]                           
-F2 save  esc discard                                    
-                tab next field  shift+tab previous field
+◆ qdeploy  maintenance window closed                                  [esc] back
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  Changelog repositories                                                        
+                                                                                
+             ╭─────────────────────────────────────────────────────────────────╮
+  Variable   │ APP_VERSION                                                   ▾ │
+             ╰─────────────────────────────────────────────────────────────────╯
+             ╔═════════════════════════════════════════════════════════════════╗
+> Repository ║ nowhere_                                                        ║
+             ╚═════════════════════════════════════════════════════════════════╝
+             owner/name on GitHub                                               
+             [!] Use a GitHub repository as owner/name. - Correct the field.    
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+[ F2 apply ]  [ esc discard ]                                                   
+F2 save  esc discard                    tab next field  shift+tab previous field

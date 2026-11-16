@@ -1,24 +1,24 @@
-◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
-  1 [2 Stack-Details] 3 4 5                             
-────────────────────────────────────────────────────────
-  Update-Regeln eines Stacks                            
-                                                        
-  Regeln des Stacks demo-stack. Backup, Prüfung und     
-  Compose-Dateien bleiben unverändert.                  
-                                                        
-                     ╔═════════════════════════════════╗
-> Modus              ║ manuell                       ▾ ║
-                     ╚═════════════════════════════════╝
-                     automatisch aktualisiert im        
-                     Wartungsfenster, manuell nur auf   
-                     Anforderung                        
-                     ╭─────────────────────────────────╮
-  Obergrenze         │ minor                         ▾ │
-                     ╰─────────────────────────────────╯
-  …                                                     
-                                                        
-                                                        
-                                                        
-[ F2 speichern ]  [ esc Verwerfen ]                     
-enter Auswählen  F2 Speichern  esc verwerfen            
-               tab Nächstes Feld  shift+tab Voriges Feld
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  Update-Regeln eines Stacks                                                    
+                                                                                
+  Regeln des Stacks demo-stack. Backup, Prüfung und Compose-Dateien bleiben     
+  unverändert.                                                                  
+                                                                                
+                         ╔═════════════════════════════════════════════════════╗
+> Modus                  ║ manuell                                           ▾ ║
+                         ╚═════════════════════════════════════════════════════╝
+                         automatisch aktualisiert im Wartungsfenster, manuell   
+                         nur auf Anforderung                                    
+                         ╭─────────────────────────────────────────────────────╮
+  Obergrenze             │ minor                                             ▾ │
+                         ╰─────────────────────────────────────────────────────╯
+                         ╭─────────────────────────────────────────────────────╮
+  Major-Sprung           │ stepwise                                          ▾ │
+                         ╰─────────────────────────────────────────────────────╯
+  …                                                                             
+                                                                                
+[ F2 speichern ]  [ esc Verwerfen ]                                             
+enter Auswählen  F2 Speichern  esc verwerfen                                    
+                                       tab Nächstes Feld  shift+tab Voriges Feld

@@ -43,5 +43,5 @@
                                                         
                                                         
                                                         
-e Update-Regeln  o Log  a Geheimnis setzen              
-x Geheimnis löschen  r Neu laden  q Beenden             
+e Update-Regeln  b Backup  C Compose  o Log             
+a Geheimnis setzen  r Neu laden  q Beenden              

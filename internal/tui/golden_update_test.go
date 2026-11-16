@@ -8,14 +8,15 @@ import (
 
 // The goldens of the update rules form: 80x24 and 120x40, in English and German.
 
-var goldenUpdateRows = map[string]int{"narrow": 24, "wide": 40}
+// goldenFormSizes are the columns and rows of the settings form goldens by size name.
+var goldenFormSizes = map[string][2]int{"narrow": {80, 24}, "wide": {wideWidth, 40}}
 
 func goldenUpdate(t *testing.T, prefix string, setup func() *fakeBackend, keys ...string) {
 	t.Helper()
 	for name, lang := range goldenLangs {
-		for size, width := range goldenSizes {
+		for size, dim := range goldenFormSizes {
 			t.Run(name+"."+size, func(t *testing.T) {
-				rows := goldenUpdateRows[size]
+				width, rows := dim[0], dim[1]
 				m := newTestModel(t, lang, setup(), width, rows)
 				send(m, keys...)
 				screen := m.render()

@@ -1,0 +1,24 @@
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  Compose files of a stack                                                      
+                                                                                
+  Compose files of the stack demo-stack. Update rules, backup and check stay as 
+  they are.                                                                     
+        ╔═ Compose files of a stack ═══════════════════════════════════╗        
+        ║ ⚠ Save the compose files of the stack demo-stack?            ║═══════╗
+> Files ║                                                              ║       ║
+        ║ A commit with the new settings is created in the stack       ║═══════╝
+        ║ repository and pushed to its remote. The files act on the    ║es      
+        ║ next deployment.                                             ║        
+        ║ 1. compose.prod.yaml                                         ║        
+        ║ 2. compose.yaml                                              ║        
+        ║                                                              ║        
+        ║ [ yes, do it ]  > cancel <                                   ║        
+        ║ y yes, do it  n/esc/enter cancel                             ║        
+        ╚══════════════════════════════════════════════════════════════╝        
+                                                                                
+                                                                                
+                                                                                
+[ F2 save ]  [ esc discard ]                                                    
+                                                                                

@@ -304,17 +304,6 @@ func (m *Model) updateProblems(err error) (kittui.FormProblem, bool) {
 	return kittui.FormProblem{Field: kittui.FieldID(sub[1]), Cause: m.serviceText(err), NextStep: m.text.Lookup(textFormFix)}, true
 }
 
-// updateSaved says what a confirmed save came to.
-func (m *Model) updateSaved(res control.StackSettingsSetResult, done func(text string, details ...string)) tea.Cmd {
-	t := m.text
-	if !res.Changed {
-		done(t.Lookup(textDoneUpdateSame, res.Stack))
-		return nil
-	}
-	done(t.Lookup(textDoneUpdate, res.Stack), t.Lookup(textDetailHead, short(res.Commit)))
-	return m.reloadNow()
-}
-
 // formUpdateLines is the line above the form.
 func (m *Model) formUpdateLines(f *settingsForm, width int) []string {
 	lines := m.wrapped(detailMargin, kittui.StyleHint, m.text.Lookup(textUpdateIntro, f.stack), width)

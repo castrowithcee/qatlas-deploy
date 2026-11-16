@@ -1,0 +1,40 @@
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks  [2 ▣ Stack-Details]  3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Compose-Dateien eines Stacks                                                                                          
+                                                                                                                        
+  Compose-Dateien des Stacks demo-stack. Update-Regeln, Backup und Prüfung bleiben unverändert.                         
+                                                                                                                        
+          ╔════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+> Dateien ║ compose.prod.yaml, compose.yaml                                                                            ║
+          ╚════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+          in Merge-Reihenfolge, relativ zum Stack-Ordner; leer nutzt die Dateien, die Compose selbst findet             
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                            ╔═ Compose-Dateien eines Stacks ═══════════════════════════════╗                            
+                            ║ ⚠ Die Compose-Dateien des Stacks demo-stack speichern?       ║                            
+                            ║                                                              ║                            
+                            ║ Im Stack-Repository entsteht ein Commit mit den neuen        ║                            
+                            ║ Einstellungen und wird zum Remote gepusht. Die Dateien       ║                            
+                            ║ wirken beim nächsten Deploy.                                 ║                            
+                            ║ 1. compose.prod.yaml                                         ║                            
+                            ║ 2. compose.yaml                                              ║                            
+                            ║                                                              ║                            
+                            ║ [ ja, ausführen ]  > abbrechen <                             ║                            
+                            ║ y ja, ausführen  n/esc/enter abbrechen                       ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                                                                                     
+                                                                                                                        

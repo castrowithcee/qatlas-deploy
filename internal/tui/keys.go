@@ -60,6 +60,12 @@ const (
 	actDataDirs kittui.ActionID = "datadirs"
 	// actContainerLogs opens the output of a container, or of a whole stack in the stack detail.
 	actContainerLogs kittui.ActionID = "containerlogs"
+	// actBackup and actCompose open the backup and the compose file forms in the stack detail.
+	actBackup  kittui.ActionID = "backupform"
+	actCompose kittui.ActionID = "composeform"
+	// actMoveUp and actMoveDown move an entry of an ordered list in its editor.
+	actMoveUp   kittui.ActionID = "moveup"
+	actMoveDown kittui.ActionID = "movedown"
 )
 
 // areaKeys are the keys of actArea, one per area in the order of the tab line.
@@ -112,6 +118,10 @@ func keyTable() []kittui.Action {
 		act(actRestore, kittui.LevelLetter, textKeyRestore, "R"),
 		act(actDataDirs, kittui.LevelLetter, textKeyDataDirs, "m"),
 		act(actContainerLogs, kittui.LevelLetter, textKeyLog, "o"),
+		act(actBackup, kittui.LevelLetter, textKeyBackupForm, "b"),
+		act(actCompose, kittui.LevelLetter, textKeyComposeForm, "C"),
+		act(actMoveUp, kittui.LevelLetter, textKeyMoveUp, "K"),
+		act(actMoveDown, kittui.LevelLetter, textKeyMoveDown, "J"),
 		act(actYes, kittui.LevelConfirm, textAnswerYes, "y"),
 		act(actNo, kittui.LevelConfirm, textAnswerCancel, "n", "esc"),
 		act(actShowLog, kittui.LevelConfirm, textAnswerLog, "l"),

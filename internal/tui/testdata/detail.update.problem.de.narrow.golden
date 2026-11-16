@@ -1,24 +1,24 @@
-◆ qdeploy  Wartungsfenster zu               [esc] Zurück
-  1 [2 Stack-Details] 3 4 5                             
-────────────────────────────────────────────────────────
-  Update-Regeln eines Stacks                            
-                                                        
-  Regeln des Stacks demo-stack. Backup, Prüfung und     
-  Compose-Dateien bleiben unverändert.                  
-                                                        
-  …                                                     
-                     ╔═════════════════════════════════╗
-> Beobachtung        ║ 9999_                           ║
-  (Minuten)          ║                                 ║
-                     ╚═════════════════════════════════╝
-                     ein Ausfall nach einem Update setzt
-                     es zurück; 0 ist aus, höchstens    
-                     1440                               
-                     [!] Die Beobachtungszeit ist eine  
-                     ganze Zahl von Minuten von 0 bis   
-                     1440. - Korrigiere das Feld.       
-  …                                                     
-                                                        
-[ F2 speichern ]  [ esc Verwerfen ]                     
-F2 Speichern  esc verwerfen                             
-               tab Nächstes Feld  shift+tab Voriges Feld
+◆ qdeploy  Wartungsfenster zu                                       [esc] Zurück
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  Update-Regeln eines Stacks                                                    
+                                                                                
+  Regeln des Stacks demo-stack. Backup, Prüfung und Compose-Dateien bleiben     
+  unverändert.                                                                  
+                                                                                
+  …                                                                             
+                         ╔═════════════════════════════════════════════════════╗
+> Beobachtung (Minuten)  ║ 9999_                                               ║
+                         ╚═════════════════════════════════════════════════════╝
+                         ein Ausfall nach einem Update setzt es zurück; 0 ist   
+                         aus, höchstens 1440                                    
+                         [!] Die Beobachtungszeit ist eine ganze Zahl von       
+                         Minuten von 0 bis 1440. - Korrigiere das Feld.         
+                         ╭─────────────────────────────────────────────────────╮
+  Tag-Filter             │ APP_VERSION → ^1\.[0-9.]+$                          │
+                         ╰─────────────────────────────────────────────────────╯
+  …                                                                             
+                                                                                
+                                                                                
+[ F2 speichern ]  [ esc Verwerfen ]                                             
+F2 Speichern  esc verwerfen            tab Nächstes Feld  shift+tab Voriges Feld

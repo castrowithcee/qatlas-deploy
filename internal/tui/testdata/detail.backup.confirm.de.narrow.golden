@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  Backup eines Stacks                                                           
+                                                                                
+  Backup╔═ Backup eines Stacks ════════════════════════════════════════╗en      
+  bleibe║ ⚠ Das Backup des Stacks demo-stack speichern?                ║        
+        ║                                                              ║        
+        ║ Im Stack-Repository entsteht ein Commit mit den neuen        ║═══════╗
+> Dateno║ Einstellungen und wird zum Remote gepusht. Das Backup wirkt  ║       ║
+        ║ beim nächsten Update.                                        ║═══════╝
+        ║ Datenordner: data/db                                         ║ werden 
+        ║ Volumes: app-data, old-volume                                ║───────╮
+  Volume║ Befehl: pg_dump --clean                                      ║       │
+        ║ die neuesten 3 behalten                                      ║───────╯
+        ║ nach 30 Tagen entfernen                                      ║───────╮
+  Befehl║                                                              ║       │
+        ║ [ ja, ausführen ]  > abbrechen <                             ║───────╯
+  …     ║ y ja, ausführen  n/esc/enter abbrechen                       ║        
+        ╚══════════════════════════════════════════════════════════════╝        
+                                                                                
+                                                                                
+[ F2 speichern ]  [ esc Verwerfen ]                                             
+                                                                                

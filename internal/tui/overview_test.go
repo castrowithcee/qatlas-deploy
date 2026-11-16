@@ -95,10 +95,11 @@ func TestDetailDropsAnswersOfAStackThatWasLeft(t *testing.T) {
 }
 
 func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
-	m := newTestModel(t, i18n.English, demoBackend(), narrowWidth, 14)
+	// 80 columns: the key line of the detail takes both lines at 56, where the counter gives way.
+	m := newTestModel(t, i18n.English, demoBackend(), 80, 14)
 	send(m, "enter")
 	first := m.render()
-	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, "/63") {
+	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, fmt.Sprintf("/%d", m.detail.total)) {
 		t.Fatalf("top:\n%s", first)
 	}
 	send(m, "down", "down")
@@ -107,7 +108,7 @@ func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
 	}
 	send(m, "end")
 	last := m.render()
-	if !strings.Contains(last, "secrets-env-not-ignored") || !strings.Contains(last, "63/63") {
+	if !strings.Contains(last, "secrets-env-not-ignored") || !strings.Contains(last, fmt.Sprintf("%d/%[1]d", m.detail.total)) {
 		t.Fatalf("end:\n%s", last)
 	}
 	send(m, "down", "pgdown")
@@ -478,7 +479,7 @@ func TestNarrowAndWideLayoutsKeepTheirWidth(t *testing.T) {
 }
 
 func TestDetailSectionsStandInClosedPanelsAndTheCounterFollowsTheScroll(t *testing.T) {
-	const width, rows = narrowWidth, 14
+	const width, rows = 80, 14 // see TestDetailScrollsAndKeepsItsPlace
 	tall := newTestModel(t, i18n.English, demoBackend(), width, 120)
 	send(tall, "enter")
 	tall.render()

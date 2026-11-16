@@ -1,0 +1,24 @@
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  Backup of a stack                                                             
+                                                                                
+  Backup of the stack demo-stack. Update rules, check and compose files stay as 
+  they are.                                                                     
+                                                                                
+  …                                                                             
+                     ╔═════════════════════════════════════════════════════════╗
+> Volumes            ║ >[x] app-data  [x] old-volume (!)  [ ] db-data          ║
+                     ╚═════════════════════════════════════════════════════════╝
+                     (!) is saved but not in the compose files; space ticks     
+                     [!] the service refused the request: stack settings:       
+                     backup.volumes[1]: "old volume" is not a volume name -     
+                     Correct the field.                                         
+                     ╭─────────────────────────────────────────────────────────╮
+  Command            │ pg_dump, --clean                                        │
+                     ╰─────────────────────────────────────────────────────────╯
+  …                                                                             
+                                                                                
+                                                                                
+[ F2 save ]  [ esc discard ]                                                    
+space toggle  F2 save  esc discard      tab next field  shift+tab previous field
