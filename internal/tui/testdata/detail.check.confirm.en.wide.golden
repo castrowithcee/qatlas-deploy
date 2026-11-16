@@ -1,0 +1,40 @@
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Check of a stack                                                                                                      
+                                                                                                                        
+  Check of the stack demo-stack. Update rules, backup and compose files stay as they are.                               
+                                                                                                                        
+                  ╔════════════════════════════════════════════════════════════════════════════════════════════════════╗
+> Container check ║ on                                                                                               ▾ ║
+                  ╚════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                  On: the stack counts as healthy only while all its containers run.                                    
+                  ╭────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  HTTP check      │ on                                                                                               ▾ │
+                  ╰────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                  ╭─────────╔═ Check of a stack ═══════════════════════════════════════════╗───────────────────────────╮
+  Address (URL)   │ http://l║ ⚠ Save the check of the stack demo-stack?                    ║                           │
+                  ╰─────────║                                                              ║───────────────────────────╯
+                  ╭─────────║ A commit with the new settings is created in the stack       ║───────────────────────────╮
+  Expected status │ 200     ║ repository and pushed to its remote. The check acts on the   ║                           │
+                  ╰─────────║ next deployment.                                             ║───────────────────────────╯
+                  ╭─────────║ container check: on                                          ║───────────────────────────╮
+  Timeout         │ 10s     ║ HTTP check: http://localhost:8080/health answers 200 within  ║                           │
+                  ╰─────────║ 10s                                                          ║───────────────────────────╯
+                            ║                                                              ║                            
+                            ║ [ yes, do it ]  > cancel <                                   ║                            
+                            ║ y yes, do it  n/esc/enter cancel                             ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 save ]  [ esc discard ]                                                                                            
+                                                                                                                        

@@ -63,6 +63,9 @@ const (
 	// actBackup and actCompose open the backup and the compose file forms in the stack detail.
 	actBackup  kittui.ActionID = "backupform"
 	actCompose kittui.ActionID = "composeform"
+	// actCheckForm opens the check form and actRemoveSettings the removal of all settings in the stack detail.
+	actCheckForm      kittui.ActionID = "checkform"
+	actRemoveSettings kittui.ActionID = "removesettings"
 	// actMoveUp and actMoveDown move an entry of an ordered list in its editor.
 	actMoveUp   kittui.ActionID = "moveup"
 	actMoveDown kittui.ActionID = "movedown"
@@ -120,6 +123,8 @@ func keyTable() []kittui.Action {
 		act(actContainerLogs, kittui.LevelLetter, textKeyLog, "o"),
 		act(actBackup, kittui.LevelLetter, textKeyBackupForm, "b"),
 		act(actCompose, kittui.LevelLetter, textKeyComposeForm, "C"),
+		act(actCheckForm, kittui.LevelLetter, textKeyCheckForm, "k"),
+		act(actRemoveSettings, kittui.LevelLetter, textKeyRemoveSettings, "E"),
 		act(actMoveUp, kittui.LevelLetter, textKeyMoveUp, "K"),
 		act(actMoveDown, kittui.LevelLetter, textKeyMoveDown, "J"),
 		act(actYes, kittui.LevelConfirm, textAnswerYes, "y"),

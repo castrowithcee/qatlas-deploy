@@ -201,6 +201,8 @@ func (m *Model) submitForm() tea.Cmd {
 		return m.submitBackup(f, v)
 	case formCompose:
 		return m.submitCompose(f)
+	case formCheck:
+		return m.submitCheck(f, v)
 	case formKeyChoice:
 		return m.submitKeyChoice(f, v)
 	case formKeyStore:

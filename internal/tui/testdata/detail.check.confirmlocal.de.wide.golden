@@ -1,0 +1,40 @@
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks  [2 ▣ Stack-Details]  3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Prüfung eines Stacks                                                                                                  
+                                                                                                                        
+  Prüfung des Stacks demo-stack. Update-Regeln, Backup und Compose-Dateien bleiben unverändert.                         
+                                                                                                                        
+                    ╔══════════════════════════════════════════════════════════════════════════════════════════════════╗
+> Container-Prüfung ║ an                                                                                             ▾ ║
+                    ╚══════════════════════════════════════════════════════════════════════════════════════════════════╝
+                    An: der Stack gilt nur als gesund, solange alle seine Container laufen.                             
+                    ╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+  HTTP-Prüfung      │ an                                                                                             ▾ │
+                    ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+                    ╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+  Adresse (URL)     │ http:/╔═ Prüfung eines Stacks ═══════════════════════════════════════╗                           │
+                    ╰───────║ ⚠ Die Prüfung des Stacks demo-stack speichern?               ║───────────────────────────╯
+                    ╭───────║                                                              ║───────────────────────────╮
+  Erwarteter Status │ 200   ║ Im lokalen Stack-Ordner entsteht ein Commit mit den neuen    ║                           │
+                    ╰───────║ Einstellungen. Die Prüfung wirkt beim nächsten Deploy.       ║───────────────────────────╯
+                    ╭───────║ Container-Prüfung: an                                        ║───────────────────────────╮
+  Zeitlimit         │ 10s   ║ HTTP-Prüfung: http://localhost:8080/health antwortet mit 200 ║                           │
+                    ╰───────║ innerhalb von 10s                                            ║───────────────────────────╯
+                            ║                                                              ║                            
+                            ║ [ ja, ausführen ]  > abbrechen <                             ║                            
+                            ║ y ja, ausführen  n/esc/enter abbrechen                       ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                                                                                     
+                                                                                                                        

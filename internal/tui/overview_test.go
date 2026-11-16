@@ -95,8 +95,8 @@ func TestDetailDropsAnswersOfAStackThatWasLeft(t *testing.T) {
 }
 
 func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
-	// 80 columns: the key line of the detail takes both lines at 56, where the counter gives way.
-	m := newTestModel(t, i18n.English, demoBackend(), 80, 14)
+	// 100 columns: the key line of the detail takes both lines and the counter still has room at the end of the second.
+	m := newTestModel(t, i18n.English, demoBackend(), 100, 14)
 	send(m, "enter")
 	first := m.render()
 	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, fmt.Sprintf("/%d", m.detail.total)) {
@@ -479,7 +479,7 @@ func TestNarrowAndWideLayoutsKeepTheirWidth(t *testing.T) {
 }
 
 func TestDetailSectionsStandInClosedPanelsAndTheCounterFollowsTheScroll(t *testing.T) {
-	const width, rows = 80, 14 // see TestDetailScrollsAndKeepsItsPlace
+	const width, rows = 100, 14 // see TestDetailScrollsAndKeepsItsPlace
 	tall := newTestModel(t, i18n.English, demoBackend(), width, 120)
 	send(tall, "enter")
 	tall.render()

@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  demo-stack                                                                    
+                                                                                
+  Modus    automatisch                                                          
+  Zustand  deployt                                                              
+  Befund╔═ Einstellungen eines Stacks entfernen ═══════════════════════╗        
+        ║ ⚠ Alle Einstellungen des Stacks demo-stack entfernen?        ║        
+╭─ Image║                                                              ║───────╮
+│ APP_VE║ Ein Commit löscht die Einstellungsdatei des Stacks mit       ║       │
+│   1.4.║ Update-Regeln, Backup, Compose-Dateien und Prüfung und wird  ║       │
+╰───────║ zum Remote gepusht. Danach wird der Stack nur noch deployt   ║───────╯
+╭─ Conta║ und nie aktualisiert.                                        ║───────╮
+│ Keine ║                                                              ║       │
+╰───────║ [ ja, ausführen ]  > abbrechen <                             ║───────╯
+╭─ Chang║ y ja, ausführen  n/esc/enter abbrechen                       ║───────╮
+│ APP_VE╚══════════════════════════════════════════════════════════════╝       │
+│   Quelle example/app                                                         │
+│   1.5.0  Spring release  2026-10-29                                          │
+│     Adds a dark theme.                                                       │
+│                                                                              │
+│     - faster start                                                           │
+                                                                           20/60

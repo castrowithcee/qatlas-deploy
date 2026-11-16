@@ -117,6 +117,8 @@ const (
 	opStackSettingsSet
 	opStackSettingsBackup
 	opStackSettingsCompose
+	opStackSettingsCheck
+	opStackSettingsRemove
 )
 
 // settingMsg carries the answer of a write. A write answers with the name it concerned, never with a value.
@@ -485,11 +487,16 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 			cmds = append(cmds, m.backupFormFor(res))
 		case opStackSettingsCompose:
 			cmds = append(cmds, m.composeFormFor(res))
+		case opStackSettingsCheck:
+			cmds = append(cmds, m.checkFormFor(res))
 		default:
 			cmds = append(cmds, m.updateFormFor(res))
 		}
 	case control.StackSettingsSetResult:
 		cmds = append(cmds, m.settingsSaved(res, done))
+	case control.StackSettingsRemoveResult:
+		done(t.Lookup(textDoneSettingsRemoved, res.Stack), t.Lookup(textDetailHead, short(res.Commit)))
+		cmds = append(cmds, m.reloadNow())
 	case dataDirsResult:
 		cmds = append(cmds, m.dataDirsDone(res, done))
 	case control.BackupRestoreResult:
@@ -523,6 +530,13 @@ func (m *Model) settingFailed(msg settingMsg) tea.Cmd {
 	}
 	if msg.op == opFetch {
 		text = m.text.Lookup(textFetchFailed, msg.name, text)
+	}
+	if msg.op == opStackSettingsRemove {
+		var remote *control.Error
+		if errors.As(msg.err, &remote) && remote.Code == control.CodeNoSettings {
+			m.warn(m.text.Lookup(textSettingsNone, msg.name))
+			return nil
+		}
 	}
 	if s.form != nil && s.form.kind != formGeneral {
 		if p, ok := m.keyProblem(s.form, msg); ok {

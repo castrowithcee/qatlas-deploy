@@ -405,6 +405,8 @@ func (m *Model) settingsProblems(kind formKind, err error) (kittui.FormProblem, 
 		}
 		field = map[string]kittui.FieldID{"": "paths", "paths": "paths", "volumes": "volumes", "command": "command",
 			"retention.keep": "keep", "retention.max_age_days": "maxage"}[sub[1]]
+	case formCheck:
+		return m.checkProblems(remote.Message, err)
 	case formCompose:
 		if !composePathRe.MatchString(remote.Message) {
 			return kittui.FormProblem{}, false
@@ -425,6 +427,8 @@ func (m *Model) settingsSaved(res control.StackSettingsSetResult, done func(text
 			same, saved = textDoneBackupSame, textDoneBackup
 		case formCompose:
 			same, saved = textDoneComposeSame, textDoneCompose
+		case formCheck:
+			same, saved = textDoneCheckSame, textDoneCheckForm
 		}
 	}
 	t := m.text

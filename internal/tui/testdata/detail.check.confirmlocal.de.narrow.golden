@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  Prüfung eines Stacks                                                          
+                                                                                
+  Prüfung des Stacks demo-stack. Update-Regeln, Backup und Compose-Dateien      
+  bleiben unverändert.                                                          
+        ╔═ Prüfung eines Stacks ═══════════════════════════════════════╗        
+        ║ ⚠ Die Prüfung des Stacks demo-stack speichern?               ║═══════╗
+> Contai║                                                              ║     ▾ ║
+        ║ Im lokalen Stack-Ordner entsteht ein Commit mit den neuen    ║═══════╝
+        ║ Einstellungen. Die Prüfung wirkt beim nächsten Deploy.       ║e       
+        ║ Container-Prüfung: an                                        ║        
+        ║ HTTP-Prüfung: http://localhost:8080/health antwortet mit 200 ║───────╮
+  HTTP-P║ innerhalb von 10s                                            ║     ▾ │
+        ║                                                              ║───────╯
+        ║ [ ja, ausführen ]  > abbrechen <                             ║───────╮
+  Adress║ y ja, ausführen  n/esc/enter abbrechen                       ║       │
+        ╚══════════════════════════════════════════════════════════════╝───────╯
+  …                                                                             
+                                                                                
+                                                                                
+[ F2 speichern ]  [ esc Verwerfen ]                                             
+                                                                                

@@ -1,0 +1,24 @@
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  demo-stack                                                                    
+                                                                                
+  mode      automatic                                                           
+  state     deployed                                                            
+  findings  1 warning                                                           
+        ╔═ Remove the settings of a stack ═════════════════════════════╗        
+╭─ Image║ ⚠ Remove all settings of the stack demo-stack?               ║───────╮
+│ APP_VE║                                                              ║       │
+│   1.4.║ A commit deletes the settings file of the stack, with update ║       │
+╰───────║ rules, backup, compose files and check, and is pushed to its ║───────╯
+╭─ Conta║ remote. Afterwards the stack is deployed but never updated.  ║───────╮
+│ No con║                                                              ║       │
+╰───────║ [ yes, do it ]  > cancel <                                   ║───────╯
+╭─ Chang║ y yes, do it  n/esc/enter cancel                             ║───────╮
+│ APP_VE╚══════════════════════════════════════════════════════════════╝       │
+│   source example/app                                                         │
+│   1.5.0  Spring release  2026-10-29                                          │
+│     Adds a dark theme.                                                       │
+│                                                                              │
+│     - faster start                                                           │
+                                                                           20/60
