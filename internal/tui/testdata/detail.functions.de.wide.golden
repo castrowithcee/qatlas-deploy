@@ -24,5 +24,5 @@
 │   secrets.env is not listed in .gitignore                                                                            │
 │   Zu tun: Add the line 'secrets.env' to the .gitignore.                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden                
-                                                                                                     ↑/↓ Scrollen  59/59
+e Update-Regeln  o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich          
+q Beenden                                                                                            ↑/↓ Scrollen  59/59

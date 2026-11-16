@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
+  1 [2 Stack-Details] 3 4 5                             
+────────────────────────────────────────────────────────
+  demo-stack                                            
+                                                        
+  Modus    automatisch                                  
+  Zustand  deployt                                      
+  Befunde  1 Warnung                                    
+                                                        
+╭─╔═ Erledigt ═══════════════════════════════════════╗─╮
+│ ║ Update-Regeln des Stacks demo-stack gespeichert. ║ │
+│ ║                                                  ║ │
+╰─║ Commit: 222222222222                             ║─╯
+╭─║                                                  ║─╮
+│ ║ > schließen <                                    ║ │
+╰─║ n/esc/enter schließen                            ║─╯
+╭─╚══════════════════════════════════════════════════╝─╮
+│ APP_VERSION  1.4.2 -> 1.5.0                          │
+│   Quelle example/app                                 │
+│   1.5.0  Spring release  2026-10-29                  │
+│     Adds a dark theme.                               │
+│                                                      │
+│     - faster start                                   │
+                                                   20/63

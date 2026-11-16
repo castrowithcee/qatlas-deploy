@@ -69,6 +69,8 @@ func (m *Model) detailAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 		return m.openBackupPick(), true
 	case actDataDirs:
 		return m.openDataDirForm(), true
+	case actEdit:
+		return m.openUpdateForm(), true
 	}
 	return nil, false
 }
@@ -214,12 +216,18 @@ func (m *Model) pickView(width, height int) string {
 func (m *Model) formView(width, height int) string {
 	m.scrollNote = ""
 	f := m.set.form
+	if f.editor != nil {
+		return m.editorView(f.editor, width, height)
+	}
 	var head []string
 	if f.kind != formGeneral {
 		head = []string{m.heading(f.title, width), ""}
 	}
 	if f.kind == formDataDirs {
 		head = append(head, m.formDataDirLines(f, width)...)
+	}
+	if f.kind == formUpdate {
+		head = append(head, m.formUpdateLines(f, width)...)
 	}
 	room := max(height-len(head), 1)
 	view, targets := f.form.View(m.styles, width, room)
@@ -238,6 +246,7 @@ func (m *Model) detailHints() []kittui.Hint {
 			hints = append(hints, kittui.Hint{Action: actDataDirs, Label: textKeyDataDirs, Priority: 2})
 		}
 	}
+	hints = append(hints, kittui.Hint{Action: actEdit, Label: textKeyUpdateRules, Priority: 3})
 	return append(hints, containerLogsHint(),
 		kittui.Hint{Action: actAdd, Label: textKeySecretSet, Priority: 3},
 		kittui.Hint{Action: actRemove, Label: textKeySecretDelete, Priority: 3},

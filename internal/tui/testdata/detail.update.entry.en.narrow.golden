@@ -1,0 +1,24 @@
+◆ qdeploy  window closed            [esc] back  [?] help
+  1 [2 Stack detail] 3 4 5                              
+────────────────────────────────────────────────────────
+  Tag filters                                           
+                                                        
+           ╔═══════════════════════════════════════════╗
+> Variable ║ APP_VERSION                             ▾ ║
+           ╚═══════════════════════════════════════════╝
+           an image version variable of the stack       
+           ╭───────────────────────────────────────────╮
+  Pattern  │ ^1\.[0-9.]+$                              │
+           ╰───────────────────────────────────────────╯
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+[ F2 apply ]  [ esc discard ]                           
+enter choose  F2 save  esc discard                      
+                tab next field  shift+tab previous field

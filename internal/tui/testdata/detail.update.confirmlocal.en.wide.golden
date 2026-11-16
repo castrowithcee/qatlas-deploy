@@ -1,0 +1,40 @@
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Update rules of a stack                                                                                               
+                                                                                                                        
+  Rules of the stack demo-stack. Backup, check and compose files stay as they are.                                      
+                                                                                                                        
+                         ╔═════════════════════════════════════════════════════════════════════════════════════════════╗
+> Mode                   ║ automatic                                                                                 ▾ ║
+                         ╚═════════════════════════════════════════════════════════════════════════════════════════════╝
+                         automatic updates in the maintenance window, manual only on request                            
+                         ╭─────────────────────────────────────────────────────────────────────────────────────────────╮
+  Ceiling                │ patch                                                                                     ▾ │
+                         ╰─────────────────────────────────────────────────────────────────────────────────────────────╯
+                         ╭──╔═ Update rules of a stack ════════════════════════════════════╗───────────────────────────╮
+  Major jump             │ d║ ⚠ Save the update rules of the stack demo-stack?             ║                         ▾ │
+                         ╰──║                                                              ║───────────────────────────╯
+                         ╭──║ A commit with the new rules is created in the local stack    ║───────────────────────────╮
+  Observation (minutes)  │ 1║ folder. The rules act on the next update.                    ║                           │
+                         ╰──║ mode: automatic, ceiling: patch, major jump: direct          ║───────────────────────────╯
+                         ╭──║ observation: 15 min                                          ║───────────────────────────╮
+  Tag filters            │ A║ tag filter APP_VERSION: ^1\.[0-9.]+$                         ║                           │
+                         ╰──║ changelog APP_VERSION: example/app                           ║───────────────────────────╯
+                         ╭──║                                                              ║───────────────────────────╮
+  Changelog repositories │ A║ [ yes, do it ]  > cancel <                                   ║                           │
+                         ╰──║ y yes, do it  n/esc/enter cancel                             ║───────────────────────────╯
+                            ╚══════════════════════════════════════════════════════════════╝                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 save ]  [ esc discard ]                                                                                            
+                                                                                                                        
