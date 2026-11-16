@@ -15,6 +15,9 @@ import (
 // compose files that are missing or give it another project name. The error carries the reason.
 var ErrInvalidSettings = errors.New("the settings do not fit the stack")
 
+// ErrNoSettings means the stack has no settings file to remove.
+var ErrNoSettings = errors.New("the stack has no settings")
+
 // StackSettings returns the settings of the stack as the working copy has them, nil when it has none. A stack
 // that cannot be read is refused with ErrUnreadable.
 func (e *Engine) StackSettings(ctx context.Context, name string) (*stacks.Rules, error) {
@@ -55,11 +58,46 @@ func (e *Engine) SetSettings(ctx context.Context, name string, rules *stacks.Rul
 	if rules == nil {
 		return "", errors.New("no settings given")
 	}
-	b, err := e.cfg.Source()
+	content, err := stacks.EncodeSettings(rules)
 	if err != nil {
 		return "", err
 	}
-	content, err := stacks.EncodeSettings(rules)
+	edit := func(old []byte) ([]byte, error) {
+		// Settings with the same meaning count as unchanged, whatever form the file has.
+		if old != nil {
+			if cur, err := stacks.ParseSettings(old); err == nil {
+				if same, err := stacks.EncodeSettings(cur); err == nil && bytes.Equal(same, content) {
+					return old, nil
+				}
+			}
+		}
+		return content, nil
+	}
+	return e.commitSettings(ctx, name, rules, edit, "qdeploy: settings of "+name)
+}
+
+// RemoveSettings removes the settings of the stack: a commit that deletes its settings file, built, pushed and
+// followed like the commit of SetSettings, with the same waits and refusals. Afterwards the stack is deployed
+// but never updated. A stack without a settings file gets ErrNoSettings and nothing is committed; a file whose
+// content is broken is removed all the same.
+func (e *Engine) RemoveSettings(ctx context.Context, name string) (string, error) {
+	edit := func(old []byte) ([]byte, error) {
+		if old == nil {
+			return nil, ErrNoSettings
+		}
+		return nil, nil
+	}
+	c, err := e.commitSettings(ctx, name, nil, edit, "qdeploy: remove settings of "+name)
+	if err == nil && c == "" {
+		return "", ErrNoSettings
+	}
+	return c, err
+}
+
+// commitSettings commits the settings file of the stack with the content edit makes of it (nil removes it)
+// and pushes the commit. rules are what the stack gets, checked against it; nil when the file is removed.
+func (e *Engine) commitSettings(ctx context.Context, name string, rules *stacks.Rules, edit func([]byte) ([]byte, error), message string) (string, error) {
+	b, err := e.cfg.Source()
 	if err != nil {
 		return "", err
 	}
@@ -77,18 +115,6 @@ func (e *Engine) SetSettings(ctx context.Context, name string, rules *stacks.Rul
 	defer e.refs.Unlock()
 
 	wc := b.Copy
-	message := "qdeploy: settings of " + name
-	edit := func(old []byte) ([]byte, error) {
-		// Settings with the same meaning count as unchanged, whatever form the file has.
-		if old != nil {
-			if cur, err := stacks.ParseSettings(old); err == nil {
-				if same, err := stacks.EncodeSettings(cur); err == nil && bytes.Equal(same, content) {
-					return old, nil
-				}
-			}
-		}
-		return content, nil
-	}
 	for attempt := 1; ; attempt++ {
 		if err := e.settingsBase(ctx, b, name, rules); err != nil {
 			return "", err
@@ -98,6 +124,9 @@ func (e *Engine) SetSettings(ctx context.Context, name string, rules *stacks.Rul
 			return "", nil
 		}
 		if err != nil {
+			if errors.Is(err, ErrNoSettings) {
+				return "", err
+			}
 			return "", fmt.Errorf("commit: %w", err)
 		}
 		err = wc.Push(ctx, c)
@@ -118,7 +147,7 @@ func (e *Engine) SetSettings(ctx context.Context, name string, rules *stacks.Rul
 	}
 }
 
-// settingsBase fetches, moves the clean working copy to the branch and checks rules against the stack there.
+// settingsBase fetches, moves the clean working copy to the branch and checks rules, if any, against the stack there.
 // The caller has the working copy to itself and holds the ref lock.
 func (e *Engine) settingsBase(ctx context.Context, b Binding, name string, rules *stacks.Rules) error {
 	wc := b.Copy
@@ -166,6 +195,9 @@ func (e *Engine) settingsBase(ctx context.Context, b Binding, name string, rules
 	st := list[i]
 	if st.Err != nil && !stacks.IsSettingsError(st.Err) {
 		return fmt.Errorf("%w: %s", ErrUnreadable, e.text(st.Err.Error()))
+	}
+	if rules == nil {
+		return nil
 	}
 	with, ok := stacks.WithSettings(b.Dir, st.Folder, rules)
 	switch {

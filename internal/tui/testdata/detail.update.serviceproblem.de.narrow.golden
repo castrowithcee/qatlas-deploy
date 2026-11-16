@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
+  1 [2 Stack-Details] 3 4 5                             
+────────────────────────────────────────────────────────
+  Update-Regeln eines Stacks                            
+                                                        
+  Regeln des Stacks demo-stack. Backup, Prüfung und     
+  Compose-Dateien bleiben unverändert.                  
+                                                        
+  …                                                     
+                     ╔═════════════════════════════════╗
+> Tag-Filter         ║ APP_VERSION → ^1\.[0-9.]+$      ║
+                     ╚═════════════════════════════════╝
+                     je Versionsvariable ein regulärer  
+                     Ausdruck, den die Tags erfüllen    
+                     müssen                             
+                     [!] der Dienst hat die Anfrage     
+                     abgelehnt: stack settings:         
+                     update.tags.APP_VERSION: not an    
+                     image variable of the stack -      
+                     Korrigiere das Feld.               
+  …                                                     
+                                                        
+enter Bearbeiten  F2 Speichern  esc verwerfen           
+               tab Nächstes Feld  shift+tab Voriges Feld

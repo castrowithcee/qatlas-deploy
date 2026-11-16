@@ -12,7 +12,7 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/stacks"
 )
 
-// registerSettingsCommands registers stack.settings.get and stack.settings.set.
+// registerSettingsCommands registers stack.settings.get, stack.settings.set and stack.settings.remove.
 func registerSettingsCommands(r *control.Registry, eng *sourceSet, redact func(string) string, log *slog.Logger) error {
 	commands := map[string]control.Handler{
 		control.StackSettingsGetCommand: func(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -68,6 +68,25 @@ func registerSettingsCommands(r *control.Registry, eng *sourceSet, redact func(s
 			}
 			return control.StackSettingsSetResult{Stack: a.Stack, Settings: s, Changed: commit != "", Commit: commit}, nil
 		},
+		control.StackSettingsRemoveCommand: func(ctx context.Context, raw json.RawMessage) (any, error) {
+			var a control.StackSettingsArgs
+			if err := decodeArgs(raw, &a); err != nil {
+				return nil, err
+			}
+			if !backup.ValidStack(a.Stack) {
+				return nil, control.NewError(control.CodeInvalid, "the stack name is not valid")
+			}
+			ctx, cancel := context.WithTimeout(ctx, control.StackSettingsTimeout)
+			defer cancel()
+			commit, err := eng.RemoveSettings(ctx, a.Stack)
+			if err != nil {
+				ans := settingsAnswer(err, redact)
+				log.Info("stack settings remove", "target", a.Stack, "result", "failed", "error", printable(redact(err.Error())))
+				return nil, ans
+			}
+			log.Info("stack settings remove", "target", a.Stack, "result", "ok", "commit", commit)
+			return control.StackSettingsRemoveResult{Stack: a.Stack, Commit: commit}, nil
+		},
 	}
 	for name, h := range commands {
 		if err := r.Register(name, h); err != nil {
@@ -96,6 +115,8 @@ func settingsAnswer(err error, redact func(string) string) error {
 	switch {
 	case errors.Is(err, engine.ErrInvalidSettings):
 		return control.NewError(control.CodeInvalid, printable(redact(err.Error())))
+	case errors.Is(err, engine.ErrNoSettings):
+		return control.NewError(control.CodeNoSettings, "the stack has no settings; it is already deployed only")
 	case errors.Is(err, engine.ErrUnreadable):
 		return control.NewError(control.CodeUnreadable, "the stack cannot be read; 'qdeploy stack check' names the problem")
 	case errors.Is(err, engine.ErrCopyChanges):

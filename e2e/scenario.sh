@@ -21,8 +21,10 @@
 # before all that. The last section resets the service to a fresh state and does the first setup only through
 # the terminal interface: deploy key, registry credential, maintenance window, notification channel with its
 # test, repository with a confirmed host key, a stack secret and the first deploy; then it restores an older
-# backup through the interface and proves that no masked value shows anywhere. At the very end the installed
-# program updates itself to a newer signed test release and refuses tampered ones. Sourced by run.sh scenario.
+# backup through the interface and proves that no masked value shows anywhere. Then the update rules of a new stack
+# are set in the interface (automatic, ceiling minor): the stacks repository gets a commit with its settings file,
+# the next maintenance window updates the stack, and qdeploy stack settings remove returns it to deploy only. At the very
+# end the installed program updates itself to a newer signed test release and refuses tampered ones. Sourced by run.sh scenario.
 
 # signature_asset is the name of the release file with the signature; it must match release.SignatureAsset.
 signature_asset=checksums.txt.sig
@@ -1218,6 +1220,8 @@ scenario_stacks_repo() {
 	scenario_adopt
 
 	scenario_tui_setup
+
+	scenario_tui_rules
 }
 
 # flat_field prints one flat field of qdeploy status by its full name (empty when it is absent).
@@ -3964,4 +3968,151 @@ $(qd stack log "$id")"
 	holders=$(docker exec "$host" grep -rlF -- "$tui_stack_value" /opt/stacks /var/lib/qdeploy 2>/dev/null || true)
 	[ "$holders" = /opt/stacks/demo-echo/secrets.env ] || fail "the value of the stack secret stands in: $holders"
 	log 'scenario: no masked value on a captured screen, in a run log, the journal or a listing; the secret value only in secrets.env'
+}
+
+# scenario_tui_rules sets the update rules of a stack in the stack detail of the interface and lets the next
+# maintenance window act on them. It runs after scenario_tui_setup because only then the service is bound to one
+# source and every other stack stands on its final version: demo-stack, demo-paused and demo-pinned (the only
+# stacks in automatic mode) already run 1.1.0, so the window has nothing to do for them; the section checks that.
+# The new stack demo-rules starts on 1.0.1 without a settings file, so it is deployed only. The observation time
+# is set to 0 so that no observation stays open for the sections after this one. The window is moved away again
+# at the end; the stack stays in the repository, unconfigured.
+scenario_tui_rules() {
+	tui_log=$work/tui-rules-screens.log
+	: >"$tui_log"
+	image=registry.$domain/demo/app
+	rules_stack=demo-rules
+	rules_file=.qatlas/qdeploy/$rules_stack.yaml
+	guard_stacks='demo-stack demo-paused demo-pinned'
+
+	step 'the stack demo-rules joins the repository without settings and is deployed only'
+	as_admin 'cd ~/stacks && git pull -q --ff-only && mkdir demo-rules'
+	cat <<EOF2 | as_admin 'cat >"$HOME"/stacks/demo-rules/compose.yaml'
+services:
+  app:
+    image: registry.$domain/demo/app:\${DEMO_APP_VERSION}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: demo-rules
+      DEMO_VERSION: \${DEMO_APP_VERSION}
+      DEMO_HEALTH: \${DEMO_HEALTH}
+EOF2
+	printf 'DEMO_APP_VERSION=1.0.1\nDEMO_HEALTH=ok\n' | as_admin 'cat >"$HOME"/stacks/demo-rules/.env'
+	as_admin 'cd ~/stacks && cp demo-cache/.gitignore demo-rules/.gitignore && git add -A &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Add the demo-rules stack" && git push -q origin main'
+	restart_service
+	wait_for 'the first run of demo-rules' 240 stack_settled "$rules_stack" succeeded
+	wait_for 'demo-rules healthy' 60 stack_healthy "$rules_stack"
+	[ "$(stack_images "$rules_stack")" = "$image:1.0.1" ] || fail "demo-rules does not run 1.0.1: $(stack_images "$rules_stack")"
+	out=$(qd --output json stack settings "$rules_stack") || fail "stack settings failed: $out"
+	printf '%s' "$out" | grep -q '"configured": *false' || fail "demo-rules has settings before the form: $out"
+	as_admin "cd ~/stacks && git pull -q --ff-only && test ! -e $rules_file" || fail 'the settings file of demo-rules exists before the form'
+	rules_before=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+
+	step 'Stack detail: the update rules are set to automatic with ceiling minor after a question'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait "1 $tui_icon_stacks Stacks" 30
+	tui_send 1
+	tui_wait "$rules_stack" 60
+	tui_click_row "$rules_stack"
+	tui_send Enter
+	tui_wait 'Image versions' 15
+	tui_send e
+	tui_wait 'Update rules of a stack' 10
+	# A stack without settings starts on the defaults: manual, ceiling minor. Right steps through the choices.
+	tui_screen | grep -q 'Mode .*manual' || fail "the form of an unconfigured stack does not start on manual: $(tui_screen)"
+	i=0
+	until tui_screen | grep -q 'Mode .*automatic'; do
+		i=$((i + 1))
+		[ "$i" -lt 4 ] || fail "the mode does not reach automatic: $(tui_screen)"
+		tui_send Right
+		sleep 0.3
+	done
+	tui_screen | grep -q 'Ceiling .*minor' || fail "the ceiling of the form is not minor: $(tui_screen)"
+	tui_send Tab Tab Tab
+	tui_clear
+	tui_type 0
+	sleep 0.5
+	tui_send F2
+	tui_wait "Save the update rules of the stack $rules_stack?" 10
+	tui_has 'observation: off' || fail "the question does not show the observation: $(tui_screen)"
+	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')" = "$rules_before" ] || fail 'the question already made a commit'
+	tui_send y
+	tui_wait "Update rules of the stack $rules_stack saved." 60
+	tui_send Enter
+	tui_send Escape
+	tui_send 1
+	sleep 0.3
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+
+	step 'the stacks repository holds one commit with the settings file of demo-rules'
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	rules_commit=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $rules_before..HEAD")" = 1 ] || fail 'the form did not make exactly one commit'
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$rules_commit" ] || fail 'the settings commit is not on the remote branch'
+	[ "$(as_admin "cd ~/stacks && git show --format= --name-status $rules_commit")" = "$(printf 'A\t%s' "$rules_file")" ] ||
+		fail "the settings commit does not only add $rules_file: $(as_admin "cd ~/stacks && git show --format= --name-status $rules_commit")"
+	rules_yaml=$(as_admin "cd ~/stacks && git show $rules_commit:$rules_file")
+	printf '%s\n' "$rules_yaml" | grep -Eq '^ +mode: automatic$' || fail "the settings file does not set mode automatic: $rules_yaml"
+	printf '%s\n' "$rules_yaml" | grep -Eq '^ +ceiling: minor$' || fail "the settings file does not set ceiling minor: $rules_yaml"
+	out=$(qd --output json stack settings "$rules_stack") || fail "stack settings failed: $out"
+	printf '%s' "$out" | grep -q '"configured": *true' || fail "the service does not show the settings of demo-rules: $out"
+	log "scenario: the interface committed $rules_file: $(printf '%s' "$rules_yaml" | tr '\n' ' ')"
+
+	step 'the next maintenance window updates demo-rules and no other stack'
+	started=$(status_field started_at)
+	[ -n "$started" ] || fail 'status shows no start time of the service'
+	for stack in $rules_stack $guard_stacks; do
+		eval "runs_$(printf '%s' "$stack" | tr - _)=$(stack_run_count "$stack")"
+		eval "images_$(printf '%s' "$stack" | tr - _)=$(stack_images "$stack")"
+	done
+	# --start has minute granularity: two minutes ahead opens the window between one and two minutes from now.
+	start=$(date -u -d '+2 minutes' +%H:%M)
+	out=$(qd --output json window set --days daily --zone UTC --start "$start" --duration 5m) || fail "window set failed: $out"
+	[ "$(window_field open)" = false ] || fail "the window is open before its start: $(qd --output json window show)"
+	window_last_before=$(window_field last_run)
+	wait_for 'the window to open' 150 sh -c "docker exec -i $host qdeploy --output json window show | grep -q '\"open\": *true'"
+	wait_for 'the window work to finish' 300 window_done
+	[ "$(window_field open)" = true ] || fail "the window work ran past the end of the window: $(qd --output json window show)"
+	[ "$(status_field started_at)" = "$started" ] || fail 'the service restarted'
+	[ "$(stack_images "$rules_stack")" = "$image:1.1.0" ] || fail "demo-rules does not run 1.1.0: $(stack_images "$rules_stack")"
+	stack_healthy "$rules_stack" || fail 'demo-rules is not healthy after the window update'
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $rules_commit..HEAD")" = 1 ] || fail 'the window did not make exactly one commit'
+	update_commit=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$update_commit" ] || fail 'the update commit is not on the remote branch'
+	[ "$(as_admin "cd ~/stacks && git show --format= --numstat $update_commit")" = "$(printf '1\t1\tdemo-rules/.env')" ] ||
+		fail "the update commit does not touch only one line of demo-rules/.env: $(as_admin "cd ~/stacks && git show --format= --numstat $update_commit")"
+	[ "$(as_admin "cd ~/stacks && git log -1 --format=%s $update_commit")" = 'Update demo-rules DEMO_APP_VERSION from 1.0.1 to 1.1.0' ] ||
+		fail "the update commit has an unexpected subject: $(as_admin "cd ~/stacks && git log -1 --format=%s $update_commit")"
+	[ "$(stack_field "$rules_stack" deployed)" = "$update_commit" ] || fail "demo-rules is not recorded as deployed at $update_commit"
+	[ "$(stack_run_count "$rules_stack")" = "$((runs_demo_rules + 1))" ] || fail 'the window did not make exactly one run of demo-rules'
+	for stack in $guard_stacks; do
+		v=$(printf '%s' "$stack" | tr - _)
+		[ "$(stack_run_count "$stack")" = "$(eval "printf %s \"\$runs_$v\"")" ] || fail "the window ran $stack"
+		[ "$(stack_images "$stack")" = "$(eval "printf %s \"\$images_$v\"")" ] || fail "the window changed the image of $stack: $(stack_images "$stack")"
+	done
+	out=$(window_far_away) || fail "window set failed: $out"
+	[ "$(window_field open)" = false ] || fail "the window is still open after it was moved: $(qd --output json window show)"
+	log "scenario: the window updated demo-rules to 1.1.0 with commit $update_commit"
+
+	step 'stack settings remove returns demo-rules to deploy only'
+	out=$(qd --output json stack settings remove "$rules_stack") || fail "settings remove failed: $out"
+	printf '%s' "$out" | grep -q '"removed": *true' || fail "settings remove does not report the removal: $out"
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	remove_commit=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $update_commit..HEAD")" = 1 ] || fail 'settings remove did not make exactly one commit'
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$remove_commit" ] || fail 'the removal commit is not on the remote branch'
+	[ "$(as_admin "cd ~/stacks && git show --format= --name-status $remove_commit")" = "$(printf 'D\t%s' "$rules_file")" ] ||
+		fail "the removal commit does not only delete $rules_file: $(as_admin "cd ~/stacks && git show --format= --name-status $remove_commit")"
+	out=$(qd --output json stack settings "$rules_stack") || fail "stack settings failed: $out"
+	printf '%s' "$out" | grep -q '"configured": *false' || fail "demo-rules still has settings after the removal: $out"
+	out=$(qd_fails stack settings remove "$rules_stack") || fail "a second settings remove succeeded: $out"
+	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')" = "$remove_commit" ] || fail 'a second settings remove made a commit'
+	wait_for 'demo-rules to be idle' 120 stack_idle "$rules_stack"
+	log 'scenario: demo-rules is set to automatic in the interface, updated by the window and returned to deploy only'
 }

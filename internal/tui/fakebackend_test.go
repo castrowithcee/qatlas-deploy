@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -66,6 +67,13 @@ type fakeBackend struct {
 	secrets    map[string][]string
 	secretSets []control.SecretSetArgs
 	restores   []control.BackupRestoreArgs
+
+	// stackSettings holds the settings by stack; a stack without an entry is only deployed. settingsSets and
+	// settingsRemoves record the writes in order; errs "settings:<stack>", "settingsset:<stack>" and
+	// "settingsremove:<stack>" fail the calls.
+	stackSettings   map[string]control.StackSettings
+	settingsSets    []control.StackSettingsSetArgs
+	settingsRemoves []string
 
 	// containers is the list the service reads from the container engine, and containerDetails the detail by
 	// name; errs "containers:" and "container:<name>" fail those calls.
@@ -754,6 +762,54 @@ func (f *fakeBackend) BackupRestore(_ context.Context, stack, id string) (contro
 	defer f.mu.Unlock()
 	f.restores = append(f.restores, control.BackupRestoreArgs{Stack: stack, ID: id, Confirm: true})
 	return control.BackupRestoreResult{Backup: control.BackupInfo{ID: id, Stack: stack}}, nil
+}
+
+func (f *fakeBackend) StackSettings(_ context.Context, stack string) (control.StackSettingsResult, error) {
+	f.count("settings")
+	if err := f.fail("settings", stack); err != nil {
+		return control.StackSettingsResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	res := control.StackSettingsResult{Stack: stack}
+	if s, ok := f.stackSettings[stack]; ok {
+		res.Settings = &s
+	}
+	return res, nil
+}
+
+func (f *fakeBackend) StackSettingsSet(_ context.Context, stack string, settings control.StackSettings) (control.StackSettingsSetResult, error) {
+	if err := f.act("settingsset", stack); err != nil {
+		return control.StackSettingsSetResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.settingsSets = append(f.settingsSets, control.StackSettingsSetArgs{Stack: stack, Settings: settings})
+	old, had := f.stackSettings[stack]
+	if f.stackSettings == nil {
+		f.stackSettings = map[string]control.StackSettings{}
+	}
+	f.stackSettings[stack] = settings
+	changed := !had || !reflect.DeepEqual(old, settings)
+	res := control.StackSettingsSetResult{Stack: stack, Settings: settings, Changed: changed}
+	if changed {
+		res.Commit = commitB
+	}
+	return res, nil
+}
+
+func (f *fakeBackend) StackSettingsRemove(_ context.Context, stack string) (control.StackSettingsRemoveResult, error) {
+	if err := f.act("settingsremove", stack); err != nil {
+		return control.StackSettingsRemoveResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.stackSettings[stack]; !ok {
+		return control.StackSettingsRemoveResult{}, control.NewError(control.CodeNoSettings, "the stack has no settings; it is already deployed only")
+	}
+	delete(f.stackSettings, stack)
+	f.settingsRemoves = append(f.settingsRemoves, stack)
+	return control.StackSettingsRemoveResult{Stack: stack, Commit: commitB}, nil
 }
 
 func (f *fakeBackend) Containers(context.Context) (control.ContainerListResult, error) {

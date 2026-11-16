@@ -326,7 +326,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.applySetting(msg)
 	case tea.PasteMsg:
 		if m.modal == nil && m.set.form != nil {
-			m.set.form.form.Paste(msg.Content)
+			if target := m.set.form.pasteTo(); target != nil {
+				target.Paste(msg.Content)
+			}
 		}
 	case logMsg:
 		return m, m.applyLog(msg)
@@ -431,7 +433,7 @@ func (m *Model) input() kittui.InputFocus {
 	case areaDetail:
 		switch {
 		case m.set.form != nil:
-			return m.set.form.form.Input()
+			return m.set.form.input()
 		case m.pick != nil:
 			return m.pick.list.Input()
 		}
@@ -440,7 +442,7 @@ func (m *Model) input() kittui.InputFocus {
 	case areaStacks:
 		switch {
 		case m.set.form != nil:
-			return m.set.form.form.Input()
+			return m.set.form.input()
 		case m.set.keyOpen:
 			return kittui.InputNavigation
 		}
@@ -890,6 +892,9 @@ func (m *Model) footer() []kittui.Hint {
 	case m.area == areaSettings:
 		return m.settingsFooter(common, nav)
 	case (m.area == areaDetail || m.area == areaStacks) && m.set.form != nil:
+		if e := m.set.form.editor; e != nil {
+			return m.editorHints(e)
+		}
 		return append(m.set.form.form.Hints(), kittui.Hint{Action: actBack, Label: textKeyCancelForm})
 	case m.area == areaStacks && m.set.keyOpen:
 		return append([]kittui.Hint{{Action: actEdit, Label: textKeySetKey, Priority: 3},

@@ -1,0 +1,40 @@
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks  [2 ▣ Stack-Details]  3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Update-Regeln eines Stacks                                                                                            
+                                                                                                                        
+  Regeln des Stacks demo-stack. Backup, Prüfung und Compose-Dateien bleiben unverändert.                                
+                                                                                                                        
+                         ╔═════════════════════════════════════════════════════════════════════════════════════════════╗
+> Modus                  ║ automatisch                                                                               ▾ ║
+                         ╚═════════════════════════════════════════════════════════════════════════════════════════════╝
+                         automatisch aktualisiert im Wartungsfenster, manuell nur auf Anforderung                       
+                         ╭─────────────────────────────────────────────────────────────────────────────────────────────╮
+  Obergrenze             │ patch                                                                                     ▾ │
+                         ╰─────────────────────────────────────────────────────────────────────────────────────────────╯
+                         ╭──╔═ Update-Regeln eines Stacks ═════════════════════════════════╗───────────────────────────╮
+  Major-Sprung           │ d║ ⚠ Die Update-Regeln des Stacks demo-stack speichern?         ║                         ▾ │
+                         ╰──║                                                              ║───────────────────────────╯
+                         ╭──║ Im lokalen Stack-Ordner entsteht ein Commit mit den neuen    ║───────────────────────────╮
+  Beobachtung (Minuten)  │ 1║ Regeln. Die Regeln wirken beim nächsten Update.              ║                           │
+                         ╰──║ Modus: automatisch, Obergrenze: patch, Major-Sprung: direct  ║───────────────────────────╯
+                         ╭──║ Beobachtung: 15 Min.                                         ║───────────────────────────╮
+  Tag-Filter             │ A║ Tag-Filter APP_VERSION: ^1\.[0-9.]+$                         ║                           │
+                         ╰──║ Changelog APP_VERSION: example/app                           ║───────────────────────────╯
+                         ╭──║                                                              ║───────────────────────────╮
+  Changelog-Repositories │ A║ [ ja, ausführen ]  > abbrechen <                             ║                           │
+                         ╰──║ y ja, ausführen  n/esc/enter abbrechen                       ║───────────────────────────╯
+                            ╚══════════════════════════════════════════════════════════════╝                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                                                                                     
+                                                                                                                        

@@ -20,5 +20,5 @@
 │   1.5.0  Spring release  2026-10-29                  │
 Backup 20261023T031000Z-4567cdef für den Stack demo-    
 stack eingespielt.                                      
-o Log  a Geheimnis setzen  x Geheimnis löschen          
-R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden
+e Update-Regeln  o Log  a Geheimnis setzen              
+x Geheimnis löschen  r Neu laden  q Beenden             

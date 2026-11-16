@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu               [esc] Zurück
+  1 [2 Stack-Details] 3 4 5                             
+────────────────────────────────────────────────────────
+  Changelog-Repositories                                
+                                                        
+             ╭─────────────────────────────────────────╮
+  Variable   │ APP_VERSION                           ▾ │
+             ╰─────────────────────────────────────────╯
+             ╔═════════════════════════════════════════╗
+> Repository ║ nowhere_                                ║
+             ╚═════════════════════════════════════════╝
+             owner/name auf GitHub                      
+             [!] Gib ein GitHub-Repository als          
+             owner/name an. - Korrigiere das Feld.      
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+[ F2 übernehmen ]  [ esc Verwerfen ]                    
+F2 Speichern  esc verwerfen                             
+               tab Nächstes Feld  shift+tab Voriges Feld

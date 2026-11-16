@@ -38,6 +38,25 @@ type settingsForm struct {
 	stackDir string
 	// keyLabel is the stack folder named in the confirmation of a key; stackDir is the Dir to send.
 	keyLabel string
+	// lists are the editors of the list fields of the form by field; editor is the one that is open.
+	lists  map[kittui.FieldID]*listEditor
+	editor *listEditor
+}
+
+// input is the input focus of the form, or of the editor that is open in it.
+func (f *settingsForm) input() kittui.InputFocus {
+	if f.editor != nil {
+		return f.editor.input()
+	}
+	return f.form.Input()
+}
+
+// pasteTo is the form that takes a paste: the entry form of the open editor, else the form.
+func (f *settingsForm) pasteTo() *kittui.Form {
+	if f.editor != nil {
+		return f.editor.entry
+	}
+	return f.form
 }
 
 // problem shows a problem without a field above the form.
@@ -176,6 +195,8 @@ func (m *Model) submitForm() tea.Cmd {
 		return m.submitSecret(f, text("key"), v["value"].Text)
 	case formDataDirs:
 		return m.submitDataDirs(f, text("owner"), text("mode"))
+	case formUpdate:
+		return m.submitUpdate(f, v)
 	case formKeyChoice:
 		return m.submitKeyChoice(f, v)
 	case formKeyStore:
@@ -365,7 +386,13 @@ func (m *Model) submitNotifyDetail(f *settingsForm, v map[kittui.FieldID]kittui.
 // formKey hands a key to the open form.
 func (m *Model) formKey(msg tea.KeyPressMsg) tea.Cmd {
 	f := m.set.form
+	if f.editor != nil {
+		return m.editorKey(f, msg)
+	}
 	act, handled := f.form.Update(msg)
+	if act == actEnter && handled && m.openEditor(f) {
+		return nil
+	}
 	if cmd, done := m.formAct(act, handled); done {
 		return cmd
 	}

@@ -113,6 +113,8 @@ const (
 	opDataDirs
 	opCompare
 	opRemote
+	opStackSettings
+	opStackSettingsSet
 )
 
 // settingMsg carries the answer of a write. A write answers with the name it concerned, never with a value.
@@ -475,6 +477,10 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		}
 		done(text, t.Lookup(textSecretAppliesLater))
 		cmds = append(cmds, m.readSecrets())
+	case control.StackSettingsResult:
+		cmds = append(cmds, m.updateFormFor(res))
+	case control.StackSettingsSetResult:
+		cmds = append(cmds, m.updateSaved(res, done))
 	case dataDirsResult:
 		cmds = append(cmds, m.dataDirsDone(res, done))
 	case control.BackupRestoreResult:
@@ -513,6 +519,12 @@ func (m *Model) settingFailed(msg settingMsg) tea.Cmd {
 		if p, ok := m.keyProblem(s.form, msg); ok {
 			s.form.problems(p)
 			return nil
+		}
+		if s.form.kind == formUpdate && msg.op == opStackSettingsSet {
+			if p, ok := m.updateProblems(msg.err); ok {
+				s.form.problems(p)
+				return nil
+			}
 		}
 		s.form.problem(text, m.text.Lookup(textFormRetry))
 		return nil
@@ -740,7 +752,7 @@ func (m *Model) settingsInput() kittui.InputFocus {
 		if f.kind == formGeneral && m.focus() != kittui.ZoneForm {
 			return kittui.InputNavigation
 		}
-		return f.form.Input()
+		return f.input()
 	}
 	if l := m.set.activeList(); l != nil {
 		return l.Input()

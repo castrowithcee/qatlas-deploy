@@ -101,6 +101,15 @@ type Backend interface {
 
 	// BackupRestore replaces the data of a stack with a backup and starts the stack again.
 	BackupRestore(ctx context.Context, stack, id string) (control.BackupRestoreResult, error)
+
+	// The stack-settings calls. StackSettings is a read; its result has no Settings for a stack that is only
+	// deployed. StackSettingsSet replaces all settings of the stack, StackSettingsRemove deletes them; both
+	// commit to the stacks repository and push when it has a remote. A refusal such as a field that does not
+	// fit is a *control.Error with CodeInvalid whose message names the field path, such as "update.tags.X: ...";
+	// removing the settings of a stack without any is a *control.Error with CodeNoSettings.
+	StackSettings(ctx context.Context, stack string) (control.StackSettingsResult, error)
+	StackSettingsSet(ctx context.Context, stack string, settings control.StackSettings) (control.StackSettingsSetResult, error)
+	StackSettingsRemove(ctx context.Context, stack string) (control.StackSettingsRemoveResult, error)
 }
 
 // updateCallLimit bounds one update call, which waits for every step of the stack; it is the limit of the
@@ -386,6 +395,23 @@ func (b *ChannelBackend) SecretDelete(ctx context.Context, stack, key string) (r
 func (b *ChannelBackend) BackupRestore(ctx context.Context, stack, id string) (res control.BackupRestoreResult, err error) {
 	err = client.Do(ctx, b.endpoint, restoreCallLimit, control.BackupRestoreCommand,
 		control.BackupRestoreArgs{Stack: stack, ID: id, Confirm: true}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) StackSettings(ctx context.Context, stack string) (res control.StackSettingsResult, err error) {
+	err = b.call(ctx, control.StackSettingsGetCommand, control.StackSettingsArgs{Stack: stack}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) StackSettingsSet(ctx context.Context, stack string, settings control.StackSettings) (res control.StackSettingsSetResult, err error) {
+	err = client.Do(ctx, b.endpoint, control.StackSettingsTimeout, control.StackSettingsSetCommand,
+		control.StackSettingsSetArgs{Stack: stack, Settings: settings}, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) StackSettingsRemove(ctx context.Context, stack string) (res control.StackSettingsRemoveResult, err error) {
+	err = client.Do(ctx, b.endpoint, control.StackSettingsTimeout, control.StackSettingsRemoveCommand,
+		control.StackSettingsArgs{Stack: stack}, &res)
 	return res, err
 }
 

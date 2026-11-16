@@ -234,6 +234,9 @@ func failureOf(err error) error {
 	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchStack:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
 			NextStep: "List the stacks with 'qdeploy stack list'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSettings:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "Nothing to remove; set update or check with the TUI or 'qdeploy stack settings set'.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchRun:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
 			NextStep: "List the runs with 'qdeploy stack runs'.", Cause: err}

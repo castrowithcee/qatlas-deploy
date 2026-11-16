@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
+  1 [2 Stack-Details] 3 4 5                             
+────────────────────────────────────────────────────────
+  Update-Regeln eines Stacks                            
+                                                        
+  ╔═ Update-Regeln eines Stacks ═════════════════════╗  
+  ║ ⚠ Die Update-Regeln des Stacks demo-stack        ║  
+  ║   speichern?                                     ║  
+  ║                                                  ║═╗
+> ║ Im Stack-Repository entsteht ein Commit mit den  ║ ║
+  ║ neuen Regeln und wird zum Remote gepusht. Die    ║═╝
+  ║ Regeln wirken beim nächsten Update.              ║  
+  ║ Modus: automatisch, Obergrenze: patch,           ║  
+  ║ Major-Sprung: direct                             ║  
+  ║ Beobachtung: 15 Min.                             ║─╮
+  ║ Tag-Filter APP_VERSION: ^1\.[0-9.]+$             ║ │
+  ║ Changelog APP_VERSION: example/app               ║─╯
+  ║                                                  ║─╮
+  ║ [ ja, ausführen ]  > abbrechen <                 ║ │
+  ║ y ja, ausführen  n/esc/enter abbrechen           ║─╯
+  ╚══════════════════════════════════════════════════╝  
+                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                     
+                                                        

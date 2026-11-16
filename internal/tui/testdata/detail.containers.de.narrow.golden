@@ -20,5 +20,5 @@
 ╭─ Changelog ──────────────────────────────────────────────────────────────────╮
 │ APP_VERSION  1.4.2 -> 1.5.0                                                  │
 │   Quelle example/app                                                         │
-o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden
-1-5 Bereich  q Beenden                                       ↑/↓ Scrollen  19/63
+e Update-Regeln  o Log  a Geheimnis setzen  x Geheimnis löschen                 
+R Backup einspielen  r Neu laden  1-5 Bereich  q Beenden     ↑/↓ Scrollen  19/63
