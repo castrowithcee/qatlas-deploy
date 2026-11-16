@@ -71,6 +71,10 @@ func (m *Model) detailAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 		return m.openDataDirForm(), true
 	case actEdit:
 		return m.openUpdateForm(), true
+	case actBackup:
+		return m.openBackupForm(), true
+	case actCompose:
+		return m.openComposeForm(), true
 	}
 	return nil, false
 }
@@ -229,6 +233,9 @@ func (m *Model) formView(width, height int) string {
 	if f.kind == formUpdate {
 		head = append(head, m.formUpdateLines(f, width)...)
 	}
+	if f.kind == formBackup || f.kind == formCompose {
+		head = append(head, m.formSettingsLines(f, width)...)
+	}
 	room := max(height-len(head), 1)
 	view, targets := f.form.View(m.styles, width, room)
 	m.formPart(f.form, targets, width, room, len(head))
@@ -246,7 +253,9 @@ func (m *Model) detailHints() []kittui.Hint {
 			hints = append(hints, kittui.Hint{Action: actDataDirs, Label: textKeyDataDirs, Priority: 2})
 		}
 	}
-	hints = append(hints, kittui.Hint{Action: actEdit, Label: textKeyUpdateRules, Priority: 3})
+	hints = append(hints, kittui.Hint{Action: actEdit, Label: textKeyUpdateRules, Priority: 3},
+		kittui.Hint{Action: actBackup, Label: textKeyBackupForm, Priority: 3},
+		kittui.Hint{Action: actCompose, Label: textKeyComposeForm, Priority: 3})
 	return append(hints, containerLogsHint(),
 		kittui.Hint{Action: actAdd, Label: textKeySecretSet, Priority: 3},
 		kittui.Hint{Action: actRemove, Label: textKeySecretDelete, Priority: 3},

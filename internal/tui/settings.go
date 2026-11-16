@@ -115,6 +115,8 @@ const (
 	opRemote
 	opStackSettings
 	opStackSettingsSet
+	opStackSettingsBackup
+	opStackSettingsCompose
 )
 
 // settingMsg carries the answer of a write. A write answers with the name it concerned, never with a value.
@@ -478,9 +480,16 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		done(text, t.Lookup(textSecretAppliesLater))
 		cmds = append(cmds, m.readSecrets())
 	case control.StackSettingsResult:
-		cmds = append(cmds, m.updateFormFor(res))
+		switch msg.op {
+		case opStackSettingsBackup:
+			cmds = append(cmds, m.backupFormFor(res))
+		case opStackSettingsCompose:
+			cmds = append(cmds, m.composeFormFor(res))
+		default:
+			cmds = append(cmds, m.updateFormFor(res))
+		}
 	case control.StackSettingsSetResult:
-		cmds = append(cmds, m.updateSaved(res, done))
+		cmds = append(cmds, m.settingsSaved(res, done))
 	case dataDirsResult:
 		cmds = append(cmds, m.dataDirsDone(res, done))
 	case control.BackupRestoreResult:
@@ -520,8 +529,8 @@ func (m *Model) settingFailed(msg settingMsg) tea.Cmd {
 			s.form.problems(p)
 			return nil
 		}
-		if s.form.kind == formUpdate && msg.op == opStackSettingsSet {
-			if p, ok := m.updateProblems(msg.err); ok {
+		if msg.op == opStackSettingsSet {
+			if p, ok := m.settingsProblems(s.form.kind, msg.err); ok {
 				s.form.problems(p)
 				return nil
 			}

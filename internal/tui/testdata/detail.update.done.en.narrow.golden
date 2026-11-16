@@ -1,24 +1,24 @@
-◆ qdeploy  window closed            [esc] back  [?] help
-  1 [2 Stack detail] 3 4 5                              
-────────────────────────────────────────────────────────
-  demo-stack                                            
-                                                        
-  mode      automatic                                   
-  state     deployed                                    
-  findings  1 warning                                   
-                                                        
-╭─╔═ Done ═══════════════════════════════════════════╗─╮
-│ ║ Update rules of the stack demo-stack saved.      ║ │
-│ ║                                                  ║ │
-╰─║ commit: 222222222222                             ║─╯
-╭─║                                                  ║─╮
-│ ║ > close <                                        ║ │
-╰─║ n/esc/enter close                                ║─╯
-╭─╚══════════════════════════════════════════════════╝─╮
-│ APP_VERSION  1.4.2 -> 1.5.0                          │
-│   source example/app                                 │
-│   1.5.0  Spring release  2026-10-29                  │
-│     Adds a dark theme.                               │
-│                                                      │
-│     - faster start                                   │
-                                                   20/63
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  demo-stack                                                                    
+                                                                                
+  mode      automatic                                                           
+  state     deployed                                                            
+  findings  1 warning                                                           
+                                                                                
+╭─ Image╔═ Done ═══════════════════════════════════════════════════════╗───────╮
+│ APP_VE║ Update rules of the stack demo-stack saved.                  ║       │
+│   1.4.║                                                              ║       │
+╰───────║ commit: 222222222222                                         ║───────╯
+╭─ Conta║                                                              ║───────╮
+│ No con║ > close <                                                    ║       │
+╰───────║ n/esc/enter close                                            ║───────╯
+╭─ Chang╚══════════════════════════════════════════════════════════════╝───────╮
+│ APP_VERSION  1.4.2 -> 1.5.0                                                  │
+│   source example/app                                                         │
+│   1.5.0  Spring release  2026-10-29                                          │
+│     Adds a dark theme.                                                       │
+│                                                                              │
+│     - faster start                                                           │
+                                                                           20/60

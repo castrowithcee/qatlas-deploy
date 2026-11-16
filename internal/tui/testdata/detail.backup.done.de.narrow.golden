@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  demo-stack                                                                    
+                                                                                
+  Modus    automatisch                                                          
+  Zustand  deployt                                                              
+  Befunde  1 Warnung                                                            
+                                                                                
+╭─ Image╔═ Erledigt ═══════════════════════════════════════════════════╗───────╮
+│ APP_VE║ Backup des Stacks demo-stack gespeichert.                    ║       │
+│   1.4.║                                                              ║       │
+╰───────║ Commit: 222222222222                                         ║───────╯
+╭─ Conta║                                                              ║───────╮
+│ Keine ║ > schließen <                                                ║       │
+╰───────║ n/esc/enter schließen                                        ║───────╯
+╭─ Chang╚══════════════════════════════════════════════════════════════╝───────╮
+│ APP_VERSION  1.4.2 -> 1.5.0                                                  │
+│   Quelle example/app                                                         │
+│   1.5.0  Spring release  2026-10-29                                          │
+│     Adds a dark theme.                                                       │
+│                                                                              │
+│     - faster start                                                           │
+                                                                           20/60

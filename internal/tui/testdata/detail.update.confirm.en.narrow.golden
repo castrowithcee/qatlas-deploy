@@ -1,24 +1,24 @@
-◆ qdeploy  window closed            [esc] back  [?] help
-  1 [2 Stack detail] 3 4 5                              
-────────────────────────────────────────────────────────
-  Update rules of a stack                               
-                                                        
-  ╔═ Update rules of a stack ════════════════════════╗  
-  ║ ⚠ Save the update rules of the stack demo-stack? ║  
-  ║                                                  ║  
-  ║ A commit with the new rules is created in the    ║═╗
-> ║ stack repository and pushed to its remote. The   ║ ║
-  ║ rules act on the next update.                    ║═╝
-  ║ mode: automatic, ceiling: patch, major jump:     ║  
-  ║ direct                                           ║n 
-  ║ observation: 15 min                              ║  
-  ║ tag filter APP_VERSION: ^1\.[0-9.]+$             ║─╮
-  ║ changelog APP_VERSION: example/app               ║ │
-  ║                                                  ║─╯
-  ║ [ yes, do it ]  > cancel <                       ║─╮
-  ║ y yes, do it  n/esc/enter cancel                 ║ │
-  ╚══════════════════════════════════════════════════╝─╯
-  …                                                     
-                                                        
-[ F2 save ]  [ esc discard ]                            
-                                                        
+◆ qdeploy  maintenance window closed                        [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  Update rules of a stack                                                       
+                                                                                
+  Rules of the stack demo-stack. Backup, check and compose files stay as they   
+  are.  ╔═ Update rules of a stack ════════════════════════════════════╗        
+        ║ ⚠ Save the update rules of the stack demo-stack?             ║        
+        ║                                                              ║═══════╗
+> Mode  ║ A commit with the new rules is created in the stack          ║     ▾ ║
+        ║ repository and pushed to its remote. The rules act on the    ║═══════╝
+        ║ next update.                                                 ║nual    
+        ║ mode: automatic, ceiling: patch, major jump: direct          ║        
+        ║ observation: 15 min                                          ║───────╮
+  Ceilin║ tag filter APP_VERSION: ^1\.[0-9.]+$                         ║     ▾ │
+        ║ changelog APP_VERSION: example/app                           ║───────╯
+        ║                                                              ║───────╮
+  Major ║ [ yes, do it ]  > cancel <                                   ║     ▾ │
+        ║ y yes, do it  n/esc/enter cancel                             ║───────╯
+  …     ╚══════════════════════════════════════════════════════════════╝        
+                                                                                
+                                                                                
+[ F2 save ]  [ esc discard ]                                                    
+                                                                                

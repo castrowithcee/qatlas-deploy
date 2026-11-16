@@ -20,5 +20,5 @@
 ╰──────────────────────────────────────────────────────╯
 ╭─ Containers ─────────────────────────────────────────╮
 │ No containers of this stack.                         │
-m create data directories  e update rules  o log        
-a set secret  x delete secret  r reload  q quit         
+m create data directories  e update rules  b backup     
+C compose  o log  a set secret  r reload  q quit        

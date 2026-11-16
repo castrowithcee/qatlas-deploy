@@ -1,0 +1,24 @@
+◆ qdeploy  maintenance window closed                                  [esc] back
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
+  Backup of a stack                                                             
+                                                                                
+  Backup of the stack demo-stack. Update rules, check and compose files stay as 
+  they are.                                                                     
+                                                                                
+  …                                                                             
+                     ╔═════════════════════════════════════════════════════════╗
+> Keep (number)      ║ 0_                                                      ║
+                     ╚═════════════════════════════════════════════════════════╝
+                     the newest backups kept, at least 1; empty keeps 7 unless  
+                     an age is set                                              
+                     [!] Keep is a whole number of at least 1, or empty. -      
+                     Correct the field.                                         
+                     ╭─────────────────────────────────────────────────────────╮
+  Maximum age (days) │ 30                                                      │
+                     ╰─────────────────────────────────────────────────────────╯
+                                                                                
+                                                                                
+                                                                                
+[ F2 save ]  [ esc discard ]                                                    
+F2 save  esc discard                    tab next field  shift+tab previous field

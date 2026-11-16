@@ -197,6 +197,10 @@ func (m *Model) submitForm() tea.Cmd {
 		return m.submitDataDirs(f, text("owner"), text("mode"))
 	case formUpdate:
 		return m.submitUpdate(f, v)
+	case formBackup:
+		return m.submitBackup(f, v)
+	case formCompose:
+		return m.submitCompose(f)
 	case formKeyChoice:
 		return m.submitKeyChoice(f, v)
 	case formKeyStore:

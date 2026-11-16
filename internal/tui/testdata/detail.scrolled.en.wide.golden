@@ -1,6 +1,7 @@
 ◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
    1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭─ Containers ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ No containers of this stack.                                                                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Changelog ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -11,6 +12,5 @@
 │                                                                                                                      │
 │     - faster start                                                                                                   │
 │     - fixes the upload limit                                                                                         │
-│   1.4.3  2026-10-20                                                                                                  │
-│     Fixes a crash on empty input.                                                                                    │
-e update rules  o log  a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit     ↑/↓ scroll  23/59
+e update rules  b backup  C compose  o log  a set secret  x delete secret  R restore backup  r reload  1-5 area  q quit 
+                                                                                                       ↑/↓ scroll  21/59

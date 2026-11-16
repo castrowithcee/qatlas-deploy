@@ -1,0 +1,24 @@
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
+   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container         
+────────────────────────────────────────────────────────────────────────────────
+  Compose-Dateien                                                               
+  Compose führt die Dateien in dieser Reihenfolge zusammen; eine spätere        
+  überschreibt eine frühere. K und J verschieben den Eintrag.                   
+                                                                                
+  DATEI                                                                         
+> compose.yaml                                                                  
+  compose.prod.yaml                                                             
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+a hinzufügen  e ändern  x entfernen  K nach oben  J nach unten  esc fertig      

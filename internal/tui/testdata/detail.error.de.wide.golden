@@ -43,5 +43,5 @@
 ╭─ Funktionen ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Deploy  geht                                                                                                         │
 │   Compose starts the stack from compose.yaml                                                                         │
-e Update-Regeln  o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  1-5 Bereich          
-q Beenden                                                                                            ↑/↓ Scrollen  42/54
+e Update-Regeln  b Backup  C Compose  o Log  a Geheimnis setzen  x Geheimnis löschen  R Backup einspielen  r Neu laden  
+1-5 Bereich  q Beenden                                                                               ↑/↓ Scrollen  42/54

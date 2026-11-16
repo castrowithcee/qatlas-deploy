@@ -1,0 +1,40 @@
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks  [2 ▣ Stack detail]  3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Compose files of a stack                                                                                              
+                                                                                                                        
+  Compose files of the stack demo-stack. Update rules, backup and check stay as they are.                               
+                                                                                                                        
+        ╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+> Files ║ compose.0.yaml, compose.1.yaml, compose.2.yaml, compose.3.yaml, compose.4.yaml, compose.5.yaml, compose.6.y… ║
+        ╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+        in merge order, relative to the stack folder; empty uses the files Compose finds itself                         
+        [!] A stack has at most 16 compose files. - Correct the field.                                                  
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 save ]  [ esc discard ]                                                                                            
+enter edit  F2 save  esc discard                                                tab next field  shift+tab previous field
