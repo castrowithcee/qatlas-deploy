@@ -44,7 +44,7 @@ func areas() []kittui.Area {
 		{ID: areaStacks, Title: textAreaStacks},
 		{ID: areaDetail, Title: textAreaDetail},
 		{ID: areaRuns, Title: textAreaRuns},
-		{ID: areaSettings, Title: textAreaSettings},
+		{ID: areaSettings, Title: textAreaSettings, Tabs: settingsTabs()},
 		{ID: areaContainers, Title: textAreaContainers},
 	}
 }
@@ -207,6 +207,9 @@ func newModel(c config) (*Model, error) {
 	}
 	if m.set, err = newSettings(keys, text); err != nil {
 		return nil, err
+	}
+	if m.area == areaSettings {
+		m.showPage(false)
 	}
 	m.setZone(kittui.ZoneTabs)
 	if !m.restyle() {
@@ -486,7 +489,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.modal != nil {
 		return m.modalKey(msg)
 	}
-	if m.formShown() {
+	if m.formFocused() {
 		if m.formBlocked() {
 			if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actForceQuit {
 				return tea.Quit
@@ -577,12 +580,18 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		case actBack:
 			switch m.area {
 			case areaSettings:
-				if m.set.page == "" {
-					m.back(m.set.menu, msg)
-					return nil
+				switch m.focus() {
+				case kittui.ZoneTabs:
+				case kittui.ZoneSubtabs:
+					m.setZone(kittui.ZoneTabs)
+				default:
+					if l := m.set.activeList(); l != nil {
+						m.back(l, msg)
+					} else {
+						m.setZone(m.above())
+					}
 				}
-				cmd, _ := m.settingsAction(actBack)
-				return cmd
+				return nil
 			case areaStacks:
 				if m.set.keyOpen {
 					m.closeKeyView()
@@ -651,7 +660,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		open, handled := m.runsList.Update(msg)
 		m.topEdge(handled, msg)
 		return m.openLog(open)
-	case m.area == areaSettings:
+	case m.area == areaSettings && m.focus() != kittui.ZoneTabs && m.focus() != kittui.ZoneSubtabs:
 		cmd, handled := m.settingsTyped(msg)
 		m.topEdge(handled, msg)
 		return cmd
@@ -662,18 +671,27 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// topEdge leads to the tab line when an up key found no row above it: a list reports the key as not handled
-// at its first row, and a text without a scroll position never handles it.
+// above is the zone over the content: the sub-tab line where the area has one, else the tab line.
+func (m *Model) above() kittui.FocusZone {
+	if m.area == areaSettings {
+		return kittui.ZoneSubtabs
+	}
+	return kittui.ZoneTabs
+}
+
+// topEdge leads to the zone above the content when an up key found no row above it: a list reports the key as
+// not handled at its first row, and a text without a scroll position never handles it.
 func (m *Model) topEdge(handled bool, msg tea.KeyPressMsg) {
 	if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actUp && !handled {
-		m.setZone(kittui.ZoneTabs)
+		m.setZone(m.above())
 	}
 }
 
-// back is Esc in a list of an area: it clears a search first, and leads to the tab line once none is left.
+// back is Esc in a list of an area: it clears a search first, and leads to the zone above the content once none
+// is left.
 func (m *Model) back(l *kittui.List, msg tea.KeyPressMsg) {
 	if _, handled := l.Update(msg); !handled {
-		m.setZone(kittui.ZoneTabs)
+		m.setZone(m.above())
 	}
 }
 
@@ -701,6 +719,14 @@ func (m *Model) reloadAll() tea.Cmd {
 
 // enter shows an area and starts what that area reads on its own.
 func (m *Model) enter(area kittui.AreaID) tea.Cmd {
+	if m.area == areaSettings && area != areaSettings {
+		if f := m.set.form; f != nil && f.kind == formGeneral && f.form.Changed() {
+			return m.leaveGeneral(func() tea.Cmd { return m.enter(area) })
+		}
+		if f := m.set.form; f != nil && f.kind == formGeneral {
+			m.set.form = nil
+		}
+	}
 	m.setZone(kittui.ZoneRows)
 	if m.clog.open && area != m.clog.area {
 		m.closeContainerLog()
@@ -718,7 +744,7 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 	case areaRuns:
 		return m.followLog()
 	case areaSettings:
-		return m.loadPage(false)
+		return m.showPage(false)
 	}
 	return nil
 }
@@ -726,13 +752,19 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 // zones are the focus zones of the screen in their fixed order: the tab line and the content.
 func (m *Model) zones() []kittui.FocusZone {
 	switch {
+	case m.formShown() && m.set.form.kind == formGeneral:
+		// The General page is its form, and the focus can leave it for the lines above.
+		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneSubtabs, kittui.ZoneForm}
 	case m.formShown():
 		return []kittui.FocusZone{kittui.ZoneForm}
 	case m.clogShown():
+	case m.area == areaSettings && m.set.activeList() == nil:
+		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneSubtabs, kittui.ZoneDetail}
+	case m.area == areaSettings:
+		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneSubtabs, kittui.ZoneRows}
 	case m.area == areaDetail && m.pick == nil,
 		m.area == areaStacks && m.set.keyOpen,
-		m.area == areaContainers && m.ctv.open,
-		m.area == areaSettings && m.set.activeList() == nil && m.set.page != "":
+		m.area == areaContainers && m.ctv.open:
 		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneDetail}
 	}
 	return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneRows}
@@ -747,19 +779,19 @@ func (m *Model) focus() kittui.FocusZone {
 	return zones[len(zones)-1]
 }
 
-// setZone moves the focus; a list shows its marked row as focused only outside the tab line.
+// setZone moves the focus; a list shows its marked row as focused only outside the tab and sub-tab lines.
 func (m *Model) setZone(z kittui.FocusZone) {
 	m.zone = z
 	lists := []*kittui.List{m.list, m.runsList, m.ctList}
 	if m.set != nil {
-		lists = append(lists, m.set.menu, m.set.credList, m.set.notifyList)
+		lists = append(lists, m.set.credList, m.set.notifyList)
 	}
 	if m.pick != nil {
 		lists = append(lists, m.pick.list)
 	}
 	for _, l := range lists {
 		if l != nil {
-			l.SetFocused(z != kittui.ZoneTabs)
+			l.SetFocused(z != kittui.ZoneTabs && z != kittui.ZoneSubtabs)
 		}
 	}
 }
@@ -777,14 +809,22 @@ func (m *Model) navKey(id kittui.ActionID, msg tea.KeyPressMsg, focus kittui.Inp
 		return nil, false
 	}
 	zones, cur := m.zones(), m.focus()
-	tabs := cur == kittui.ZoneTabs
+	tabs, sub := cur == kittui.ZoneTabs, cur == kittui.ZoneSubtabs
 	switch {
-	case id == actNext, tabs && (id == actDown || id == actEnter):
+	case id == actNext, (tabs || sub) && (id == actDown || id == actEnter):
 		m.setZone(kittui.CycleZone(zones, cur, 1))
 	case id == actPrev:
 		m.setZone(kittui.CycleZone(zones, cur, -1))
 	case tabs && id == actUp:
 		// nothing lies above the tab line; the unfocused content must not move under it
+	case sub && id == actUp:
+		m.setZone(kittui.ZoneTabs)
+	case sub && (id == actLeft || id == actRight):
+		step := 1
+		if id == actLeft {
+			step = -1
+		}
+		return m.stepTab(step), true
 	case tabs && (id == actLeft || id == actRight):
 		step := 1
 		if id == actLeft {
@@ -986,7 +1026,7 @@ func (m *Model) frameSpec() kittui.FrameSpec {
 	spec := kittui.FrameSpec{
 		Width: m.width, Height: m.height, Product: productName, Status: m.marks(),
 		HeaderKeys: []kittui.Hint{{Action: actHelp, Label: kittui.TextKeyHelp}},
-		Areas:      areas(), ActiveArea: m.area, Focus: m.focus(), Input: m.input(),
+		Areas:      areas(), ActiveArea: m.area, ActiveTab: kittui.TabID(m.set.page), Focus: m.focus(), Input: m.input(),
 		Message: m.message(), Footer: m.footer(),
 	}
 	switch {

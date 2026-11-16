@@ -1,5 +1,6 @@
 qdeploy  Wartungsfenster zu                                                                                 [esc] Zurück
    1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+   Allgemein   Zugangsdaten   Wartungsfenster  [Benachrichtigungen]                                                     
 ------------------------------------------------------------------------------------------------------------------------
   Einstellungen des Kanals                                                                                              
                                                                                                                         
@@ -10,7 +11,6 @@ qdeploy  Wartungsfenster zu                                                     
 > Signaturschlüssel | ************************_                                                                        |
                     #==================================================================================================#
                     verborgen; signiert jede Nachricht                                                                  
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

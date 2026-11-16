@@ -47,13 +47,14 @@ func seq(parts ...[]string) []string { return slices.Concat(parts...) }
 
 func keys(k ...string) []string { return k }
 
-// The ways to a page of the Settings area from the Stacks area.
+// The ways to a page of the Settings area from the Stacks area: the area opens on the General form; up leaves
+// it for the sub-tab line, the arrows choose a sub-tab, and down enters its content.
 var (
-	toMenu    = keys("4")
-	toGeneral = keys("4", "enter")
-	toCreds   = keys("4", "down", "enter")
-	toWindow  = keys("4", "down", "down", "enter")
-	toNotify  = keys("4", "down", "down", "down", "enter")
+	toSubtabs = keys("4", "up")
+	toGeneral = keys("4")
+	toCreds   = keys("4", "up", "right", "down")
+	toWindow  = keys("4", "up", "right", "right", "down")
+	toNotify  = keys("4", "up", "right", "right", "right", "down")
 )
 
 // The ways to the folders in the Stacks area: the area itself, and the key view of the first folder.
@@ -95,26 +96,45 @@ func contains(t *testing.T, m *Model, want ...string) {
 	}
 }
 
-func TestSettingsAreaListsItsPages(t *testing.T) {
+func TestSettingsAreaShowsItsPagesAsSubtabs(t *testing.T) {
 	m := newSettingsModel(t, settingsBackend())
-	send(m, toMenu...)
-	contains(t, m, "General", "Credentials", "Maintenance window", "Notifications")
+	send(m, "4")
+	contains(t, m, "General", "Credentials", "Maintenance window", "Notifications", "Theme")
 	if screen := m.render(); strings.Contains(screen, "Stack folders") || strings.Contains(screen, "Deploy key") {
-		t.Fatalf("the menu offers a page that lives in Stacks:\n%s", screen)
+		t.Fatalf("a sub-tab offers a page that lives in Stacks:\n%s", screen)
 	}
 	if n := len(settingsPages); n != 4 {
 		t.Fatalf("%d pages", n)
 	}
-	send(m, "down", "enter")
-	contains(t, m, "registry.docker.io", "github.com")
-	// Esc leaves the page, then leads to the tab line.
+	// Every page shows its content as soon as its sub-tab is chosen, without enter.
+	send(m, "up")
+	for _, c := range []struct {
+		step string
+		page settingsPage
+		want string
+	}{{"right", pageCreds, "registry.docker.io"}, {"right", pageWindow, "days: sun"}, {"right", pageNotify, "ops-hook"},
+		{"right", pageGeneral, "Theme"}, {"left", pageNotify, "ops-mail"}} {
+		send(m, c.step)
+		if m.set.page != c.page || m.focus() != kittui.ZoneSubtabs {
+			t.Fatalf("page %q, zone %s", m.set.page, m.focus())
+		}
+		contains(t, m, c.want)
+	}
+}
+
+func TestEscInASettingsPageLeadsToTheSubtabLineThenToTheTabLine(t *testing.T) {
+	m := newSettingsModel(t, settingsBackend())
+	send(m, toCreds...)
+	wantZone(t, m, kittui.ZoneRows)
 	send(m, "esc")
-	if m.area != areaSettings || m.set.page != "" {
+	wantZone(t, m, kittui.ZoneSubtabs)
+	if m.area != areaSettings || m.set.page != pageCreds {
 		t.Fatalf("area %s page %q", m.area, m.set.page)
 	}
 	send(m, "esc")
-	if m.area != areaSettings || m.focus() != kittui.ZoneTabs {
-		t.Fatalf("area %s, zone %s", m.area, m.focus())
+	wantZone(t, m, kittui.ZoneTabs)
+	if m.area != areaSettings || m.set.page != pageCreds {
+		t.Fatalf("area %s page %q", m.area, m.set.page)
 	}
 }
 
@@ -437,10 +457,11 @@ func TestSettingsKeysDoNothingOutsideTheirPage(t *testing.T) {
 	if m.modal != nil || m.set.form != nil || len(b.actions()) != 0 {
 		t.Fatal("a settings key acted in the Stacks area")
 	}
-	send(m, toMenu...)
-	send(m, "a", "x", "e", "b", "F", "G", "s")
-	if m.modal != nil || m.set.form != nil || len(b.actions()) != 0 {
-		t.Fatal("a settings key acted on the menu")
+	send(m, toSubtabs...)
+	send(m, "right", "right")
+	send(m, "a", "x", "b", "F", "G", "s")
+	if m.modal != nil || m.set.form != nil || len(b.actions()) != 0 || m.set.page != pageWindow {
+		t.Fatalf("a settings key acted outside its page: page %q", m.set.page)
 	}
 }
 

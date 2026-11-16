@@ -1,11 +1,10 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
+  [Benachrichtigungen]                                  
 --------------------------------------------------------
   Benachrichtigungskanal anlegen                        
                                                         
-             +-----------------------------------------+
-  Name       | deploy-hook                             |
-             +-----------------------------------------+
+  ~                                                     
              +-----------------------------------------+
   Typ        | webhook                               v |
              +-----------------------------------------+
@@ -18,6 +17,7 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
              #=========================================#
              Leertaste hakt an; nichts angehakt heißt   
              alle                                       
+                                                        
                                                         
 [ F2 speichern ]  [ esc Verwerfen ]                     
 space Umschalten  F2 Speichern  esc verwerfen           

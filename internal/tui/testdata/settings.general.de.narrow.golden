@@ -1,8 +1,7 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
+  [Allgemein]                                           
 --------------------------------------------------------
-  Allgemein                                             
-                                                        
                #=======================================#
 > Design       | terminal                            v |
                #=======================================#
@@ -16,6 +15,7 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                +---------------------------------------+
   Maus         | an                                  v |
                +---------------------------------------+
+                                                        
                                                         
                                                         
                                                         

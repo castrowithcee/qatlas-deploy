@@ -138,9 +138,9 @@ func TestTabIsTextInASearch(t *testing.T) {
 func TestSettingsTextPageHasADetailZone(t *testing.T) {
 	m := newTestModel(t, i18n.English, demoBackend(), wideWidth, goldenRows)
 	send(m, "4")
-	wantZone(t, m, kittui.ZoneRows)
-	send(m, "down", "down", "enter")
-	if m.set.page == "" || m.set.activeList() != nil {
+	wantZone(t, m, kittui.ZoneForm)
+	send(m, toWindow[1:]...)
+	if m.set.page != pageWindow || m.set.activeList() != nil {
 		t.Fatalf("page %q is not a text page", m.set.page)
 	}
 	wantZone(t, m, kittui.ZoneDetail)

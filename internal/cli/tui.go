@@ -55,9 +55,15 @@ func newTUICommand(state *notRunning) *cobra.Command {
 			"Stacks lists every stack with its current and available version, update mode, state, last run and\n" +
 			"findings, under a row for each stack folder with its kind and last poll; Stack detail shows the chosen\n" +
 			"stack with its image versions, changelog, backups and last runs; Runs lists the runs, and enter opens\n" +
-			"the log of a run, which follows a run in progress; Settings holds the general preferences, the\n" +
-			"credentials, the maintenance window and the notification channels; Containers lists every container of\n" +
-			"the host. ? opens the help, r reads the service again, q quits.\n\n" +
+			"the log of a run, which follows a run in progress; Settings holds what applies to the whole host or\n" +
+			"this device, on four sub-tabs below the tab line: General (the preferences of this device),\n" +
+			"Credentials, Maintenance window and Notifications; Containers lists every container of the\n" +
+			"host. ? opens the help, r reads the service again, q quits.\n\n" +
+			"The sub-tabs of Settings are a second line under the tab line. From the tab line, down leads to it, and\n" +
+			"there left and right choose the sub-tab with wrap-around and show its content at once; down, enter or\n" +
+			"tab lead into the content, and up in its first row or field, at the top of a text, or esc lead back to\n" +
+			"the sub-tab line, and up or esc again to the tab line. Leaving the General form with unsaved changes,\n" +
+			"or choosing another sub-tab or area, first asks whether to discard them. Click a sub-tab to choose it.\n\n" +
 			"In Stacks the keys act on the stack under the cursor, or on the stacks ticked with space, one stack\n" +
 			"after another: u update, d deploy, p pause, P unpause, i pin, I unpin, g resume (only for a stack paused\n" +
 			"after a failed rollback) and c asking the registries now about all stacks. Every action first asks:\n" +

@@ -1,5 +1,6 @@
 qdeploy  maintenance window closed            [esc] back
   1 2 3 [4 Settings] 5                                  
+  [Notifications]                                       
 --------------------------------------------------------
   Settings of the channel                               
                                                         
@@ -10,7 +11,6 @@ qdeploy  maintenance window closed            [esc] back
 > Signing key | ************************_              |
               #========================================#
               hidden; signs every message               
-                                                        
                                                         
                                                         
                                                         

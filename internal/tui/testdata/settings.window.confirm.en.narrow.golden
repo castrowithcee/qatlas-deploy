@@ -1,5 +1,6 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
+  [Maintenance window]                                  
 --------------------------------------------------------
   Change the maintenance window                         
                                                         
@@ -16,7 +17,6 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   | y yes, do it  n/esc/enter cancel                 |-+
   #==================================================# |
             +------------------------------------------+
-                                                        
                                                         
                                                         
                                                         

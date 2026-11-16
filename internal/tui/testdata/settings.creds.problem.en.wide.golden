@@ -1,5 +1,6 @@
 qdeploy  maintenance window closed                                                                            [esc] back
    1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+   General  [Credentials]  Maintenance window   Notifications                                                           
 ------------------------------------------------------------------------------------------------------------------------
   Set a credential                                                                                                      
                                                                                                                         
@@ -19,7 +20,6 @@ qdeploy  maintenance window closed                                              
   Token         | empty                                                                                                |
                 +------------------------------------------------------------------------------------------------------+
                 [!] A value of 4 to 8192 characters without control characters is required. - Correct the field.        
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

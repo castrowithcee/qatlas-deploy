@@ -7,8 +7,12 @@ import "testing"
 
 const settingsRows = 24
 
-func TestGoldenSettingsMenu(t *testing.T) {
-	goldenScreens(t, "settings.menu", settingsRows, settingsBackend, toMenu...)
+func TestGoldenSettingsFocusedSubtabLine(t *testing.T) {
+	goldenScreens(t, "settings.subtabs", settingsRows, settingsBackend, seq(toSubtabs, keys("right"))...)
+}
+
+func TestGoldenSettingsGeneralDiscardQuestion(t *testing.T) {
+	goldenScreens(t, "settings.general.discard", settingsRows, settingsBackend, seq(toGeneral, keys("right", "up"))...)
 }
 
 func TestGoldenSettingsGeneralForm(t *testing.T) {

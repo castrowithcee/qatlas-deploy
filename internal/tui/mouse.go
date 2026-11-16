@@ -28,6 +28,12 @@ func (m *Model) formShown() bool {
 	return (m.area == areaSettings || m.area == areaDetail || m.area == areaStacks) && m.set.form != nil
 }
 
+// formFocused reports whether the open form takes the keys. The General form shares the screen with the tab and
+// sub-tab lines and takes keys only while it has the focus; every other form takes them all.
+func (m *Model) formFocused() bool {
+	return m.formShown() && (m.set.form.kind != formGeneral || m.focus() == kittui.ZoneForm)
+}
+
 // mousePart is a widget of the workspace that takes clicks and the wheel itself: a list, a log view, a form
 // or a scrolled text, with its place on the screen.
 type mousePart struct {
@@ -131,11 +137,20 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 				return m.rowClick(p.list, res)
 			case p.form != nil && m.formTakesMouse(p.form):
 				act, handled := p.form.Click(res)
+				if m.set.form.kind == formGeneral {
+					m.setZone(kittui.ZoneForm)
+				}
 				cmd, _ := m.formAct(act, handled)
 				return cmd
 			}
 		}
+	case res.Tab != "":
+		return m.selectTab(res.Tab)
 	case res.Area != "":
+		if m.formShown() && m.set.form.kind == formGeneral {
+			// A key would go to the form, which is no way to another area.
+			return m.enter(res.Area)
+		}
 		if i := slices.IndexFunc(areas(), func(a kittui.Area) bool { return a.ID == res.Area }); i >= 0 && i < len(areaKeys) {
 			return m.pressName(areaKeys[i])
 		}
@@ -145,6 +160,9 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		}
 	case res.Zone != "":
 		if slices.Contains(m.zones(), res.Zone) {
+			if res.Zone != kittui.ZoneForm && m.formFocused() && m.set.form.kind == formGeneral {
+				return m.leaveGeneral(func() tea.Cmd { m.setZone(res.Zone); return nil })
+			}
 			m.setZone(res.Zone)
 		}
 	}

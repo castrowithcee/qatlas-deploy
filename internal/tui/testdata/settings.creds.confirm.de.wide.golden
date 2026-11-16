@@ -1,22 +1,22 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
    1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+   Allgemein  [Zugangsdaten]  Wartungsfenster   Benachrichtigungen                                                      
 ------------------------------------------------------------------------------------------------------------------------
   Zugangsdaten setzen                                                                                                   
                                                                                                                         
                     +--------------------------------------------------------------------------------------------------+
   Zugangsdaten      | Registry-Login                                                                                 v |
-                    +--------------------------------------------------------------------------------------------------+
                     +-------#= Zugangsdaten setzen ========================================#---------------------------+
-  Registry-Host     | Regist| ! Die Zugangsdaten registry.registry.example.test-5000       |                           |
-                    +-------|   speichern?                                                 |---------------------------+
+                    +-------| ! Die Zugangsdaten registry.registry.example.test-5000       |---------------------------+
+  Registry-Host     | Regist|   speichern?                                                 |                           |
                     +-------|                                                              |---------------------------+
-  Registry-Benutzer | alice | Der Dienst speichert den Wert und zeigt ihn nie wieder.      |                           |
-                    +-------| Zugangsdaten gleichen Namens werden ersetzt.                 |---------------------------+
-                    #=======|                                                              |===========================#
-> Token             | ******| [ ja, ausführen ]  > abbrechen <                             |                           |
-                    #=======| y ja, ausführen  n/esc/enter abbrechen                       |===========================#
-                    verborge#==============================================================#                            
-                                                                                                                        
+                    +-------| Der Dienst speichert den Wert und zeigt ihn nie wieder.      |---------------------------+
+  Registry-Benutzer | alice | Zugangsdaten gleichen Namens werden ersetzt.                 |                           |
+                    +-------|                                                              |---------------------------+
+                    #=======| [ ja, ausführen ]  > abbrechen <                             |===========================#
+> Token             | ******| y ja, ausführen  n/esc/enter abbrechen                       |                           |
+                    #=======#==============================================================#===========================#
+                    verborgen; das Registry-Token oder das GitHub-Token                                                 
                                                                                                                         
                                                                                                                         
                                                                                                                         

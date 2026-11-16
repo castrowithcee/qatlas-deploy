@@ -1,5 +1,6 @@
 qdeploy  Wartungsfenster zu                 [esc] Zurück
   1 2 3 [4 Einstellungen] 5                             
+  [Zugangsdaten]                                        
 --------------------------------------------------------
   Zugangsdaten setzen                                   
                                                         
@@ -21,7 +22,6 @@ qdeploy  Wartungsfenster zu                 [esc] Zurück
                     enthält keinen Doppelpunkt. -       
                     Korrigiere das Feld.                
   ~                                                     
-                                                        
                                                         
                                                         
                                                         
