@@ -25,7 +25,8 @@
 # are set in the interface (automatic, ceiling minor): the stacks repository gets a commit with its settings file,
 # the next maintenance window updates the stack, and qdeploy stack settings remove returns it to deploy only. The backup
 # of a stack with a named volume is set in the interface (the volume ticked): the settings file gets a commit, and the next
-# update run backs up exactly that volume. At the very
+# update run backs up exactly that volume. The HTTP check of a stack is set in the interface: the settings file gets a
+# commit with the check, and "clear settings" deletes the file by a commit. At the very
 # end the installed program updates itself to a newer signed test release and refuses tampered ones. Sourced by run.sh scenario.
 
 # signature_asset is the name of the release file with the signature; it must match release.SignatureAsset.
@@ -1226,6 +1227,8 @@ scenario_stacks_repo() {
 	scenario_tui_rules
 
 	scenario_tui_backup
+
+	scenario_tui_check
 }
 
 # flat_field prints one flat field of qdeploy status by its full name (empty when it is absent).
@@ -4239,4 +4242,106 @@ EOF2
 		'mkdir /t && tar -xf /b/volume-0.tar -C /t && cat /t/marker.txt' </dev/null)" = "$vol_marker" ] ||
 		fail "the volume archive of $vol_backup does not hold the marker of the volume"
 	log "scenario: the update run $vol_run backed up the volume $vol_name in $vol_backup, with its marker"
+}
+
+# scenario_tui_check sets the HTTP check of a stack in the check form of the stack detail and removes the settings
+# of the stack again with the action of the detail. It uses demo-rules: the update section left it healthy, idle,
+# without a settings file and in no mode that any later section touches, and no section follows this one. The
+# address is made up and nothing answers there; the acceptance is the commit with the check, and the check acts
+# only on a deployment, which no commit of this section causes (the stack folder itself stays unchanged).
+scenario_tui_check() {
+	tui_log=$work/tui-check-screens.log
+	: >"$tui_log"
+	check_stack=demo-rules
+	check_file=.qatlas/qdeploy/$check_stack.yaml
+	check_url=http://$check_stack.$domain/health
+
+	step 'the stack demo-rules has no settings before the check form'
+	out=$(qd --output json stack settings "$check_stack") || fail "stack settings failed: $out"
+	printf '%s' "$out" | grep -q '"configured": *false' || fail "demo-rules has settings before the check form: $out"
+	as_admin "cd ~/stacks && git pull -q --ff-only && test ! -e $check_file" || fail 'the settings file of demo-rules exists before the check form'
+	check_before=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+
+	step 'Stack detail: the HTTP check of demo-rules is switched on and saved after a question'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait "1 $tui_icon_stacks Stacks" 30
+	tui_send 1
+	tui_wait "$check_stack" 60
+	tui_click_row "$check_stack"
+	tui_send Enter
+	tui_wait 'Image versions' 15
+	tui_send k
+	tui_wait 'Check of a stack' 10
+	# A stack without settings starts on the container check on and the HTTP check off. Tab leads to the HTTP
+	# check; Right steps through its choices; the next fields are the address, the status and the timeout.
+	tui_screen | grep -q 'HTTP check .*off' || fail "the HTTP check of an unconfigured stack does not start off: $(tui_screen)"
+	tui_send Tab
+	i=0
+	until tui_screen | grep -Eq 'HTTP check .*[│║] on'; do
+		i=$((i + 1))
+		[ "$i" -lt 4 ] || fail "the HTTP check does not reach on: $(tui_screen)"
+		tui_send Right
+		sleep 0.3
+	done
+	tui_send Tab
+	tui_clear
+	tui_type "$check_url"
+	tui_send Tab Tab
+	tui_clear
+	tui_type 5s
+	sleep 0.5
+	tui_send F2
+	tui_wait "Save the check of the stack $check_stack?" 10
+	tui_has 'HTTP check: http' || fail "the question does not show the HTTP check: $(tui_screen)"
+	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')" = "$check_before" ] || fail 'the question already made a commit'
+	tui_send y
+	tui_wait "Check of the stack $check_stack saved." 60
+
+	step 'the stacks repository holds one commit that only adds the settings file of demo-rules, with the check'
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	check_commit=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $check_before..HEAD")" = 1 ] || fail 'the form did not make exactly one commit'
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$check_commit" ] || fail 'the check commit is not on the remote branch'
+	[ "$(as_admin "cd ~/stacks && git show --format= --name-status $check_commit")" = "$(printf 'A\t%s' "$check_file")" ] ||
+		fail "the check commit does not only add $check_file: $(as_admin "cd ~/stacks && git show --format= --name-status $check_commit")"
+	check_yaml=$(as_admin "cd ~/stacks && git show $check_commit:$check_file")
+	printf '%s\n' "$check_yaml" | grep -Eq '^check:$' || fail "the settings file has no check section: $check_yaml"
+	printf '%s\n' "$check_yaml" | grep -Eq '^ +http:$' || fail "the check section has no http probe: $check_yaml"
+	printf '%s\n' "$check_yaml" | grep -Eq "^ +url: $check_url\$" || fail "the settings file does not set the address $check_url: $check_yaml"
+	printf '%s\n' "$check_yaml" | grep -Eq '^ +timeout: 5s$' || fail "the settings file does not set the timeout 5s: $check_yaml"
+	out=$(qd --output json stack settings "$check_stack") || fail "stack settings failed: $out"
+	printf '%s' "$out" | grep -q '"configured": *true' || fail "the service does not show the settings of demo-rules: $out"
+	printf '%s' "$out" | grep -qF "$check_url" || fail "the service does not show the address in the settings of demo-rules: $out"
+	log "scenario: the interface committed $check_file: $(printf '%s' "$check_yaml" | tr '\n' ' ')"
+
+	step 'Stack detail: the settings of demo-rules are removed after a question'
+	tui_send Enter
+	tui_wait 'Image versions' 15
+	tui_send E
+	tui_wait "Remove all settings of the stack $check_stack?" 10
+	tui_has 'deletes the settings file' || fail "the question does not name the deletion: $(tui_screen)"
+	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')" = "$check_commit" ] || fail 'the question already made a commit'
+	tui_send y
+	tui_wait "Settings of the stack $check_stack removed." 60
+	tui_send Enter
+	tui_send Escape
+	tui_send 1
+	sleep 0.3
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+
+	step 'the stacks repository holds one commit that only deletes the settings file of demo-rules'
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	check_remove=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $check_commit..HEAD")" = 1 ] || fail 'the removal did not make exactly one commit'
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$check_remove" ] || fail 'the removal commit is not on the remote branch'
+	[ "$(as_admin "cd ~/stacks && git show --format= --name-status $check_remove")" = "$(printf 'D\t%s' "$check_file")" ] ||
+		fail "the removal commit does not only delete $check_file: $(as_admin "cd ~/stacks && git show --format= --name-status $check_remove")"
+	out=$(qd --output json stack settings "$check_stack") || fail "stack settings failed: $out"
+	printf '%s' "$out" | grep -q '"configured": *false' || fail "demo-rules still has settings after the removal: $out"
+	wait_for 'demo-rules to be idle' 120 stack_idle "$check_stack"
+	log 'scenario: the HTTP check of demo-rules is set in the interface and its settings are removed again, one commit each'
 }
