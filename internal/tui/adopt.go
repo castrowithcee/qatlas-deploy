@@ -206,6 +206,9 @@ func (m *Model) askAdoptRejection(src foreignSource, p adoptProblem, res *contro
 
 // title is the title of the questions of a flow.
 func (f *addFlow) title() kittui.TextID {
+	if f.remote {
+		return textTitleRemote
+	}
 	if f.foreign != nil {
 		return textTitleAdopt
 	}

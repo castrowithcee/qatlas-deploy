@@ -101,6 +101,8 @@ const (
 	opSecretDelete
 	opRestore
 	opDataDirs
+	opCompare
+	opRemote
 )
 
 // settingMsg carries the answer of a write. A write answers with the name it concerned, never with a value.
@@ -381,7 +383,16 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		m.askHostKey()
 		return nil
 	case keyChecked:
-		return m.keyDone(res.found)
+		return m.keyDone(res)
+	case control.SourceCompareResult:
+		m.showComparison(res)
+		return nil
+	case control.SourceRemoteResult:
+		s.add = nil
+		details := []string{t.Lookup(textDetailState, res.State), t.Lookup(textDetailBranch, res.Branch), t.Lookup(textDetailHead, short(res.Head)),
+			t.Lookup(textDetailPushed, yesNo(t, res.Pushed))}
+		done(t.Lookup(textDoneRemote, res.Path, res.URL), details...)
+		cmds = append(cmds, m.reloadNow())
 	case listChanged:
 		s.add = nil
 		m.failure = t.Lookup(kittui.TextError, t.Lookup(textFolderListChanged, res.path))

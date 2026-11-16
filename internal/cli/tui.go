@@ -68,7 +68,12 @@ func newTUICommand(state *notRunning) *cobra.Command {
 			"The stack folders are managed in Stacks too: a adds a folder (with the steps of qdeploy source add; an\n" +
 			"empty host starts there), and on a folder row F fetches it, x releases it after a question and e shows,\n" +
 			"generates or stores its deploy key; a folder with no remote has no key to offer. The private key is\n" +
-			"never shown.\n\n" +
+			"never shown. On the row of a local folder O adds a remote: it asks for the SSH address, the host key and\n" +
+			"the deploy key (without one, the key view opens), then compares the folder with the repository. A\n" +
+			"repository without a commit receives the history, an equal one is taken over, and for a different one\n" +
+			"the paths are listed and the state of the host is put on it as one commit after your answer. Secret-like\n" +
+			"files in what would be pushed stop it, with no way around. Adding a folder of files offers the same\n" +
+			"comparison with an address.\n\n" +
 			"The mouse works too: click a tab, a key in the header or footer, or a row, and turn the wheel to scroll.\n" +
 			"A click does what the key does, so every action still asks first. The mouse is on by default; with it\n" +
 			"on, hold Shift to select text. Settings, General switches it off.\n\n" +

@@ -120,7 +120,9 @@ type modal struct {
 	// gen separates the answers of a preview that was left from the current one.
 	gen int
 	// yes, when set, replaces the plan of the stacks: it is what a confirmed change of the settings does.
-	yes        func() tea.Cmd
+	yes func() tea.Cmd
+	// alt is what the answer actWithRemote does, for a question that offers it.
+	alt        func() tea.Cmd
 	changelogs map[string]*changelogEntry
 	// summary
 	title    string
@@ -410,6 +412,10 @@ func (m *Model) answer(answer kittui.ActionID) tea.Cmd {
 			return md.yes()
 		}
 		return m.start(md.plan)
+	case actWithRemote:
+		if md.alt != nil {
+			return md.alt()
+		}
 	case actShowLog:
 		return m.showRuns(md.runs())
 	}

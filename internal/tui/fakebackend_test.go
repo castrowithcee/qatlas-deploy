@@ -50,7 +50,10 @@ type fakeBackend struct {
 	compare    control.SourceCompareResult
 	fetchDirs  []string
 	sourceAdds []control.SourceAddArgs
-	removes    []string
+	// compares records the comparisons asked for; remotes the source.remote calls, and remoteRes is their answer.
+	compares []control.SourceCompareArgs
+	remotes  []control.SourceRemoteArgs
+	removes  []string
 	// host is the host side the model gets; nil gives it none.
 	host *fakeFolders
 	// sent are the arguments of the credential and channel writes in order, kept to check what reached the
@@ -493,7 +496,19 @@ func (f *fakeBackend) SourceCompare(_ context.Context, args control.SourceCompar
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.compares = append(f.compares, args)
 	return f.compare, nil
+}
+
+func (f *fakeBackend) SourceRemote(_ context.Context, args control.SourceRemoteArgs) (control.SourceRemoteResult, error) {
+	if err := f.act("sourceremote", args.Path); err != nil {
+		return control.SourceRemoteResult{}, err
+	}
+	f.mu.Lock()
+	f.remotes = append(f.remotes, args)
+	f.mu.Unlock()
+	return control.SourceRemoteResult{ID: "demo-id", Path: args.Path, URL: args.URL, State: args.ExpectState, Branch: "main",
+		Head: commitA, Pushed: args.ExpectState != control.SourceRemoteEqual}, nil
 }
 
 func (f *fakeBackend) SourceAdd(_ context.Context, args control.SourceAddArgs) (control.SourceAddResult, error) {
