@@ -54,3 +54,43 @@ func TestBindMountsOfAnUnparsableFileAreNone(t *testing.T) {
 		t.Fatalf("BindMounts of a broken file = %q", s.BindMounts)
 	}
 }
+
+func TestVolumesAreTheNamedVolumesWithoutBindMountsOrDuplicates(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "demo-stack/compose.yaml", `services:
+  app:
+    image: registry.example.test/demo/app:${DEMO_VERSION}
+    volumes:
+      - app-data:/var/lib/app
+      - app-data:/backup:ro
+      - ./uploads:/srv/uploads
+      - /var/log/demo:/logs
+      - ${DEMO_DIR}:/srv/var
+      - ~/demo:/srv/home
+      - /anonymous
+      - type: volume
+        source: cache
+        target: /srv/cache
+      - type: bind
+        source: ./long
+        target: /srv/long
+  worker:
+    image: registry.example.test/demo/worker:${DEMO_VERSION}
+    volumes: ["queue:/queue"]
+volumes:
+  app-data:
+  declared-only:
+    external: true
+`)
+	write(t, root, "demo-stack/compose.override.yaml", "services:\n  app:\n    volumes:\n      - extra:/srv/extra\nvolumes:\n  queue:\n")
+	write(t, root, "demo-stack/.env", "DEMO_VERSION=1.0.0\n")
+
+	s := load(t, root)["demo-stack"]
+	if s.Err != nil {
+		t.Fatal(s.Err)
+	}
+	want := []string{"app-data", "cache", "declared-only", "extra", "queue"}
+	if !slices.Equal(s.Volumes, want) {
+		t.Fatalf("Volumes = %q\nwant      %q", s.Volumes, want)
+	}
+}

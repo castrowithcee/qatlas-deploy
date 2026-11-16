@@ -446,6 +446,9 @@ func (s *repoService) handleStacks(_ context.Context, raw json.RawMessage) (any,
 				Service: printable(img.Service), Image: printable(img.Image), Var: printable(img.Var), Version: printable(img.Value),
 			})
 		}
+		for _, v := range st.Volumes {
+			info.Volumes = append(info.Volumes, printable(v))
+		}
 		detail, blocked := r.blocked[ref.src][st.Name]
 		if blocked {
 			info.Collision = printable(detail)

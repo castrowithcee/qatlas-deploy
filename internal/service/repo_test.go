@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -369,6 +370,25 @@ func TestStacksListsValidInvalidAndPlainStacks(t *testing.T) {
 	}
 	if broken := by["broken-stack"]; broken.Error == "" || !strings.Contains(broken.Error, "stack settings") {
 		t.Fatalf("broken-stack = %+v", broken)
+	}
+}
+
+func TestStacksListCarriesTheNamedVolumes(t *testing.T) {
+	h := start(t)
+	h.withKey()
+	h.git.Files = map[string]string{
+		"vol-stack/compose.yaml": "services:\n  app:\n    image: registry.example.test/demo/app:${DEMO_APP_VERSION}\n    volumes:\n      - app-data:/data\n      - ./uploads:/up\nvolumes:\n  app-data:\n  db-data:\n",
+		"vol-stack/.env":         "DEMO_APP_VERSION=1.2.3\n",
+	}
+	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	var res control.StacksResult
+	if err := h.call(control.StacksListCommand, nil, &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Stacks) != 1 || !slices.Equal(res.Stacks[0].Volumes, []string{"app-data", "db-data"}) {
+		t.Fatalf("result = %+v", res)
 	}
 }
 
