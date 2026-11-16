@@ -2344,7 +2344,7 @@ EOF
 	wait_for 'observe-demo healthy' 60 stack_healthy observe-demo
 	out=$(qd_in "$hook_url
 $hook_signing_value
-" notify add obs --type webhook --events rolled-back,rollback-failed,recovery-failed) || fail "notify add obs failed: $out"
+" notify add obs --type webhook --events rolled-back,rollback-failed) || fail "notify add obs failed: $out"
 	[ -z "$(stack_field observe-demo observe)" ] || fail "a stack that was not updated shows an observation: $(stack_field observe-demo observe)"
 
 	step 'observe-demo is updated to 1.1.0 and shows its observation time; data is marked before and after the update'
