@@ -241,25 +241,23 @@ func TestTheRunsListTakesTheRowUnderThePointer(t *testing.T) {
 	}
 }
 
-func TestTheSettingsMenuAndPageListTakeTheRowUnderThePointer(t *testing.T) {
+func TestASubtabClickShowsItsPageAndTheListTakesTheRowUnderThePointer(t *testing.T) {
 	m := newSettingsModel(t, settingsBackend())
 	m.mouseOn = true
-	send(m, toMenu...)
+	send(m, "4")
 	x, y := cellOf(t, m, "Credentials")
 	clickAt(m, x, y)
-	if got := marked(t, m.set.menu); got != string(pageCreds) {
-		t.Fatalf("marked %q", got)
-	}
-	clickAt(m, x, y) // the marked row opens as enter does
 	if m.set.page != pageCreds {
 		t.Fatalf("page %q", m.set.page)
 	}
-	m.render()
+	wantZone(t, m, kittui.ZoneSubtabs)
+	contains(t, m, "registry.docker.io")
 	x, y = cellOf(t, m, "github.com")
-	clickAt(m, x, y) // the page list lies two rows below the top of the workspace
+	clickAt(m, x, y)
 	if got := marked(t, m.set.credList); !strings.Contains(got, "github.com") {
 		t.Fatalf("marked %q", got)
 	}
+	wantZone(t, m, kittui.ZoneRows)
 }
 
 func TestTheContainersListIsClickable(t *testing.T) {

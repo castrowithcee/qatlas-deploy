@@ -198,8 +198,8 @@ acc_first_setup() {
 
 	step 'Settings: the maintenance window is moved away from now'
 	win_start=$(date -u -d '+12 hours' +%H:%M)
-	tui_page 2
-	tui_wait 'Maintenance window' 10
+	tui_subtab 'Maintenance window'
+	tui_wait 'e edit' 10
 	tui_send e
 	tui_wait 'Change the maintenance window' 10
 	tui_clear
@@ -220,8 +220,8 @@ acc_first_setup() {
 	tui_send Enter
 
 	step 'Settings: a webhook channel is added and its test message is sent'
-	tui_page 3
-	tui_wait 'Notifications' 10
+	tui_subtab Notifications
+	tui_wait 's send test' 10
 	tui_send a
 	tui_wait 'Add a notification channel' 10
 	tui_type acceptance-hook

@@ -1,5 +1,6 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
    1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+   Allgemein   Zugangsdaten   Wartungsfenster  [Benachrichtigungen]                                                     
 ------------------------------------------------------------------------------------------------------------------------
   Benachrichtigungskanal anlegen                                                                                        
                                                                                                                         
@@ -14,7 +15,6 @@ qdeploy  Wartungsfenster zu                                                     
              |  [ ] recovery-failed  [ ] update-available                                                              |
              #=========================================================================================================#
              Leertaste hakt an; nichts angehakt heißt alle                                                              
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

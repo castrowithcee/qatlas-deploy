@@ -1,11 +1,10 @@
 qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
    1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+>  Allgemein  [Zugangsdaten]  Wartungsfenster   Benachrichtigungen                                                      
 ------------------------------------------------------------------------------------------------------------------------
-  EINSTELLUNG         INHALT                                                                                            
-> Allgemein           Design, Startbereich, Sprache und Maus dieses Geräts                                              
-  Zugangsdaten        Registry-Logins und GitHub-Token                                                                  
-  Wartungsfenster     wann Updates laufen                                                                               
-  Benachrichtigungen  Kanäle für Webhook, Slack, Telegram und E-Mail                                                    
+  NAME                GESPEICHERT                                                                                       
+  registry.docker.io  2026-10-30 09:00                                                                                  
+  github.com          2026-10-29 09:00                                                                                  
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -21,4 +20,5 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-enter öffnen  r Neu laden  1-5 Bereich  q Beenden                                                 up/down Auswählen  1/4
+left vorherige Seite  right nächste Seite  a hinzufügen  x entfernen  esc Zurück  r Neu laden  1-5 Bereich  q Beenden   
+                                                                                                  up/down Auswählen  1/2

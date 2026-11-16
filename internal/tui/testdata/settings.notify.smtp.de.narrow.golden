@@ -1,5 +1,6 @@
 qdeploy  Wartungsfenster zu                 [esc] Zurück
   1 2 3 [4 Einstellungen] 5                             
+  [Benachrichtigungen]                                  
 --------------------------------------------------------
   Einstellungen des Kanals                              
                                                         
@@ -25,7 +26,6 @@ qdeploy  Wartungsfenster zu                 [esc] Zurück
                   +------------------------------------+
   Empfänger       | leer                               |
                   +------------------------------------+
-                                                        
                                                         
 [ F2 speichern ]  [ esc Verwerfen ]                     
 F2 Speichern  esc verwerfen                             

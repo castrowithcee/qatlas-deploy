@@ -1,5 +1,6 @@
 qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
+  [Benachrichtigungen]                                  
 --------------------------------------------------------
   Einstellungen des Kanals                              
                                                         
@@ -15,7 +16,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
   | [ ja, ausführen ]  > abbrechen <                 |  
   | y ja, ausführen  n/esc/enter abbrechen           |  
   #==================================================#  
-                                                        
                                                         
                                                         
                                                         

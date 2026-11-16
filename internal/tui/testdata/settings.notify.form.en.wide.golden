@@ -1,5 +1,6 @@
 qdeploy  maintenance window closed                                                                  [esc] back  [?] help
    1 Stacks   2 Stack detail   3 Runs  [4 Settings]  5 Containers                                                       
+   General   Credentials   Maintenance window  [Notifications]                                                          
 ------------------------------------------------------------------------------------------------------------------------
   Add a notification channel                                                                                            
                                                                                                                         
@@ -14,7 +15,6 @@ qdeploy  maintenance window closed                                              
          |  [ ] recovery-failed  [ ] update-available                                                                  |
          #=============================================================================================================#
          space ticks; none ticked means all                                                                             
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

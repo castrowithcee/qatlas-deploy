@@ -1,5 +1,6 @@
 qdeploy  Wartungsfenster zu                                                                                 [esc] Zurück
    1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+   Allgemein  [Zugangsdaten]  Wartungsfenster   Benachrichtigungen                                                      
 ------------------------------------------------------------------------------------------------------------------------
   Zugangsdaten setzen                                                                                                   
                                                                                                                         
@@ -19,7 +20,6 @@ qdeploy  Wartungsfenster zu                                                     
   Token             | leer                                                                                             |
                     +--------------------------------------------------------------------------------------------------+
                     [!] Nötig ist ein Wert von 4 bis 8192 Zeichen ohne Steuerzeichen. - Korrigiere das Feld.            
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

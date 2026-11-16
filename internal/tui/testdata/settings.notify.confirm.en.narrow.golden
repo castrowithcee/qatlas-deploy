@@ -1,5 +1,6 @@
 qdeploy  maintenance window closed  [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
+  [Notifications]                                       
 --------------------------------------------------------
   Settings of the channel                               
                                                         
@@ -15,7 +16,6 @@ qdeploy  maintenance window closed  [esc] back  [?] help
   | [ yes, do it ]  > cancel <                       |  
   | y yes, do it  n/esc/enter cancel                 |  
   #==================================================#  
-                                                        
                                                         
                                                         
                                                         

@@ -1,5 +1,6 @@
 qdeploy  Wartungsfenster zu                 [esc] Zurück
   1 2 3 [4 Einstellungen] 5                             
+  [Zugangsdaten]                                        
 --------------------------------------------------------
   Zugangsdaten setzen                                   
                                                         
@@ -17,7 +18,6 @@ qdeploy  Wartungsfenster zu                 [esc] Zurück
                     #==================================#
                     verborgen; das Registry-Token oder  
                     das GitHub-Token                    
-                                                        
                                                         
 [ F2 speichern ]  [ esc Verwerfen ]                     
 F2 Speichern  esc verwerfen                             

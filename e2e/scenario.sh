@@ -3071,7 +3071,7 @@ scenario_tui() {
 
 	step 'Settings General: Deutsch is saved and the interface switches at once, keeps it after a restart, and English is saved back'
 	tui_send Escape
-	tui_page 0
+	tui_subtab General
 	tui_wait 'Start area' 10
 	# The language names stand only in the language field, so they are matched without its frame.
 	tui_wait 'English' 10
@@ -3083,7 +3083,7 @@ scenario_tui() {
 	tui_wait 'Die Einstellungen sind gespeichert.' 10
 	tui_wait '4 Einstellungen' 10
 	tui_send Escape
-	tui_wait 'wann Updates laufen' 10
+	tui_wait 'Zugangsdaten' 10
 	tui_send 1
 	tui_wait '2 Stack-Details' 10
 	tui_wait 'q Beenden' 10
@@ -3097,9 +3097,7 @@ scenario_tui() {
 	tui_wait '2 Stack-Details' 30
 	tui_wait 'demo-stack' 30
 	tui_wait 'q Beenden' 10
-	tui_send 4
-	tui_wait 'wann Updates laufen' 10
-	tui_send Home Enter
+	tui_subtab Allgemein
 	tui_wait 'Startbereich' 10
 	tui_send Tab Tab
 	tui_wait '> Sprache' 10
@@ -3108,7 +3106,7 @@ scenario_tui() {
 	tui_send F2
 	tui_wait 'The settings are saved.' 10
 	tui_send Escape
-	tui_wait 'when updates run' 10
+	tui_wait 'Credentials' 10
 	tui_send 1
 	tui_wait '2 Stack detail' 10
 	tui_has 'Stack-Details' && fail "the interface still shows German after English was saved: $(tui_screen)"
@@ -3273,27 +3271,20 @@ tui_clear() {
 	tui_send BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace
 }
 
-# tui_menu shows the menu of the Settings area, whatever page was open.
-tui_menu() {
+# tui_subtab opens the sub-tab of the Settings area that is named $1, whatever page was open, and leads the focus
+# into its content. The digit shows the area with the focus in the content, so the sub-tab line is not focused and
+# draws no mark before its first tab; the third line of the screen is that line (header, tab line, sub-tab line).
+# The name is clicked, as the page stands where only spaces precede it.
+tui_subtab() {
 	tui_send 4
 	sleep 0.4
-	tui_has 'when updates run' || {
-		tui_send Escape
-		sleep 0.4
-	}
-	tui_wait 'when updates run' 10
-}
-
-# tui_page opens the page of the Settings menu that is $1 rows below the first.
-tui_page() {
-	tui_menu
-	tui_send Home
-	n=0
-	while [ "$n" -lt "$1" ]; do
-		tui_send Down
-		n=$((n + 1))
-	done
-	tui_send Enter
+	cell=$(tui_screen | awk -v t="$1" 'NR == 3 && (i = index($0, t)) { print i, NR; exit }')
+	[ -n "$cell" ] || fail "cannot click the sub-tab '$1', it is not on the sub-tab line: $(tui_screen)"
+	set -- $cell
+	tui_send -l "$(printf '\033[<0;%d;%dM\033[<0;%d;%dm' "$1" "$2" "$1" "$2")"
+	sleep 0.4
+	tui_send Down
+	sleep 0.3
 }
 
 # tui_key_generate runs the form of the deploy key view and chooses to generate; the result dialog is closed.
@@ -3453,8 +3444,8 @@ scenario_tui_setup() {
 	log 'scenario: deploy key generated through the interface and registered on the git server'
 
 	step 'Settings: a registry credential is set after a question'
-	tui_page 1
-	tui_wait 'Credentials' 10
+	tui_subtab Credentials
+	tui_wait 'x remove' 10
 	tui_send a
 	tui_wait 'Set a credential' 10
 	tui_send Tab
@@ -3482,8 +3473,8 @@ scenario_tui_setup() {
 
 	step 'Settings: the maintenance window is moved away from now'
 	win_start=$(date -u -d '+12 hours' +%H:%M)
-	tui_page 2
-	tui_wait 'Maintenance window' 10
+	tui_subtab 'Maintenance window'
+	tui_wait 'e edit' 10
 	tui_send e
 	tui_wait 'Change the maintenance window' 10
 	tui_clear
@@ -3506,8 +3497,14 @@ scenario_tui_setup() {
 		fail "the window was not set through the interface: $(qd --output json window show)"
 
 	step 'Settings: a webhook channel is added and its test message is sent'
-	tui_page 3
-	tui_wait 'Notifications' 10
+	# The arrows alone lead there from the text of the window page: up to the sub-tab line, right to the next
+	# sub-tab, whose content stands at once, and down into it.
+	tui_send Up
+	sleep 0.3
+	tui_send Right
+	tui_wait 's send test' 10
+	tui_send Down
+	sleep 0.3
 	tui_send a
 	tui_wait 'Add a notification channel' 10
 	tui_type tui-hook

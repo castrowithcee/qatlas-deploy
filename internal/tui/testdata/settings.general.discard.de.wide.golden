@@ -1,0 +1,24 @@
+qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
+   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+  [Allgemein]  Zugangsdaten   Wartungsfenster   Benachrichtigungen                                                      
+------------------------------------------------------------------------------------------------------------------------
+               #=======================================================================================================#
+> Design       | catppuccin mocha                                                                                    v |
+               #=======================================================================================================#
+               die Farben der Oberfläche                                                                                
+               +-------------------------------------------------------------------------------------------------------+
+  Startbereich | Stacks     #= Änderungen verwerfen =======================================#                         v |
+               +------------| ! Die Änderungen an diesem Formular verwerfen?               |---------------------------+
+               +------------|                                                              |---------------------------+
+  Sprache      | English    | Die Änderungen, die Sie hier gemacht haben, gehen verloren.  |                         v |
+               +------------|                                                              |---------------------------+
+               +------------| [ ja, ausführen ]  > abbrechen <                             |---------------------------+
+  Maus         | an         | y ja, ausführen  n/esc/enter abbrechen                       |                         v |
+               +------------#==============================================================#---------------------------+
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+[ F2 speichern ]  [ esc Verwerfen ]                                                                                     
+                                                                                                                        
