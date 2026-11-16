@@ -1,0 +1,24 @@
+◆ qdeploy  maintenance window closed          [esc] back
+  [1 Stacks] 2 3 4 5                                    
+────────────────────────────────────────────────────────
+  Add a remote                                          
+                                                        
+          ╔════════════════════════════════════════════╗
+> SSH URL ║ _                                          ║
+          ╚════════════════════════════════════════════╝
+          address of the repository for the marked stack
+          folder; it is compared before anything changes
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        
+[ F2 save ]  [ esc discard ]                            
+F2 save  esc discard                                    
+                tab next field  shift+tab previous field

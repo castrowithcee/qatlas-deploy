@@ -1,24 +1,24 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks  [2 Stack-Details]  3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks  [2 ▣ Stack-Details]  3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   demo-stack                                                                                                            
                                                                                                                         
   Modus    automatisch                                                                                                  
-  Zustand  deployt          #= Backup einspielen ==========================================#                            
-  Befunde  1 Warnung        | ! Das Backup 20261023T031000Z-4567cdef des Stacks demo-stack |                            
-                            |   einspielen?                                                |                            
-  Image-Versionen           |                                                              |                            
-    APP_VERSION  example/app| Der Stack wird gestoppt und seine aktuellen Daten werden mit |                            
-      1.4.2 -> 1.5.0  Update| dem Backup überschrieben. Danach wird der Stack wieder       |                            
-                            | gestartet. Das lässt sich nicht rückgängig machen.           |                            
-  Container                 | 10-23 03:10                                                  |                            
-    Keine Container dieses S| 11.0 MiB                                                     |                            
-                            |                                                              |                            
-  Changelog                 | [ ja, ausführen ]  > abbrechen <                             |                            
-    APP_VERSION  1.4.2 -> 1.| y ja, ausführen  n/esc/enter abbrechen                       |                            
-      Quelle example/app    #==============================================================#                            
-      1.5.0  Spring release  2026-10-29                                                                                 
-        Adds a dark theme.                                                                                              
-                                                                                                                        
-        - faster start                                                                                                  
-                                                                                                                   20/58
+  Zustand  deployt          ╔═ Backup einspielen ══════════════════════════════════════════╗                            
+  Befunde  1 Warnung        ║ ⚠ Das Backup 20261023T031000Z-4567cdef des Stacks demo-stack ║                            
+                            ║   einspielen?                                                ║                            
+╭─ Image-Versionen ─────────║                                                              ║───────────────────────────╮
+│ APP_VERSION  example/app  ║ Der Stack wird gestoppt und seine aktuellen Daten werden mit ║                           │
+│   1.4.2 -> 1.5.0  Update v║ dem Backup überschrieben. Danach wird der Stack wieder       ║                           │
+╰───────────────────────────║ gestartet. Das lässt sich nicht rückgängig machen.           ║───────────────────────────╯
+╭─ Container ───────────────║ 10-23 03:10                                                  ║───────────────────────────╮
+│ Keine Container dieses Sta║ 11.0 MiB                                                     ║                           │
+╰───────────────────────────║                                                              ║───────────────────────────╯
+╭─ Changelog ───────────────║ [ ja, ausführen ]  > abbrechen <                             ║───────────────────────────╮
+│ APP_VERSION  1.4.2 -> 1.5.║ y ja, ausführen  n/esc/enter abbrechen                       ║                           │
+│   Quelle example/app      ╚══════════════════════════════════════════════════════════════╝                           │
+│   1.5.0  Spring release  2026-10-29                                                                                  │
+│     Adds a dark theme.                                                                                               │
+│                                                                                                                      │
+│     - faster start                                                                                                   │
+                                                                                                                   20/59

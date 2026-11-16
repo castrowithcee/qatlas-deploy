@@ -1,14 +1,12 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/castrowithcee/qatlas-kit/cli"
 	"github.com/castrowithcee/qatlas-kit/cobracli"
 	"github.com/castrowithcee/qatlas-kit/output"
 
@@ -92,7 +90,7 @@ func newSourceRemoveCommand(program *cobracli.Program, state *notRunning) *cobra
 			return gate.Run(cobracli.Request{Question: question}, func() error {
 				var res control.SourceRemoveResult
 				if err := credentialCall(c, state, control.SourceRemoveCommand, control.SourceRemoveArgs{Path: path}, &res); err != nil {
-					return sourceRemoveFailure(err)
+					return err
 				}
 				return output.Encode(c.OutOrStdout(), program.Format(), output.Object{Fields: []output.Field{
 					{Name: "id", Value: res.ID}, {Name: "path", Value: res.Path},
@@ -102,14 +100,4 @@ func newSourceRemoveCommand(program *cobracli.Program, state *notRunning) *cobra
 	}
 	gate = program.AddGate(remove, cobracli.Gates{Question: true})
 	return remove
-}
-
-// sourceRemoveFailure words an unknown folder for this command; failureOf's hint for it belongs to keys.
-func sourceRemoveFailure(err error) error {
-	var remote *control.Error
-	if errors.As(err, &remote) && remote.Code == control.CodeNotFound {
-		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
-			NextStep: "List the bound folders with 'qdeploy source list'.", Cause: err}
-	}
-	return err
 }

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
@@ -38,7 +39,7 @@ func TestSecretIsSetAfterConfirmationAndNeverShown(t *testing.T) {
 	sendHidden(t, m, hidden, typed("SERVICE_TOKEN")...)
 	sendHidden(t, m, hidden, "down")
 	sendHidden(t, m, hidden, typed(hiddenA)...)
-	contains(t, m, "************************")
+	contains(t, m, strings.Repeat("•", 24))
 	sendHidden(t, m, hidden, "f2")
 	contains(t, m, "SERVICE_TOKEN", "demo-stack")
 	if len(b.secretSets) != 0 {
@@ -184,7 +185,7 @@ func TestRestoreWithoutAnOlderBackupSaysSo(t *testing.T) {
 func TestDetailChangesKeysDoNothingInStacks(t *testing.T) {
 	b := settingsBackend()
 	m := newSettingsModel(t, b)
-	send(m, "a", "x", "R")
+	send(m, "x", "R")
 	if m.modal != nil || m.pick != nil || m.set.form != nil || len(b.actions()) != 0 {
 		t.Fatal("a detail key acted in the Stacks area")
 	}

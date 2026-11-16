@@ -230,23 +230,43 @@ func (m *Model) heading(key kittui.TextID, width int) string {
 	return m.line(detailMargin, kittui.StyleActive, m.text.Lookup(key), width)
 }
 
+// panelChrome is what a panel takes of its width: a border and a cell of padding on each side.
+const panelChrome = 4
+
+// framed draws one section in a panel of width cells; the height follows the content, and rows above zero is
+// the most it may take. build lays the content out for the width it is given: the builders indent their
+// lines by detailIndent, so they get that much more than the inside of the panel and the indent is taken off
+// again, which keeps nested indents relative to the inside.
+func (m *Model) framed(title, note string, width, rows int, build func(width int) []string) []string {
+	inner := max(width-panelChrome, 1)
+	body := build(inner + detailIndent)
+	for i, l := range body {
+		body[i] = strings.TrimPrefix(l, strings.Repeat(" ", detailIndent))
+	}
+	height := len(body) + 2
+	if rows > 0 {
+		height = min(height, rows)
+	}
+	return m.styles.Panel(title, note, body, width, height, false)
+}
+
 // detailLines is the whole detail of a stack in width cells.
 func (m *Model) detailLines(r stackRow, width int) []string {
 	lines := []string{"  " + m.styles.TitleLine(r.name, "", max(width-2, 1)), ""}
 	lines = append(lines, m.summaryLines(r, width)...)
+	lines = append(lines, "")
 	lines = append(lines, m.stoppedSection(r, width)...)
 	lines = append(lines, m.dataDirSection(r.name, width)...)
-	section := func(key kittui.TextID, body []string) {
-		lines = append(lines, "", m.heading(key, width))
-		lines = append(lines, body...)
+	section := func(key kittui.TextID, build func(width int) []string) {
+		lines = append(lines, m.framed(m.text.Lookup(key), "", width, 0, build)...)
 	}
-	section(textDetailVersions, m.versionLines(r.name, width))
-	section(textDetailContainers, m.stackContainerLines(r.name, width))
-	section(textDetailChangelog, m.changelogLines(width))
-	section(textDetailSecrets, m.secretLines(width))
-	section(textDetailBackups, m.backupLines(width))
-	section(textDetailRuns, m.runLines(r.name, width))
-	section(textDetailCapabilities, m.capabilityLines(r.name, width))
+	section(textDetailVersions, func(w int) []string { return m.versionLines(r.name, w) })
+	section(textDetailContainers, func(w int) []string { return m.stackContainerLines(r.name, w) })
+	section(textDetailChangelog, m.changelogLines)
+	section(textDetailSecrets, m.secretLines)
+	section(textDetailBackups, m.backupLines)
+	section(textDetailRuns, func(w int) []string { return m.runLines(r.name, w) })
+	section(textDetailCapabilities, func(w int) []string { return m.capabilityLines(r.name, w) })
 	return lines
 }
 
@@ -262,11 +282,13 @@ func (m *Model) stoppedSection(r stackRow, width int) []string {
 			since = st.Stopped.Since
 		}
 	}
-	lines := []string{"", m.heading(textDetailStopped, width)}
-	if !since.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleWarn, t.Lookup(textStoppedSince, since.In(m.loc).Format(lastRunLayout)), width))
-	}
-	return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textStoppedHint), width)...)
+	return m.framed(t.Lookup(textDetailStopped), "", width, 0, func(width int) []string {
+		var lines []string
+		if !since.IsZero() {
+			lines = append(lines, m.line(detailIndent, kittui.StyleWarn, t.Lookup(textStoppedSince, since.In(m.loc).Format(lastRunLayout)), width))
+		}
+		return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textStoppedHint), width)...)
+	})
 }
 
 // summaryLines are the update mode, the state and the findings of the stack as the Stacks area has them.

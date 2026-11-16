@@ -93,6 +93,8 @@ type Backend interface {
 	SourceInspect(ctx context.Context, path, url string) (control.SourceInspectResult, error)
 	SourceCompare(ctx context.Context, args control.SourceCompareArgs) (control.SourceCompareResult, error)
 	SourceAdd(ctx context.Context, args control.SourceAddArgs) (control.SourceAddResult, error)
+	// SourceRemote gives a local stack folder its remote, as the comparison the person was shown.
+	SourceRemote(ctx context.Context, args control.SourceRemoteArgs) (control.SourceRemoteResult, error)
 	SourceList(ctx context.Context) (control.SourceListResult, error)
 	// SourceRemove releases a stack folder; no file of it is touched.
 	SourceRemove(ctx context.Context, path string) (control.SourceRemoveResult, error)
@@ -275,6 +277,11 @@ func (b *ChannelBackend) SourceInspect(ctx context.Context, path, url string) (r
 
 func (b *ChannelBackend) SourceCompare(ctx context.Context, args control.SourceCompareArgs) (res control.SourceCompareResult, err error) {
 	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.SourceCompareCommand, args, &res)
+	return res, err
+}
+
+func (b *ChannelBackend) SourceRemote(ctx context.Context, args control.SourceRemoteArgs) (res control.SourceRemoteResult, err error) {
+	err = client.Do(ctx, b.endpoint, remoteCallLimit, control.SourceRemoteCommand, args, &res)
 	return res, err
 }
 

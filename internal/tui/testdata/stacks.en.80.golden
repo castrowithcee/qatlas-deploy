@@ -1,6 +1,6 @@
-qdeploy                                                                 [?] help
-  [1 Stacks]  2 Stack detail   3 Runs   4 Settings   5 Containers               
---------------------------------------------------------------------------------
+◆ qdeploy                                                               [?] help
+  [1 ▤ Stacks]  2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers     
+────────────────────────────────────────────────────────────────────────────────
       STACK                 CURRENT         AVAILABLE      STATE     FINDINGS   
 > [ ] a-running-media-srv   1.4.2           1.5.0          running   none       
   [ ] b-rollback-media-srv  2.0.1           up to date     rollback  none       
@@ -20,5 +20,5 @@ qdeploy                                                                 [?] help
                                                                                 
                                                                                 
                                                                                 
-enter details  / search  space tick  u update  d deploy  r reload  1-5 area     
-q quit                                                      up/down choose  1/13
+enter details  / search  space tick  u update  d deploy  a add  r reload        
+1-5 area  q quit                                                ↑/↓ choose  1/13

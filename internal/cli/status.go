@@ -174,7 +174,23 @@ func failureOf(err error) error {
 			NextStep: "Fix the argument and run the command again.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNotFound:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
-			NextStep: "Create it first with 'qdeploy key generate' or 'qdeploy credential set <name>'.", Cause: err}
+			Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchKey:
+		f := &cli.Failure{Code: output.CodeNotFound, Message: remote.Message, Cause: err}
+		// The message of a stack folder's key already names the command with its --dir.
+		if !strings.Contains(remote.Message, "qdeploy key generate") {
+			f.NextStep = "Create it first with 'qdeploy key generate'."
+		}
+		return f
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchCredential:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the credentials with 'qdeploy credential list'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchSecret:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the secrets with 'qdeploy stack secret list <stack>'.", Cause: err}
+	case errors.As(err, &remote) && remote.Code == control.CodeNoSuchSource:
+		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
+			NextStep: "List the bound folders with 'qdeploy source list'.", Cause: err}
 	case errors.As(err, &remote) && remote.Code == control.CodeNoRepo:
 		return &cli.Failure{Code: output.CodeNotFound, Message: remote.Message,
 			NextStep: "Bind the stacks repository with 'qdeploy repo set <ssh-url>'.", Cause: err}

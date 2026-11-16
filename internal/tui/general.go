@@ -35,6 +35,9 @@ func (m *Model) generalForm() *settingsForm {
 	for _, a := range areas() {
 		starts = append(starts, choice(string(a.ID), a.Title))
 	}
+	if p.Icons == "" {
+		p.Icons = uiprefs.IconsUnicode
+	}
 	mouse := mouseChoiceOn
 	if !p.MouseEnabled {
 		mouse = mouseChoiceOff
@@ -50,6 +53,8 @@ func (m *Model) generalForm() *settingsForm {
 			choice(uiprefs.LanguageGerman, textLangGerman), choice(uiprefs.LanguageSystem, textLangSystem)}, p.Language),
 		pick("mouse", textFieldMouse, textHintMouse, []kittui.Choice{choice(mouseChoiceOn, textMouseOn),
 			choice(mouseChoiceOff, textMouseOff)}, mouse),
+		pick("icons", textFieldIcons, textHintIcons, []kittui.Choice{choice(uiprefs.IconsUnicode, textIconsUnicode),
+			choice(uiprefs.IconsNerdFont, textIconsNerdFont), choice(uiprefs.IconsNone, textIconsNone)}, p.Icons),
 	})
 }
 
@@ -65,6 +70,7 @@ func (m *Model) submitGeneral(f *settingsForm) tea.Cmd {
 	v := f.form.Values()
 	next := m.prefs
 	next.Theme, next.Start = string(v["theme"].Choice), string(v["start"].Choice)
+	next.Icons = string(v["icons"].Choice)
 	next.Language, next.MouseEnabled = string(v["language"].Choice), v["mouse"].Choice == mouseChoiceOn
 	if err := m.savePrefs(next); err != nil {
 		f.problem(t.Lookup(textGeneralSaveFailed, err.Error()), t.Lookup(textFormRetry))
@@ -143,8 +149,8 @@ func (m *Model) relocalize(lang i18n.Lang) tea.Cmd {
 		return nil
 	}
 	s := m.set
-	old := []**kittui.List{&m.list, &m.runsList, &m.ctList, &s.menu, &s.credList, &s.notifyList, &s.folderList}
-	fresh := []*kittui.List{stacks, runs, containers, set.menu, set.credList, set.notifyList, set.folderList}
+	old := []**kittui.List{&m.list, &m.runsList, &m.ctList, &s.credList, &s.notifyList}
+	fresh := []*kittui.List{stacks, runs, containers, set.credList, set.notifyList}
 	mem := make([]listMemory, len(old))
 	for i, l := range old {
 		mem[i] = remember(*l)
@@ -159,12 +165,12 @@ func (m *Model) relocalize(lang i18n.Lang) tea.Cmd {
 	}
 	m.setCredentials(s.credRead)
 	m.setChannels(s.notifyRead)
-	m.fillFolders()
 	for i, l := range fresh {
 		mem[i].restore(l)
 	}
 	// A picker keeps its rows only inside its list; the detail opens it again.
 	m.pick = nil
+	m.setZone(m.zone)
 	return m.relocalizeLogs()
 }
 

@@ -1,22 +1,22 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
---------------------------------------------------------
+  [Notifications]                                       
+────────────────────────────────────────────────────────
   Add a notification channel                            
                                                         
-         +---------------------------------------------+
-  Name   | deploy-hook                                 |
-         +---------------------------------------------+
-         +---------------------------------------------+
-  Type   | webhook                                   v |
-         +---------------------------------------------+
-         #=============================================#
-> Events | >[x] succeeded  [ ] failed  [ ] rolled-back |
-         |  [ ] rollback-failed  [ ] container-failed  |
-         |  [ ] recovered  [ ] recovery-failed         |
-         |  [ ] update-available                       |
-         #=============================================#
+         ╭─────────────────────────────────────────────╮
+  Name   │ deploy-hook                                 │
+         ╰─────────────────────────────────────────────╯
+         ╭─────────────────────────────────────────────╮
+  Type   │ webhook                                   ▾ │
+         ╰─────────────────────────────────────────────╯
+         ╔═════════════════════════════════════════════╗
+> Events ║ >[x] succeeded  [ ] failed  [ ] rolled-back ║
+         ║  [ ] rollback-failed  [ ] container-failed  ║
+         ║  [ ] recovered  [ ] recovery-failed         ║
+         ║  [ ] update-available                       ║
+         ╚═════════════════════════════════════════════╝
          space ticks; none ticked means all             
-                                                        
                                                         
                                                         
 [ F2 save ]  [ esc discard ]                            

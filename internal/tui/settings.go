@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,51 +14,56 @@ import (
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 )
 
-// settingsPage is one page of the Settings area; the empty page is the menu.
+// settingsPage is one page of the Settings area, shown under its sub-tab.
 type settingsPage string
 
 const (
 	pageGeneral settingsPage = "general"
-	pageFolders settingsPage = "folders"
-	pageKey     settingsPage = "key"
 	pageCreds   settingsPage = "credentials"
 	pageWindow  settingsPage = "window"
 	pageNotify  settingsPage = "notifications"
 )
 
-// settingsPages are the pages in the order of the menu, with the texts of their title and of their line in the
-// menu.
-var settingsPages = []struct {
-	page         settingsPage
-	title, about kittui.TextID
-}{
-	{pageGeneral, textPageGeneral, textAboutGeneral},
-	{pageFolders, textPageFolders, textAboutFolders},
-	{pageKey, textPageKey, textAboutKey},
-	{pageCreds, textPageCreds, textAboutCreds},
-	{pageWindow, textPageWindow, textAboutWindow},
-	{pageNotify, textPageNotify, textAboutNotify},
+type settingsEntry struct {
+	page  settingsPage
+	title kittui.TextID
 }
 
-// settingsState is what the Settings area holds. gen separates the answers of a page that was left from those
-// of the page shown.
+// settingsPages are the pages in the order of the sub-tabs, with the text of their title.
+var settingsPages = []settingsEntry{
+	{pageGeneral, textPageGeneral},
+	{pageCreds, textPageCreds},
+	{pageWindow, textPageWindow},
+	{pageNotify, textPageNotify},
+}
+
+// settingsTabs are the sub-tabs of the Settings area.
+func settingsTabs() []kittui.Tab {
+	tabs := make([]kittui.Tab, len(settingsPages))
+	for i, p := range settingsPages {
+		tabs[i] = kittui.Tab{ID: kittui.TabID(p.page), Title: p.title}
+	}
+	return tabs
+}
+
+// settingsState is what the Settings area holds. page is the sub-tab shown; it stays while the area is left.
+// gen separates the answers of a page that was left from those of the page shown.
 type settingsState struct {
-	menu *kittui.List
 	page settingsPage
 	gen  int
 	// busy is set while a write is under way; the interface takes no key but quit then.
 	busy bool
 	form *settingsForm
 
-	folderList *kittui.List
-	folderData map[kittui.ItemID]control.SourceStatus
-	// add is the stack folder being added, nil while none is.
-	add *addFlow
+	// folderData are the bound stack folders by path; add is the one being added, nil while none is.
+	folderData map[string]control.SourceStatus
+	add        *addFlow
 
-	key part
-	// keyFor is the stack folder the key page shows, empty for the default key.
-	keyFor string
-	keyRes control.KeyResult
+	// keyOpen says the Stacks area shows the deploy key of the folder keyFor.
+	keyOpen bool
+	key     part
+	keyFor  string
+	keyRes  control.KeyResult
 	// noKey says the service holds no deploy key yet.
 	noKey bool
 
@@ -75,11 +81,10 @@ type settingsState struct {
 	notifyRead []control.NotifyChannelInfo
 }
 
-// settingsLoadMsg carries the answer of a read of one page; dir is the stack folder a key page read for.
+// settingsLoadMsg carries the answer of a read of one page.
 type settingsLoadMsg struct {
 	gen  int
 	page settingsPage
-	dir  string
 	res  any
 	err  error
 }
@@ -106,6 +111,8 @@ const (
 	opSecretDelete
 	opRestore
 	opDataDirs
+	opCompare
+	opRemote
 )
 
 // settingMsg carries the answer of a write. A write answers with the name it concerned, never with a value.
@@ -118,21 +125,8 @@ type settingMsg struct {
 }
 
 func newSettings(keys *kittui.Keymap, text kittui.Translator) (*settingsState, error) {
-	s := &settingsState{}
+	s := &settingsState{page: pageGeneral}
 	var err error
-	s.menu, err = kittui.NewList(kittui.ListSpec{Columns: []kittui.Column{{Title: textColSetting}, {Title: textColAbout, Flex: true}},
-		Keys: listKeys(), Search: kittui.SearchByKey, Empty: textNoValue}, keys, text)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]kittui.ListItem, len(settingsPages))
-	for i, p := range settingsPages {
-		items[i] = kittui.ListItem{ID: kittui.ItemID(p.page), Cells: []string{text.Lookup(p.title), text.Lookup(p.about)}}
-	}
-	if err := s.menu.SetItems(items); err != nil {
-		return nil, err
-	}
-	s.menu.SetFocused(true)
 	s.credList, err = kittui.NewList(kittui.ListSpec{Columns: []kittui.Column{{Title: textColName}, {Title: textColModified, Flex: true}},
 		Keys: listKeys(), Search: kittui.SearchByKey, Empty: textCredsEmpty}, keys, text)
 	if err != nil {
@@ -146,49 +140,80 @@ func newSettings(keys *kittui.Keymap, text kittui.Translator) (*settingsState, e
 		return nil, err
 	}
 	s.notifyList.SetFocused(true)
-	if s.folderList, err = newFolderList(keys, text); err != nil {
-		return nil, err
-	}
 	return s, nil
 }
 
 // activeList is the list of the page shown, nil for a page without one.
 func (s *settingsState) activeList() *kittui.List {
 	switch s.page {
-	case "":
-		return s.menu
 	case pageCreds:
 		return s.credList
 	case pageNotify:
 		return s.notifyList
-	case pageFolders:
-		return s.folderList
 	}
 	return nil
 }
 
 func (m *Model) settingsBusy() bool { return m.set.busy }
 
-// openPage shows a page and reads what it shows.
-func (m *Model) openPage(p settingsPage) tea.Cmd {
-	s := m.set
-	s.page = p
-	switch p {
-	case pageGeneral:
-		return m.openForm(m.generalForm())
-	case pageFolders:
-		m.fillFolders()
-		return m.reloadNow()
-	case pageKey:
-		s.keyFor, s.key, s.noKey = "", part{}, false
+// showPage fills the page shown: the General page is its form, the others read what they show.
+func (m *Model) showPage(force bool) tea.Cmd {
+	if m.set.page == pageGeneral {
+		if m.set.form == nil {
+			return m.openForm(m.generalForm())
+		}
+		return nil
 	}
-	return m.loadPage(true)
+	return m.loadPage(force)
+}
+
+// selectTab shows the page of a sub-tab and gives the focus to the sub-tab line. Unsaved changes of the General
+// form are asked about first; the focus moves only once they are answered.
+func (m *Model) selectTab(id kittui.TabID) tea.Cmd {
+	page := settingsPage(id)
+	if !slices.ContainsFunc(settingsPages, func(e settingsEntry) bool { return e.page == page }) {
+		return nil
+	}
+	return m.leaveGeneral(func() tea.Cmd {
+		m.setZone(kittui.ZoneSubtabs)
+		if page == m.set.page {
+			return nil
+		}
+		m.set.page, m.set.form = page, nil
+		return m.showPage(true)
+	})
+}
+
+// stepTab shows the sub-tab step places after the one shown, with wrap-around.
+func (m *Model) stepTab(step int) tea.Cmd {
+	for _, a := range areas() {
+		if a.ID == areaSettings {
+			return m.selectTab(kittui.StepTab(a, kittui.TabID(m.set.page), step))
+		}
+	}
+	return nil
+}
+
+// leaveGeneral runs leave at once, or, while the General form holds unsaved changes, after the question about
+// discarding them; the form then starts again from the saved values.
+func (m *Model) leaveGeneral(leave func() tea.Cmd) tea.Cmd {
+	f := m.set.form
+	if f == nil || f.kind != formGeneral || !f.form.Changed() {
+		return leave()
+	}
+	m.ask(textTitleDiscard, m.text.Lookup(textAskDiscard), m.text.Lookup(textWhatDiscard), nil, true, func() tea.Cmd {
+		if m.set.form == f {
+			m.set.form = m.generalForm()
+		}
+		return leave()
+	})
+	return nil
 }
 
 // loadPage reads what the page shows. The folder page shows the status the refresh reads.
 func (m *Model) loadPage(force bool) tea.Cmd {
 	s := m.set
-	ctx, b, page, dir := m.ctx, m.backend, s.page, s.keyFor
+	ctx, b, page := m.ctx, m.backend, s.page
 	read := func(p *part, fn func() (any, error)) tea.Cmd {
 		if p.loading || p.loaded && !force {
 			return nil
@@ -198,12 +223,10 @@ func (m *Model) loadPage(force bool) tea.Cmd {
 		gen := s.gen
 		return func() tea.Msg {
 			res, err := fn()
-			return settingsLoadMsg{gen: gen, page: page, dir: dir, res: res, err: err}
+			return settingsLoadMsg{gen: gen, page: page, res: res, err: err}
 		}
 	}
 	switch page {
-	case pageKey:
-		return read(&s.key, func() (any, error) { return b.KeyShow(ctx, dir) })
 	case pageCreds:
 		return read(&s.creds, func() (any, error) { return b.Credentials(ctx) })
 	case pageWindow:
@@ -217,8 +240,6 @@ func (m *Model) loadPage(force bool) tea.Cmd {
 // pagePart is the read state of a page, nil for a page that reads nothing of its own.
 func (s *settingsState) pagePart(p settingsPage) *part {
 	switch p {
-	case pageKey:
-		return &s.key
 	case pageCreds:
 		return &s.creds
 	case pageWindow:
@@ -232,10 +253,6 @@ func (s *settingsState) pagePart(p settingsPage) *part {
 func (m *Model) applySettingsLoad(msg settingsLoadMsg) {
 	s := m.set
 	p := s.pagePart(msg.page)
-	if msg.page == pageKey && msg.dir != s.keyFor {
-		// The key of a folder the page no longer shows; the read of the folder shown is its own.
-		return
-	}
 	if p == nil || msg.page != s.page {
 		if p != nil {
 			p.loading = false
@@ -245,16 +262,7 @@ func (m *Model) applySettingsLoad(msg settingsLoadMsg) {
 	p.loading = false
 	p.err = msg.err
 	p.loaded = msg.err == nil
-	var remote *control.Error
 	switch res := msg.res.(type) {
-	case control.KeyResult:
-		s.noKey = false
-		if errors.As(msg.err, &remote) && remote.Code == control.CodeNotFound {
-			// No key yet is a state of the page, not a failure.
-			s.noKey, p.err, p.loaded, s.keyRes = true, nil, true, control.KeyResult{}
-		} else if msg.err == nil {
-			s.keyRes = res
-		}
 	case control.CredentialListResult:
 		if msg.err == nil {
 			m.setCredentials(res.Credentials)
@@ -342,32 +350,6 @@ func (m *Model) selectedChannel() (control.NotifyChannelInfo, bool) {
 func (m *Model) settingsAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 	s := m.set
 	switch {
-	case id == actBack:
-		if s.page == pageKey && s.keyFor != "" {
-			s.page, s.keyFor = pageFolders, ""
-			m.fillFolders()
-			return nil, true
-		}
-		if s.page != "" {
-			s.page = ""
-			return nil, true
-		}
-		return m.enter(areaStacks), true
-	case s.page == "" && id == actEnter:
-		if item, ok := s.menu.Selected(); ok {
-			return m.openPage(settingsPage(item)), true
-		}
-		return nil, true
-	case id == actAdd && s.page == pageFolders:
-		return m.openForm(m.folderForm()), true
-	case id == actFetch && s.page == pageFolders:
-		return m.askFolderFetch(), true
-	case id == actRemove && s.page == pageFolders:
-		return m.askFolderRemove(), true
-	case id == actEdit && s.page == pageFolders:
-		return m.openFolderKey(), true
-	case id == actEdit && s.page == pageKey:
-		return m.openKeyForm(), true
 	case id == actAdd && s.page == pageCreds:
 		return m.openForm(m.credentialForm()), true
 	case id == actRemove && s.page == pageCreds:
@@ -428,7 +410,16 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		m.askHostKey()
 		return nil
 	case keyChecked:
-		return m.keyDone(res.found)
+		return m.keyDone(res)
+	case control.SourceCompareResult:
+		m.showComparison(res)
+		return nil
+	case control.SourceRemoteResult:
+		s.add = nil
+		details := []string{t.Lookup(textDetailState, res.State), t.Lookup(textDetailBranch, res.Branch), t.Lookup(textDetailHead, short(res.Head)),
+			t.Lookup(textDetailPushed, yesNo(t, res.Pushed))}
+		done(t.Lookup(textDoneRemote, res.Path, res.URL), details...)
+		cmds = append(cmds, m.reloadNow())
 	case listChanged:
 		s.add = nil
 		m.failure = t.Lookup(kittui.TextError, t.Lookup(textFolderListChanged, res.path))
@@ -453,7 +444,7 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		cmds = append(cmds, m.reloadNow())
 	case control.KeyResult:
 		// The page shows the key of its folder only; the key of another stack folder is shown in the answer alone.
-		if msg.name == s.keyFor {
+		if s.keyOpen && msg.name == s.keyFor {
 			s.key.loaded, s.noKey, s.keyRes = true, false, res
 		}
 		text := textDoneKeySet
@@ -642,33 +633,23 @@ func (m *Model) settingsMark() kittui.StatusMark {
 // settingsFooter is the key line of the Settings area.
 func (m *Model) settingsFooter(common, nav []kittui.Hint) []kittui.Hint {
 	s := m.set
-	if s.form != nil {
+	if s.form != nil && m.formFocused() {
 		return append(s.form.form.Hints(), kittui.Hint{Action: actBack, Label: textKeyCancelForm})
 	}
 	back := kittui.Hint{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}
 	var own []kittui.Hint
+	if m.focus() == kittui.ZoneSubtabs {
+		own = append(own, kittui.Hint{Action: actLeft, Label: textKeyPrevPage, Priority: 3},
+			kittui.Hint{Action: actRight, Label: textKeyNextPage, Priority: 3})
+	}
 	switch s.page {
-	case "":
-		return append(append([]kittui.Hint{{Action: actEnter, Label: textKeyOpen}}, common...), nav...)
-	case pageFolders:
-		own = []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}}
-		// Fetch and deploy key exist only for a folder with a remote.
-		if f, ok := m.selectedFolder(); ok && f.Kind == control.SourceKindRemote {
-			own = append(own, kittui.Hint{Action: actFetch, Label: textKeyFetch, Priority: 3},
-				kittui.Hint{Action: actEdit, Label: textKeyDeployKey, Priority: 3})
-		}
-		if _, ok := m.selectedFolder(); ok {
-			own = append(own, kittui.Hint{Action: actRemove, Label: textKeyRelease, Priority: 3})
-		}
-	case pageKey:
-		own = []kittui.Hint{{Action: actEdit, Label: textKeySetKey, Priority: 3}}
 	case pageCreds:
-		own = []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}, {Action: actRemove, Label: textKeyRemove, Priority: 3}}
+		own = append(own, kittui.Hint{Action: actAdd, Label: textKeyAdd, Priority: 3}, kittui.Hint{Action: actRemove, Label: textKeyRemove, Priority: 3})
 	case pageWindow:
-		own = []kittui.Hint{{Action: actEdit, Label: textKeyEdit, Priority: 3}}
+		own = append(own, kittui.Hint{Action: actEdit, Label: textKeyEdit, Priority: 3})
 	case pageNotify:
-		own = []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}, {Action: actTest, Label: textKeyTest, Priority: 3},
-			{Action: actRemove, Label: textKeyRemove, Priority: 3}}
+		own = append(own, kittui.Hint{Action: actAdd, Label: textKeyAdd, Priority: 3}, kittui.Hint{Action: actTest, Label: textKeyTest, Priority: 3},
+			kittui.Hint{Action: actRemove, Label: textKeyRemove, Priority: 3})
 	}
 	hints := append(own, back)
 	if s.activeList() != nil {
@@ -684,33 +665,15 @@ func (m *Model) settingsView(width, height int) string {
 	if s.form != nil {
 		return m.formView(width, height)
 	}
-	if s.page == "" {
-		return m.listView(s.menu, width, height, 0)
-	}
-	if s.page == pageFolders {
-		return m.foldersView(width, height)
-	}
-	title := m.heading(pageTitle(s.page), width)
 	if list := s.activeList(); list != nil {
-		lines := []string{title, ""}
-		room := max(height-len(lines), 1)
 		if p := s.pagePart(s.page); p != nil && (!p.loaded || p.err != nil) {
-			return strings.Join(append(lines, m.partLines(*p, width)...), "\n")
+			lines := m.partLines(*p, width)
+			return strings.Join(lines[:min(len(lines), height)], "\n")
 		}
-		view := m.listView(list, width, room, len(lines))
-		return strings.Join(lines, "\n") + "\n" + view
+		return m.listView(list, width, height, 0)
 	}
-	lines := append([]string{title, ""}, m.pageLines(width)...)
+	lines := m.pageLines(width, height)
 	return strings.Join(lines[:min(len(lines), height)], "\n")
-}
-
-func pageTitle(p settingsPage) kittui.TextID {
-	for _, e := range settingsPages {
-		if e.page == p {
-			return e.title
-		}
-	}
-	return textAreaSettings
 }
 
 // partLines say why a page shows nothing yet.
@@ -725,38 +688,15 @@ func (m *Model) partLines(p part, width int) []string {
 }
 
 // pageLines are the lines of the pages that are text.
-func (m *Model) pageLines(width int) []string {
+func (m *Model) pageLines(width, height int) []string {
 	switch m.set.page {
-	case pageKey:
-		return m.keyLines(width)
 	case pageWindow:
-		return m.windowLines(width)
+		return m.windowLines(width, height)
 	}
 	return nil
 }
 
-func (m *Model) keyLines(width int) []string {
-	s, t := m.set, m.text
-	var lines []string
-	if s.keyFor != "" {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailKeyFolder, s.keyFor), width), "")
-	}
-	if !s.key.loaded || s.key.err != nil {
-		return append(lines, m.partLines(s.key, width)...)
-	}
-	if s.noKey {
-		return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyNone), width)...)
-	}
-	lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailFingerprint, s.keyRes.Fingerprint), width), "")
-	lines = append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyCopy), width)...)
-	// The key is written out whole and broken only where the screen is too narrow, so it can be copied.
-	for _, l := range kittui.Wrap(kittui.Escape(strings.TrimSpace(s.keyRes.PublicKey)), max(width-detailIndent, 1)) {
-		lines = append(lines, strings.Repeat(" ", detailIndent)+m.styles.Render(kittui.StyleActive, l))
-	}
-	return lines
-}
-
-func (m *Model) windowLines(width int) []string {
+func (m *Model) windowLines(width, height int) []string {
 	s, t := m.set, m.text
 	if !s.window.loaded || s.window.err != nil {
 		return m.partLines(s.window, width)
@@ -766,43 +706,41 @@ func (m *Model) windowLines(width int) []string {
 	if w.Open {
 		state = t.Lookup(textHeaderWindowOpen)
 	}
-	lines := []string{
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDays, m.dayList(w.Days)), width),
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailStart, w.Start), width),
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDuration, w.Duration), width),
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailZone, w.Zone), width),
-		m.line(detailIndent, kittui.StyleText, state, width),
-	}
-	if !w.NextOpening.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailNext, m.stamp(w.NextOpening)), width))
-	}
-	if !w.LastRun.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastRun, m.stamp(w.LastRun)), width))
-	}
-	return lines
+	return m.framed(t.Lookup(textPageWindow), "", width, height, func(width int) []string {
+		lines := []string{
+			m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDays, m.dayList(w.Days)), width),
+			m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailStart, w.Start), width),
+			m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDuration, w.Duration), width),
+			m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailZone, w.Zone), width),
+			m.line(detailIndent, kittui.StyleText, state, width),
+		}
+		if !w.NextOpening.IsZero() {
+			lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailNext, m.stamp(w.NextOpening)), width))
+		}
+		if !w.LastRun.IsZero() {
+			lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastRun, m.stamp(w.LastRun)), width))
+		}
+		return lines
+	})
 }
 
 // settingsTyped gives a key to the list of the page that has the text focus.
 func (m *Model) settingsTyped(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
 	if l := m.set.activeList(); l != nil && m.set.form == nil {
-		open, handled := l.Update(msg)
-		return m.settingsOpen(open), handled
+		// The lists of the pages open nothing.
+		_, handled := l.Update(msg)
+		return nil, handled
 	}
 	return nil, false
 }
 
-// settingsOpen opens the page the menu chose; the lists of the pages open nothing.
-func (m *Model) settingsOpen(id kittui.ItemID) tea.Cmd {
-	if id == "" || m.set.page != "" {
-		return nil
-	}
-	return m.openPage(settingsPage(id))
-}
-
 // settingsInput is the input focus of the Settings area.
 func (m *Model) settingsInput() kittui.InputFocus {
-	if m.set.form != nil {
-		return m.set.form.form.Input()
+	if f := m.set.form; f != nil {
+		if f.kind == formGeneral && m.focus() != kittui.ZoneForm {
+			return kittui.InputNavigation
+		}
+		return f.form.Input()
 	}
 	if l := m.set.activeList(); l != nil {
 		return l.Input()

@@ -1,8 +1,7 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
---------------------------------------------------------
-  Zugangsdaten                                          
-                                                        
+  [Zugangsdaten]                                        
+────────────────────────────────────────────────────────
   Keine Zugangsdaten gespeichert; qdeploy arbeitet      
   anonym. a legt eine an.                               
                                                         
@@ -20,5 +19,6 @@ qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
                                                         
                                                         
                                                         
+                                                        
 a hinzufügen  x entfernen  esc Zurück  r Neu laden      
-1-5 Bereich  q Beenden                 up/down Auswählen
+1-5 Bereich  q Beenden                     ↑/↓ Auswählen

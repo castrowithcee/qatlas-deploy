@@ -59,6 +59,7 @@ func TestChannelBackendSpeaksTheServiceCommands(t *testing.T) {
 		"sourceinspect": func() error { _, err := b.SourceInspect(ctx, "/var/tmp/demo-stacks", ""); return err },
 		"sourcecompare": func() error { _, err := b.SourceCompare(ctx, control.SourceCompareArgs{}); return err },
 		"sourceadd":     func() error { _, err := b.SourceAdd(ctx, control.SourceAddArgs{}); return err },
+		"sourceremote":  func() error { _, err := b.SourceRemote(ctx, control.SourceRemoteArgs{}); return err },
 		"sourcelist":    func() error { _, err := b.SourceList(ctx); return err },
 		"sourceremove":  func() error { _, err := b.SourceRemove(ctx, "/var/tmp/demo-stacks"); return err },
 		"keyshow":       func() error { _, err := b.KeyShow(ctx, ""); return err },

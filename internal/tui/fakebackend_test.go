@@ -50,7 +50,10 @@ type fakeBackend struct {
 	compare    control.SourceCompareResult
 	fetchDirs  []string
 	sourceAdds []control.SourceAddArgs
-	removes    []string
+	// compares records the comparisons asked for; remotes the source.remote calls, and remoteRes is their answer.
+	compares []control.SourceCompareArgs
+	remotes  []control.SourceRemoteArgs
+	removes  []string
 	// host is the host side the model gets; nil gives it none.
 	host *fakeFolders
 	// sent are the arguments of the credential and channel writes in order, kept to check what reached the
@@ -493,7 +496,19 @@ func (f *fakeBackend) SourceCompare(_ context.Context, args control.SourceCompar
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.compares = append(f.compares, args)
 	return f.compare, nil
+}
+
+func (f *fakeBackend) SourceRemote(_ context.Context, args control.SourceRemoteArgs) (control.SourceRemoteResult, error) {
+	if err := f.act("sourceremote", args.Path); err != nil {
+		return control.SourceRemoteResult{}, err
+	}
+	f.mu.Lock()
+	f.remotes = append(f.remotes, args)
+	f.mu.Unlock()
+	return control.SourceRemoteResult{ID: "demo-id", Path: args.Path, URL: args.URL, State: args.ExpectState, Branch: "main",
+		Head: commitA, Pushed: args.ExpectState != control.SourceRemoteEqual}, nil
 }
 
 func (f *fakeBackend) SourceAdd(_ context.Context, args control.SourceAddArgs) (control.SourceAddResult, error) {
@@ -526,10 +541,16 @@ func (f *fakeBackend) SourceRemove(_ context.Context, path string) (control.Sour
 	return control.SourceRemoveResult{ID: "demo-id", Path: path}, nil
 }
 
+// defaultKeyDir says dir names the default key: no folder, or the first bound one.
+func (f *fakeBackend) defaultKeyDir(dir string) bool {
+	src := f.status.Engine.Sources
+	return dir == "" || len(src) > 0 && dir == src[0].Path
+}
+
 // keySlot is the stored key of a stack folder: key for the default one, dirKeys for the others. The caller
 // holds f.mu.
 func (f *fakeBackend) keySlot(dir string) *control.KeyResult {
-	if dir == "" {
+	if f.defaultKeyDir(dir) {
 		return f.key
 	}
 	if k, ok := f.dirKeys[dir]; ok {
@@ -539,7 +560,7 @@ func (f *fakeBackend) keySlot(dir string) *control.KeyResult {
 }
 
 func (f *fakeBackend) putKey(dir string, k control.KeyResult) {
-	if dir == "" {
+	if f.defaultKeyDir(dir) {
 		f.key = &k
 		return
 	}
@@ -559,7 +580,7 @@ func (f *fakeBackend) KeyShow(_ context.Context, dir string) (control.KeyResult,
 	if k := f.keySlot(dir); k != nil {
 		return *k, nil
 	}
-	return control.KeyResult{}, control.NewError(control.CodeNotFound, "no deploy key exists")
+	return control.KeyResult{}, control.NewError(control.CodeNoSuchKey, "no deploy key exists")
 }
 
 func (f *fakeBackend) KeyGenerate(_ context.Context, dir string, replace bool) (control.KeyResult, error) {

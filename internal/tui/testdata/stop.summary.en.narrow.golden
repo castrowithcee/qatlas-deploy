@@ -1,6 +1,6 @@
-qdeploy  maintenance window closed              [?] help
+◆ qdeploy  maintenance window closed            [?] help
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
+────────────────────────────────────────────────────────
   stop finished: 1 ok, 1 failed                         
                                                         
   demo-stack  ok                                        
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed              [?] help
                                                         
                                                         
                                                         
-n/esc/enter close                         up/down scroll
+n/esc/enter close                             ↑/↓ scroll

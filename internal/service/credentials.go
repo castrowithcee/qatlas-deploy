@@ -34,8 +34,10 @@ func answerOf(err error) error {
 		return control.NewError(control.CodeInvalid, err.Error())
 	case errors.Is(err, credentials.ErrKeyExists):
 		return control.NewError(control.CodeKeyExists, err.Error())
-	case errors.Is(err, credentials.ErrNoKey), errors.Is(err, credentials.ErrNotFound):
-		return control.NewError(control.CodeNotFound, err.Error())
+	case errors.Is(err, credentials.ErrNoKey):
+		return control.NewError(control.CodeNoSuchKey, err.Error())
+	case errors.Is(err, credentials.ErrNotFound):
+		return control.NewError(control.CodeNoSuchCredential, err.Error())
 	}
 	return err
 }

@@ -38,5 +38,7 @@ seed_repo stacks3 /usr/local/share/demo-stacks-root
 # empty because the push to it is refused.
 empty_repo stacks4
 empty_repo stacks5
+# A repository without a commit for the folder that gets its remote in the terminal interface.
+empty_repo stacks6
 
 exec /usr/sbin/sshd -D -e

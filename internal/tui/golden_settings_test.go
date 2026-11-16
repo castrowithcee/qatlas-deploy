@@ -1,92 +1,22 @@
 package tui
 
-import (
-	"testing"
-
-	"github.com/castrowithcee/qatlas-deploy/internal/control"
-)
+import "testing"
 
 // The goldens of the Settings area fix its pages, its forms and its questions byte for byte. The masked fields
 // of the forms hold typed values; the goldens show them hidden, and goldenScreens fails if one shows.
 
 const settingsRows = 24
 
-func TestGoldenSettingsMenu(t *testing.T) {
-	goldenScreens(t, "settings.menu", settingsRows, settingsBackend, toMenu...)
+func TestGoldenSettingsFocusedSubtabLine(t *testing.T) {
+	goldenScreens(t, "settings.subtabs", settingsRows, settingsBackend, seq(toSubtabs, keys("right"))...)
+}
+
+func TestGoldenSettingsGeneralDiscardQuestion(t *testing.T) {
+	goldenScreens(t, "settings.general.discard", settingsRows, settingsBackend, seq(toGeneral, keys("right", "up"))...)
 }
 
 func TestGoldenSettingsGeneralForm(t *testing.T) {
 	goldenScreens(t, "settings.general", settingsRows, settingsBackend, toGeneral...)
-}
-
-func TestGoldenSettingsFolders(t *testing.T) {
-	goldenScreens(t, "settings.folders", settingsRows, foldersBackend, toFolders...)
-}
-
-// The second folder is the chosen one: its poll error is shown in full below the list.
-func TestGoldenSettingsFoldersPollError(t *testing.T) {
-	goldenScreens(t, "settings.folders.pollerror", settingsRows, foldersBackend, seq(toFolders, keys("down"))...)
-}
-
-func TestGoldenSettingsFoldersEmpty(t *testing.T) {
-	goldenScreens(t, "settings.folders.empty", settingsRows, settingsBackend, toFolders...)
-}
-
-func TestGoldenSettingsFolderFiles(t *testing.T) {
-	goldenScreens(t, "settings.folders.files", settingsRows, foldersBackend, addKeys(filesDir)...)
-}
-
-func TestGoldenSettingsFolderClone(t *testing.T) {
-	goldenScreens(t, "settings.folders.clone", settingsRows, foldersBackend, addKeys(cloneDir)...)
-}
-
-func TestGoldenSettingsFolderAdopt(t *testing.T) {
-	goldenScreens(t, "settings.folders.adopt", settingsRows, foldersBackend, addKeys(adoptDir)...)
-}
-
-func TestGoldenSettingsFolderHostKey(t *testing.T) {
-	goldenScreens(t, "settings.folders.hostkey", settingsRows, foldersBackend, seq(addKeys(adoptDir), keys("y"))...)
-}
-
-func TestGoldenSettingsFolderReject(t *testing.T) {
-	goldenScreens(t, "settings.folders.reject", settingsRows, foldersBackend, addKeys(rejectDir)...)
-}
-
-func TestGoldenSettingsFolderFetchFailed(t *testing.T) {
-	goldenScreens(t, "settings.folders.fetchfailed", settingsRows, func() *fakeBackend {
-		b := foldersBackend()
-		b.errs["fetch:"+stackDir] = control.NewError(control.CodeRemote, "cannot reach git.example.test: connection refused")
-		return b
-	}, seq(toFolders, keys("F", "y"))...)
-}
-
-func TestGoldenSettingsKeyNone(t *testing.T) {
-	goldenScreens(t, "settings.key.none", settingsRows, settingsBackend, toKey...)
-}
-
-func TestGoldenSettingsKeyShown(t *testing.T) {
-	goldenScreens(t, "settings.key.shown", settingsRows, settingsBackend, seq(toKey, keys("e", "right", "f2", "enter"))...)
-}
-
-func TestGoldenSettingsKeyForm(t *testing.T) {
-	goldenScreens(t, "settings.key.form", settingsRows, func() *fakeBackend { return keyBackend("/srv/first-example", "/srv/second-example") },
-		seq(toKey, keys("e"))...)
-}
-
-func TestGoldenSettingsKeyStoreForm(t *testing.T) {
-	goldenScreens(t, "settings.key.store", settingsRows, settingsBackend, seq(toKey, keys("e", "f2"), typed(hiddenA))...)
-}
-
-func TestGoldenSettingsKeyStoreProblem(t *testing.T) {
-	goldenScreens(t, "settings.key.problem", settingsRows, settingsBackend, seq(toKey, keys("e", "f2", "f2"))...)
-}
-
-func TestGoldenSettingsKeyReplaceQuestion(t *testing.T) {
-	goldenScreens(t, "settings.key.replace", settingsRows, func() *fakeBackend {
-		b := keyBackend("/srv/first-example")
-		b.key = &control.KeyResult{PublicKey: "ssh-ed25519 AAAAexamplekey qdeploy", Fingerprint: fingerprint}
-		return b
-	}, seq(toKey, keys("e", "f2"), typed(hiddenA), keys("f2"))...)
 }
 
 func TestGoldenSettingsCredentials(t *testing.T) {
@@ -174,10 +104,6 @@ func TestGoldenSettingsNotifyTestQuestion(t *testing.T) {
 
 func TestGoldenSettingsNotifyRemoveQuestion(t *testing.T) {
 	goldenScreens(t, "settings.notify.remove", settingsRows, settingsBackend, seq(toNotify, keys("down", "x"))...)
-}
-
-func TestGoldenSettingsDiscardQuestion(t *testing.T) {
-	goldenScreens(t, "settings.discard", settingsRows, settingsBackend, seq(toFolders, keys("a"), typed(stackDir), keys("esc"))...)
 }
 
 func TestGoldenDetailDiscardQuestion(t *testing.T) {

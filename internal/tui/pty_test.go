@@ -111,7 +111,8 @@ func TestSecretSetAtATerminalLeavesTheValueOnlyInTheSecretsFile(t *testing.T) {
 			}
 		}
 	}
-	step("photo-album", "\r")
+	step("photo-album", "\x1b[B") // down: from the tab line into the list
+	step("", "\r")
 	step("API_SIGNING_KEY", "a")
 	step("Set a secret", "PTY_SECRET\t"+ptyValue)
 	// The TUI redraws only changed cells, so the mask dots are not contiguous in

@@ -168,23 +168,38 @@ acc_first_setup() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
-	tui_wait 'No stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
+	tui_send 1
+	tui_wait 'No stack folders yet' 30
 
-	step 'Settings: the deploy key is generated and registered on the git server'
-	tui_page 2
+	step 'Stacks: adding the clone stops at the missing deploy key; the key is generated and registered on the git server'
+	tui_send a
+	tui_wait 'Add a stack folder' 10
+	tui_type "$acc_stacks"
+	tui_send F2
+	tui_wait "Clone a repository into $acc_stacks?" 10
+	tui_send y
+	tui_wait 'Address of the repository to clone' 10
+	tui_type "git.$domain:stacks.git"
+	tui_send F2
+	tui_wait 'ssh-ed25519' 60
+	tui_send y
+	tui_wait "$acc_stacks has no deploy key yet." 30
+	tui_send Enter
 	tui_wait 'No deploy key yet' 10
 	tui_key_generate
 	tui_wait 'Add this public key' 10
 	pub=$(tui_screen | grep -o 'ssh-ed25519 [A-Za-z0-9+/=]*' | head -n 1)
 	[ -n "$pub" ] || fail "the public key is not on the screen: $(tui_screen)"
 	printf '%s\n' "$pub" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+	tui_send Escape
+	tui_wait 'No stack folders yet' 10
 	acc 'deploy key generated through the interface and registered on the git server'
 
 	step 'Settings: the maintenance window is moved away from now'
 	win_start=$(date -u -d '+12 hours' +%H:%M)
-	tui_page 4
-	tui_wait 'Maintenance window' 10
+	tui_subtab 'Maintenance window'
+	tui_wait 'e edit' 10
 	tui_send e
 	tui_wait 'Change the maintenance window' 10
 	tui_clear
@@ -205,8 +220,8 @@ acc_first_setup() {
 	tui_send Enter
 
 	step 'Settings: a webhook channel is added and its test message is sent'
-	tui_page 5
-	tui_wait 'Notifications' 10
+	tui_subtab Notifications
+	tui_wait 's send test' 10
 	tui_send a
 	tui_wait 'Add a notification channel' 10
 	tui_type acceptance-hook
@@ -229,8 +244,8 @@ acc_first_setup() {
 	hook_seen "$acc_hook_path" test || fail 'the webhook receiver did not record the test message of the interface'
 	acc 'webhook channel added through the interface; the test message reached the receiver'
 
-	step 'Settings: the repository is cloned into a new stack folder after the host key is shown and confirmed'
-	tui_page 1
+	step 'Stacks: the repository is cloned into a new stack folder after the host key is shown and confirmed'
+	tui_send 1
 	tui_wait 'No stack folders yet' 10
 	tui_send a
 	tui_wait 'Add a stack folder' 10

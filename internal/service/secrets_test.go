@@ -53,7 +53,7 @@ func TestSecretSetListDeleteRoundTrip(t *testing.T) {
 	if err := h.call(control.SecretDeleteCommand, control.SecretKeyArgs{Stack: "plain-stack", Key: "DB_PASSWORD"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, h.call(control.SecretDeleteCommand, control.SecretKeyArgs{Stack: "plain-stack", Key: "DB_PASSWORD"}, nil), control.CodeNotFound)
+	wantCode(t, h.call(control.SecretDeleteCommand, control.SecretKeyArgs{Stack: "plain-stack", Key: "DB_PASSWORD"}, nil), control.CodeNoSuchSecret)
 	if err := h.call(control.SecretListCommand, control.SecretListArgs{Stack: "plain-stack"}, &list); err != nil || len(list.Keys) != 1 {
 		t.Fatalf("list = %+v, %v", list, err)
 	}

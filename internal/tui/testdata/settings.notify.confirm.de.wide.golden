@@ -1,21 +1,21 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks   2 ▣ Stack-Details   3 ▶ Läufe  [4 ⚙ Einstellungen]  5 ▦ Container                                       
+   Allgemein   Zugangsdaten   Wartungsfenster  [Benachrichtigungen]                                                     
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Einstellungen des Kanals                                                                                              
                                                                                                                         
-                    +--------------------------------------------------------------------------------------------------+
-  Webhook-URL       | (eingegeben, verborgen)                                                                          |
-                    +--------------------------------------------------------------------------------------------------+
-                    #=======#= Benachrichtigungskanal anlegen =============================#===========================#
-> Signaturschlüssel | ******| ! Den Kanal deploy-hook (webhook) anlegen?                   |                           |
-                    #=======|                                                              |===========================#
-                    verborge| Der Dienst speichert die geheimen Teile und zeigt sie nie    |                            
-                            | wieder.                                                      |                            
-                            |                                                              |                            
-                            | [ ja, ausführen ]  > abbrechen <                             |                            
-                            | y ja, ausführen  n/esc/enter abbrechen                       |                            
-                            #==============================================================#                            
-                                                                                                                        
+                    ╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+  Webhook-URL       │ (eingegeben, verborgen)                                                                          │
+                    ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+                    ╔═══════╔═ Benachrichtigungskanal anlegen ═════════════════════════════╗═══════════════════════════╗
+> Signaturschlüssel ║ ••••••║ ⚠ Den Kanal deploy-hook (webhook) anlegen?                   ║                           ║
+                    ╚═══════║                                                              ║═══════════════════════════╝
+                    verborge║ Der Dienst speichert die geheimen Teile und zeigt sie nie    ║                            
+                            ║ wieder.                                                      ║                            
+                            ║                                                              ║                            
+                            ║ [ ja, ausführen ]  > abbrechen <                             ║                            
+                            ║ y ja, ausführen  n/esc/enter abbrechen                       ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
                                                                                                                         
                                                                                                                         
                                                                                                                         

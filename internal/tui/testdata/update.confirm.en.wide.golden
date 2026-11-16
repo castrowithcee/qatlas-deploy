@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed                                                                              [?] help
-  [1 Stacks]  2 Stack detail   3 Runs   4 Settings   5 Containers                                                       
-------------------------------------------------------------------------------------------------------------------------
-  ! Update demo-stack?                                                                                                  
+◆ qdeploy  maintenance window closed                                                                            [?] help
+  [1 ▤ Stacks]  2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ Update demo-stack?                                                                                                  
                                                                                                                         
   Each stack is backed up, committed and deployed step by step, one stack after another; a failed step is rolled back.  
   The versions shown are from the last check, the service asks the registries again.                                    
@@ -44,4 +44,4 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-y yes, do it  n/esc/enter cancel                                                                          up/down scroll
+y yes, do it  n/esc/enter cancel                                                                              ↑/↓ scroll

@@ -16,7 +16,8 @@
 # tmux pane, an update shows its changelog before it is confirmed and then runs, and two ticked stacks are updated
 # one after another with one confirmation. An update that fails after its start is rolled back in its observation time. Notification channels (webhook, Slack, Telegram, e-mail) are
 # added with qdeploy notify: a webhook hears of a deployed and of a rolled-back run, and every channel
-# type delivers a test message. Docker integration tests of the deployer run inside the host
+# type delivers a test message. A local stack folder gets a remote in the terminal interface: an empty repository
+# receives its history, a differing one is shown and left alone without the confirmation. Docker integration tests of the deployer run inside the host
 # before all that. The last section resets the service to a fresh state and does the first setup only through
 # the terminal interface: deploy key, registry credential, maintenance window, notification channel with its
 # test, repository with a confirmed host key, a stack secret and the first deploy; then it restores an older
@@ -1210,6 +1211,8 @@ scenario_stacks_repo() {
 
 	scenario_source_remote
 
+	scenario_tui_remote
+
 	scenario_repair_end
 
 	scenario_adopt
@@ -1870,6 +1873,125 @@ EOF2
 	log 'scenario: source add --url took over the history of an equal repository and left a differing folder alone'
 }
 
+# scenario_tui_remote proves the remote of a local stack folder in the Stacks area of the interface. A local folder
+# below /srv/qd-tr-a has no deploy key: the interface leads to the key view, the generated key is entered at the git
+# server, and the folder then pushes its history to an empty repository after the confirmation. A local folder below
+# /srv/qd-tr-b is compared with the repository of /opt/stacks3, which holds other files: the paths are listed and the
+# answer to cancel leaves the folder, the service and the repository as they were.
+scenario_tui_remote() {
+	tui_log=$work/tui-remote-screens.log
+	: >"$tui_log"
+	tr_a=/srv/qd-tr-a
+	tr_b=/srv/qd-tr-b
+	tr_url6=git.$domain:stacks6.git
+	tr_url3=git.$domain:stacks3.git
+
+	step 'two local folders without a remote are bound'
+	for tr_dir in "$tr_a" "$tr_b"; do
+		docker exec "$host" sh -ec "rm -rf '$tr_dir' && mkdir -p '$tr_dir/notes' && chmod 0755 '$tr_dir' '$tr_dir/notes' &&
+			printf 'notes of %s\n' '$tr_dir' >'$tr_dir/notes/readme.txt' && chmod 0644 '$tr_dir/notes/readme.txt' &&
+			cd '$tr_dir' && git init -q -b main && git add -A &&
+			git -c user.name='E2E Root' -c user.email=root.qdeploye2e.test commit -q -m 'Add the notes'" ||
+			fail "cannot create the local folder $tr_dir"
+		out=$(qd --output json source add "$tr_dir" --yes) || fail "source add of $tr_dir failed: $out"
+		printf '%s\n' "$out" | tail -n 1 | jq -e '.kind == "local"' >/dev/null || fail "unexpected source add result: $out"
+		wait_for 'the qdeploy service to answer' 30 qd status
+	done
+	repo_head3=$(remote_head "$tr_url3")
+	[ -n "$repo_head3" ] || fail 'stacks3 has no head'
+	[ -z "$(remote_head "$tr_url6")" ] || fail 'stacks6 is not empty'
+	tr_head_a=$(folder_git "$tr_a" rev-parse HEAD)
+
+	step 'the interface leads to the key view for a folder without a deploy key and compares nothing before it exists'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait "1 $tui_icon_stacks Stacks" 30
+	tui_send 1
+	tui_folder_to "$tr_a"
+	tui_wait 'add remote' 10
+	tui_send O
+	tui_wait 'Add a remote' 10
+	tui_type "$tr_url6"
+	tui_send F2
+	tui_wait 'Trust this host key for' 30
+	tui_has "$(git_ed25519_fingerprint)" || fail "the host key question does not show the fingerprint: $(tui_screen)"
+	tui_send y
+	tui_wait 'has no deploy key yet' 30
+	tui_send Enter
+	tui_wait "stack folder: $tr_a" 10
+	tui_key_generate
+	tr_out=$(qd --output json key show --dir "$tr_a") || fail "key show --dir $tr_a failed: $tr_out"
+	tr_pub=$(key_pub_field "$tr_out")
+	case $tr_pub in ssh-ed25519\ *) ;; *) fail "no public key of $tr_a: $tr_out" ;; esac
+	[ -z "$(remote_head "$tr_url6")" ] || fail 'the interface pushed before the question'
+	[ -z "$(folder_git "$tr_a" remote)" ] || fail 'the interface gave the folder a remote before the question'
+	printf '%s\n' "$tr_pub" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+
+	step 'with the key in place the empty repository is compared, n changes nothing and y pushes'
+	tui_send Escape
+	tui_folder_to "$tr_a"
+	tui_send O
+	tui_wait 'Add a remote' 10
+	tui_type "$tr_url6"
+	tui_send F2
+	tui_wait 'Trust this host key for' 30
+	tui_send y
+	tui_wait 'Push the history of' 30
+	tui_has "$tr_a" || fail "the question does not name the folder: $(tui_screen)"
+	tui_has 'branch: main' || fail "the comparison does not show the branch: $(tui_screen)"
+	tui_send n
+	sleep 1
+	[ -z "$(remote_head "$tr_url6")" ] || fail 'the answer n pushed'
+	[ -z "$(folder_git "$tr_a" remote)" ] || fail 'the answer n gave the folder a remote'
+	tui_folder_to "$tr_a"
+	tui_send O
+	tui_wait 'Add a remote' 10
+	tui_type "$tr_url6"
+	tui_send F2
+	tui_wait 'Trust this host key for' 30
+	tui_send y
+	tui_wait 'Push the history of' 30
+	tui_send y
+	tui_wait 'runs against' 60
+	tui_send Enter
+	[ "$(remote_head "$tr_url6")" = "$tr_head_a" ] || fail "the repository does not hold the head of the folder: $(remote_head "$tr_url6")"
+	[ "$(qd --output json source list | jq -r --arg p "$tr_a" '.sources[] | select(.path == $p) | .kind')" = remote ] ||
+		fail "the folder is not a remote source: $(qd --output json source list)"
+	[ "$(folder_git "$tr_a" rev-parse HEAD)" = "$tr_head_a" ] || fail 'the push moved the head of the folder'
+
+	step 'a repository with other files is listed and cancel changes nothing'
+	register_folder_key "$tr_b"
+	tui_folder_to "$tr_b"
+	tui_send O
+	tui_wait 'Add a remote' 10
+	tui_type "$tr_url3"
+	tui_send F2
+	tui_wait 'Trust this host key for' 30
+	tui_send y
+	tui_wait 'Put the state of the host' 30
+	tui_has 'Paths that differ' || fail "the comparison does not list the paths: $(tui_screen)"
+	tui_has "$tr_b" || fail "the question does not name the folder: $(tui_screen)"
+	tui_send Enter
+	sleep 1
+	[ "$(remote_head "$tr_url3")" = "$repo_head3" ] || fail 'the answer cancel changed the repository'
+	[ -z "$(folder_git "$tr_b" remote)" ] || fail 'the answer cancel gave the folder a remote'
+	[ "$(qd --output json source list | jq -r --arg p "$tr_b" '.sources[] | select(.path == $p) | .kind')" = local ] ||
+		fail 'the answer cancel changed the kind of the source'
+	tui_send Escape
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+
+	step 'the folders are released and removed'
+	for tr_dir in "$tr_a" "$tr_b"; do
+		out=$(qd --output json source remove "$tr_dir" --yes) || fail "source remove of $tr_dir failed: $out"
+	done
+	docker exec "$host" rm -rf "$tr_a" "$tr_b"
+	wait_for 'the qdeploy service to answer' 30 qd status
+	log 'scenario: the interface pushed a local folder to an empty remote and left a differing remote alone without the confirmation'
+}
+
 # key_pub_field prints the public part (type and key, without comment) of the qdeploy key output $1.
 key_pub_field() {
 	printf '%s\n' "$1" | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p' | cut -d ' ' -f 1,2
@@ -1888,7 +2010,7 @@ git_unregister_key() {
 }
 
 # scenario_key_set proves that an existing key becomes the deploy key of a stack folder, through the command line
-# for /opt/stacks2 and through the interface for /opt/stacks3. Both folders have a generated key, so each store is
+# for /opt/stacks2 and through the Stacks area for /opt/stacks3, which is released at the end. Both folders have a generated key, so each store is
 # a replacement: it is refused without the confirmation (--replace, the answer n) and leaves the key unchanged.
 scenario_key_set() {
 	tui_log=$work/tui-key-screens.log
@@ -1929,13 +2051,13 @@ scenario_key_set() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
-	tui_page 2
+	tui_wait "1 $tui_icon_stacks Stacks" 30
+	tui_send 1
+	tui_folder_to /opt/stacks3
 	tui_send e
-	tui_wait 'Stack folder' 10
-	tui_send Right Right
-	sleep 0.3
-	tui_has '/opt/stacks3' || fail "the form does not offer /opt/stacks3: $(tui_screen)"
+	tui_wait 'stack folder: /opt/stacks3' 10
+	tui_send e
+	tui_wait 'store an existing key' 10
 	tui_send F2
 	tui_wait 'Store the deploy key' 10
 	docker exec "$host" cat "$kdir/b" | docker exec -i -u "$admin" "$host" tmux -L qdtui load-buffer - || fail 'cannot load the test key into tmux'
@@ -1968,7 +2090,7 @@ scenario_key_set() {
 	tui_send q
 	tui_wait 'qdeploy-exit=0' 10
 	tui_tmux kill-server >/dev/null 2>&1 || true
-	log "scenario: the interface stored the test key for /opt/stacks3 ($fp_b) after the question and the fetch over it succeeds"
+	log "scenario: the interface stored the test key for /opt/stacks3 ($fp_b) after the question, the fetch over it succeeds"
 
 	step 'no private test key shows on a captured screen, in the journal or in a key output'
 	[ "$(wc -l <"$tui_log")" -gt 40 ] || fail 'too few screens were captured to check'
@@ -2657,6 +2779,14 @@ scenario_window() {
 
 # The terminal interface is driven in a tmux pane of the administrator, 120 columns by 40 rows. The command
 # keeps the pane after qdeploy ends, so the exit code can be read from the screen.
+# The icons of the tab line in the default setting (unicode), which the pane's UTF-8 locale draws; an icon
+# stands between the digit and the name.
+tui_icon_stacks='▤'
+tui_icon_detail='▣'
+tui_icon_runs='▶'
+tui_icon_settings='⚙'
+tui_icon_containers='▦'
+
 tui_tmux() {
 	docker exec -u "$admin" "$host" tmux -L qdtui "$@"
 }
@@ -2688,7 +2818,8 @@ tui_wait() {
 	done
 }
 
-# tui_cursor_to moves the cursor of the Stacks list to the stack $1.
+# tui_cursor_to moves the cursor of the Stacks list to the stack $1. The list draws no cursor without the focus, so
+# the focus must be in the list.
 tui_cursor_to() {
 	i=0
 	until tui_screen | grep -q "^> .*\[.\] $1 "; do
@@ -2699,11 +2830,24 @@ tui_cursor_to() {
 	done
 }
 
+# tui_folder_to moves the cursor of the Stacks list to the group row of the stack folder $1. The mark before the path
+# is a symbol in a terminal.
+tui_folder_to() {
+	tui_send Home
+	i=0
+	until tui_screen | grep -q "^> .*\[.\] [^ ]* $1 ("; do
+		i=$((i + 1))
+		[ "$i" -lt 40 ] || fail "the cursor does not reach the folder $1: $(tui_screen)"
+		tui_send Down
+		sleep 0.2
+	done
+}
+
 # tui_click presses and releases the left mouse button at the first cell of the text $1 on the screen, as a
-# terminal reports it (SGR, 1-based), and fails when the text is not on the screen. The text must lie where
-# only ASCII precedes it on its line.
+# terminal reports it (SGR, 1-based), and fails when the text is not on the screen. awk counts bytes, so the
+# continuation bytes of the icons before the text are taken off; an icon is one cell wide.
 tui_click() {
-	cell=$(tui_screen | awk -v t="$1" 'i = index($0, t) { print i, NR; exit }')
+	cell=$(tui_screen | awk -v t="$1" 'i = index($0, t) { p = substr($0, 1, i - 1); gsub(/[\200-\277]/, "", p); print length(p) + 1, NR; exit }')
 	[ -n "$cell" ] || fail "cannot click '$1', it is not on the screen: $(tui_screen)"
 	set -- $cell
 	tui_send -l "$(printf '\033[<0;%d;%dM\033[<0;%d;%dm' "$1" "$2" "$1" "$2")"
@@ -2754,15 +2898,17 @@ scenario_tui() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
 	for name in demo-stack demo-cache demo-paused demo-pinned; do tui_wait "$name" 30; done
 	tui_wait 'q quit' 10
+	# The interface opens with the focus on the tab line.
+	tui_wait 'next area' 10
 	log 'scenario: interface open, stacks listed'
 
 	step 'a click on a tab switches the area and a click on a stack row marks it'
-	tui_click '3 Runs'
+	tui_click "3 $tui_icon_runs Runs"
 	tui_wait 'TRIGGER' 10
-	tui_click '1 Stacks'
+	tui_click "1 $tui_icon_stacks Stacks"
 	tui_wait 'CURRENT' 10
 	tui_click_row demo-pinned
 	# tui_cursor_to only moves down, so the cursor goes back to the first row.
@@ -2957,7 +3103,7 @@ scenario_tui() {
 	wait_for 'the single container' 30 health_is "$single" healthy
 	tui_send Escape
 	tui_send 5
-	tui_wait '5 Containers' 10
+	tui_wait "5 $tui_icon_containers Containers" 10
 	tui_wait 'single containers' 15
 	running_seen=0 stopped_seen=0
 	tui_screen | grep -qE " $single +ok " && running_seen=1
@@ -3020,8 +3166,8 @@ scenario_tui() {
 	tui_send Escape
 	tui_wait 'own stack demo-stack' 10
 	tui_has 'demo tick' && fail "the log is still open after Escape: $(tui_screen)"
-	tui_send Escape
-	tui_wait '1 Stacks' 10
+	tui_send 1
+	tui_wait 'CURRENT' 10
 	tui_send Home
 	tui_cursor_to demo-stack
 	tui_send Enter
@@ -3045,7 +3191,7 @@ scenario_tui() {
 	wait_for 'the foreign container' 30 health_is "$foreign" healthy
 	tui_send Escape
 	tui_send 5
-	tui_wait '5 Containers' 10
+	tui_wait "5 $tui_icon_containers Containers" 10
 	tui_wait 'foreign project demo-foreign-tui' 15
 	# ct_action presses the action key $1 on the row of $foreign (the group order depends on the language, so the
 	# cursor is found by name), confirms the question that starts with $2 and closes the result sheet of the
@@ -3067,7 +3213,7 @@ scenario_tui() {
 		tui_wait "$3 finished: 1 ok, 0 failed" 60
 		tui_has "$foreign" || fail "the result sheet of $3 does not name $foreign: $(tui_screen)"
 		tui_send Escape
-		tui_wait '5 Containers' 10
+		tui_wait "5 $tui_icon_containers Containers" 10
 	}
 	# ct_expect waits without a key press for the row of $foreign to show the state $1 and checks the engine state $2.
 	ct_expect() {
@@ -3105,7 +3251,7 @@ scenario_tui() {
 	tui_send Escape
 	tui_wait 'STARTED' 10
 	tui_send 1
-	tui_wait '1 Stacks' 10
+	tui_wait "1 $tui_icon_stacks Stacks" 10
 	# The tab line has the focus while the footer offers "next area"; the area shows in its content: the
 	# Stacks list has the CURRENT column, Stack detail a "mode" row (or the hint that no stack is chosen),
 	# Runs the STARTED column.
@@ -3135,9 +3281,32 @@ scenario_tui() {
 	tui_screen | grep -qE '^ +(mode +|No stack chosen)' || fail "the area changed with Tab: $(tui_screen)"
 	log 'scenario: Tab, Right and Left switched the area without digits and Tab led back to the content'
 
+	step 'the arrows lead between the tab line and the content: Down into the list, Up in the first row back, Escape in Runs stays in Runs'
+	tui_send 1
+	tui_wait 'CURRENT' 10
+	tui_send Home
+	tui_send Up
+	tui_wait 'next area' 10
+	tui_send Right Right
+	tui_wait 'STARTED' 10
+	tui_has 'next area' || fail "Right did not keep the focus on the tab line: $(tui_screen)"
+	tui_send Down
+	sleep 0.5
+	tui_has 'next area' && fail "Down did not lead into the Runs list: $(tui_screen)"
+	tui_send Home
+	tui_send Up
+	tui_wait 'next area' 10
+	tui_send Down
+	sleep 0.5
+	tui_has 'next area' && fail "Down did not lead into the Runs list again: $(tui_screen)"
+	tui_send Escape
+	tui_wait 'next area' 10
+	tui_has 'STARTED' || fail "Escape in Runs left the area: $(tui_screen)"
+	log 'scenario: the arrows and Escape led between the tab line and the content'
+
 	step 'Settings General: Deutsch is saved and the interface switches at once, keeps it after a restart, and English is saved back'
 	tui_send Escape
-	tui_page 0
+	tui_subtab General
 	tui_wait 'Start area' 10
 	# The language names stand only in the language field, so they are matched without its frame.
 	tui_wait 'English' 10
@@ -3147,11 +3316,11 @@ scenario_tui() {
 	tui_wait 'Deutsch' 10
 	tui_send F2
 	tui_wait 'Die Einstellungen sind gespeichert.' 10
-	tui_wait '4 Einstellungen' 10
+	tui_wait "4 $tui_icon_settings Einstellungen" 10
 	tui_send Escape
-	tui_wait 'Stack-Ordner anzeigen' 10
+	tui_wait 'Zugangsdaten' 10
 	tui_send 1
-	tui_wait '2 Stack-Details' 10
+	tui_wait "2 $tui_icon_detail Stack-Details" 10
 	tui_wait 'q Beenden' 10
 	log 'scenario: the interface switched to Deutsch when the General page was saved:'
 	tui_excerpt 'qdeploy' 4
@@ -3160,12 +3329,10 @@ scenario_tui() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '2 Stack-Details' 30
+	tui_wait "2 $tui_icon_detail Stack-Details" 30
 	tui_wait 'demo-stack' 30
 	tui_wait 'q Beenden' 10
-	tui_send 4
-	tui_wait 'Stack-Ordner anzeigen' 10
-	tui_send Home Enter
+	tui_subtab Allgemein
 	tui_wait 'Startbereich' 10
 	tui_send Tab Tab
 	tui_wait '> Sprache' 10
@@ -3174,9 +3341,9 @@ scenario_tui() {
 	tui_send F2
 	tui_wait 'The settings are saved.' 10
 	tui_send Escape
-	tui_wait 'list, add, fetch and release' 10
+	tui_wait 'Credentials' 10
 	tui_send 1
-	tui_wait '2 Stack detail' 10
+	tui_wait "2 $tui_icon_detail Stack detail" 10
 	tui_has 'Stack-Details' && fail "the interface still shows German after English was saved: $(tui_screen)"
 	log 'scenario: Deutsch stayed after the restart of the interface and English was saved back'
 
@@ -3254,7 +3421,7 @@ EOF2
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
 	tui_send 5
 	tui_wait 'foreign project app' 30
 	tui_ct_cursor_to app-app-1
@@ -3339,31 +3506,23 @@ tui_clear() {
 	tui_send BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace BSpace
 }
 
-# tui_menu shows the menu of the Settings area, whatever page was open.
-tui_menu() {
+# tui_subtab opens the sub-tab of the Settings area that is named $1, whatever page was open, and leads the focus
+# into its content. The digit shows the area with the focus in the content, so the sub-tab line is not focused and
+# draws no mark before its first tab; the third line of the screen is that line (header, tab line, sub-tab line).
+# The name is clicked, as the page stands where only spaces precede it.
+tui_subtab() {
 	tui_send 4
 	sleep 0.4
-	tui_has 'list, add, fetch and release' || {
-		tui_send Escape
-		sleep 0.4
-	}
-	tui_wait 'list, add, fetch and release' 10
+	cell=$(tui_screen | awk -v t="$1" 'NR == 3 && (i = index($0, t)) { print i, NR; exit }')
+	[ -n "$cell" ] || fail "cannot click the sub-tab '$1', it is not on the sub-tab line: $(tui_screen)"
+	set -- $cell
+	tui_send -l "$(printf '\033[<0;%d;%dM\033[<0;%d;%dm' "$1" "$2" "$1" "$2")"
+	sleep 0.4
+	tui_send Down
+	sleep 0.3
 }
 
-# tui_page opens the page of the Settings menu that is $1 rows below the first.
-tui_page() {
-	tui_menu
-	tui_send Home
-	n=0
-	while [ "$n" -lt "$1" ]; do
-		tui_send Down
-		n=$((n + 1))
-	done
-	tui_send Enter
-}
-
-# tui_key_generate runs the form of the Deploy key page for a service without a bound folder and chooses to
-# generate; the result dialog is closed.
+# tui_key_generate runs the form of the deploy key view and chooses to generate; the result dialog is closed.
 tui_key_generate() {
 	tui_send e
 	tui_wait 'store an existing key' 10
@@ -3451,10 +3610,11 @@ EOF2
 }
 
 # tui_stack_folder prints the folder the Stacks list shows the stack $1 under: the stacks stand below the row of
-# their folder, which reads "<mark> <path> (<count>)"; the mark is "#" in the goldens and a symbol in a terminal.
+# their folder, which reads "<mark> <path> (<count>)" and its cells; the mark is "#" in the goldens and a symbol in a
+# terminal.
 tui_stack_folder() {
 	tui_screen | awk -v s="$1" '
-		/\[.\] [^ ]+ \// { f = $0; sub(/^.*\[.\] [^ ]+ /, "", f); sub(/ \([0-9]+\) *$/, "", f); next }
+		/\[.\] [^ ]+ \// { f = $0; sub(/^.*\[.\] [^ ]+ /, "", f); sub(/ \([0-9]+\).*$/, "", f); next }
 		$0 ~ ("\\[.\\] " s " ") { print f; exit }'
 }
 
@@ -3486,24 +3646,41 @@ scenario_tui_setup() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
-	tui_wait 'No stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
+	tui_send 1
+	tui_wait 'No stack folders yet' 30
 
-	step 'Settings: the deploy key is generated and its public part shown'
-	tui_page 2
+	step 'Stacks: adding the clone stops at the missing deploy key; the key is generated and its public part shown'
+	tui_send a
+	tui_wait 'Add a stack folder' 10
+	tui_type /opt/stacks
+	tui_send F2
+	tui_wait 'Clone a repository into /opt/stacks?' 10
+	tui_send y
+	tui_wait 'Address of the repository to clone' 10
+	tui_type "git.$domain:stacks.git"
+	tui_send F2
+	tui_wait 'ssh-ed25519' 60
+	tui_send y
+	tui_wait '/opt/stacks has no deploy key yet.' 30
+	tui_send Enter
 	tui_wait 'No deploy key yet' 10
 	tui_key_generate
 	tui_wait 'Add this public key' 10
 	pub=$(tui_screen | grep -o 'ssh-ed25519 [A-Za-z0-9+/=]*' | head -n 1)
 	[ -n "$pub" ] || fail "the public key is not on the screen: $(tui_screen)"
-	cli_pub=$(qd --output json key show | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p' | cut -d ' ' -f 1,2)
+	cli_pub=$(qd --output json key show --dir /opt/stacks | sed -n 's/.*"public_key": *"\([^"]*\)".*/\1/p' | cut -d ' ' -f 1,2)
 	[ "$pub" = "$cli_pub" ] || fail "the key on the screen differs from the key of the service: $pub vs $cli_pub"
 	printf '%s\n' "$pub" | docker exec -i "$prefix-git" sh -c 'cat >>/srv/git/.ssh/authorized_keys'
+	# Escape closes the key view; nothing was added.
+	tui_send Escape
+	tui_wait 'No stack folders yet' 10
+	if list_has_path /opt/stacks; then fail 'the stopped add bound /opt/stacks'; fi
 	log 'scenario: deploy key generated through the interface and registered on the git server'
 
 	step 'Settings: a registry credential is set after a question'
-	tui_page 3
-	tui_wait 'Credentials' 10
+	tui_subtab Credentials
+	tui_wait 'x remove' 10
 	tui_send a
 	tui_wait 'Set a credential' 10
 	tui_send Tab
@@ -3531,8 +3708,8 @@ scenario_tui_setup() {
 
 	step 'Settings: the maintenance window is moved away from now'
 	win_start=$(date -u -d '+12 hours' +%H:%M)
-	tui_page 4
-	tui_wait 'Maintenance window' 10
+	tui_subtab 'Maintenance window'
+	tui_wait 'e edit' 10
 	tui_send e
 	tui_wait 'Change the maintenance window' 10
 	tui_clear
@@ -3555,8 +3732,14 @@ scenario_tui_setup() {
 		fail "the window was not set through the interface: $(qd --output json window show)"
 
 	step 'Settings: a webhook channel is added and its test message is sent'
-	tui_page 5
-	tui_wait 'Notifications' 10
+	# The arrows alone lead there from the text of the window page: up to the sub-tab line, right to the next
+	# sub-tab, whose content stands at once, and down into it.
+	tui_send Up
+	sleep 0.3
+	tui_send Right
+	tui_wait 's send test' 10
+	tui_send Down
+	sleep 0.3
 	tui_send a
 	tui_wait 'Add a notification channel' 10
 	tui_type tui-hook
@@ -3578,12 +3761,12 @@ scenario_tui_setup() {
 	tui_send Enter
 	hook_seen /tui-hook-e2e-path test || fail 'the webhook receiver did not record the test message of the interface'
 
-	step 'Settings: a stack folder is not added while its question is not answered with yes'
+	step 'Stacks: a stack folder is not added while its question is not answered with yes'
 	local_dir=/srv/qd-tui-local
 	prepare_tui_local
 	dir_before=$(docker exec "$host" stat -c '%U:%G %a' "$local_dir")
 	secret_before=$(docker exec "$host" stat -c '%U:%G %a' "$local_dir/demo-tui-local/secrets.env")
-	tui_page 1
+	tui_send 1
 	tui_wait 'No stack folders yet' 10
 	tui_send a
 	tui_wait 'Add a stack folder' 10
@@ -3601,7 +3784,7 @@ scenario_tui_setup() {
 		fail 'the answer n changed the permissions of the secrets file'
 	[ -z "$(docker exec "$host" git -C "$local_dir" config core.sharedRepository)" ] || fail 'the answer n changed the repository configuration'
 
-	step 'Settings: the clone is added as a stack folder after the host key is shown and confirmed'
+	step 'Stacks: the clone is added as a stack folder after the host key is shown and confirmed'
 	tui_send a
 	tui_wait 'Add a stack folder' 10
 	tui_type /opt/stacks
@@ -3630,8 +3813,8 @@ scenario_tui_setup() {
 	tui_wait 'demo-echo' 60
 	wait_for 'the first run of demo-echo' 180 stack_idle demo-echo
 
-	step 'Settings: the local repository is added as the second stack folder; the Stacks area lists both folders'
-	tui_page 1
+	step 'Stacks: the local repository is added as the second stack folder; the Stacks area lists both folders'
+	tui_send 1
 	tui_wait '/opt/stacks' 10
 	tui_send a
 	tui_wait 'Add a stack folder' 10
@@ -3659,6 +3842,7 @@ scenario_tui_setup() {
 	[ "$(stack_images demo-tui-local)" = "$image:1.0.0" ] || fail "demo-tui-local does not run 1.0.0: $(stack_images demo-tui-local)"
 
 	step 'Stack detail: a secret is set after a question and the file holds the value'
+	tui_send Home
 	tui_cursor_to demo-echo
 	tui_send Enter
 	tui_wait 'Secrets' 15
@@ -3734,6 +3918,20 @@ scenario_tui_setup() {
 		fail "the restore did not bring back the data: $(docker exec "$host" cat /opt/stacks/demo-echo/data/marker.txt)"
 	wait_for 'demo-echo to run again after the restore' 120 stack_healthy demo-echo
 	log "scenario: the older backup $older of demo-echo was restored through the interface"
+
+	step 'Stacks: x releases the local stack folder only after its question is answered with yes'
+	tui_send Escape
+	tui_send 1
+	tui_folder_to "$local_dir"
+	tui_wait 'x release' 10
+	tui_send x
+	tui_wait "Release the stack folder $local_dir" 10
+	list_has_path "$local_dir" || fail "the question already released $local_dir"
+	tui_send y
+	tui_wait "The stack folder $local_dir is released" 30
+	tui_send Enter
+	if list_has_path "$local_dir"; then fail "source list still shows $local_dir after the release: $(qd --output json source list)"; fi
+	log "scenario: the Stacks area released $local_dir after the question"
 
 	step 'q ends the interface with exit code 0'
 	tui_send Escape

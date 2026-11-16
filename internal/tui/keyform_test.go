@@ -56,10 +56,19 @@ func sendKeyChecked(t *testing.T, m *Model, key string, keys ...string) {
 	}
 }
 
+// keyBackend is the demo host with the stack folder of its stacks and the given others, which have no stack.
 func keyBackend(sources ...string) *fakeBackend {
 	b := settingsBackend()
+	b.status.Engine.Sources = []control.SourceStatus{{ID: "srv-stacks-example", Path: stackDir, Kind: control.SourceKindRemote, URL: repoURL,
+		LastPoll: at(30, 14, 30), Head: commitA}}
+	for i := range b.status.Engine.Stacks {
+		b.status.Engine.Stacks[i].Source = "srv-stacks-example"
+	}
+	for i := range b.stacks.Stacks {
+		b.stacks.Stacks[i].Source, b.stacks.Stacks[i].SourceDir = "srv-stacks-example", stackDir
+	}
 	for _, s := range sources {
-		b.status.Engine.Sources = append(b.status.Engine.Sources, control.SourceStatus{ID: filepath.Base(s), Path: s})
+		b.status.Engine.Sources = append(b.status.Engine.Sources, control.SourceStatus{ID: filepath.Base(s), Path: s, Kind: control.SourceKindRemote})
 	}
 	return b
 }
@@ -74,10 +83,10 @@ func TestPastedKeyIsStoredAndNeverShown(t *testing.T) {
 	noKeyText(t, m.render(), key)
 	contains(t, m, "(hidden; lines: ", "Private key")
 	sendKeyChecked(t, m, key, "f2")
-	if got := b.actions(); !slices.Equal(got, []string{"keyset:"}) {
+	if got := b.actions(); !slices.Equal(got, []string{"keyset:" + stackDir}) {
 		t.Fatalf("calls = %v", got)
 	}
-	if len(b.keyArgs) != 1 || b.keyArgs[0].Key != key || b.keyArgs[0].Replace || b.keyArgs[0].Dir != "" {
+	if len(b.keyArgs) != 1 || b.keyArgs[0].Key != key || b.keyArgs[0].Replace || b.keyArgs[0].Dir != stackDir {
 		t.Fatalf("the service got %+v", b.keyArgs)
 	}
 	contains(t, m, "The deploy key is stored.", "SHA256:StoredKey")
@@ -148,35 +157,32 @@ func TestKeyFormRefusesWhatIsNoSingleKeySource(t *testing.T) {
 	}
 }
 
-func TestFolderChoiceSendsTheFolder(t *testing.T) {
+func TestKeyViewIsForTheMarkedFolderAlone(t *testing.T) {
 	first, second := "/srv/first-example", "/srv/second-example"
-	t.Run("first folder is the default key", func(t *testing.T) {
-		b := keyBackend(first, second)
-		m := newSettingsModel(t, b)
-		send(m, toKey...)
-		send(m, "e")
-		contains(t, m, first)
-		send(m, "down", "right", "f2")
-		if len(b.keyArgs) != 1 || b.keyArgs[0].Dir != "" {
-			t.Fatalf("the service got %+v", b.keyArgs)
-		}
-	})
-	t.Run("another folder sends its path", func(t *testing.T) {
-		b := keyBackend(first, second)
-		m := newSettingsModel(t, b)
-		send(m, toKey...)
-		send(m, "e", "right", "down", "right", "f2")
-		if got := b.actions(); !slices.Equal(got, []string{"keygen:" + second}) {
-			t.Fatalf("calls = %v", got)
-		}
-		if len(b.keyArgs) != 1 || b.keyArgs[0].Dir != second {
-			t.Fatalf("the service got %+v", b.keyArgs)
-		}
-		// The page keeps showing the default key; the other key is in the answer.
-		contains(t, m, "SHA256:ExampleKey")
-		send(m, "enter")
-		contains(t, m, "No deploy key yet")
-	})
+	b := keyBackend(first, second)
+	m := newSettingsModel(t, b)
+	send(m, "1")
+	onFolder(t, m, second)
+	send(m, "e")
+	contains(t, m, "stack folder: "+second, "No deploy key yet")
+	send(m, "e")
+	if _, ok := m.set.form.form.Values()["folder"]; ok {
+		t.Fatal("the form offers a folder choice")
+	}
+	send(m, "right", "f2")
+	if got := b.actions(); !slices.Equal(got, []string{"keygen:" + second}) {
+		t.Fatalf("calls = %v", got)
+	}
+	if len(b.keyArgs) != 1 || b.keyArgs[0].Dir != second {
+		t.Fatalf("the service got %+v", b.keyArgs)
+	}
+	send(m, "enter")
+	contains(t, m, "SHA256:ExampleKey")
+	// Esc leaves the view with the marked row still on the folder.
+	send(m, "esc")
+	if key, ok := m.list.SelectedGroup(); m.set.keyOpen || !ok || key != second {
+		t.Fatalf("key view %v, marked folder %q (%v)", m.set.keyOpen, key, ok)
+	}
 }
 
 func TestReplacingAKeyAsksFirstAndOnlyYesReplaces(t *testing.T) {
@@ -230,7 +236,7 @@ func TestRefusedKeyIsShownAtTheKeyField(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			b := keyBackend()
-			b.errs["keyset:"] = c.err
+			b.errs["keyset:"+stackDir] = c.err
 			m := newSettingsModel(t, b)
 			send(m, toKey...)
 			send(m, "e", "f2")

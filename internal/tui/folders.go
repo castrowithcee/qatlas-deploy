@@ -26,7 +26,14 @@ const (
 // shownEntries is how many files and left-out paths the inspection of a folder lists before it counts the rest.
 const shownEntries = 10
 
-// polledLayout is the time of the last poll in the folder list.
+// The columns of the Stacks list that the row of a stack folder fills: the kind under the current version and
+// the last poll under the findings, where the rest of the width is.
+const (
+	colGroupKind   = 1
+	colGroupPolled = 6
+)
+
+// polledLayout is the time of the last poll of a folder.
 const polledLayout = "2006-01-02 15:04"
 
 // addFlow is a stack folder being added: the answer of its inspection and what the later steps found. Neither
@@ -43,13 +50,22 @@ type addFlow struct {
 	// foreign is set when the folder is that of a foreign Compose project the person chose in the Containers
 	// area; the flow is the same, with the labels shown and compared.
 	foreign *foreignSource
+	// remote is set when the folder is a local stack folder that gets a remote; res then only names it.
+	remote bool
+	// key is the deploy key the look found; cmp is the comparison with the repository at url that the person
+	// was shown, which the last call hands back as what to expect.
+	key control.KeyResult
+	cmp *control.SourceCompareResult
 }
 
 // inspected is the answer of the inspection of a folder to add.
 type inspected struct{ flow *addFlow }
 
 // keyChecked is the answer of the look for the deploy key of a folder to add.
-type keyChecked struct{ found bool }
+type keyChecked struct {
+	found bool
+	key   control.KeyResult
+}
 
 // listChanged is the answer for a folder of files whose list changed after it was shown; nothing was changed.
 type listChanged struct{ path string }
@@ -69,106 +85,89 @@ type keptChanges struct {
 func (e keptChanges) Error() string { return e.err.Error() }
 func (e keptChanges) Unwrap() error { return e.err }
 
-func newFolderList(keys *kittui.Keymap, text kittui.Translator) (*kittui.List, error) {
-	failed := text.Lookup(textFolderFailed)
-	l, err := kittui.NewList(kittui.ListSpec{Columns: []kittui.Column{{Title: textColPath}, {Title: textColKind},
-		{Title: textColCommit}, {Title: textColState, Tone: func(cell string) kittui.TextStyle {
-			if cell == failed {
-				return kittui.StyleFail
-			}
-			return kittui.StyleText
-		}}, {Title: textColPolled, Optional: true, Dimmed: true}},
-		Keys: listKeys(), Search: kittui.SearchByKey, Empty: textFoldersEmpty}, keys, text)
-	if err != nil {
-		return nil, err
-	}
-	l.SetFocused(true)
-	return l, nil
-}
-
-// fillFolders sets the rows of the folder list from the status read last.
-func (m *Model) fillFolders() {
+// folderGroups sets the data of the stack folders and their group rows in the Stacks list: every bound folder
+// has its row, with or without stacks, and it shows the kind and the last poll or why that failed.
+func (m *Model) folderGroups() {
 	s, t := m.set, m.text
 	src := m.snap.status.Engine.Sources
-	s.folderData = map[kittui.ItemID]control.SourceStatus{}
-	items := make([]kittui.ListItem, len(src))
-	for i, f := range src {
-		id := kittui.ItemID(f.Path)
-		s.folderData[id] = f
-		kind, state, polled, head := t.Lookup(textFolderKindLocal), t.Lookup(textFolderOK), t.Lookup(textNoValue), t.Lookup(textNoValue)
+	s.folderData = map[string]control.SourceStatus{}
+	groups := make([]kittui.ListGroup, 0, len(src))
+	for _, f := range src {
+		s.folderData[f.Path] = f
+		kind, polled := t.Lookup(textFolderKindLocal), t.Lookup(textNoValue)
 		if f.Kind == control.SourceKindRemote {
 			kind = t.Lookup(textFolderKindRemote)
 		}
-		if f.PollError != "" {
-			state = t.Lookup(textFolderFailed)
+		switch {
+		case f.PollError != "":
+			polled = t.Lookup(textFolderPollFailed, strings.Join(strings.Fields(f.PollError), " "))
+			m.tones[polled] = kittui.StyleFail
+		case !f.LastPoll.IsZero():
+			polled = t.Lookup(textFolderPolled, f.LastPoll.In(m.loc).Format(polledLayout))
 		}
-		if !f.LastPoll.IsZero() {
-			polled = f.LastPoll.In(m.loc).Format(polledLayout)
-		}
-		if f.Head != "" {
-			head = f.Head[:min(len(f.Head), shortCommit)]
-		}
-		items[i] = kittui.ListItem{ID: id, Cells: []string{f.Path, kind, head, state, polled}}
+		cells := make([]string, colGroupPolled+1)
+		cells[colGroupKind], cells[colGroupPolled] = kind, polled
+		groups = append(groups, kittui.ListGroup{Key: f.Path, Title: f.Path, Cells: cells, Keep: true})
 	}
-	if err := s.folderList.SetItems(items); err != nil {
+	if err := m.list.SetGroups(groups); err != nil {
 		m.failure = t.Lookup(kittui.TextError, err.Error())
 	}
 }
 
-// shortCommit is the length of a commit in the folder list, which has little room.
-const shortCommit = 7
-
+// selectedFolder is the stack folder whose group row is marked.
 func (m *Model) selectedFolder() (control.SourceStatus, bool) {
-	id, ok := m.set.folderList.Selected()
-	f, found := m.set.folderData[id]
+	key, ok := m.list.SelectedGroup()
+	f, found := m.set.folderData[key]
 	return f, ok && found
 }
 
-// foldersView draws the folder page: the list, and below it what the list leaves out of the chosen folder.
-func (m *Model) foldersView(width, height int) string {
-	s, t := m.set, m.text
-	lines := []string{m.heading(textPageFolders, width), ""}
-	if !m.loaded {
-		lines = append(lines, m.line(detailIndent, kittui.StyleHint, t.Lookup(textDetailLoading), width))
-		return strings.Join(lines, "\n")
-	}
-	var detail []string
-	if f, ok := m.selectedFolder(); ok {
-		detail = append([]string{""}, m.folderDetail(f, width)...)
-	}
-	room := max(height-len(lines)-len(detail), 1)
-	rows := room
-	if l := s.folderList; len(s.folderData) > 0 {
-		// The header and the rows, and the search line while there is one; the rest of the room is the detail's.
-		rows = len(s.folderData) + 1
-		if l.Searching() || l.Query() != "" {
-			rows++
+// folderDetail is the address, the last poll and why it failed for one folder, in a panel of at most rows rows.
+func (m *Model) folderDetail(f control.SourceStatus, width, rows int) []string {
+	t := m.text
+	return m.framed(f.Path, "", width, rows, func(width int) []string {
+		var lines []string
+		if f.URL != "" {
+			lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailURL, f.URL), width))
 		}
-		rows = min(rows, room)
-	}
-	view := m.listView(s.folderList, width, rows, len(lines))
-	out := append(lines, strings.Split(view, "\n")...)
-	out = append(out, detail...)
-	return strings.Join(out[:min(len(out), height)], "\n")
+		if !f.LastPoll.IsZero() {
+			lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastPoll, m.stamp(f.LastPoll.In(m.loc))), width))
+		}
+		if f.PollError != "" {
+			lines = append(lines, m.wrapped(detailIndent, kittui.StyleFail, t.Lookup(textDetailPollError, f.PollError), width)...)
+		}
+		if f.Note != "" {
+			lines = append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textDetailNote, f.Note), width)...)
+		}
+		return lines
+	})
 }
 
-// folderDetail is the address, the last poll and why it failed for one folder.
-func (m *Model) folderDetail(f control.SourceStatus, width int) []string {
-	t := m.text
-	lines := []string{m.line(detailMargin, kittui.StyleActive, f.Path, width)}
-	if f.URL != "" {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailURL, f.URL), width))
+// folderAction takes a key of the folder row in the Stacks area; handled is false where the key does nothing: on a
+// stack row, and in the key view, where only the key to set the key counts.
+func (m *Model) folderAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
+	if m.set.keyOpen {
+		if id == actEdit {
+			return m.openKeyForm(), true
+		}
+		return nil, false
 	}
-	if !f.LastPoll.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastPoll, m.stamp(f.LastPoll.In(m.loc))), width))
+	if id == actAdd {
+		return m.openForm(m.folderForm()), true
 	}
-	if f.PollError != "" {
-		lines = append(lines, m.wrapped(detailIndent, kittui.StyleFail, t.Lookup(textDetailPollError, f.PollError), width)...)
+	if _, ok := m.selectedFolder(); !ok {
+		return nil, false
 	}
-	if f.Note != "" {
-		lines = append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textDetailNote, f.Note), width)...)
+	switch id {
+	case actFetch:
+		return m.askFolderFetch(), true
+	case actRemove:
+		return m.askFolderRemove(), true
+	case actEdit:
+		return m.openFolderKey(), true
+	case actRemote:
+		return m.askFolderRemote(), true
 	}
-	return lines
+	return nil, false
 }
 
 func (m *Model) askFolderFetch() tea.Cmd {
@@ -181,7 +180,7 @@ func (m *Model) askFolderFetch() tea.Cmd {
 		m.warn(m.text.Lookup(textFolderLocalFetch))
 		return nil
 	}
-	m.ask(textPageFolders, m.text.Lookup(textAskFetch, f.Path), m.text.Lookup(textWhatFetch), nil, false, func() tea.Cmd {
+	m.ask(textTitleFolders, m.text.Lookup(textAskFetch, f.Path), m.text.Lookup(textWhatFetch), nil, false, func() tea.Cmd {
 		return m.writeCall(opFetch, f.Path, func(b Backend) (any, error) { return b.RepoFetch(m.ctx, f.Path) })
 	})
 	return nil
@@ -212,13 +211,13 @@ func (m *Model) askFolderRemove() tea.Cmd {
 		m.warn(m.text.Lookup(textChooseOne))
 		return nil
 	}
-	m.ask(textPageFolders, m.text.Lookup(textAskRelease, f.Path), m.text.Lookup(textWhatRelease), nil, false, func() tea.Cmd {
+	m.ask(textTitleFolders, m.text.Lookup(textAskRelease, f.Path), m.text.Lookup(textWhatRelease), nil, false, func() tea.Cmd {
 		return m.writeCall(opSourceRemove, f.Path, func(b Backend) (any, error) { return b.SourceRemove(m.ctx, f.Path) })
 	})
 	return nil
 }
 
-// openFolderKey opens the key page for the chosen folder; a local folder has no key to offer.
+// openFolderKey opens the key view for the chosen folder; a local folder has no key to offer.
 func (m *Model) openFolderKey() tea.Cmd {
 	f, ok := m.selectedFolder()
 	switch {
@@ -232,11 +231,75 @@ func (m *Model) openFolderKey() tea.Cmd {
 	return m.openKeyPage(f.Path)
 }
 
-// openKeyPage shows the key page for exactly the folder dir.
+// openKeyPage shows the key view of the Stacks area for exactly the folder dir.
 func (m *Model) openKeyPage(dir string) tea.Cmd {
 	s := m.set
-	s.page, s.keyFor, s.key, s.noKey = pageKey, dir, part{}, false
-	return m.loadPage(true)
+	m.enter(areaStacks)
+	s.keyOpen, s.keyFor, s.key, s.noKey = true, dir, part{}, false
+	return m.loadKey()
+}
+
+// closeKeyView leaves the key view for the list; the marked row is still the folder.
+func (m *Model) closeKeyView() {
+	m.set.keyOpen, m.set.keyFor = false, ""
+}
+
+// keyLoadMsg carries the answer of the read of the deploy key of the folder dir.
+type keyLoadMsg struct {
+	dir string
+	res control.KeyResult
+	err error
+}
+
+// loadKey reads the deploy key of the folder the key view shows; the answer carries the public part only.
+func (m *Model) loadKey() tea.Cmd {
+	s := m.set
+	ctx, b, dir := m.ctx, m.backend, s.keyFor
+	if s.key.loading {
+		return nil
+	}
+	s.key.loading = true
+	return func() tea.Msg {
+		res, err := b.KeyShow(ctx, dir)
+		return keyLoadMsg{dir: dir, res: res, err: err}
+	}
+}
+
+func (m *Model) applyKeyLoad(msg keyLoadMsg) {
+	s := m.set
+	if !s.keyOpen || msg.dir != s.keyFor {
+		// The key of a folder the view no longer shows; the read of the folder shown is its own.
+		return
+	}
+	s.key.loading, s.key.err, s.key.loaded = false, msg.err, msg.err == nil
+	var remote *control.Error
+	switch {
+	case errors.As(msg.err, &remote) && remote.Code == control.CodeNoSuchKey:
+		// No key yet is a state of the view, not a failure.
+		s.noKey, s.key.err, s.key.loaded, s.keyRes = true, nil, true, control.KeyResult{}
+	case msg.err == nil:
+		s.noKey, s.keyRes = false, msg.res
+	}
+}
+
+// keyLines are the lines of the key view: the folder, and its key as the service shows it. A private key is
+// never among them.
+func (m *Model) keyLines(width int) []string {
+	s, t := m.set, m.text
+	lines := []string{m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailKeyFolder, s.keyFor), width), ""}
+	if !s.key.loaded || s.key.err != nil {
+		return append(lines, m.partLines(s.key, width)...)
+	}
+	if s.noKey {
+		return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyNone), width)...)
+	}
+	lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailFingerprint, s.keyRes.Fingerprint), width), "")
+	lines = append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyCopy), width)...)
+	// The key is written out whole and broken only where the screen is too narrow, so it can be copied.
+	for _, l := range kittui.Wrap(kittui.Escape(strings.TrimSpace(s.keyRes.PublicKey)), max(width-detailIndent, 1)) {
+		lines = append(lines, strings.Repeat(" ", detailIndent)+m.styles.Render(kittui.StyleActive, l))
+	}
+	return lines
 }
 
 func (m *Model) folderForm() *settingsForm {
@@ -322,15 +385,25 @@ func (m *Model) showInspection(flow *addFlow) {
 			m.askSheet(title, t.Lookup(textAskFolderNoFiles, res.Path), t.Lookup(textWhatFolderNoFiles), body, nil, nil)
 			return
 		}
-		m.askSheet(title, t.Lookup(textAskFolderFiles, res.Path), t.Lookup(textWhatFolderFiles), body, yes,
+		files := []kittui.Answer{{Action: actYes, Label: textAnswerYes}, {Action: actWithRemote, Label: textAnswerWithRemote},
+			{Action: actNo, Label: textAnswerCancel}}
+		m.askSheet(title, t.Lookup(textAskFolderFiles, res.Path), t.Lookup(textWhatFolderFiles), body, files,
 			func() tea.Cmd { return m.addFolder(flow) })
+		if m.modal != nil {
+			// The same comparison as for a local folder, with the repository that already holds content.
+			m.modal.alt = func() tea.Cmd { return m.openForm(m.folderURLForm()) }
+		}
 	default:
 		m.askSheet(title, t.Lookup(textAskFolderRejected, res.Path), t.Lookup(textWhatNothing), body, nil, nil)
 	}
 }
 
 func (m *Model) folderURLForm() *settingsForm {
-	return m.newSettingsForm(formFolderURL, textTitleFolderURL, []kittui.FormField{textField("url", textFieldURL, textHintURL, "")})
+	title, hint := textTitleFolderURL, textHintURL
+	if flow := m.set.add; flow != nil && flow.remote {
+		title, hint = textTitleRemote, textHintRemoteURL
+	}
+	return m.newSettingsForm(formFolderURL, title, []kittui.FormField{textField("url", textFieldURL, hint, "")})
 }
 
 func (m *Model) submitFolderURL(f *settingsForm, url string) tea.Cmd {
@@ -387,12 +460,12 @@ func (m *Model) hostKeyDetails(flow *addFlow) []string {
 func (m *Model) checkFolderKey(flow *addFlow) tea.Cmd {
 	path := flow.res.Path
 	return m.writeCall(opKeyCheck, path, func(b Backend) (any, error) {
-		_, err := b.KeyShow(m.ctx, path)
+		key, err := b.KeyShow(m.ctx, path)
 		var remote *control.Error
 		switch {
 		case err == nil:
-			return keyChecked{found: true}, nil
-		case errors.As(err, &remote) && remote.Code == control.CodeNotFound:
+			return keyChecked{found: true, key: key}, nil
+		case errors.As(err, &remote) && remote.Code == control.CodeNoSuchKey:
 			return keyChecked{}, nil
 		}
 		return nil, err
@@ -401,15 +474,25 @@ func (m *Model) checkFolderKey(flow *addFlow) tea.Cmd {
 
 // keyDone takes the look for the deploy key: without one the key page for the folder opens and the adding ends
 // there; with one comes the last question.
-func (m *Model) keyDone(found bool) tea.Cmd {
+func (m *Model) keyDone(checked keyChecked) tea.Cmd {
 	s, t := m.set, m.text
-	flow := s.add
+	flow, found := s.add, checked.found
 	if flow == nil {
 		return nil
+	}
+	if found {
+		flow.key = checked.key
+	}
+	if found && flow.comparing() {
+		return m.compareFolder(flow)
 	}
 	if !found {
 		s.add = nil
 		cmd := m.openKeyPage(flow.res.Path)
+		if flow.comparing() {
+			m.tell(textTitleKey, t.Lookup(textRemoteNoKey, flow.res.Path), []string{t.Lookup(textRemoteNoKeyNext)})
+			return cmd
+		}
 		m.tell(textTitleKey, t.Lookup(textFolderNoKey, flow.res.Path), []string{t.Lookup(textFolderNoKeyNext)})
 		return cmd
 	}
@@ -465,7 +548,11 @@ func (m *Model) addFolder(flow *addFlow) tea.Cmd {
 			set, err := b.RepoSet(ctx, control.RepoSetArgs{URL: flow.url, Dir: path, Fingerprint: flow.probe.Fingerprint})
 			return set, kept(err)
 		case control.SourceCaseFiles:
-			added, err := b.SourceAdd(ctx, control.SourceAddArgs{Path: path, Files: res.PlannedFiles})
+			args := control.SourceAddArgs{Path: path, Files: res.PlannedFiles}
+			if c := flow.cmp; c != nil {
+				args.URL, args.Fingerprint, args.ExpectState, args.ExpectCommit = flow.url, flow.probe.Fingerprint, c.State, c.Commit
+			}
+			added, err := b.SourceAdd(ctx, args)
 			return added, kept(err)
 		}
 		added, err := b.SourceAdd(ctx, control.SourceAddArgs{Path: path})

@@ -41,9 +41,11 @@ func Endpoint(t testing.TB) localipc.ServiceEndpoint {
 // readyLimit bounds how long WaitReady keeps dialing.
 const readyLimit = 5 * time.Second
 
-// WaitReady blocks until a dial of ep succeeds. The socket file exists before the listener has fixed its owner and
-// mode, and the client refuses such a socket, so the file alone does not mean the channel is ready. Every successful
-// probe connection is closed at once; every dial error is retried until the limit, then the test fails with the last one.
+// WaitReady blocks until a dial of ep succeeds, that is until the channel accepts connections. The service may still
+// be setting up and answer nothing yet; a successful dial does not mean it is ready. The socket file exists before the
+// listener has fixed its owner and mode, and the client refuses such a socket, so the file alone does not mean the
+// channel accepts connections. Every successful probe connection is closed at once; every dial error is retried until
+// the limit, then the test fails with the last one.
 func WaitReady(t testing.TB, ep localipc.ServiceEndpoint) {
 	t.Helper()
 	waitReady(t, ep, readyLimit)

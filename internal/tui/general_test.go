@@ -44,11 +44,10 @@ var (
 func TestGeneralPageIsFirstAndShowsTheLoadedValues(t *testing.T) {
 	m := generalModel(t, &savedPrefs{})
 	m.prefs.MouseEnabled = false
-	send(m, toMenu...)
-	if first, _ := m.set.menu.Selected(); first != "general" {
-		t.Fatalf("the first page is %q", first)
+	send(m, "4")
+	if m.set.page != pageGeneral {
+		t.Fatalf("the first page is %q", m.set.page)
 	}
-	send(m, "enter")
 	contains(t, m, "General", "Theme", "Start area", "Language", "Mouse", "terminal", "Runs", "English", "off",
 		"the colors of the interface")
 	send(m, "down", "down", "down")
@@ -83,7 +82,7 @@ func TestGeneralSaveWritesTheChosenValuesAndKeepsTheRest(t *testing.T) {
 	// The form and the message are in the new language in the next frame.
 	contains(t, m, "Allgemein", "Sprache", "Maus", "Deutsch", "Die Einstellungen sind gespeichert.")
 	send(m, "esc")
-	contains(t, m, "Allgemein", "Stack-Ordner")
+	contains(t, m, "Allgemein", "Zugangsdaten")
 }
 
 func TestGeneralLanguageRebuildsTheListsAndKeepsTheirState(t *testing.T) {
@@ -163,11 +162,12 @@ func TestGeneralSavesDuringAServiceCall(t *testing.T) {
 	}
 }
 
-func TestGeneralDiscardReturnsToTheMenu(t *testing.T) {
+func TestGeneralEscLeadsToTheSubtabLineWithoutAQuestionWhenNothingChanged(t *testing.T) {
 	m := generalModel(t, &savedPrefs{})
 	send(m, toGeneral...)
 	send(m, "esc")
-	if m.set.page != "" || m.set.form != nil {
-		t.Fatalf("page %q form %v", m.set.page, m.set.form)
+	if m.set.page != pageGeneral || m.set.form == nil || m.modal != nil {
+		t.Fatalf("page %q form %v modal %v", m.set.page, m.set.form, m.modal)
 	}
+	wantZone(t, m, kittui.ZoneSubtabs)
 }

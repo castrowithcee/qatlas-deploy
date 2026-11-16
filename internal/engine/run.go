@@ -73,10 +73,7 @@ func (r *run) execute() {
 		e.releaseHold()
 		r.held = false
 	}
-	rec := r.record(out)
-	e.mu.Lock()
-	delete(e.active, rec.Stack)
-	e.mu.Unlock()
+	rec := r.record(out, true)
 	ev := Event{Kind: rec.Result, Stack: rec.Stack, Run: rec.ID, Commit: rec.Commit, Error: rec.Error}
 	if r.undo != nil {
 		ev.Cause = CauseObservation
@@ -99,8 +96,10 @@ func (r *run) perform() outcome {
 	return r.secured(ctx)
 }
 
-// record closes the run log, stores the result of the run in the state and returns the record.
-func (r *run) record(out outcome) RunRecord {
+// record closes the run log, stores the result of the run in the state and returns the record. With
+// freeSlot the stack's slot is given up in the same critical section, so a client that sees the result can
+// start the next run.
+func (r *run) record(out outcome, freeSlot bool) RunRecord {
 	e := r.e
 	rec := r.rec
 	rec.Duration = e.cfg.Clock.Now().Sub(rec.Started)
@@ -121,6 +120,9 @@ func (r *run) record(out outcome) RunRecord {
 
 	now := e.cfg.Clock.Now().UTC()
 	var dropped []RunRecord
+	if freeSlot {
+		e.mu.Lock()
+	}
 	uerr := e.update(func(s State) (State, error) {
 		s = normalize(s)
 		cur := s.Stacks[rec.Stack]
@@ -167,6 +169,13 @@ func (r *run) record(out outcome) RunRecord {
 		dropped = s.addRun(rec)
 		return s, nil
 	})
+	if e.afterResult != nil {
+		e.afterResult(rec.Stack)
+	}
+	if freeSlot {
+		delete(e.active, rec.Stack)
+		e.mu.Unlock()
+	}
 	if uerr != nil {
 		e.cfg.Logger.Error("run result not recorded", "run", rec.ID, "error", uerr)
 	}

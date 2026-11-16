@@ -120,7 +120,7 @@ func TestSourceAddBindsAndRunsALocalFolder(t *testing.T) {
 		t.Fatalf("known hosts = %q", h.knownHosts())
 	}
 	// The key it would use once it gets a remote does not exist yet.
-	wantCode(t, h.call(control.KeyShowCommand, control.KeyShowArgs{Dir: dir}, nil), control.CodeNotFound)
+	wantCode(t, h.call(control.KeyShowCommand, control.KeyShowArgs{Dir: dir}, nil), control.CodeNoSuchKey)
 
 	st := h.waitStatus("local source polled", func(st control.StatusResult) bool {
 		return len(st.Engine.Sources) == 1 && st.Engine.Sources[0].Head == res.Head && len(stacksNamed(st, "web")) == 1
@@ -222,8 +222,8 @@ func TestSourceRemoveReleasesOnlyTheBinding(t *testing.T) {
 	}
 	before, head := tree(t, dir), headOf(t, dir)
 
-	wantCode(t, h.sourceRemove(filepath.Join(dir, "web")), control.CodeNotFound)
-	wantCode(t, h.sourceRemove(filepath.Join(tempBase(t), "unknown")), control.CodeNotFound)
+	wantCode(t, h.sourceRemove(filepath.Join(dir, "web")), control.CodeNoSuchSource)
+	wantCode(t, h.sourceRemove(filepath.Join(tempBase(t), "unknown")), control.CodeNoSuchSource)
 	wantCode(t, h.sourceRemove("relative"), control.CodeInvalid)
 	if err := h.sourceRemove(dir); err != nil {
 		t.Fatal(err)

@@ -58,7 +58,8 @@ func newHarness(t *testing.T) *harness {
 	return h
 }
 
-// run starts the service of the harness and waits for its channel.
+// run starts the service of the harness and returns once it has answered a request, which serve only does after
+// the store, its sweep and the migrations are done.
 func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
 	t := h.t
 	t.Helper()
@@ -83,6 +84,9 @@ func (h *harness) run(dep engine.Deployer, opts ...func(*service.Config)) {
 		}
 		defer cl.Close()
 		return cl.Call(context.Background(), command, args, result)
+	}
+	if err := h.call(control.StatusCommand, nil, nil); err != nil {
+		t.Fatalf("service does not answer: %v", err)
 	}
 }
 
@@ -199,7 +203,7 @@ func TestSetRefusesAChangedHostKey(t *testing.T) {
 
 func TestSetNeedsADeployKey(t *testing.T) {
 	h := start(t)
-	wantCode(t, errOf(h.set(h.srv.Key().Fingerprint)), control.CodeNotFound)
+	wantCode(t, errOf(h.set(h.srv.Key().Fingerprint)), control.CodeNoSuchKey)
 	if h.knownHosts() != "" {
 		t.Fatal("a key was pinned without a deploy key")
 	}
@@ -482,7 +486,7 @@ func TestCheckRefusesUnknownStackAndMissingBinding(t *testing.T) {
 	if _, err := h.set(h.srv.Key().Fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "nope"}, nil), control.CodeNotFound)
+	wantCode(t, h.call(control.StacksCheckCommand, control.StacksCheckArgs{Stack: "nope"}, nil), control.CodeNoSuchStack)
 	wantCode(t, h.call(control.StacksCheckCommand, map[string]string{"bogus": "x"}, nil), control.CodeBadRequest)
 }
 
