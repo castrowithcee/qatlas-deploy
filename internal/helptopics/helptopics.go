@@ -160,7 +160,7 @@ Fields (all optional except version):
 - update.mode: manual (default) or automatic
 - update.ceiling: patch, minor (default) or major; the largest version step taken; versions are MAJOR.MINOR.PATCH (SemVer or CalVer), and with CalVer the first part, for example the year, counts as major
 - update.major: stepwise (default, one major version at a time) or direct
-- update.observe: observation time in minutes after an update by qdeploy (default 60, 0 off, at most 1440); a failure of the stack in it rolls the update back (see qdeploy help containers); a commit that did not come from qdeploy starts none
+- update.observe: observation time in minutes after an update by qdeploy (default 60, 0 off, at most 1440); a failure of the stack in it rolls the update back (see qdeploy help containers); a commit that did not come from qdeploy starts none; qdeploy status shows a running one as observe with its end and the update commit
 - update.tags.<VARIABLE>: regular expression a candidate tag must match; VARIABLE is the image version variable in .env
 - update.changelog.<VARIABLE>: GitHub repository (owner/name or a github.com address) whose releases are shown as changelog; it takes precedence over the image label org.opencontainers.image.source
 - backup.paths: data directories below data/ in the stack folder, for example data/db; other paths are refused when a backup runs
