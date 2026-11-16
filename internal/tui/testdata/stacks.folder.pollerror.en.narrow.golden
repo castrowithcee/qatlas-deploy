@@ -1,24 +1,24 @@
-qdeploy  maintenance window closed              [?] help
+◆ qdeploy  maintenance window closed            [?] help
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
+────────────────────────────────────────────────────────
         STACK                      CURRENT  AVAILABLE  S
-> v [ ] # /srv/local-example (0)   local               ~
-  v [ ] # /srv/stacks-example (6)  clone               ~
-    [ ] demo-stack                 1.4.2    1.5.0      ~
-    [ ] mail-relay                 3.1      up to da~  ~
-    [ ] old-tool                   -        unchecked  ~
-    [ ] photo-album                2.0.1    error      ~
-    [ ] web-shop                   5.2.0,~  6.0.0 (m~  ~
-    [ ] wiki                       1.41.0   unchecked  ~
+> ▾ [ ] ■ /srv/local-example (0)   local               …
+  ▾ [ ] ■ /srv/stacks-example (6)  clone               …
+    [ ] demo-stack                 1.4.2    1.5.0      …
+    [ ] mail-relay                 3.1      up to da…  …
+    [ ] old-tool                   -        unchecked  …
+    [ ] photo-album                2.0.1    error      …
+    [ ] web-shop                   5.2.0,…  6.0.0 (m…  …
+    [ ] wiki                       1.41.0   unchecked  …
                                                         
                                                         
                                                         
                                                         
                                                         
-                                                        
-  /srv/local-example                                    
-    last poll: Fri 2026-10-30 14:25                     
-    poll failed: the working copy has uncommitted       
-    changes in demo/compose.yaml                        
+╭─ /srv/local-example ─────────────────────────────────╮
+│ last poll: Fri 2026-10-30 14:25                      │
+│ poll failed: the working copy has uncommitted        │
+│ changes in demo/compose.yaml                         │
+╰──────────────────────────────────────────────────────╯
 enter details  / search  O add remote  x release  a add 
-r reload  1-5 area  q quit           up/down choose  1/6
+r reload  1-5 area  q quit               ↑/↓ choose  1/6

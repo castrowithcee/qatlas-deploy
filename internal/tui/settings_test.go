@@ -199,7 +199,7 @@ func TestCredentialIsSetWithADerivedNameAndNeverShown(t *testing.T) {
 	sendHidden(t, m, hidden, typed("alice")...)
 	sendHidden(t, m, hidden, "down")
 	sendHidden(t, m, hidden, typed(hiddenA)...)
-	contains(t, m, "************************")
+	contains(t, m, strings.Repeat("•", 24))
 	sendHidden(t, m, hidden, "f2")
 	contains(t, m, "registry.registry.example.test-5000")
 	if len(b.credSets) != 0 {

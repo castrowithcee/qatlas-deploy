@@ -1,6 +1,6 @@
-qdeploy  maintenance window closed                                                                              [?] help
-  [1 Stacks]  2 Stack detail   3 Runs   4 Settings   5 Containers                                                       
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  maintenance window closed                                                                            [?] help
+  [1 ▤ Stacks]  2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   No stack folders yet. a adds one; on the command line: sudo qdeploy source add <path>                                 
                                                                                                                         
                                                                                                                         

@@ -1,20 +1,20 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+  [1 ▤ Stacks]  2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Stack-Ordner hinzufügen                                                                                               
                                                                                                                         
-         #=============================================================================================================#
-> Ordner | /srv/stacks-example_                                                                                        |
-         #=============================================================================================================#
+         ╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+> Ordner ║ /srv/stacks-example_                                                                                        ║
+         ╚═════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
          absoluter Pfad; er wird nur geprüft, vor den Fragen ändert sich nichts                                         
-                            #= Änderungen verwerfen =======================================#                            
-                            | ! Die Änderungen an diesem Formular verwerfen?               |                            
-                            |                                                              |                            
-                            | Die Änderungen, die Sie hier gemacht haben, gehen verloren.  |                            
-                            |                                                              |                            
-                            | [ ja, ausführen ]  > abbrechen <                             |                            
-                            | y ja, ausführen  n/esc/enter abbrechen                       |                            
-                            #==============================================================#                            
+                            ╔═ Änderungen verwerfen ═══════════════════════════════════════╗                            
+                            ║ ⚠ Die Änderungen an diesem Formular verwerfen?               ║                            
+                            ║                                                              ║                            
+                            ║ Die Änderungen, die Sie hier gemacht haben, gehen verloren.  ║                            
+                            ║                                                              ║                            
+                            ║ [ ja, ausführen ]  > abbrechen <                             ║                            
+                            ║ y ja, ausführen  n/esc/enter abbrechen                       ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
                                                                                                                         
                                                                                                                         
                                                                                                                         

@@ -54,7 +54,7 @@ func TestBinaryWithoutArgumentsAtATerminalRunsTheInterface(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer term.Close()
-	if err := term.WaitForText(10*time.Second, "1 Stacks"); err != nil {
+	if err := term.WaitForText(10*time.Second, "Stacks"); err != nil {
 		t.Fatalf("%v\n%q", err, term.Output())
 	}
 	if _, err := term.Write([]byte("q")); err != nil {

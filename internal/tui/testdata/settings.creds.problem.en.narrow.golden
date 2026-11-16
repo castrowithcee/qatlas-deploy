@@ -1,25 +1,25 @@
-qdeploy  maintenance window closed            [esc] back
+◆ qdeploy  maintenance window closed          [esc] back
   1 2 3 [4 Settings] 5                                  
   [Credentials]                                         
---------------------------------------------------------
+────────────────────────────────────────────────────────
   Set a credential                                      
                                                         
-                +--------------------------------------+
-  Credential    | registry login                     v |
-                +--------------------------------------+
-                #======================================#
-> Registry host | _                                    |
-                #======================================#
+                ╭──────────────────────────────────────╮
+  Credential    │ registry login                     ▾ │
+                ╰──────────────────────────────────────╯
+                ╔══════════════════════════════════════╗
+> Registry host ║ _                                    ║
+                ╚══════════════════════════════════════╝
                 registry login only; with port as       
                 host:port, Docker Hub as docker.io      
                 [!] This is no registry host. - Correct 
                 the field.                              
-                +--------------------------------------+
-  Registry user | empty                                |
-                +--------------------------------------+
+                ╭──────────────────────────────────────╮
+  Registry user │ empty                                │
+                ╰──────────────────────────────────────╯
                 [!] The user is required and holds no   
                 colon. - Correct the field.             
-  ~                                                     
+  …                                                     
                                                         
                                                         
                                                         

@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed              [?] help
+◆ qdeploy  maintenance window closed            [?] help
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
-  ! Put the state of the host in /srv/local-example as  
+────────────────────────────────────────────────────────
+  ⚠ Put the state of the host in /srv/local-example as  
     one commit on branch main of                        
     ssh://git.example.test/ops/local-example.git and    
     push it?                                            
@@ -20,5 +20,5 @@ qdeploy  maintenance window closed              [?] help
     demo/compose.yaml                                   
     demo/.env                                           
     wiki/compose.yaml                                   
-y put and push  n/esc/enter cancel                      
-                                   up/down scroll  19/33
+    wiki/data                                           
+y put and push  n/esc/enter cancel     ↑/↓ scroll  20/33

@@ -1,8 +1,12 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-kit/i18n"
 	kittui "github.com/castrowithcee/qatlas-kit/tui"
@@ -94,7 +98,7 @@ func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
 	m := newTestModel(t, i18n.English, demoBackend(), narrowWidth, 14)
 	send(m, "enter")
 	first := m.render()
-	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, "/62") {
+	if !strings.Contains(first, "demo-stack") || !strings.Contains(first, "/63") {
 		t.Fatalf("top:\n%s", first)
 	}
 	send(m, "down", "down")
@@ -103,7 +107,7 @@ func TestDetailScrollsAndKeepsItsPlace(t *testing.T) {
 	}
 	send(m, "end")
 	last := m.render()
-	if !strings.Contains(last, "secrets-env-not-ignored") || !strings.Contains(last, "62/62") {
+	if !strings.Contains(last, "secrets-env-not-ignored") || !strings.Contains(last, "63/63") {
 		t.Fatalf("end:\n%s", last)
 	}
 	send(m, "down", "pgdown")
@@ -470,5 +474,50 @@ func TestNarrowAndWideLayoutsKeepTheirWidth(t *testing.T) {
 				m = newTestModel(t, lang, demoBackend(), width, 24)
 			}
 		}
+	}
+}
+
+func TestDetailSectionsStandInClosedPanelsAndTheCounterFollowsTheScroll(t *testing.T) {
+	const width, rows = narrowWidth, 14
+	tall := newTestModel(t, i18n.English, demoBackend(), width, 120)
+	send(tall, "enter")
+	tall.render()
+	var tops, bottoms int
+	for _, l := range tall.detailLines(tall.rows[tall.chosen], width) {
+		switch {
+		case strings.HasPrefix(l, "╭─ "):
+			tops++
+		case strings.HasPrefix(l, "╰"):
+			bottoms++
+		}
+		if strings.HasPrefix(l, "╭") || strings.HasPrefix(l, "│") || strings.HasPrefix(l, "╰") {
+			if lipgloss.Width(l) != width {
+				t.Errorf("panel line is %d cells wide, want %d: %q", lipgloss.Width(l), width, l)
+			}
+		}
+	}
+	if tops < 5 || tops != bottoms {
+		t.Fatalf("%d panel tops and %d bottoms", tops, bottoms)
+	}
+
+	m := newTestModel(t, i18n.English, demoBackend(), width, rows)
+	m.mouseOn = true
+	send(m, "enter")
+	m.render()
+	total, shown := m.detail.total, m.detail.rows
+	for top := 0; top <= total-shown; top++ {
+		if m.detail.top != top {
+			t.Fatalf("top %d, want %d", m.detail.top, top)
+		}
+		if want := fmt.Sprintf("%d/%d", top+shown, total); !strings.Contains(m.render(), want) || m.scrollNote != want {
+			t.Fatalf("at %d: note %q, want %q", top, m.scrollNote, want)
+		}
+		send(m, "down")
+	}
+	// The wheel takes the whole area, a border row included.
+	send(m, "home")
+	wheelAt(m, 10, 3, tea.MouseWheelDown)
+	if m.detail.top != kittui.WheelTextLines {
+		t.Fatalf("wheel moved to %d", m.detail.top)
 	}
 }

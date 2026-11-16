@@ -1,15 +1,15 @@
-qdeploy  Wartungsfenster zu                 [esc] Zurück
+◆ qdeploy  Wartungsfenster zu               [esc] Zurück
   1 2 3 [4 Einstellungen] 5                             
   [Benachrichtigungen]                                  
---------------------------------------------------------
+────────────────────────────────────────────────────────
   Einstellungen des Kanals                              
                                                         
-                    +----------------------------------+
-  Webhook-URL       | (eingegeben, verborgen)          |
-                    +----------------------------------+
-                    #==================================#
-> Signaturschlüssel | ************************_        |
-                    #==================================#
+                    ╭──────────────────────────────────╮
+  Webhook-URL       │ (eingegeben, verborgen)          │
+                    ╰──────────────────────────────────╯
+                    ╔══════════════════════════════════╗
+> Signaturschlüssel ║ ••••••••••••••••••••••••_        ║
+                    ╚══════════════════════════════════╝
                     verborgen; signiert jede Nachricht  
                                                         
                                                         

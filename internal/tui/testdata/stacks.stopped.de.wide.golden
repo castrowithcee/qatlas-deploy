@@ -1,6 +1,6 @@
-qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
+◆ qdeploy  Wartungsfenster zu                                                                                  [?] Hilfe
+  [1 ▤ Stacks]  2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
       STACK        VERSION      VERFÜGBAR      MODUS        ZUSTAND   LETZTER LAUF                         BEFUNDE      
 > [ ] demo-stack   1.4.2        1.5.0          automatisch  deployt   erfolgreich 10-30 14:02              1 Warnung    
   [ ] mail-relay   3.1          aktuell        manuell      gestoppt  erfolgreich 10-28 03:10              keine        
@@ -11,4 +11,4 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
 enter Details  / Suchen  space markieren  u update  d deploy  a hinzufügen  r Neu laden  1-5 Bereich  q Beenden         
-                                                                                                  up/down Auswählen  1/6
+                                                                                                      ↑/↓ Auswählen  1/6

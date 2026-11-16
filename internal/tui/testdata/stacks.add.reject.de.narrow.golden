@@ -1,6 +1,6 @@
-qdeploy  Wartungsfenster zu                    [?] Hilfe
+◆ qdeploy  Wartungsfenster zu                  [?] Hilfe
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
+────────────────────────────────────────────────────────
   /srv/reject-example kann nicht übernommen werden.     
                                                         
   Es wurde nichts geändert.                             
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                    [?] Hilfe
                                                         
                                                         
                                                         
-n/esc/enter schließen                   up/down Scrollen
+n/esc/enter schließen                       ↑/↓ Scrollen

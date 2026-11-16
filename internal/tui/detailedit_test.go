@@ -2,6 +2,7 @@ package tui
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
@@ -38,7 +39,7 @@ func TestSecretIsSetAfterConfirmationAndNeverShown(t *testing.T) {
 	sendHidden(t, m, hidden, typed("SERVICE_TOKEN")...)
 	sendHidden(t, m, hidden, "down")
 	sendHidden(t, m, hidden, typed(hiddenA)...)
-	contains(t, m, "************************")
+	contains(t, m, strings.Repeat("•", 24))
 	sendHidden(t, m, hidden, "f2")
 	contains(t, m, "SERVICE_TOKEN", "demo-stack")
 	if len(b.secretSets) != 0 {

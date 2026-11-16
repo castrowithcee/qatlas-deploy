@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed              [?] help
+◆ qdeploy  maintenance window closed            [?] help
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
-  ! Take over the clone /srv/clone-example with the     
+────────────────────────────────────────────────────────
+  ⚠ Take over the clone /srv/clone-example with the     
     address ssh://git.example.test/ops/stacks.git?      
                                                         
   Next the host key is shown and the deploy key of the  
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed              [?] help
       works: deploy                                     
                                                         
   Changes after yes                                     
-y continue  n/esc/enter cancel     up/down scroll  20/26
+y continue  n/esc/enter cancel         ↑/↓ scroll  20/26

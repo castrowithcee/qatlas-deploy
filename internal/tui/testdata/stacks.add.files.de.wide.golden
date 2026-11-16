@@ -1,7 +1,7 @@
-qdeploy  Wartungsfenster zu                                                                                    [?] Hilfe
-  [1 Stacks]  2 Stack-Details   3 Läufe   4 Einstellungen   5 Container                                                 
-------------------------------------------------------------------------------------------------------------------------
-  ! In /srv/files-example ein Git-Repository anlegen und übernehmen?                                                    
+◆ qdeploy  Wartungsfenster zu                                                                                  [?] Hilfe
+  [1 ▤ Stacks]  2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen   5 ▦ Container                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ In /srv/files-example ein Git-Repository anlegen und übernehmen?                                                    
                                                                                                                         
   Ja prüft den Ordner noch einmal und nimmt die unten aufgeführten Änderungen nur vor, wenn seine Liste unverändert ist.
                                                                                                                         
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                                                     
   Stacks (1)                                                                                                            
     demo (Ordner demo)                                                                                                  
       funktioniert: deploy                                                                                              
-y ja, ausführen  w mit Remote  n/esc/enter abbrechen                                             up/down Scrollen  20/29
+y ja, ausführen  w mit Remote  n/esc/enter abbrechen                                                 ↑/↓ Scrollen  20/29

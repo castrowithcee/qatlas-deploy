@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed                                                                  [esc] back  [?] help
-   1 Stacks   2 Stack detail   3 Runs   4 Settings  [5 Containers]                                                      
-------------------------------------------------------------------------------------------------------------------------
-  ! Take over the repository /srv/demo-foreign as a local stack folder?                                                 
+◆ qdeploy  maintenance window closed                                                                [esc] back  [?] help
+   1 ▤ Stacks   2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings  [5 ▦ Containers]                                            
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ Take over the repository /srv/demo-foreign as a local stack folder?                                                 
                                                                                                                         
   Yes makes the changes listed below.                                                                                   
                                                                                                                         
@@ -37,4 +37,4 @@ qdeploy  maintenance window closed                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
-y yes, do it  n/esc/enter cancel                                                                          up/down scroll
+y yes, do it  n/esc/enter cancel                                                                              ↑/↓ scroll

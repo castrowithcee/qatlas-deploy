@@ -1,7 +1,7 @@
-qdeploy  Wartungsfenster zu                              [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu                            [esc] Zurück  [?] Hilfe
    1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]        
---------------------------------------------------------------------------------
-  ! Das Repository /srv/demo-foreign als lokalen Stack-Ordner übernehmen?       
+────────────────────────────────────────────────────────────────────────────────
+  ⚠ Das Repository /srv/demo-foreign als lokalen Stack-Ordner übernehmen?       
                                                                                 
   Ja nimmt die unten aufgeführten Änderungen vor.                               
                                                                                 
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                              [esc] Zurück  [?] Hilf
     legacy-blog (Ordner .)                                                      
       funktioniert: deploy                                                      
       funktioniert nicht: backup                                                
-y ja, ausführen  n/esc/enter abbrechen                   up/down Scrollen  20/26
+y ja, ausführen  n/esc/enter abbrechen                       ↑/↓ Scrollen  20/26

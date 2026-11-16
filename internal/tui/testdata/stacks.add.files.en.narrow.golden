@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed              [?] help
+◆ qdeploy  maintenance window closed            [?] help
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
-  ! Start a git repository in /srv/files-example and    
+────────────────────────────────────────────────────────
+  ⚠ Start a git repository in /srv/files-example and    
     take it over?                                       
                                                         
   Yes looks at the folder once more and makes the       
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed              [?] help
   Left out (1), recorded only in .git/info/exclude      
     demo/data: bind-mount (stack demo)                  
 y yes, do it  w with a remote  n/esc/enter cancel       
-                                   up/down scroll  19/38
+                                       ↑/↓ scroll  19/38

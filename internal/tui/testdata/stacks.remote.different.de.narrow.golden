@@ -1,7 +1,7 @@
-qdeploy  Wartungsfenster zu                    [?] Hilfe
+◆ qdeploy  Wartungsfenster zu                  [?] Hilfe
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
-  ! Den Stand des Hosts in /srv/local-example als einen 
+────────────────────────────────────────────────────────
+  ⚠ Den Stand des Hosts in /srv/local-example als einen 
     Commit auf Branch main von                          
     ssh://git.example.test/ops/local-example.git setzen 
     und pushen?                                         
@@ -21,4 +21,4 @@ qdeploy  Wartungsfenster zu                    [?] Hilfe
     demo/compose.yaml                                   
     demo/.env                                           
 y setzen und pushen  n/esc/enter abbrechen              
-                                 up/down Scrollen  19/34
+                                     ↑/↓ Scrollen  19/34

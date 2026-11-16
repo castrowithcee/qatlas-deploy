@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed  [esc] back  [?] help
+◆ qdeploy  window closed            [esc] back  [?] help
   1 2 3 [4 Settings] 5                                  
   [Credentials]                                         
---------------------------------------------------------
+────────────────────────────────────────────────────────
   No credentials stored; qdeploy works anonymously. a   
   adds one.                                             
                                                         
@@ -21,4 +21,4 @@ qdeploy  maintenance window closed  [esc] back  [?] help
                                                         
                                                         
 a add  x remove  esc back  r reload  1-5 area  q quit   
-                                          up/down choose
+                                              ↑/↓ choose

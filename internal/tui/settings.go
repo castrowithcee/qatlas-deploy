@@ -672,7 +672,7 @@ func (m *Model) settingsView(width, height int) string {
 		}
 		return m.listView(list, width, height, 0)
 	}
-	lines := m.pageLines(width)
+	lines := m.pageLines(width, height)
 	return strings.Join(lines[:min(len(lines), height)], "\n")
 }
 
@@ -688,15 +688,15 @@ func (m *Model) partLines(p part, width int) []string {
 }
 
 // pageLines are the lines of the pages that are text.
-func (m *Model) pageLines(width int) []string {
+func (m *Model) pageLines(width, height int) []string {
 	switch m.set.page {
 	case pageWindow:
-		return m.windowLines(width)
+		return m.windowLines(width, height)
 	}
 	return nil
 }
 
-func (m *Model) windowLines(width int) []string {
+func (m *Model) windowLines(width, height int) []string {
 	s, t := m.set, m.text
 	if !s.window.loaded || s.window.err != nil {
 		return m.partLines(s.window, width)
@@ -706,20 +706,22 @@ func (m *Model) windowLines(width int) []string {
 	if w.Open {
 		state = t.Lookup(textHeaderWindowOpen)
 	}
-	lines := []string{
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDays, m.dayList(w.Days)), width),
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailStart, w.Start), width),
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDuration, w.Duration), width),
-		m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailZone, w.Zone), width),
-		m.line(detailIndent, kittui.StyleText, state, width),
-	}
-	if !w.NextOpening.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailNext, m.stamp(w.NextOpening)), width))
-	}
-	if !w.LastRun.IsZero() {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastRun, m.stamp(w.LastRun)), width))
-	}
-	return lines
+	return m.framed(t.Lookup(textPageWindow), "", width, height, func(width int) []string {
+		lines := []string{
+			m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDays, m.dayList(w.Days)), width),
+			m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailStart, w.Start), width),
+			m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailDuration, w.Duration), width),
+			m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailZone, w.Zone), width),
+			m.line(detailIndent, kittui.StyleText, state, width),
+		}
+		if !w.NextOpening.IsZero() {
+			lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailNext, m.stamp(w.NextOpening)), width))
+		}
+		if !w.LastRun.IsZero() {
+			lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailLastRun, m.stamp(w.LastRun)), width))
+		}
+		return lines
+	})
 }
 
 // settingsTyped gives a key to the list of the page that has the text focus.

@@ -1,21 +1,21 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details   3 Läufe  [4 Einstellungen]  5 Container                                                 
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks   2 ▣ Stack-Details   3 ▶ Läufe  [4 ⚙ Einstellungen]  5 ▦ Container                                       
    Allgemein   Zugangsdaten   Wartungsfenster  [Benachrichtigungen]                                                     
-------------------------------------------------------------------------------------------------------------------------
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   NAME      TYP      EREIGNISSE          ZIEL                                                                           
 > ops-hook  webhook  failed,rolled-back  -                                                                              
   ops-mail  smtp     alle                mail.example.test:587 -> ops@example.test                                      
                                                                                                                         
                                                                                                                         
-                            #= Benachrichtigungen =========================================#                            
-                            | ! Eine Testnachricht über ops-hook senden?                   |                            
-                            |                                                              |                            
-                            | Eine kurze Nachricht geht einmal an den Kanal, ohne          |                            
-                            | Wiederholung.                                                |                            
-                            |                                                              |                            
-                            | [ ja, ausführen ]  > abbrechen <                             |                            
-                            | y ja, ausführen  n/esc/enter abbrechen                       |                            
-                            #==============================================================#                            
+                            ╔═ Benachrichtigungen ═════════════════════════════════════════╗                            
+                            ║ ⚠ Eine Testnachricht über ops-hook senden?                   ║                            
+                            ║                                                              ║                            
+                            ║ Eine kurze Nachricht geht einmal an den Kanal, ohne          ║                            
+                            ║ Wiederholung.                                                ║                            
+                            ║                                                              ║                            
+                            ║ [ ja, ausführen ]  > abbrechen <                             ║                            
+                            ║ y ja, ausführen  n/esc/enter abbrechen                       ║                            
+                            ╚══════════════════════════════════════════════════════════════╝                            
                                                                                                                         
                                                                                                                         
                                                                                                                         

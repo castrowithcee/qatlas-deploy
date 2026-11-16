@@ -1,21 +1,21 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
   [Zugangsdaten]                                        
---------------------------------------------------------
+────────────────────────────────────────────────────────
   NAME                GESPEICHERT                       
 > registry.docker.io  2026-10-30 09:00                  
   github.com          2026-10-29 09:00                  
                                                         
                                                         
-  #= Zugangsdaten ===================================#  
-  | ! Die Zugangsdaten registry.docker.io löschen?   |  
-  |                                                  |  
-  | Ohne sie arbeitet qdeploy bei diesem Dienst      |  
-  | anonym. Der Wert ist nicht wiederherstellbar.    |  
-  |                                                  |  
-  | [ ja, ausführen ]  > abbrechen <                 |  
-  | y ja, ausführen  n/esc/enter abbrechen           |  
-  #==================================================#  
+  ╔═ Zugangsdaten ═══════════════════════════════════╗  
+  ║ ⚠ Die Zugangsdaten registry.docker.io löschen?   ║  
+  ║                                                  ║  
+  ║ Ohne sie arbeitet qdeploy bei diesem Dienst      ║  
+  ║ anonym. Der Wert ist nicht wiederherstellbar.    ║  
+  ║                                                  ║  
+  ║ [ ja, ausführen ]  > abbrechen <                 ║  
+  ║ y ja, ausführen  n/esc/enter abbrechen           ║  
+  ╚══════════════════════════════════════════════════╝  
                                                         
                                                         
                                                         

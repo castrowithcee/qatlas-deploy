@@ -1901,7 +1901,7 @@ scenario_tui_remote() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
 	tui_send 1
 	tui_folder_to "$tr_a"
 	tui_wait 'add remote' 10
@@ -2046,7 +2046,7 @@ scenario_key_set() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
 	tui_send 1
 	tui_folder_to /opt/stacks3
 	tui_send e
@@ -2674,6 +2674,14 @@ scenario_window() {
 
 # The terminal interface is driven in a tmux pane of the administrator, 120 columns by 40 rows. The command
 # keeps the pane after qdeploy ends, so the exit code can be read from the screen.
+# The icons of the tab line in the default setting (unicode), which the pane's UTF-8 locale draws; an icon
+# stands between the digit and the name.
+tui_icon_stacks='▤'
+tui_icon_detail='▣'
+tui_icon_runs='▶'
+tui_icon_settings='⚙'
+tui_icon_containers='▦'
+
 tui_tmux() {
 	docker exec -u "$admin" "$host" tmux -L qdtui "$@"
 }
@@ -2731,10 +2739,10 @@ tui_folder_to() {
 }
 
 # tui_click presses and releases the left mouse button at the first cell of the text $1 on the screen, as a
-# terminal reports it (SGR, 1-based), and fails when the text is not on the screen. The text must lie where
-# only ASCII precedes it on its line.
+# terminal reports it (SGR, 1-based), and fails when the text is not on the screen. awk counts bytes, so the
+# continuation bytes of the icons before the text are taken off; an icon is one cell wide.
 tui_click() {
-	cell=$(tui_screen | awk -v t="$1" 'i = index($0, t) { print i, NR; exit }')
+	cell=$(tui_screen | awk -v t="$1" 'i = index($0, t) { p = substr($0, 1, i - 1); gsub(/[\200-\277]/, "", p); print length(p) + 1, NR; exit }')
 	[ -n "$cell" ] || fail "cannot click '$1', it is not on the screen: $(tui_screen)"
 	set -- $cell
 	tui_send -l "$(printf '\033[<0;%d;%dM\033[<0;%d;%dm' "$1" "$2" "$1" "$2")"
@@ -2785,7 +2793,7 @@ scenario_tui() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
 	for name in demo-stack demo-cache demo-paused demo-pinned; do tui_wait "$name" 30; done
 	tui_wait 'q quit' 10
 	# The interface opens with the focus on the tab line.
@@ -2793,9 +2801,9 @@ scenario_tui() {
 	log 'scenario: interface open, stacks listed'
 
 	step 'a click on a tab switches the area and a click on a stack row marks it'
-	tui_click '3 Runs'
+	tui_click "3 $tui_icon_runs Runs"
 	tui_wait 'TRIGGER' 10
-	tui_click '1 Stacks'
+	tui_click "1 $tui_icon_stacks Stacks"
 	tui_wait 'CURRENT' 10
 	tui_click_row demo-pinned
 	# tui_cursor_to only moves down, so the cursor goes back to the first row.
@@ -2990,7 +2998,7 @@ scenario_tui() {
 	wait_for 'the single container' 30 health_is "$single" healthy
 	tui_send Escape
 	tui_send 5
-	tui_wait '5 Containers' 10
+	tui_wait "5 $tui_icon_containers Containers" 10
 	tui_wait 'single containers' 15
 	running_seen=0 stopped_seen=0
 	tui_screen | grep -qE " $single +ok " && running_seen=1
@@ -3078,7 +3086,7 @@ scenario_tui() {
 	wait_for 'the foreign container' 30 health_is "$foreign" healthy
 	tui_send Escape
 	tui_send 5
-	tui_wait '5 Containers' 10
+	tui_wait "5 $tui_icon_containers Containers" 10
 	tui_wait 'foreign project demo-foreign-tui' 15
 	# ct_action presses the action key $1 on the row of $foreign (the group order depends on the language, so the
 	# cursor is found by name), confirms the question that starts with $2 and closes the result sheet of the
@@ -3100,7 +3108,7 @@ scenario_tui() {
 		tui_wait "$3 finished: 1 ok, 0 failed" 60
 		tui_has "$foreign" || fail "the result sheet of $3 does not name $foreign: $(tui_screen)"
 		tui_send Escape
-		tui_wait '5 Containers' 10
+		tui_wait "5 $tui_icon_containers Containers" 10
 	}
 	# ct_expect waits without a key press for the row of $foreign to show the state $1 and checks the engine state $2.
 	ct_expect() {
@@ -3138,7 +3146,7 @@ scenario_tui() {
 	tui_send Escape
 	tui_wait 'STARTED' 10
 	tui_send 1
-	tui_wait '1 Stacks' 10
+	tui_wait "1 $tui_icon_stacks Stacks" 10
 	# The tab line has the focus while the footer offers "next area"; the area shows in its content: the
 	# Stacks list has the CURRENT column, Stack detail a "mode" row (or the hint that no stack is chosen),
 	# Runs the STARTED column.
@@ -3203,11 +3211,11 @@ scenario_tui() {
 	tui_wait 'Deutsch' 10
 	tui_send F2
 	tui_wait 'Die Einstellungen sind gespeichert.' 10
-	tui_wait '4 Einstellungen' 10
+	tui_wait "4 $tui_icon_settings Einstellungen" 10
 	tui_send Escape
 	tui_wait 'Zugangsdaten' 10
 	tui_send 1
-	tui_wait '2 Stack-Details' 10
+	tui_wait "2 $tui_icon_detail Stack-Details" 10
 	tui_wait 'q Beenden' 10
 	log 'scenario: the interface switched to Deutsch when the General page was saved:'
 	tui_excerpt 'qdeploy' 4
@@ -3216,7 +3224,7 @@ scenario_tui() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '2 Stack-Details' 30
+	tui_wait "2 $tui_icon_detail Stack-Details" 30
 	tui_wait 'demo-stack' 30
 	tui_wait 'q Beenden' 10
 	tui_subtab Allgemein
@@ -3230,7 +3238,7 @@ scenario_tui() {
 	tui_send Escape
 	tui_wait 'Credentials' 10
 	tui_send 1
-	tui_wait '2 Stack detail' 10
+	tui_wait "2 $tui_icon_detail Stack detail" 10
 	tui_has 'Stack-Details' && fail "the interface still shows German after English was saved: $(tui_screen)"
 	log 'scenario: Deutsch stayed after the restart of the interface and English was saved back'
 
@@ -3308,7 +3316,7 @@ EOF2
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
 	tui_send 5
 	tui_wait 'foreign project app' 30
 	tui_ct_cursor_to app-app-1
@@ -3533,7 +3541,7 @@ scenario_tui_setup() {
 	tui_tmux kill-server >/dev/null 2>&1 || true
 	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
 		fail 'cannot start tmux for the interface'
-	tui_wait '1 Stacks' 30
+	tui_wait "1 $tui_icon_stacks Stacks" 30
 	tui_send 1
 	tui_wait 'No stack folders yet' 30
 

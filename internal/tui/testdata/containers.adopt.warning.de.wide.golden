@@ -1,7 +1,7 @@
-qdeploy  Wartungsfenster zu                                                                      [esc] Zurück  [?] Hilfe
-   1 Stacks   2 Stack-Details   3 Läufe   4 Einstellungen  [5 Container]                                                
-------------------------------------------------------------------------------------------------------------------------
-  ! Das Repository /srv/demo-foreign als lokalen Stack-Ordner übernehmen?                                               
+◆ qdeploy  Wartungsfenster zu                                                                    [esc] Zurück  [?] Hilfe
+   1 ▤ Stacks   2 ▣ Stack-Details   3 ▶ Läufe   4 ⚙ Einstellungen  [5 ▦ Container]                                      
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ Das Repository /srv/demo-foreign als lokalen Stack-Ordner übernehmen?                                               
                                                                                                                         
   Ja nimmt die unten aufgeführten Änderungen vor.                                                                       
                                                                                                                         
@@ -37,4 +37,4 @@ qdeploy  Wartungsfenster zu                                                     
                                                                                                                         
                                                                                                                         
                                                                                                                         
-y ja, ausführen  n/esc/enter abbrechen                                                                  up/down Scrollen
+y ja, ausführen  n/esc/enter abbrechen                                                                      ↑/↓ Scrollen

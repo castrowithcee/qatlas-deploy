@@ -1,7 +1,7 @@
-qdeploy  maintenance window closed              [?] help
+◆ qdeploy  maintenance window closed            [?] help
   [1 Stacks] 2 3 4 5                                    
---------------------------------------------------------
-  ! Update demo-stack?                                  
+────────────────────────────────────────────────────────
+  ⚠ Update demo-stack?                                  
                                                         
   Each stack is backed up, committed and deployed step  
   by step, one stack after another; a failed step is    
@@ -44,4 +44,4 @@ qdeploy  maintenance window closed              [?] help
                                                         
                                                         
                                                         
-y yes, do it  n/esc/enter cancel          up/down scroll
+y yes, do it  n/esc/enter cancel              ↑/↓ scroll

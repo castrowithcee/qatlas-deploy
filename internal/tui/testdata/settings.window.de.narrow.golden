@@ -1,15 +1,15 @@
-qdeploy  Wartungsfenster zu      [esc] Zurück  [?] Hilfe
+◆ qdeploy  Wartungsfenster zu    [esc] Zurück  [?] Hilfe
   1 2 3 [4 Einstellungen] 5                             
   [Wartungsfenster]                                     
---------------------------------------------------------
-    Tage: so                                            
-    Beginn: 03:00                                       
-    Dauer: 2h                                           
-    Zeitzone: UTC                                       
-    Wartungsfenster zu                                  
-    nächste Öffnung: Sa 2026-10-31 03:00                
-                                                        
-                                                        
+────────────────────────────────────────────────────────
+╭─ Wartungsfenster ────────────────────────────────────╮
+│ Tage: so                                             │
+│ Beginn: 03:00                                        │
+│ Dauer: 2h                                            │
+│ Zeitzone: UTC                                        │
+│ Wartungsfenster zu                                   │
+│ nächste Öffnung: Sa 2026-10-31 03:00                 │
+╰──────────────────────────────────────────────────────╯
                                                         
                                                         
                                                         
