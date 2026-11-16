@@ -548,7 +548,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			if cmd, ok := m.openContainerLogs(); ok {
 				return cmd
 			}
-		case actFetch, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs:
+		case actFetch, actAdd, actRemove, actEdit, actTest, actEnter, actRestore, actDataDirs, actRemote:
 			switch m.area {
 			case areaSettings:
 				if cmd, handled := m.settingsAction(id); handled {
@@ -1256,6 +1256,9 @@ func (m *Model) stacksFooter(common, nav []kittui.Hint) []kittui.Hint {
 		if f.Kind == control.SourceKindRemote {
 			own = append(own, kittui.Hint{Action: actFetch, Label: textKeyFetch, Priority: 3},
 				kittui.Hint{Action: actEdit, Label: textKeyDeployKey, Priority: 3})
+		}
+		if f.Kind != control.SourceKindRemote {
+			own = append(own, kittui.Hint{Action: actRemote, Label: textKeyRemote, Priority: 3})
 		}
 		own = append(own, kittui.Hint{Action: actRemove, Label: textKeyRelease, Priority: 3}, add)
 		common = append(own, common...)

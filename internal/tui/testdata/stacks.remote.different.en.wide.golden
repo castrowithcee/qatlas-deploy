@@ -1,0 +1,24 @@
+◆ qdeploy  maintenance window closed                                                                            [?] help
+  [1 ▤ Stacks]  2 ▣ Stack detail   3 ▶ Runs   4 ⚙ Settings   5 ▦ Containers                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ Put the state of the host in /srv/local-example as one commit on branch main of ssh://git.example.test/ops/local-   
+    example.git and push it?                                                                                            
+                                                                                                                        
+  The files differ. Yes adds one commit with the files of the host on top of the remote history and pushes it; the      
+  remote history is kept and never overwritten.                                                                         
+                                                                                                                        
+    folder: /srv/local-example                                                                                          
+    address: ssh://git.example.test/ops/local-example.git                                                               
+    branch: main                                                                                                        
+    commit: 111111111111                                                                                                
+                                                                                                                        
+  Paths that differ (12)                                                                                                
+    demo/compose.yaml                                                                                                   
+    demo/.env                                                                                                           
+    wiki/compose.yaml                                                                                                   
+    wiki/data                                                                                                           
+    a                                                                                                                   
+    b                                                                                                                   
+    c                                                                                                                   
+    d                                                                                                                   
+y put and push  n/esc/enter cancel                                                                     ↑/↓ scroll  20/27

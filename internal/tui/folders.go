@@ -50,13 +50,22 @@ type addFlow struct {
 	// foreign is set when the folder is that of a foreign Compose project the person chose in the Containers
 	// area; the flow is the same, with the labels shown and compared.
 	foreign *foreignSource
+	// remote is set when the folder is a local stack folder that gets a remote; res then only names it.
+	remote bool
+	// key is the deploy key the look found; cmp is the comparison with the repository at url that the person
+	// was shown, which the last call hands back as what to expect.
+	key control.KeyResult
+	cmp *control.SourceCompareResult
 }
 
 // inspected is the answer of the inspection of a folder to add.
 type inspected struct{ flow *addFlow }
 
 // keyChecked is the answer of the look for the deploy key of a folder to add.
-type keyChecked struct{ found bool }
+type keyChecked struct {
+	found bool
+	key   control.KeyResult
+}
 
 // listChanged is the answer for a folder of files whose list changed after it was shown; nothing was changed.
 type listChanged struct{ path string }
@@ -155,6 +164,8 @@ func (m *Model) folderAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 		return m.askFolderRemove(), true
 	case actEdit:
 		return m.openFolderKey(), true
+	case actRemote:
+		return m.askFolderRemote(), true
 	}
 	return nil, false
 }
@@ -374,15 +385,25 @@ func (m *Model) showInspection(flow *addFlow) {
 			m.askSheet(title, t.Lookup(textAskFolderNoFiles, res.Path), t.Lookup(textWhatFolderNoFiles), body, nil, nil)
 			return
 		}
-		m.askSheet(title, t.Lookup(textAskFolderFiles, res.Path), t.Lookup(textWhatFolderFiles), body, yes,
+		files := []kittui.Answer{{Action: actYes, Label: textAnswerYes}, {Action: actWithRemote, Label: textAnswerWithRemote},
+			{Action: actNo, Label: textAnswerCancel}}
+		m.askSheet(title, t.Lookup(textAskFolderFiles, res.Path), t.Lookup(textWhatFolderFiles), body, files,
 			func() tea.Cmd { return m.addFolder(flow) })
+		if m.modal != nil {
+			// The same comparison as for a local folder, with the repository that already holds content.
+			m.modal.alt = func() tea.Cmd { return m.openForm(m.folderURLForm()) }
+		}
 	default:
 		m.askSheet(title, t.Lookup(textAskFolderRejected, res.Path), t.Lookup(textWhatNothing), body, nil, nil)
 	}
 }
 
 func (m *Model) folderURLForm() *settingsForm {
-	return m.newSettingsForm(formFolderURL, textTitleFolderURL, []kittui.FormField{textField("url", textFieldURL, textHintURL, "")})
+	title, hint := textTitleFolderURL, textHintURL
+	if flow := m.set.add; flow != nil && flow.remote {
+		title, hint = textTitleRemote, textHintRemoteURL
+	}
+	return m.newSettingsForm(formFolderURL, title, []kittui.FormField{textField("url", textFieldURL, hint, "")})
 }
 
 func (m *Model) submitFolderURL(f *settingsForm, url string) tea.Cmd {
@@ -439,11 +460,11 @@ func (m *Model) hostKeyDetails(flow *addFlow) []string {
 func (m *Model) checkFolderKey(flow *addFlow) tea.Cmd {
 	path := flow.res.Path
 	return m.writeCall(opKeyCheck, path, func(b Backend) (any, error) {
-		_, err := b.KeyShow(m.ctx, path)
+		key, err := b.KeyShow(m.ctx, path)
 		var remote *control.Error
 		switch {
 		case err == nil:
-			return keyChecked{found: true}, nil
+			return keyChecked{found: true, key: key}, nil
 		case errors.As(err, &remote) && remote.Code == control.CodeNoSuchKey:
 			return keyChecked{}, nil
 		}
@@ -453,15 +474,25 @@ func (m *Model) checkFolderKey(flow *addFlow) tea.Cmd {
 
 // keyDone takes the look for the deploy key: without one the key page for the folder opens and the adding ends
 // there; with one comes the last question.
-func (m *Model) keyDone(found bool) tea.Cmd {
+func (m *Model) keyDone(checked keyChecked) tea.Cmd {
 	s, t := m.set, m.text
-	flow := s.add
+	flow, found := s.add, checked.found
 	if flow == nil {
 		return nil
+	}
+	if found {
+		flow.key = checked.key
+	}
+	if found && flow.comparing() {
+		return m.compareFolder(flow)
 	}
 	if !found {
 		s.add = nil
 		cmd := m.openKeyPage(flow.res.Path)
+		if flow.comparing() {
+			m.tell(textTitleKey, t.Lookup(textRemoteNoKey, flow.res.Path), []string{t.Lookup(textRemoteNoKeyNext)})
+			return cmd
+		}
 		m.tell(textTitleKey, t.Lookup(textFolderNoKey, flow.res.Path), []string{t.Lookup(textFolderNoKeyNext)})
 		return cmd
 	}
@@ -517,7 +548,11 @@ func (m *Model) addFolder(flow *addFlow) tea.Cmd {
 			set, err := b.RepoSet(ctx, control.RepoSetArgs{URL: flow.url, Dir: path, Fingerprint: flow.probe.Fingerprint})
 			return set, kept(err)
 		case control.SourceCaseFiles:
-			added, err := b.SourceAdd(ctx, control.SourceAddArgs{Path: path, Files: res.PlannedFiles})
+			args := control.SourceAddArgs{Path: path, Files: res.PlannedFiles}
+			if c := flow.cmp; c != nil {
+				args.URL, args.Fingerprint, args.ExpectState, args.ExpectCommit = flow.url, flow.probe.Fingerprint, c.State, c.Commit
+			}
+			added, err := b.SourceAdd(ctx, args)
 			return added, kept(err)
 		}
 		added, err := b.SourceAdd(ctx, control.SourceAddArgs{Path: path})

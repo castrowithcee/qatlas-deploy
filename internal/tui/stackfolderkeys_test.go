@@ -155,7 +155,7 @@ func TestAClickOnAFolderRowMarksItAndTheKeysOfTheLineAct(t *testing.T) {
 	clickAt(m, x, y)
 	contains(t, m, "Release the stack folder "+localDir)
 	send(m, "n")
-	x, y = cellOf(t, m, "add")
+	x, y = cellOf(t, m, "a add")
 	clickAt(m, x, y)
 	if m.set.form == nil || m.set.form.kind != formFolder {
 		t.Fatal("a click on the key to add did not open the form")
