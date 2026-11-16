@@ -23,7 +23,9 @@
 # test, repository with a confirmed host key, a stack secret and the first deploy; then it restores an older
 # backup through the interface and proves that no masked value shows anywhere. Then the update rules of a new stack
 # are set in the interface (automatic, ceiling minor): the stacks repository gets a commit with its settings file,
-# the next maintenance window updates the stack, and qdeploy stack settings remove returns it to deploy only. At the very
+# the next maintenance window updates the stack, and qdeploy stack settings remove returns it to deploy only. The backup
+# of a stack with a named volume is set in the interface (the volume ticked): the settings file gets a commit, and the next
+# update run backs up exactly that volume. At the very
 # end the installed program updates itself to a newer signed test release and refuses tampered ones. Sourced by run.sh scenario.
 
 # signature_asset is the name of the release file with the signature; it must match release.SignatureAsset.
@@ -1222,6 +1224,8 @@ scenario_stacks_repo() {
 	scenario_tui_setup
 
 	scenario_tui_rules
+
+	scenario_tui_backup
 }
 
 # flat_field prints one flat field of qdeploy status by its full name (empty when it is absent).
@@ -4115,4 +4119,124 @@ EOF2
 	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')" = "$remove_commit" ] || fail 'a second settings remove made a commit'
 	wait_for 'demo-rules to be idle' 120 stack_idle "$rules_stack"
 	log 'scenario: demo-rules is set to automatic in the interface, updated by the window and returned to deploy only'
+}
+
+# scenario_tui_backup ticks a named volume in the backup form of the stack detail and lets the next update run
+# back it up. It uses a stack of its own, demo-vol, with one named volume and no bind mount: the stacks of the
+# earlier sections are in their final state and the backup rules of demo-stack are part of the backup and rollback
+# sections. The observation time is set to 0 with qdeploy stack settings set before the form (the form leaves the
+# update rules as they are), so that no observation stays open for the sections after this one; the stack stays
+# in the repository, in manual mode, and nothing else acts on it. The update runs through the command line
+# because only its backup step matters here.
+scenario_tui_backup() {
+	tui_log=$work/tui-backup-screens.log
+	: >"$tui_log"
+	image=registry.$domain/demo/app
+	vol_stack=demo-vol
+	vol_file=.qatlas/qdeploy/$vol_stack.yaml
+	vol_name=${vol_stack}_state
+	vol_store=/var/lib/qdeploy/backups/$vol_stack
+
+	step 'the stack demo-vol with a named volume joins the repository and its observation time is set to 0'
+	as_admin 'cd ~/stacks && git pull -q --ff-only && mkdir demo-vol'
+	cat <<EOF2 | as_admin 'cat >"$HOME"/stacks/demo-vol/compose.yaml'
+services:
+  app:
+    image: registry.$domain/demo/app:\${DEMO_APP_VERSION}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: demo-vol
+      DEMO_VERSION: \${DEMO_APP_VERSION}
+      DEMO_HEALTH: \${DEMO_HEALTH}
+    volumes:
+      - state:/state
+
+volumes:
+  state: {}
+EOF2
+	printf 'DEMO_APP_VERSION=1.0.1\nDEMO_HEALTH=ok\n' | as_admin 'cat >"$HOME"/stacks/demo-vol/.env'
+	as_admin 'cd ~/stacks && cp demo-cache/.gitignore demo-vol/.gitignore && git add -A &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Add the demo-vol stack" && git push -q origin main'
+	restart_service
+	wait_for 'the first run of demo-vol' 240 stack_settled "$vol_stack" succeeded
+	wait_for 'demo-vol healthy' 60 stack_healthy "$vol_stack"
+	[ "$(stack_images "$vol_stack")" = "$image:1.0.1" ] || fail "demo-vol does not run 1.0.1: $(stack_images "$vol_stack")"
+	settings_set "$vol_stack" "$(printf 'version: 1\nupdate:\n  observe: 0\n')"
+	printf '%s' "$settings_out" | grep -q '"changed": *true' || fail "settings set reports no change: $settings_out"
+	vol_marker=marker-$(date +%s)
+	fixture_run "$vol_name" "printf '%s\n' $vol_marker >/data/marker.txt" || fail 'cannot write the marker into the volume of demo-vol'
+	[ -z "$(backup_ids "$vol_stack" || true)" ] || fail "demo-vol has a backup before the form: $(qd stack backup list "$vol_stack")"
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	vol_before=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+
+	step 'Stack detail: the volume of demo-vol is ticked in the backup form and saved after a question'
+	tui_tmux kill-server >/dev/null 2>&1 || true
+	tui_tmux new-session -d -s qdtui -x 120 -y 40 "env LANG=C.UTF-8 sh -c 'sudo qdeploy; echo qdeploy-exit=\$?; sleep 600'" ||
+		fail 'cannot start tmux for the interface'
+	tui_wait "1 $tui_icon_stacks Stacks" 30
+	tui_send 1
+	tui_wait "$vol_stack" 60
+	tui_click_row "$vol_stack"
+	tui_send Enter
+	tui_wait 'Image versions' 15
+	tui_send b
+	tui_wait 'Backup of a stack' 10
+	# The stack has no backup section yet: the volume list offers the named volume of the compose file, unticked.
+	# Tab leaves the data directories for the volumes; space ticks the volume under the cursor.
+	tui_send Tab
+	tui_wait '[ ] state' 5
+	tui_send Space
+	tui_wait '[x] state' 5
+	tui_send F2
+	tui_wait "Save the backup of the stack $vol_stack?" 10
+	tui_has 'volumes: state' || fail "the question does not show the volume: $(tui_screen)"
+	[ "$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')" = "$vol_before" ] || fail 'the question already made a commit'
+	tui_send y
+	tui_wait "Backup of the stack $vol_stack saved." 60
+	tui_send Enter
+	tui_send Escape
+	tui_send 1
+	sleep 0.3
+	tui_send q
+	tui_wait 'qdeploy-exit=0' 10
+	tui_tmux kill-server >/dev/null 2>&1 || true
+
+	step 'the stacks repository holds one commit that only changes the settings file of demo-vol, with the volume under backup'
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	vol_commit=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	[ "$(as_admin "cd ~/stacks && git rev-list --count $vol_before..HEAD")" = 1 ] || fail 'the form did not make exactly one commit'
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$vol_commit" ] || fail 'the settings commit is not on the remote branch'
+	[ "$(as_admin "cd ~/stacks && git show --format= --name-status $vol_commit")" = "$(printf 'M\t%s' "$vol_file")" ] ||
+		fail "the settings commit does not only change $vol_file: $(as_admin "cd ~/stacks && git show --format= --name-status $vol_commit")"
+	vol_yaml=$(as_admin "cd ~/stacks && git show $vol_commit:$vol_file")
+	printf '%s\n' "$vol_yaml" | grep -Eq '^backup:$' || fail "the settings file has no backup section: $vol_yaml"
+	printf '%s\n' "$vol_yaml" | grep -Eq '^  volumes:$' || fail "the backup section has no volumes: $vol_yaml"
+	printf '%s\n' "$vol_yaml" | grep -Eq '^    - state$' || fail "the settings file does not name the volume state under backup.volumes: $vol_yaml"
+	printf '%s\n' "$vol_yaml" | grep -Eq '^  observe: 0$' || fail "the form changed the observation time: $vol_yaml"
+	out=$(qd --output json stack settings "$vol_stack") || fail "stack settings failed: $out"
+	printf '%s' "$out" | grep -q '"state"' || fail "the service does not show the volume in the settings of demo-vol: $out"
+	[ -z "$(backup_ids "$vol_stack" || true)" ] || fail 'saving the form made a backup'
+	log "scenario: the interface committed $vol_file: $(printf '%s' "$vol_yaml" | tr '\n' ' ')"
+
+	step 'the next update run backs up the volume of demo-vol and nothing else'
+	vol_runs=$(stack_run_count "$vol_stack")
+	out=$(qd --output json stack update "$vol_stack" --version 1.1.0) || fail "update of demo-vol failed: $out"
+	vol_run=$(json_values "$out" run | head -n 1)
+	[ -n "$vol_run" ] || fail "update reported no run: $out"
+	run_log=$(qd stack log "$vol_run")
+	printf '%s' "$run_log" | grep -q ' result succeeded' || fail "the update run did not succeed: $run_log"
+	[ "$(update_steps "$run_log")" = stop,backup,commit,push,fast-forward,pull,up,check ] || fail "unexpected steps of the update run: $(update_steps "$run_log")"
+	[ "$(stack_run_count "$vol_stack")" = "$((vol_runs + 1))" ] || fail 'the update did not make exactly one run'
+	[ "$(stack_images "$vol_stack")" = "$image:1.1.0" ] || fail "demo-vol does not run 1.1.0: $(stack_images "$vol_stack")"
+	stack_healthy "$vol_stack" || fail 'demo-vol is not healthy after the update'
+	[ -z "$(stack_field "$vol_stack" observe)" ] || fail "demo-vol shows an observation: $(stack_field "$vol_stack" observe)"
+	vol_backup=$(update_run_backup "$run_log")
+	[ -n "$vol_backup" ] || fail "the update run made no backup: $run_log"
+	[ "$(backup_ids "$vol_stack" | tr '\n' ' ')" = "$vol_backup " ] || fail "backup list does not show only $vol_backup: $(qd stack backup list "$vol_stack")"
+	vol_items=$(docker exec "$host" ls "$vol_store/$vol_backup" | grep -x -e 'volume-[0-9]*\.tar' -e 'path-[0-9]*\.tar' -e command.out | tr '\n' ' ')
+	[ "$vol_items" = 'volume-0.tar ' ] || fail "the backup does not hold exactly one volume archive: $vol_items"
+	[ "$(docker exec -i "$host" docker run --rm --network none -v "$vol_store/$vol_backup:/b:ro" "$backup_image" sh -ec \
+		'mkdir /t && tar -xf /b/volume-0.tar -C /t && cat /t/marker.txt' </dev/null)" = "$vol_marker" ] ||
+		fail "the volume archive of $vol_backup does not hold the marker of the volume"
+	log "scenario: the update run $vol_run backed up the volume $vol_name in $vol_backup, with its marker"
 }
