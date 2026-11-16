@@ -182,3 +182,17 @@ func TestRepairText(t *testing.T) {
 		}
 	}
 }
+
+func TestObservationInStatusFields(t *testing.T) {
+	until := time.Date(2026, 5, 4, 3, 2, 1, 0, time.UTC)
+	commit := strings.Repeat("b", 40)
+	got := map[string]any{}
+	for _, f := range engineFields(control.EngineStatus{Stacks: []control.StackStatus{
+		{Name: "web", Source: "srv", Observe: &control.ObserveInfo{Commit: commit, Until: until}},
+	}}) {
+		got[f.Name] = f.Value
+	}
+	if want := "until 2026-05-04T03:02:01Z, update " + commit; got["stack.web.observe"] != want {
+		t.Errorf("observe = %v, want %q", got["stack.web.observe"], want)
+	}
+}

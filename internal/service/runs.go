@@ -238,6 +238,9 @@ func stackStatuses(snap engine.Snapshot) []control.StackStatus {
 				item.Repair.Halted = &control.HoldInfo{Since: r.Halted.Since}
 			}
 		}
+		if o := s.Observe; o != nil && time.Now().Before(o.Until) && o.Commit == s.Deployed {
+			item.Observe = &control.ObserveInfo{Commit: printable(o.Commit), Until: o.Until}
+		}
 		res = append(res, item)
 	}
 	return res

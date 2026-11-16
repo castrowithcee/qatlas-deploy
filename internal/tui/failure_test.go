@@ -112,3 +112,22 @@ func TestSelectedContainerFailedEventIsSentWithTheChannel(t *testing.T) {
 		t.Fatalf("adds = %+v", b.adds)
 	}
 }
+
+func TestDetailShowsARunningObservationInBothLanguages(t *testing.T) {
+	commit := strings.Repeat("b", 40)
+	for _, tt := range []struct {
+		lang i18n.Lang
+		want string
+	}{
+		{i18n.English, "update " + short(commit) + " until 10-30 12:00"},
+		{i18n.German, "Update " + short(commit) + " bis 10-30 12:00"},
+	} {
+		b := demoBackend()
+		b.status.Engine.Stacks[1].Observe = &control.ObserveInfo{Commit: commit, Until: at(30, 12, 0)}
+		m := newTestModel(t, tt.lang, b, wideWidth, detailRows)
+		send(m, "down", "enter")
+		if got := m.render(); !strings.Contains(got, tt.want) {
+			t.Errorf("%s: no %q in\n%s", tt.lang, tt.want, got)
+		}
+	}
+}

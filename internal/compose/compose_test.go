@@ -518,6 +518,8 @@ func (b *fakeBackups) Create(_ context.Context, st stacks.Stack, commit string, 
 	return "backup-1", b.err
 }
 
+func (b *fakeBackups) Exists(stacks.Stack, string) (bool, error) { return true, nil }
+
 func (b *fakeBackups) Restore(_ context.Context, st stacks.Stack, id string, _ Logger) error {
 	b.restored = append(b.restored, st.Name+"/"+id)
 	return b.err

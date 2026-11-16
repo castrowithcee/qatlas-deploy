@@ -14,6 +14,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-deploy/internal/control"
 	"github.com/castrowithcee/qatlas-deploy/internal/engine"
+	"github.com/castrowithcee/qatlas-deploy/internal/notifier"
 )
 
 const (
@@ -34,7 +35,8 @@ const (
 )
 
 // repairDelays are the waits before each repair attempt: the first from the start of the failure, each further
-// one from the attempt before. The first restarts the failed containers, the others the stack.
+// one from the attempt before. The first restarts the failed containers, the others the stack. In the
+// observation time of an update the rollback of the update takes the place of the second and third.
 var repairDelays = [engine.MaxRepairAttempts]time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute}
 
 var exitedStatusRe = regexp.MustCompile(`^Exited \((\d+)\)`)
@@ -54,8 +56,8 @@ func completedOneShot(c docker.Container) bool {
 }
 
 // MonitorEvent is one transition of the container monitor: a stack's containers failed, run again, or its
-// repair by restarts was halted. Exactly one failed event is sent per failure and one recovered event when it
-// ends; a halted event is sent once per halt.
+// repair was halted. Exactly one failed event is sent per failure and one recovered event when it ends; a
+// halted event is sent once per halt.
 type MonitorEvent struct {
 	Stack string
 	// Kind is the engine.Failure* kind of the failure; for a recovery, the kind it had.
@@ -68,6 +70,9 @@ type MonitorEvent struct {
 	// Halted is set when the repair attempts did not end the failure; Attempts is how many were made.
 	Halted   bool
 	Attempts int
+	// Cause is notifier.CauseBackupMissing on a halt because the update under observation could not be rolled
+	// back; Error then says why.
+	Cause, Error string
 	// Since is when the failure was first observed; Time is when this transition was found.
 	Since, Time time.Time
 }
@@ -80,7 +85,7 @@ func logMonitorEvent(log *slog.Logger, ev MonitorEvent) {
 	}
 	if ev.Halted {
 		log.Warn("container failure not repaired; repair halted until resume", "stack", ev.Stack, "kind", ev.Kind,
-			"container", ev.Container, "attempts", ev.Attempts)
+			"container", ev.Container, "attempts", ev.Attempts, "cause", ev.Cause, "error", ev.Error)
 		return
 	}
 	log.Warn("container failure", "stack", ev.Stack, "kind", ev.Kind, "container", ev.Container)
@@ -93,6 +98,7 @@ type monitorEngine interface {
 	UpdateStoppedContainers(stack string, add, remove []string) error
 	Repair(ctx context.Context, stack string, rec engine.Repair, restart func(ctx context.Context) error) (bool, error)
 	RecordRepair(stack string, rec *engine.Repair) (bool, error)
+	RollbackUpdate(ctx context.Context, stack, commit string, f engine.Failure) (engine.RunInfo, error)
 }
 
 type monitorConfig struct {
@@ -112,7 +118,8 @@ type restartSample struct {
 
 // containerMonitor reads the containers every interval and tells when an own stack fails or runs again. It
 // repairs a failure by at most engine.MaxRepairAttempts restarts, each under the stack's run slot, and halts the
-// repair when they do not help. It holds no engine lock while it talks to Docker. A stack is evaluated only if
+// repair when they do not help. A failure in the observation time of an update gets one restart and then the
+// rollback of the update. It holds no engine lock while it talks to Docker. A stack is evaluated only if
 // it was deployed, is not stopped, not paused (a failed rollback or 'qdeploy stack pause' alike) and has no run
 // or action active; a failed reading marks nothing.
 type containerMonitor struct {
@@ -129,11 +136,14 @@ type containerMonitor struct {
 }
 
 // repairAttempt is a repair attempt that is due. containers are the IDs to restart, none for the whole stack;
-// all are the IDs of the stack's containers, whose timers start afresh after the attempt.
+// all are the IDs of the stack's containers, whose timers start afresh after the attempt. With update set the
+// attempt is the rollback of that update after failure, and rec is the repair record as it stands.
 type repairAttempt struct {
 	stack           string
 	rec             engine.Repair
 	containers, all []string
+	update          string
+	failure         engine.Failure
 }
 
 type realMonitorClock struct{}
@@ -305,7 +315,7 @@ func (m *containerMonitor) evaluate(now time.Time, dirs map[string]string, state
 				delete(m.clean, name)
 				f := st.Failure
 				r := st.Repair
-				restarted := r != nil && r.Halted == nil && r.Attempts > 0 && !r.Last.Before(f.Since)
+				restarted := r != nil && r.Halted == nil && r.Attempts > 0 && !r.Last.Before(f.Since) && !rolledBack(st, f.Since)
 				m.Hook(MonitorEvent{Stack: name, Kind: f.Kind, Container: f.Container, Recovered: true,
 					Restarted: restarted, Since: f.Since, Time: now.UTC()})
 				open = nil
@@ -317,7 +327,7 @@ func (m *containerMonitor) evaluate(now time.Time, dirs map[string]string, state
 		}
 		switch {
 		case kind != "":
-			if a, ok := m.planRepair(now, name, st.Repair, *open, kind, container, failed); ok {
+			if a, ok := m.planRepair(now, name, st.Repair, observing(st, *open), *open, kind, container, failed); ok {
 				for _, c := range cs {
 					a.all = append(a.all, c.ID)
 				}
@@ -330,10 +340,26 @@ func (m *containerMonitor) evaluate(now time.Time, dirs map[string]string, state
 	return due
 }
 
+// observing returns the update under observation whose observation time the failure f began in, nil when none.
+func observing(st engine.StackState, f engine.Failure) *engine.Observation {
+	o := st.Observe
+	if o == nil || o.Commit != st.Deployed || f.Since.Before(o.Since) || !f.Since.Before(o.Until) {
+		return nil
+	}
+	return o
+}
+
+// rolledBack tells whether the stack's last run rolled back an update under observation at or after since.
+func rolledBack(st engine.StackState, since time.Time) bool {
+	r := st.LastRun
+	return r != nil && r.Trigger == engine.TriggerObserve && !r.Started.Before(since)
+}
+
 // planRepair handles the repair of a stack whose reading shows the failure f: it halts the repair once the
-// attempts are used up, keeps the time of the next attempt and returns the attempt when it is due.
-func (m *containerMonitor) planRepair(now time.Time, name string, cur *engine.Repair, f engine.Failure, kind,
-	container string, failed []string) (repairAttempt, bool) {
+// attempts are used up, keeps the time of the next attempt and returns the attempt when it is due. With obs,
+// the update under observation, see planObserved.
+func (m *containerMonitor) planRepair(now time.Time, name string, cur *engine.Repair, obs *engine.Observation,
+	f engine.Failure, kind, container string, failed []string) (repairAttempt, bool) {
 	var r engine.Repair
 	if cur != nil {
 		r = *cur
@@ -342,6 +368,9 @@ func (m *containerMonitor) planRepair(now time.Time, name string, cur *engine.Re
 		return repairAttempt{}, false
 	}
 	r.StableSince = time.Time{}
+	if obs != nil {
+		return m.planObserved(now, name, cur, r, *obs, f, failed)
+	}
 	if r.Attempts >= engine.MaxRepairAttempts {
 		r.Next, r.Halted = time.Time{}, &engine.Hold{Since: now.UTC()}
 		if m.recordRepair(name, &r) {
@@ -374,6 +403,33 @@ func (m *containerMonitor) planRepair(now time.Time, name string, cur *engine.Re
 		a.containers = failed
 	}
 	return a, true
+}
+
+// planObserved plans the repair of a failure in the observation time of the update obs: the first attempt
+// restarts the failed containers, counted from the start of the failure as always; when the failure lasts
+// until a second attempt would be due, or no restart is left, the update is rolled back instead. Restarts made
+// before the update do not count here.
+func (m *containerMonitor) planObserved(now time.Time, name string, cur *engine.Repair, r engine.Repair,
+	obs engine.Observation, f engine.Failure, failed []string) (repairAttempt, bool) {
+	restarted := r.Attempts > 0 && !r.Last.Before(obs.Since)
+	next := f.Since.Add(repairDelays[0])
+	if t := r.Last.Add(repairDelays[1]); restarted && t.After(next) {
+		next = t
+	}
+	r.Next = next.UTC()
+	if cur == nil || !sameRepair(*cur, r) {
+		if !m.recordRepair(name, &r) {
+			return repairAttempt{}, false
+		}
+	}
+	if now.Before(next) {
+		return repairAttempt{}, false
+	}
+	if restarted || r.Attempts >= engine.MaxRepairAttempts {
+		return repairAttempt{stack: name, rec: r, update: obs.Commit, failure: f}, true
+	}
+	return repairAttempt{stack: name, containers: failed, rec: engine.Repair{Attempts: r.Attempts + 1, Last: now.UTC(),
+		Next: now.Add(repairDelays[1]).UTC()}}, true
 }
 
 // settleRepair handles the repair of a stack without an open failure: no attempt is due, and after
@@ -415,6 +471,10 @@ func (m *containerMonitor) recordRepair(name string, r *engine.Repair) bool {
 func (m *containerMonitor) attempt(ctx context.Context, a repairAttempt) {
 	ctx, cancel := context.WithTimeout(ctx, control.StackActionTimeout)
 	defer cancel()
+	if a.update != "" {
+		m.rollback(ctx, a)
+		return
+	}
 	var restart func(ctx context.Context) error
 	if len(a.containers) > 0 {
 		restart = func(ctx context.Context) error { return m.restartContainers(ctx, a.containers) }
@@ -443,6 +503,40 @@ func (m *containerMonitor) attempt(ctx context.Context, a repairAttempt) {
 	if msg := err.Error(); m.repairErr[a.stack] != msg {
 		m.repairErr[a.stack] = msg
 		m.Log.Warn("repair attempt refused; retrying every cycle", "stack", a.stack, "error", err)
+	}
+}
+
+// rollback starts the rollback of the update under observation. A missing backup halts the repair, since no
+// restart is left to try and the rollback cannot succeed; another refusal leaves it due for the next reading.
+func (m *containerMonitor) rollback(ctx context.Context, a repairAttempt) {
+	info, err := m.Engine.RollbackUpdate(ctx, a.stack, a.update, a.failure)
+	switch {
+	case err == nil:
+		delete(m.repairErr, a.stack)
+		for _, id := range a.all {
+			delete(m.unhealthySince, id)
+			delete(m.restarts, id)
+		}
+		m.Log.Info("update rollback started after a failure in its observation time", "stack", a.stack,
+			"commit", a.update, "run", info.ID)
+		return
+	case errors.Is(err, engine.ErrBackupMissing):
+		now := m.Clock.Now().UTC()
+		r := a.rec
+		r.Next, r.Halted = time.Time{}, &engine.Hold{Since: now}
+		if m.recordRepair(a.stack, &r) {
+			delete(m.repairErr, a.stack)
+			m.Hook(MonitorEvent{Stack: a.stack, Kind: a.failure.Kind, Container: a.failure.Container, Halted: true,
+				Attempts: r.Attempts, Cause: notifier.CauseBackupMissing, Error: printable(err.Error()), Since: a.failure.Since, Time: now})
+		}
+		return
+	case errors.Is(err, engine.ErrNoObservation), errors.Is(err, engine.ErrNotRepairable), errors.Is(err, engine.ErrRunActive),
+		errors.Is(err, engine.ErrBusy), errors.Is(err, engine.ErrPaused), errors.Is(err, engine.ErrStackStopped):
+		return
+	}
+	if msg := err.Error(); m.repairErr[a.stack] != msg {
+		m.repairErr[a.stack] = msg
+		m.Log.Warn("update rollback refused; retrying every cycle", "stack", a.stack, "error", err)
 	}
 }
 

@@ -33,7 +33,7 @@ func newStatusCommand(program *cobracli.Program, state *notRunning) *cobra.Comma
 		Use:   "status",
 		Short: "Show whether the qdeploy service is running",
 		Long: "status asks the running service for its version and start time, the state of the last poll of each stack folder\n" +
-			"and, per stack, what is deployed, pending or running, the last run result, a pause after a failed rollback, the operator's pause and pin, and the findings,\n" +
+			"and, per stack, what is deployed, pending or running, the last run result, a pause after a failed rollback, the operator's pause and pin, the observation time after an update, and the findings,\n" +
 			"and whether the maintenance window is open and when it opens next (see 'qdeploy window'). A stack is listed as\n" +
 			"stack.<name>; when another stack folder holds its name, as source.<id>.stack.<name> (see 'qdeploy help sources').\n" +
 			"Only root may use the service channel, so run it with sudo. Without a running service it ends with exit code 3.",
@@ -127,6 +127,9 @@ func engineFields(e control.EngineStatus) []output.Field {
 		}
 		if r := s.Repair; r != nil {
 			out = append(out, output.Field{Name: p + "repair", Value: repairText(r)})
+		}
+		if o := s.Observe; o != nil {
+			out = append(out, output.Field{Name: p + "observe", Value: "until " + o.Until.UTC().Format(time.RFC3339) + ", update " + o.Commit})
 		}
 	}
 	return out

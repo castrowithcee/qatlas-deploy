@@ -783,6 +783,10 @@ func (s *sourceSet) RecordRepair(name string, rec *engine.Repair) (bool, error) 
 	return routed(s, name, func(e *engine.Engine) (bool, error) { return e.RecordRepair(name, rec) })
 }
 
+func (s *sourceSet) RollbackUpdate(ctx context.Context, name, commit string, f engine.Failure) (engine.RunInfo, error) {
+	return routed(s, name, func(e *engine.Engine) (engine.RunInfo, error) { return e.RollbackUpdate(ctx, name, commit, f) })
+}
+
 func (s *sourceSet) WindowEligibility(name string) (engine.WindowVerdict, error) {
 	return routed(s, name, func(e *engine.Engine) (engine.WindowVerdict, error) { return e.WindowEligibility(name) })
 }

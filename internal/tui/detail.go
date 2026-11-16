@@ -312,6 +312,11 @@ func (m *Model) summaryLines(r stackRow, width int) []string {
 	if repair != nil {
 		labelWidth = max(labelWidth, lipgloss.Width(repairLabel))
 	}
+	observe := m.observeOf(r.name)
+	observeLabel := kittui.Escape(m.text.Lookup(textDetailObserve))
+	if observe != nil {
+		labelWidth = max(labelWidth, lipgloss.Width(observeLabel))
+	}
 	row := func(label string, style kittui.TextStyle, value string) string {
 		return "  " + m.styles.Render(kittui.StyleHint, kittui.Pad(label, labelWidth)) + "  " +
 			m.styles.Render(style, m.styles.Truncate(kittui.Escape(value), max(width-labelWidth-4, 1)))
@@ -327,7 +332,21 @@ func (m *Model) summaryLines(r stackRow, width int) []string {
 		style, text := m.repairText(*repair)
 		out = append(out, row(repairLabel, style, text))
 	}
+	if observe != nil {
+		out = append(out, row(observeLabel, kittui.StyleWarn,
+			m.text.Lookup(textObserveUntil, short(observe.Commit), observe.Until.In(m.loc).Format(lastRunLayout))))
+	}
 	return out
+}
+
+// observeOf is the running observation time the status reports for a stack, nil when it reports none.
+func (m *Model) observeOf(stack string) *control.ObserveInfo {
+	for i, st := range m.snap.status.Engine.Stacks {
+		if st.Name == stack && control.Primary(m.snap.status.Engine.Stacks, i) {
+			return st.Observe
+		}
+	}
+	return nil
 }
 
 // repairOf is the automatic repair the status reports for a stack, nil when it reports none.

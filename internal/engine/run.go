@@ -24,7 +24,13 @@ type Event struct {
 	Commit string
 	// Error is the redacted reason of a run that did not succeed.
 	Error string
+	// Cause is CauseObservation for the rollback of an update under observation, empty otherwise.
+	Cause string
 }
+
+// CauseObservation is the Cause of the events of a run that rolled back an update because the stack failed in
+// its observation time; the notifier uses the same word.
+const CauseObservation = "observation"
 
 // run is one run of a stack, from its start to its recorded result.
 type run struct {
@@ -40,6 +46,8 @@ type run struct {
 	// change is set for a step of an update; pushed says its commit is on the branch.
 	change *VersionStep
 	pushed bool
+	// undo is set for the rollback of an update under observation; the run then only rolls back.
+	undo *undo
 	// tracked caches the files git tracks in the stack folder for the data directory check.
 	tracked   []string
 	trackedOK bool
@@ -66,7 +74,11 @@ func (r *run) execute() {
 		r.held = false
 	}
 	rec := r.record(out, true)
-	e.notify(Event{Kind: rec.Result, Stack: rec.Stack, Run: rec.ID, Commit: rec.Commit, Error: rec.Error})
+	ev := Event{Kind: rec.Result, Stack: rec.Stack, Run: rec.ID, Commit: rec.Commit, Error: rec.Error}
+	if r.undo != nil {
+		ev.Cause = CauseObservation
+	}
+	e.notify(ev)
 }
 
 // perform runs the secured run under the run's own time limit.
@@ -78,6 +90,9 @@ func (r *run) perform() outcome {
 		head += " " + r.e.text(c.Variable+" "+c.From+" -> "+c.To)
 	}
 	r.log.Step(head + ")")
+	if r.undo != nil {
+		return r.reverse(ctx)
+	}
 	return r.secured(ctx)
 }
 
@@ -142,6 +157,10 @@ func (r *run) record(out outcome, freeSlot bool) RunRecord {
 			}
 			cur.Paused = &Pause{Time: now, Run: rec.ID, Reason: e.text(out.rollbackErr.Error())}
 			cur.Findings = append([]Finding{{Kind: FindingPaused, Detail: e.pauseDetail(cur.Paused)}}, cur.Findings...)
+		}
+		cur.Observe = nil
+		if d := r.st.ObserveTime(); rec.Result == ResultSucceeded && rec.Trigger == TriggerUpdate && d > 0 {
+			cur.Observe = &Observation{Run: rec.ID, From: r.deployed, Commit: rec.Commit, Backup: rec.Backup, Since: now, Until: now.Add(d)}
 		}
 		if cur.Pending != "" && (cur.Pending == rec.Commit || cur.Pending == out.at) {
 			cur.Pending = ""
@@ -280,7 +299,7 @@ func (r *run) secured(ctx context.Context) outcome {
 	if skip == "" && !started {
 		skip = "the new version was never started, so the data is unchanged"
 	}
-	at, rerr := r.rollback(rctx, failedAt, backupID, skip)
+	at, rerr := r.rollback(rctx, fmt.Sprintf("run %s failed at the %s step", r.rec.ID, failedAt), backupID, skip)
 	if rerr != nil {
 		out.result, out.rollbackErr = ResultRollbackFailed, rerr
 		log.Printf("rollback failed: %v", rerr)
@@ -345,8 +364,8 @@ func (r *run) versioned(ctx context.Context, rel string) (bool, error) {
 // rollback brings the stack back to its deployed state: stop, restore the run's backup unless skip says why
 // not, revert the stack folder on the branch and follow it, start and check. An update step whose commit was
 // not pushed has nothing to revert: the working copy and the stack folder never left the deployed state. It
-// returns the commit the stack runs at.
-func (r *run) rollback(ctx context.Context, failedAt, backup, skip string) (string, error) {
+// returns the commit the stack runs at; reason goes into the revert commit.
+func (r *run) rollback(ctx context.Context, reason, backup, skip string) (string, error) {
 	d, log := r.e.cfg.Deployer, r.log
 	log.Step("rollback")
 	if err := r.step("stop", func() error { return d.Stop(ctx, r.st, log) }); err != nil {
@@ -365,7 +384,7 @@ func (r *run) rollback(ctx context.Context, failedAt, backup, skip string) (stri
 	}
 	at := r.deployed
 	if r.change == nil || r.pushed {
-		if at, err = r.revert(ctx, failedAt); err != nil {
+		if at, err = r.revert(ctx, reason); err != nil {
 			return "", err
 		}
 	} else {
@@ -385,7 +404,7 @@ func (r *run) rollback(ctx context.Context, failedAt, backup, skip string) (stri
 // the freshly fetched branch, pushed as a fast-forward, or the branch itself when it already has that state.
 // It waits until no other run relies on the working copy and keeps everyone else off it meanwhile, and holds
 // the ref lock from its fetch to its fast-forward; it returns holding the run's hold again.
-func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
+func (r *run) revert(ctx context.Context, reason string) (string, error) {
 	e, log, wc := r.e, r.log, r.b.Copy
 	log.Step("revert")
 	e.releaseHold()
@@ -420,7 +439,6 @@ func (r *run) revert(ctx context.Context, failedAt string) (string, error) {
 		}
 		return "", fmt.Errorf("the working copy has local changes and cannot follow a revert (%s); nothing was pushed", detail)
 	}
-	reason := fmt.Sprintf("run %s failed at the %s step", r.rec.ID, failedAt)
 	var at string
 	for attempt := 1; at == ""; attempt++ {
 		c, err := wc.RevertStack(ctx, r.st.Folder, r.deployed, r.rec.Commit, reason)

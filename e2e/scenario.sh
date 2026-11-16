@@ -14,7 +14,7 @@
 # without a human, a stack in manual mode is only reported, a paused and a pinned stack stay as they are, and a change with
 # window set takes effect in the running service. The terminal interface follows: sudo qdeploy opens it in a
 # tmux pane, an update shows its changelog before it is confirmed and then runs, and two ticked stacks are updated
-# one after another with one confirmation. Notification channels (webhook, Slack, Telegram, e-mail) are
+# one after another with one confirmation. An update that fails after its start is rolled back in its observation time. Notification channels (webhook, Slack, Telegram, e-mail) are
 # added with qdeploy notify: a webhook hears of a deployed and of a rolled-back run, and every channel
 # type delivers a test message. A local stack folder gets a remote in the terminal interface: an empty repository
 # receives its history, a differing one is shown and left alone without the confirmation. Docker integration tests of the deployer run inside the host
@@ -272,7 +272,8 @@ rollback_failed_steps=stop,backup,pull,up,check,rollback,stop,restore,revert,pus
 
 # newest_run prints the id of the newest recorded run of a stack (empty when there is none).
 newest_run() {
-	qd stack runs "$1" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' || true
+	# The error column can name another run, so only the first id of the newest line counts.
+	qd stack runs "$1" | grep -m 1 -o '[0-9]\{8\}T[0-9]\{6\}Z-[0-9a-f]\{8\}' | head -n 1
 }
 
 # next_run waits for a run of the stack other than the run id $2, active or already finished, and prints its
@@ -1192,6 +1193,8 @@ scenario_stacks_repo() {
 	step 'the original host key works again'
 	qd repo fetch >/dev/null || fail 'repo fetch fails after the host keys were restored'
 
+	scenario_observe_start
+
 	scenario_sources
 
 	scenario_root_source
@@ -1199,6 +1202,8 @@ scenario_stacks_repo() {
 	scenario_source_inspect
 
 	scenario_key_set
+
+	scenario_observe_end
 
 	scenario_source_local
 
@@ -2428,6 +2433,106 @@ scenario_repair_end() {
 	as_admin 'cd ~/stacks && git pull -q --ff-only && git rm -r -q repair-demo &&
 		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Remove the repair-demo stack" && git push -q origin main'
 	log 'scenario: resume released the repair; repair-demo is fixed and removed'
+}
+
+# scenario_observe_start deploys the stack observe-demo, whose image 1.1.0 turns unhealthy for good 100 seconds
+# after it starts, and updates it to 1.1.0 with a marker in its data before and one after the update. The
+# observation time of the update (60 minutes by default) is running; qdeploy restarts the container once after
+# the failure began and, if it lasts 5 more minutes, rolls the update back. The delays run in real time;
+# scenario_observe_end checks the outcome after the source scenarios, so they overlap with them. observe-demo is
+# set up after the terminal interface scenario on purpose: its row and containers stay out of the screens there.
+# Every update by qdeploy starts an observation time, also for the other stacks, and none of them needs
+# update.observe: 0: no later step makes such a stack fail except through a run that rolls itself back (the failing
+# middle step of scenario_update), a stop or a mark that exempts it from repair, or a failure that one restart ends
+# (scenario_container_monitor, which runs before the first update anyway).
+scenario_observe_start() {
+	step 'the stack observe-demo is deployed and a channel for rolled-back is added'
+	as_admin 'cd ~/stacks && git pull -q --ff-only && mkdir observe-demo'
+	cat <<EOF | as_admin 'cat >"$HOME"/stacks/observe-demo/compose.yaml'
+services:
+  app:
+    image: registry.$domain/demo/late:\${DEMO_APP_VERSION}
+    restart: unless-stopped
+    environment:
+      DEMO_NAME: observe-demo
+    volumes:
+      - ./data:/data
+EOF
+	as_admin 'cd ~/stacks && cp demo-stack/.gitignore observe-demo/.gitignore && printf "DEMO_APP_VERSION=1.0.0\n" >observe-demo/.env &&
+		printf "version: 1\nbackup:\n  paths:\n    - data\n" >.qatlas/qdeploy/observe-demo.yaml && git add -A &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Add the observe-demo stack" && git push -q origin main'
+	restart_service
+	wait_for 'the first run of observe-demo' 240 stack_settled observe-demo succeeded
+	wait_for 'observe-demo healthy' 60 stack_healthy observe-demo
+	out=$(qd_in "$hook_url
+$hook_signing_value
+" notify add obs --type webhook --events rolled-back,rollback-failed) || fail "notify add obs failed: $out"
+	[ -z "$(stack_field observe-demo observe)" ] || fail "a stack that was not updated shows an observation: $(stack_field observe-demo observe)"
+
+	step 'observe-demo is updated to 1.1.0 and shows its observation time; data is marked before and after the update'
+	docker exec "$host" sh -c 'echo before >/opt/stacks/observe-demo/data/marker.txt' || fail 'cannot write the marker before the update'
+	observe_from=$(as_admin 'cd ~/stacks && git pull -q --ff-only && git rev-parse HEAD')
+	out=$(qd --output json stack update observe-demo --version 1.1.0) || fail "update of observe-demo failed: $out"
+	observe_update=$(json_values "$out" commit | head -n 1)
+	[ -n "$observe_update" ] || fail "update reported no commit: $out"
+	observe_update_at=$(date +%s)
+	printf '%s' "$out" | grep -q '"result": *"succeeded"' || fail "the update of observe-demo did not succeed: $out"
+	[ "$(stack_images observe-demo)" = "registry.$domain/demo/late:1.1.0" ] || fail "observe-demo does not run 1.1.0: $(stack_images observe-demo)"
+	docker exec "$host" sh -c 'echo after >/opt/stacks/observe-demo/data/after.txt' || fail 'cannot write the marker after the update'
+	case $(stack_field observe-demo observe) in
+	until\ *", update $observe_update") ;;
+	*) fail "status does not show the observation of $observe_update: $(stack_field observe-demo observe)" ;;
+	esac
+	log "scenario: observe-demo updated by commit $observe_update; $(stack_field observe-demo observe)"
+}
+
+# scenario_observe_end waits until qdeploy rolled the update of observe-demo back and proves the outcome: the
+# rollback as a run of its own with trigger observe, the backup of the update restored, the revert commit on the
+# branch, rolled-back with cause observation at the webhook and the previous version running; then it removes
+# the stack from the repository.
+scenario_observe_end() {
+	step 'the failing update of observe-demo is rolled back in its observation time'
+	wait_for 'the webhook for the rolled-back update' 1200 hook_has /notify rolled-back '\"stack\":\"observe-demo\"' '\"cause\":\"observation\"' "\\\"commit\\\":\\\"$observe_update\\\""
+	log "scenario: observe-demo rolled back $(($(date +%s) - observe_update_at)) seconds after its update"
+	wait_for 'the rollback run of observe-demo' 120 stack_settled observe-demo rolled-back
+	runs=$(qd stack runs observe-demo) || fail "stack runs observe-demo failed: $runs"
+	newest=$(printf '%s\n' "$runs" | sed -n 2p)
+	printf '%s\n' "$newest" | grep -q ' observe ' || fail "the newest run of observe-demo is not the rollback of the observation: $runs"
+	printf '%s\n' "$newest" | grep -q 'rolled-back' || fail "the rollback run of observe-demo is not rolled-back: $runs"
+	run=$(newest_run observe-demo)
+	[ -n "$run" ] || fail "no run of observe-demo in: $runs"
+	run_log=$(qd stack log "$run") || fail "stack log $run failed: $run_log"
+	printf '%s' "$run_log" | grep -q ' result rolled-back' || fail "the rollback run did not end rolled-back: $run_log"
+	log "scenario: observe rollback steps: $(update_steps "$run_log")"
+	case ,$(update_steps "$run_log"), in
+	,rollback,stop,*restore,*revert,*up,check,) ;;
+	*) fail "unexpected steps of the rollback run: $(update_steps "$run_log")" ;;
+	esac
+	as_admin 'cd ~/stacks && git pull -q --ff-only'
+	revert=$(as_admin 'cd ~/stacks && git rev-parse HEAD')
+	[ "$(as_admin "cd ~/stacks && git rev-parse $revert^")" = "$observe_update" ] || fail "the revert commit does not follow the update commit $observe_update"
+	[ "$(as_admin "cd ~/stacks && git log -1 --format='%an|%ae' $revert")" = 'qdeploy|qdeploy@localhost.invalid' ] || fail 'the revert commit is not by qdeploy'
+	as_admin "cd ~/stacks && git log -1 --format=%s $revert" | grep -q '^Revert observe-demo to ' ||
+		fail "unexpected subject of the revert commit: $(as_admin "cd ~/stacks && git log -1 --format=%s $revert")"
+	[ "$(as_admin "cd ~/stacks && git rev-parse $revert:observe-demo")" = "$(as_admin "cd ~/stacks && git rev-parse $observe_from:observe-demo")" ] ||
+		fail 'the revert commit does not restore the observe-demo folder from before the update'
+	[ "$(as_admin "git ls-remote $repo refs/heads/main" | cut -f 1)" = "$revert" ] || fail 'the revert commit is not the head of the remote branch'
+	[ "$(stack_field observe-demo deployed)" = "$revert" ] || fail "observe-demo is not recorded as deployed at the revert commit $revert"
+	[ "$(stack_images observe-demo)" = "registry.$domain/demo/late:1.0.0" ] || fail "observe-demo does not run 1.0.0 again: $(stack_images observe-demo)"
+	wait_for 'observe-demo healthy' 60 stack_healthy observe-demo
+
+	step 'the data of the backup of the update is back and the data written since is gone'
+	[ "$(docker exec "$host" cat /opt/stacks/observe-demo/data/marker.txt)" = before ] || fail 'the marker from before the update is not back'
+	if docker exec "$host" test -e /opt/stacks/observe-demo/data/after.txt; then fail 'the marker written after the update survived the rollback'; fi
+	if docker exec "$host" test -e /opt/stacks/observe-demo/data/late-failed; then fail 'the failure state of the update survived the rollback'; fi
+	[ -z "$(stack_field observe-demo observe)" ] || fail "status still shows an observation after the rollback: $(stack_field observe-demo observe)"
+	wait_for 'the finding of observe-demo to end' 120 no_finding observe-demo container-failed
+
+	step 'observe-demo leaves the repository'
+	out=$(qd notify remove obs) || fail "notify remove obs failed: $out"
+	as_admin 'cd ~/stacks && git pull -q --ff-only && git rm -r -q observe-demo .qatlas/qdeploy/observe-demo.yaml &&
+		git -c user.name="E2E Admin" -c user.email=admin.qdeploye2e.test commit -q -m "Remove the observe-demo stack" && git push -q origin main'
+	log 'scenario: the update of observe-demo was rolled back by qdeploy; observe-demo is removed'
 }
 
 # selfupdate_field prints one top-level field of qdeploy update status, run without root.

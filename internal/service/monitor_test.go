@@ -25,6 +25,31 @@ type monEngine struct {
 	stackRestarts int
 	// onRestart runs inside an attempt, as the restart would.
 	onRestart func()
+	// rollbacks are the updates rolled back, rollbackErr the refusal of RollbackUpdate.
+	rollbacks   []string
+	rollbackErr error
+	now         func() time.Time
+}
+
+// RollbackUpdate mirrors the engine: it refuses as Repair does and without the observation, otherwise the run
+// ends at once with the update rolled back and the observation gone.
+func (e *monEngine) RollbackUpdate(_ context.Context, stack, commit string, f engine.Failure) (engine.RunInfo, error) {
+	if e.rollbackErr != nil {
+		return engine.RunInfo{}, e.rollbackErr
+	}
+	if _, busy := e.active[stack]; busy {
+		return engine.RunInfo{}, engine.ErrRunActive
+	}
+	cur := e.states[stack]
+	if o := cur.Observe; o == nil || o.Commit != commit {
+		return engine.RunInfo{}, engine.ErrNoObservation
+	}
+	e.rollbacks = append(e.rollbacks, commit)
+	cur.Observe = nil
+	cur.LastRun = &engine.RunRecord{ID: "20260504T030000Z-0000abcd", Stack: stack, Trigger: engine.TriggerObserve,
+		Result: engine.ResultRolledBack, Started: e.now()}
+	e.states[stack] = cur
+	return engine.RunInfo{ID: cur.LastRun.ID, Stack: stack, Commit: commit}, nil
 }
 
 // Repair mirrors the engine: a busy slot refuses, an unrepairable stack refuses, otherwise the record is stored
@@ -576,5 +601,25 @@ func TestMonitorExitedWithErrorOrUnparseableStatusIsFailure(t *testing.T) {
 		r.dock.list = []docker.Container{app}
 		r.poll(30 * time.Second)
 		r.wantEvents(1, 0)
+	}
+}
+
+func TestObservationShownInStatusOnlyWhileActive(t *testing.T) {
+	commit := strings.Repeat("b", 40)
+	until := time.Now().Add(time.Hour)
+	stack := func(deployed string, until time.Time) engine.Snapshot {
+		return engine.Snapshot{State: engine.State{Stacks: map[string]engine.StackState{"web": {
+			Deployed: deployed, Observe: &engine.Observation{Commit: commit, Until: until},
+		}}}}
+	}
+	o := stackStatuses(stack(commit, until))[0].Observe
+	if o == nil || o.Commit != commit || !o.Until.Equal(until) {
+		t.Fatalf("active observation = %+v", o)
+	}
+	if o := stackStatuses(stack(commit, time.Now().Add(-time.Minute)))[0].Observe; o != nil {
+		t.Fatalf("expired observation = %+v", o)
+	}
+	if o := stackStatuses(stack(strings.Repeat("c", 40), until))[0].Observe; o != nil {
+		t.Fatalf("observation of another commit = %+v", o)
 	}
 }

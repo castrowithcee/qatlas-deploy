@@ -15,6 +15,8 @@ type Backups interface {
 	Create(ctx context.Context, st stacks.Stack, commit string, log Logger) (string, error)
 	// Restore puts the data of backup id back into the stopped stack and leaves it stopped.
 	Restore(ctx context.Context, st stacks.Stack, id string, log Logger) error
+	// Exists tells whether the stack has the complete backup id.
+	Exists(st stacks.Stack, id string) (bool, error)
 }
 
 // Deployer implements engine.Deployer with Docker Compose and, when Backups is set, the stack's backup rules.
@@ -25,7 +27,10 @@ type Deployer struct {
 	Backups Backups
 }
 
-var _ engine.Deployer = (*Deployer)(nil)
+var (
+	_ engine.Deployer      = (*Deployer)(nil)
+	_ engine.BackupChecker = (*Deployer)(nil)
+)
 
 // New returns the production deployer: docker through os/exec with ProductionEnv, real clock.
 func New(backups Backups) *Deployer {
@@ -80,4 +85,12 @@ func (d *Deployer) Restore(ctx context.Context, st stacks.Stack, id string, log 
 		return engine.ErrNoBackup
 	}
 	return d.Backups.Restore(ctx, st, id, log)
+}
+
+// HasBackup implements engine.BackupChecker; without Backups no backup exists.
+func (d *Deployer) HasBackup(_ context.Context, st stacks.Stack, id string) (bool, error) {
+	if d.Backups == nil {
+		return false, nil
+	}
+	return d.Backups.Exists(st, id)
 }

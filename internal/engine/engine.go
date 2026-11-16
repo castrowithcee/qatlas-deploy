@@ -543,7 +543,7 @@ func (e *Engine) poll(ctx context.Context, b Binding) (PollResult, error) {
 			byName[st.Name] = st
 		}
 		for _, name := range names {
-			_, err := e.start(b, byName[name], head, TriggerPoll)
+			_, err := e.start(b, byName[name], head, TriggerPoll, nil)
 			switch {
 			case err == nil:
 				res.Started = append(res.Started, name)
@@ -743,39 +743,49 @@ func (e *Engine) Trigger(ctx context.Context, name string) (RunInfo, error) {
 		return RunInfo{}, err
 	}
 	defer e.lock.Unlock()
-	changes, err := b.Copy.Status(ctx)
+	st, head, err := e.runnable(ctx, b, name)
 	if err != nil {
 		return RunInfo{}, err
+	}
+	return e.start(b, st, head, TriggerManual, nil)
+}
+
+// runnable reads the stack from the working copy and refuses it as Trigger does. It returns the stack and the
+// working copy's HEAD. The caller holds the working-copy lock.
+func (e *Engine) runnable(ctx context.Context, b Binding, name string) (stacks.Stack, string, error) {
+	changes, err := b.Copy.Status(ctx)
+	if err != nil {
+		return stacks.Stack{}, "", err
 	}
 	list, loadErr := stacks.Load(b.Dir)
 	if local, _ := classify(changes, list); len(local[folderOf(list, name)]) > 0 {
-		return RunInfo{}, fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[folderOf(list, name)]))
+		return stacks.Stack{}, "", fmt.Errorf("%w: %s", ErrLocalChanges, e.localDetail(local[folderOf(list, name)]))
 	}
 	head, err := b.Copy.Head(ctx)
 	if err != nil {
-		return RunInfo{}, err
+		return stacks.Stack{}, "", err
 	}
 	if loadErr != nil {
-		return RunInfo{}, fmt.Errorf("read stacks: %w", loadErr)
+		return stacks.Stack{}, "", fmt.Errorf("read stacks: %w", loadErr)
 	}
 	for _, st := range list {
 		if st.Name != name {
 			continue
 		}
 		if st.Err != nil {
-			return RunInfo{}, fmt.Errorf("%w: %s", ErrUnreadable, e.text(st.Err.Error()))
+			return stacks.Stack{}, "", fmt.Errorf("%w: %s", ErrUnreadable, e.text(st.Err.Error()))
 		}
 		if err := b.blocked(name); err != nil {
-			return RunInfo{}, err
+			return stacks.Stack{}, "", err
 		}
-		return e.start(b, st, head, TriggerManual)
+		return st, head, nil
 	}
-	return RunInfo{}, ErrUnknownStack
+	return stacks.Stack{}, "", ErrUnknownStack
 }
 
-// start takes the stack's slot and a hold on the working copy and launches the run. The caller holds the
-// working-copy lock.
-func (e *Engine) start(b Binding, st stacks.Stack, commit, trigger string) (RunInfo, error) {
+// start takes the stack's slot and a hold on the working copy and launches the run; u, when set, makes it the
+// rollback of that update. The caller holds the working-copy lock.
+func (e *Engine) start(b Binding, st stacks.Stack, commit, trigger string, u *undo) (RunInfo, error) {
 	e.mu.Lock()
 	if e.closed {
 		e.mu.Unlock()
@@ -801,6 +811,14 @@ func (e *Engine) start(b Binding, st stacks.Stack, commit, trigger string) (RunI
 		e.mu.Unlock()
 		return RunInfo{}, ErrStackStopped
 	}
+	deployed := cur.Deployed
+	if u != nil {
+		if err := undoable(cur, u.Run, u.Commit); err != nil {
+			e.mu.Unlock()
+			return RunInfo{}, err
+		}
+		deployed = u.From
+	}
 	now := e.cfg.Clock.Now().UTC()
 	id, w, err := e.newLog(now)
 	if err != nil {
@@ -813,7 +831,7 @@ func (e *Engine) start(b Binding, st stacks.Stack, commit, trigger string) (RunI
 	e.mu.Unlock()
 
 	r := &run{
-		e: e, b: b, st: st, deployed: cur.Deployed, held: true,
+		e: e, b: b, st: st, deployed: deployed, held: true, undo: u,
 		log: &Log{w: w, redact: e.cfg.Redact, now: e.cfg.Clock.Now},
 		rec: RunRecord{ID: id, Stack: st.Name, Commit: commit, Trigger: trigger, Started: now},
 	}

@@ -508,3 +508,43 @@ func TestRepairMessagesTellOfTheRestart(t *testing.T) {
 		t.Errorf("select recovery-failed = %v, %v", got, err)
 	}
 }
+
+func TestObservationMessagesTellTheCause(t *testing.T) {
+	commit := "0123456789abcdef0123456789abcdef01234567"
+	rolled := notifier.Message(notifier.Event{Type: notifier.EventRolledBack, Stack: "web", Run: "r1", Commit: commit,
+		Error: "the stack failed within the observation time", Cause: notifier.CauseObservation})
+	if rolled.Subject != "Stack web rolled back" ||
+		!strings.Contains(rolled.Text, "failed in the observation time after its update to commit 0123456789ab; run r1 rolled the update back") {
+		t.Errorf("rolled-back = %q / %q", rolled.Subject, rolled.Text)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rolled.JSON, &body); err != nil || body["event"] != "rolled-back" || body["cause"] != "observation" {
+		t.Errorf("rolled-back json = %s, %v", rolled.JSON, err)
+	}
+	failed := notifier.Message(notifier.Event{Type: notifier.EventRollbackFailed, Stack: "web", Run: "r1", Commit: commit,
+		Error: "boom", Cause: notifier.CauseObservation})
+	if !strings.Contains(failed.Text, "could not roll the update back") || !strings.Contains(failed.Text, "no further runs") {
+		t.Errorf("rollback-failed = %q", failed.Text)
+	}
+	plain := notifier.Message(notifier.Event{Type: notifier.EventRolledBack, Stack: "web", Run: "r1", Commit: commit})
+	body = nil
+	if err := json.Unmarshal(plain.JSON, &body); err != nil || body["cause"] != nil || strings.Contains(plain.Text, "observation") {
+		t.Errorf("rolled-back without cause = %q, %s", plain.Text, plain.JSON)
+	}
+
+	since := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	halted := notifier.Message(notifier.Event{Type: notifier.EventRecoveryFailed, Stack: "web", Kind: "exited", Container: "web-app-1",
+		Since: since, Time: since.Add(6 * time.Minute), Attempts: 1, Cause: notifier.CauseBackupMissing,
+		Error: "the backup of the update is missing: 20260301T095500Z-0000abcd"})
+	for _, want := range []string{"has exited and 1 restart did not fix it", "the update was not rolled back: the backup of the update is missing",
+		"Nothing was changed", "until an operator resumes", "Error: the backup of the update is missing: 20260301T095500Z-0000abcd"} {
+		if !strings.Contains(halted.Text, want) {
+			t.Errorf("recovery-failed text %q lacks %q", halted.Text, want)
+		}
+	}
+	body = nil
+	if err := json.Unmarshal(halted.JSON, &body); err != nil || body["cause"] != "backup-missing" || body["attempts"] != float64(1) ||
+		!strings.HasPrefix(body["error"].(string), "the backup of the update is missing") {
+		t.Errorf("recovery-failed json = %s, %v", halted.JSON, err)
+	}
+}

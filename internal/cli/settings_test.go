@@ -41,7 +41,7 @@ func TestStackSettingsShow(t *testing.T) {
 	update, _ := s["update"].(map[string]any)
 	check, _ := s["check"].(map[string]any)
 	if s["version"] != float64(1) || update["mode"] != "automatic" || update["ceiling"] != "minor" || update["major"] != "stepwise" ||
-		check["containers"] != true {
+		update["observe"] != float64(60) || check["containers"] != true {
 		t.Fatalf("settings = %v", s)
 	}
 
@@ -49,7 +49,8 @@ func TestStackSettingsShow(t *testing.T) {
 	if got := objectOf(t, out); code != 0 || got["configured"] != false || got["settings"] != nil {
 		t.Fatalf("plain: %d %v", code, got)
 	}
-	if code, out, _ := run(t, "stack", "settings", "demo-stack"); code != 0 || !strings.Contains(out, "UPDATE.MODE") || !strings.Contains(out, "automatic") {
+	if code, out, _ := run(t, "stack", "settings", "demo-stack"); code != 0 || !strings.Contains(out, "UPDATE.MODE") || !strings.Contains(out, "automatic") ||
+		!strings.Contains(out, "UPDATE.OBSERVE") {
 		t.Fatalf("table: %d %q", code, out)
 	}
 	if code, _, stderr := run(t, "stack", "settings", "broken-stack"); code == 0 || !strings.Contains(stderr, "stack check") {
@@ -115,6 +116,7 @@ func TestStackSettingsSetRefusals(t *testing.T) {
 		{"two documents", "version: 1\n---\nversion: 1\n", []string{"plain-stack", "--file", "-"}, 2, "one document"},
 		{"empty", "", []string{"plain-stack", "--file", "-"}, 2, "empty"},
 		{"bad mode", "version: 1\nupdate: {mode: sometimes}\n", []string{"plain-stack", "--file", "-"}, 2, "update.mode"},
+		{"observe too long", "version: 1\nupdate: {observe: 1441}\n", []string{"plain-stack", "--file", "-"}, 2, "update.observe"},
 		{"unknown variable", "version: 1\nupdate:\n  tags:\n    OTHER_VERSION: '.*'\n", []string{"plain-stack", "--file", "-"}, 2, "no service image"},
 		{"no version", "update: {mode: manual}\n", []string{"plain-stack", "--file", "-"}, 2, "version"},
 		{"unknown stack", "version: 1\n", []string{"missing-stack", "--file", "-"}, 1, "no such stack"},
@@ -130,5 +132,18 @@ func TestStackSettingsSetRefusals(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(e.dir, ".qatlas", "qdeploy", "plain-stack.yaml")); !os.IsNotExist(err) {
 		t.Fatalf("settings were written: %v", err)
+	}
+}
+
+func TestStackSettingsSetObserveOff(t *testing.T) {
+	e := startSettingsService(t)
+	code, out, stderr := runWithStdin(t, "version: 1\nupdate: {observe: 0}\n", "stack", "settings", "set", "plain-stack", "--file", "-", "--output", "json")
+	update, _ := settingsOfOutput(t, out)["update"].(map[string]any)
+	if code != 0 || update["observe"] != float64(0) {
+		t.Fatalf("set: %d %q %s", code, out, stderr)
+	}
+	written, err := os.ReadFile(filepath.Join(e.dir, filepath.FromSlash(servicetest.Settings("plain-stack"))))
+	if err != nil || !strings.Contains(string(written), "  observe: 0\n") {
+		t.Fatalf("file = %q, %v", written, err)
 	}
 }

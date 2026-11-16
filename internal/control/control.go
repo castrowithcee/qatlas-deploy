@@ -268,6 +268,14 @@ type StackStatus struct {
 	Failure *FailureInfo `json:"failure,omitempty"`
 	// Repair is the state of the automatic repair of a failure; nil when there is none.
 	Repair *RepairInfo `json:"repair,omitempty"`
+	// Observe is the update by qdeploy whose observation time is running; nil when none is.
+	Observe *ObserveInfo `json:"observe,omitempty"`
+}
+
+// ObserveInfo is a running observation time: the update commit and when the time ends.
+type ObserveInfo struct {
+	Commit string    `json:"commit"`
+	Until  time.Time `json:"until"`
 }
 
 // RepairInfo is the state of the automatic repair: the attempts made of Max, when the last was made and the
@@ -428,12 +436,14 @@ type StackComposeSettings struct {
 }
 
 // StackUpdateSettings say whether and how far the stack is updated. Mode is automatic or manual, Ceiling
-// patch, minor or major, Major direct or stepwise. Tags maps an image version variable to a regular
+// patch, minor or major, Major direct or stepwise. Observe is the observation time after an update in
+// minutes, from 0 (off) to 1440, 60 when left out. Tags maps an image version variable to a regular
 // expression its candidate tags must match; Changelog maps it to a GitHub repository (owner/name).
 type StackUpdateSettings struct {
 	Mode      string            `json:"mode,omitempty"`
 	Ceiling   string            `json:"ceiling,omitempty"`
 	Major     string            `json:"major,omitempty"`
+	Observe   *int              `json:"observe,omitempty"`
 	Tags      map[string]string `json:"tags,omitempty"`
 	Changelog map[string]string `json:"changelog,omitempty"`
 }

@@ -37,6 +37,9 @@ const (
 	TriggerManual = "manual"
 	// TriggerUpdate is a step of an update, see Engine.Update.
 	TriggerUpdate = "update"
+	// TriggerObserve is the rollback of an update whose stack failed in its observation time, see
+	// Engine.RollbackUpdate.
+	TriggerObserve = "observe"
 )
 
 // Kinds of findings. The poll replaces the findings of a stack as a whole in every cycle.
@@ -134,6 +137,21 @@ type StackState struct {
 	StoppedContainers []string `json:"stopped_containers,omitempty"`
 	// Repair is the monitor's repair of the stack's failures by restarts; nil while none is planned or counts.
 	Repair *Repair `json:"repair,omitempty"`
+	// Observe is the update under observation, set by the last run when it was a successful update step and
+	// the stack's observation time is not zero. It stays after Until has passed, until the next run.
+	Observe *Observation `json:"observe,omitempty"`
+}
+
+// Observation is an update by qdeploy and its observation time: a failure of the stack from Since until before
+// Until rolls back exactly this update. Run made it, From is the commit the stack ran at before it, Commit its
+// commit and Backup the backup it made, empty when the stack had no backup rules.
+type Observation struct {
+	Run    string    `json:"run"`
+	From   string    `json:"from"`
+	Commit string    `json:"commit"`
+	Backup string    `json:"backup,omitempty"`
+	Since  time.Time `json:"since"`
+	Until  time.Time `json:"until"`
 }
 
 // MaxRepairAttempts is how many restarts the monitor makes before it halts the repair of a stack.
@@ -308,6 +326,10 @@ func validateState(s State) error {
 		if err := validateMonitor(st); err != nil {
 			return err
 		}
+		if o := st.Observe; o != nil && (!runIDRe.MatchString(o.Run) || !commitRe.MatchString(o.From) ||
+			!commitRe.MatchString(o.Commit) || len(o.Backup) > maxNameLen || o.Since.IsZero() || !o.Until.After(o.Since)) {
+			return errors.New("invalid observation")
+		}
 	}
 	for _, r := range s.Runs {
 		if !runIDRe.MatchString(r.ID) {
@@ -456,6 +478,10 @@ func (s State) clone() State {
 				r.Halted = &h
 			}
 			v.Repair = &r
+		}
+		if v.Observe != nil {
+			o := *v.Observe
+			v.Observe = &o
 		}
 		out.Stacks[k] = v
 	}

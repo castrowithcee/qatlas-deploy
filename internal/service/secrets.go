@@ -90,6 +90,15 @@ func (d redactingDeployer) Restore(ctx context.Context, st stacks.Stack, id stri
 	return d.next.Restore(ctx, st, id, log)
 }
 
+// HasBackup implements engine.BackupChecker; a deployer without the check has no backup.
+func (d redactingDeployer) HasBackup(ctx context.Context, st stacks.Stack, id string) (bool, error) {
+	c, ok := d.next.(engine.BackupChecker)
+	if !ok {
+		return false, nil
+	}
+	return c.HasBackup(ctx, st, id)
+}
+
 func registerSecretCommands(r *control.Registry, eng *sourceSet,
 	secrets *redact.Redactor, log *slog.Logger) error {
 	checkStack := func(name string) error {
