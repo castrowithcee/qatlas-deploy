@@ -23,9 +23,9 @@ func (m *Model) setMouse(targets []kittui.Target) {
 	m.mouseMap = kittui.NewMouseMap(targets, m.mouseOn && on)
 }
 
-// formShown reports whether a form of the Settings area or of the detail is open.
+// formShown reports whether a form of the Settings area, the Stacks area or the detail is open.
 func (m *Model) formShown() bool {
-	return (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil
+	return (m.area == areaSettings || m.area == areaDetail || m.area == areaStacks) && m.set.form != nil
 }
 
 // mousePart is a widget of the workspace that takes clicks and the wheel itself: a list, a log view, a form

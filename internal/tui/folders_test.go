@@ -29,6 +29,12 @@ func foldersBackend() *fakeBackend {
 		{ID: "srv-local-example", Path: localDir, Kind: control.SourceKindLocal, LastPoll: at(30, 14, 25), Head: commitB,
 			PollError: "the working copy has uncommitted changes in demo/compose.yaml"},
 	}
+	for i := range b.status.Engine.Stacks {
+		b.status.Engine.Stacks[i].Source = "srv-stacks-example"
+	}
+	for i := range b.stacks.Stacks {
+		b.stacks.Stacks[i].Source, b.stacks.Stacks[i].SourceDir = "srv-stacks-example", stackDir
+	}
 	no := false
 	b.inspects = map[string]control.SourceInspectResult{
 		filesDir: {Path: filesDir, Case: control.SourceCaseFiles,
@@ -59,6 +65,19 @@ func foldersBackend() *fakeBackend {
 }
 
 // addKeys open the form, type the folder and send it.
+// onFolder marks the group row of the stack folder dir.
+func onFolder(t *testing.T, m *Model, dir string) {
+	t.Helper()
+	send(m, "home")
+	for i := 0; i < 40; i++ {
+		if key, ok := m.list.SelectedGroup(); ok && key == dir {
+			return
+		}
+		send(m, "down")
+	}
+	t.Fatalf("the folder %s cannot be marked", dir)
+}
+
 func addKeys(dir string) []string { return seq(toFolders, keys("a"), typed(dir), keys("f2")) }
 
 // noChange fails when the service or the host changed anything; the probe of a host key only reads.
@@ -77,8 +96,9 @@ func noChange(t *testing.T, b *fakeBackend) {
 func TestFolderListShowsEachFolderWithItsState(t *testing.T) {
 	m := newSettingsModel(t, foldersBackend())
 	send(m, toFolders...)
-	contains(t, m, "Stack folders", stackDir, localDir, "remote", "local", "1111111", "2222222", "failed", "address: "+repoURL)
-	send(m, "down")
+	onFolder(t, m, stackDir)
+	contains(t, m, stackDir, localDir, "clone", "local", "polled", "poll failed: the working copy", "address: "+repoURL)
+	onFolder(t, m, localDir)
 	contains(t, m, "poll failed: the working copy has uncommitted changes in demo/compose.yaml")
 }
 
@@ -168,13 +188,13 @@ func TestFolderAddClonesAfterTheHostKeyAndTheLastQuestion(t *testing.T) {
 	contains(t, m, "The stack folder "+cloneDir+" is bound")
 }
 
-func TestFolderAddWithoutDeployKeyEndsOnTheKeyPageOfTheFolder(t *testing.T) {
+func TestFolderAddWithoutDeployKeyEndsOnTheKeyViewOfTheFolder(t *testing.T) {
 	b := foldersBackend()
 	m := newSettingsModel(t, b)
 	send(m, addKeys(adoptDir)...)
 	send(m, "y", "y")
-	if m.set.page != pageKey || m.set.keyFor != adoptDir || m.set.add != nil {
-		t.Fatalf("page %q for %q, flow %v", m.set.page, m.set.keyFor, m.set.add)
+	if m.area != areaStacks || !m.set.keyOpen || m.set.keyFor != adoptDir || m.set.add != nil {
+		t.Fatalf("area %s, key view %v for %q, flow %v", m.area, m.set.keyOpen, m.set.keyFor, m.set.add)
 	}
 	contains(t, m, adoptDir+" has no deploy key yet")
 	send(m, "enter")
@@ -274,6 +294,7 @@ func TestFolderFetchFetchesTheChosenFolder(t *testing.T) {
 	b := foldersBackend()
 	m := newSettingsModel(t, b)
 	send(m, toFolders...)
+	onFolder(t, m, stackDir)
 	send(m, "F", "n")
 	if len(b.actions()) != 0 {
 		t.Fatalf("calls %v", b.actions())
@@ -283,7 +304,9 @@ func TestFolderFetchFetchesTheChosenFolder(t *testing.T) {
 		t.Fatalf("fetched %v", b.fetchDirs)
 	}
 	contains(t, m, "Fetched "+stackDir+"; the remote has newer commits")
-	send(m, "enter", "down", "F")
+	send(m, "enter")
+	onFolder(t, m, localDir)
+	send(m, "F")
 	if m.modal != nil || len(b.fetchDirs) != 1 {
 		t.Fatal("a local folder was fetched")
 	}
@@ -295,6 +318,7 @@ func TestFolderFetchFailureNamesTheFolder(t *testing.T) {
 	b.errs["fetch:"+stackDir] = control.NewError(control.CodeRemote, "cannot reach the server")
 	m := newSettingsModel(t, b)
 	send(m, toFolders...)
+	onFolder(t, m, stackDir)
 	send(m, "F", "y")
 	contains(t, m, "the fetch of "+stackDir+" failed", "cannot reach the server")
 }
@@ -303,6 +327,7 @@ func TestFolderReleaseOnlyAfterYes(t *testing.T) {
 	b := foldersBackend()
 	m := newSettingsModel(t, b)
 	send(m, toFolders...)
+	onFolder(t, m, stackDir)
 	send(m, "x")
 	contains(t, m, "Release the stack folder "+stackDir, "Nothing is deleted")
 	send(m, "n")
@@ -317,13 +342,14 @@ func TestFolderReleaseOnlyAfterYes(t *testing.T) {
 	contains(t, m, "The stack folder "+stackDir+" is released")
 }
 
-func TestFolderDeployKeyOpensTheKeyPageOfThatFolder(t *testing.T) {
+func TestFolderDeployKeyOpensTheKeyViewOfThatFolder(t *testing.T) {
 	b := foldersBackend()
 	m := newSettingsModel(t, b)
 	send(m, toFolders...)
+	onFolder(t, m, stackDir)
 	send(m, "e")
-	if m.set.page != pageKey || m.set.keyFor != stackDir {
-		t.Fatalf("page %q for %q", m.set.page, m.set.keyFor)
+	if !m.set.keyOpen || m.set.keyFor != stackDir {
+		t.Fatalf("key view %v for %q", m.set.keyOpen, m.set.keyFor)
 	}
 	contains(t, m, "stack folder: "+stackDir, "No deploy key yet")
 	// The form is for this folder alone: no folder to choose, and the key goes to this folder.
@@ -338,12 +364,13 @@ func TestFolderDeployKeyOpensTheKeyPageOfThatFolder(t *testing.T) {
 	send(m, "enter")
 	contains(t, m, "SHA256:ExampleKey")
 	send(m, "esc")
-	if m.set.page != pageFolders {
-		t.Fatalf("esc leads to %q", m.set.page)
+	if m.set.keyOpen {
+		t.Fatal("esc leaves the key view open")
 	}
-	send(m, "down", "e")
-	if m.set.page != pageFolders {
-		t.Fatal("a local folder opened the key page")
+	onFolder(t, m, localDir)
+	send(m, "e")
+	if m.set.keyOpen {
+		t.Fatal("a local folder opened the key view")
 	}
 	contains(t, m, "has no deploy key")
 }

@@ -42,11 +42,9 @@ const (
 	textGeneralSavedStart     kittui.TextID = "general.saved.start"
 	textGeneralCannotSave     kittui.TextID = "general.cannotsave"
 	textGeneralSaveFailed     kittui.TextID = "general.savefailed"
-	textPageKey               kittui.TextID = "page.key"
 	textPageCreds             kittui.TextID = "page.creds"
 	textPageWindow            kittui.TextID = "page.window"
 	textPageNotify            kittui.TextID = "page.notify"
-	textAboutKey              kittui.TextID = "about.key"
 	textAboutCreds            kittui.TextID = "about.creds"
 	textAboutWindow           kittui.TextID = "about.window"
 	textAboutNotify           kittui.TextID = "about.notify"
@@ -191,17 +189,11 @@ const (
 	textTitleDiscard          kittui.TextID = "title.discard"
 	textAskDiscard            kittui.TextID = "ask.discard"
 	textWhatDiscard           kittui.TextID = "what.discard"
-	textPageFolders           kittui.TextID = "page.folders"
-	textAboutFolders          kittui.TextID = "about.folders"
-	textColPath               kittui.TextID = "col.path"
-	textColKind               kittui.TextID = "col.kind"
-	textColCommit             kittui.TextID = "col.commit"
-	textColPolled             kittui.TextID = "col.polled"
+	textTitleFolders          kittui.TextID = "title.folders"
+	textFolderPolled          kittui.TextID = "folder.polled"
+	textFolderPollFailed      kittui.TextID = "folder.pollfailed"
 	textFolderKindRemote      kittui.TextID = "folder.remote"
 	textFolderKindLocal       kittui.TextID = "folder.local"
-	textFolderOK              kittui.TextID = "folder.ok"
-	textFolderFailed          kittui.TextID = "folder.failed"
-	textFoldersEmpty          kittui.TextID = "folders.empty"
 	textDetailURL             kittui.TextID = "detail.url"
 	textDetailLastPoll        kittui.TextID = "detail.lastpoll"
 	textDetailNote            kittui.TextID = "detail.note"
@@ -303,7 +295,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textColType:               "type",
 		textColEvents:             "events",
 		textColTarget:             "target",
-		textPageKey:               "Deploy key",
 		textPageCreds:             "Credentials",
 		textPageWindow:            "Maintenance window",
 		textPageNotify:            "Notifications",
@@ -326,7 +317,6 @@ func settingsEnglish() map[kittui.TextID]string {
 		textGeneralSavedStart:     "The settings are saved. The start area applies from the next start.",
 		textGeneralCannotSave:     "The settings cannot be saved here: this device has no place for them.",
 		textGeneralSaveFailed:     "The settings could not be saved: %s",
-		textAboutKey:              "store or generate the key for the git platform",
 		textAboutCreds:            "registry logins and the GitHub token",
 		textAboutWindow:           "when updates run",
 		textAboutNotify:           "webhook, Slack, Telegram and e-mail channels",
@@ -471,17 +461,11 @@ func settingsEnglish() map[kittui.TextID]string {
 		textTitleDiscard:          "Discard the changes",
 		textAskDiscard:            "Discard the changes to this form?",
 		textWhatDiscard:           "The changes you made here are lost.",
-		textPageFolders:           "Stack folders",
-		textAboutFolders:          "list, add, fetch and release the stack folders",
-		textColPath:               "path",
-		textColKind:               "kind",
-		textColCommit:             "commit",
-		textColPolled:             "last poll",
-		textFolderKindRemote:      "remote",
+		textTitleFolders:          "Stack folders",
+		textFolderPolled:          "polled %s",
+		textFolderPollFailed:      "poll failed: %s",
+		textFolderKindRemote:      "clone",
 		textFolderKindLocal:       "local",
-		textFolderOK:              "ok",
-		textFolderFailed:          "failed",
-		textFoldersEmpty:          "No stack folders yet. {add} adds one.",
 		textDetailURL:             "address: %s",
 		textDetailLastPoll:        "last poll: %s",
 		textDetailNote:            "note: %s",
@@ -548,7 +532,7 @@ func settingsEnglish() map[kittui.TextID]string {
 		textAskFolderCloneFinal:   "Clone %s into %s?",
 		textWhatFolderFinal:       "Only now the host key is stored and the changes listed below are made.",
 		textFolderNoKey:           "%s has no deploy key yet.",
-		textFolderNoKeyNext:       "Store or generate it on this page and enter the public key on the git platform, then add the folder again. Nothing was changed.",
+		textFolderNoKeyNext:       "Store or generate it in this view and enter the public key on the git platform, then add the folder again. Nothing was changed.",
 		textFolderListChanged:     "%s changed since its list was shown; nothing was changed. Add it again to review the new list.",
 		textFolderLocalFetch:      "A local stack folder has no remote to fetch from.",
 		textFolderLocalKey:        "A local stack folder has no deploy key.",
@@ -584,7 +568,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textColType:               "Typ",
 		textColEvents:             "Ereignisse",
 		textColTarget:             "Ziel",
-		textPageKey:               "Deploy-Schlüssel",
 		textPageCreds:             "Zugangsdaten",
 		textPageWindow:            "Wartungsfenster",
 		textPageNotify:            "Benachrichtigungen",
@@ -607,7 +590,6 @@ func settingsGerman() map[kittui.TextID]string {
 		textGeneralSavedStart:     "Die Einstellungen sind gespeichert. Der Startbereich gilt ab dem nächsten Start.",
 		textGeneralCannotSave:     "Die Einstellungen können hier nicht gespeichert werden: Dieses Gerät hat keinen Ort dafür.",
 		textGeneralSaveFailed:     "Die Einstellungen konnten nicht gespeichert werden: %s",
-		textAboutKey:              "Schlüssel für die Git-Plattform hinterlegen oder erzeugen",
 		textAboutCreds:            "Registry-Logins und GitHub-Token",
 		textAboutWindow:           "wann Updates laufen",
 		textAboutNotify:           "Kanäle für Webhook, Slack, Telegram und E-Mail",
@@ -752,17 +734,11 @@ func settingsGerman() map[kittui.TextID]string {
 		textTitleDiscard:          "Änderungen verwerfen",
 		textAskDiscard:            "Die Änderungen an diesem Formular verwerfen?",
 		textWhatDiscard:           "Die Änderungen, die Sie hier gemacht haben, gehen verloren.",
-		textPageFolders:           "Stack-Ordner",
-		textAboutFolders:          "Stack-Ordner anzeigen, hinzufügen, abrufen und lösen",
-		textColPath:               "Pfad",
-		textColKind:               "Art",
-		textColCommit:             "Commit",
-		textColPolled:             "letzter Abruf",
-		textFolderKindRemote:      "remote",
+		textTitleFolders:          "Stack-Ordner",
+		textFolderPolled:          "abgerufen %s",
+		textFolderPollFailed:      "Abruf fehlgeschlagen: %s",
+		textFolderKindRemote:      "Klon",
 		textFolderKindLocal:       "lokal",
-		textFolderOK:              "ok",
-		textFolderFailed:          "Fehler",
-		textFoldersEmpty:          "Noch keine Stack-Ordner. {add} fügt einen hinzu.",
 		textDetailURL:             "Adresse: %s",
 		textDetailLastPoll:        "letzter Abruf: %s",
 		textDetailNote:            "Hinweis: %s",
@@ -829,7 +805,7 @@ func settingsGerman() map[kittui.TextID]string {
 		textAskFolderCloneFinal:   "%s nach %s klonen?",
 		textWhatFolderFinal:       "Erst jetzt wird der Hostschlüssel gespeichert, und die unten aufgeführten Änderungen werden vorgenommen.",
 		textFolderNoKey:           "%s hat noch keinen Deploy-Schlüssel.",
-		textFolderNoKeyNext:       "Hinterlege oder erzeuge ihn auf dieser Seite und trage den öffentlichen Schlüssel bei der Git-Plattform ein, dann füge den Ordner erneut hinzu. Es wurde nichts geändert.",
+		textFolderNoKeyNext:       "Hinterlege oder erzeuge ihn in dieser Ansicht und trage den öffentlichen Schlüssel bei der Git-Plattform ein, dann füge den Ordner erneut hinzu. Es wurde nichts geändert.",
 		textFolderListChanged:     "%s hat sich geändert, seit die Liste gezeigt wurde; es wurde nichts geändert. Füge ihn erneut hinzu, um die neue Liste zu prüfen.",
 		textFolderLocalFetch:      "Ein lokaler Stack-Ordner hat kein Remote zum Abrufen.",
 		textFolderLocalKey:        "Ein lokaler Stack-Ordner hat keinen Deploy-Schlüssel.",

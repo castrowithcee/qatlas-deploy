@@ -18,8 +18,6 @@ type settingsPage string
 
 const (
 	pageGeneral settingsPage = "general"
-	pageFolders settingsPage = "folders"
-	pageKey     settingsPage = "key"
 	pageCreds   settingsPage = "credentials"
 	pageWindow  settingsPage = "window"
 	pageNotify  settingsPage = "notifications"
@@ -32,8 +30,6 @@ var settingsPages = []struct {
 	title, about kittui.TextID
 }{
 	{pageGeneral, textPageGeneral, textAboutGeneral},
-	{pageFolders, textPageFolders, textAboutFolders},
-	{pageKey, textPageKey, textAboutKey},
 	{pageCreds, textPageCreds, textAboutCreds},
 	{pageWindow, textPageWindow, textAboutWindow},
 	{pageNotify, textPageNotify, textAboutNotify},
@@ -49,15 +45,15 @@ type settingsState struct {
 	busy bool
 	form *settingsForm
 
-	folderList *kittui.List
-	folderData map[kittui.ItemID]control.SourceStatus
-	// add is the stack folder being added, nil while none is.
-	add *addFlow
+	// folderData are the bound stack folders by path; add is the one being added, nil while none is.
+	folderData map[string]control.SourceStatus
+	add        *addFlow
 
-	key part
-	// keyFor is the stack folder the key page shows, empty for the default key.
-	keyFor string
-	keyRes control.KeyResult
+	// keyOpen says the Stacks area shows the deploy key of the folder keyFor.
+	keyOpen bool
+	key     part
+	keyFor  string
+	keyRes  control.KeyResult
 	// noKey says the service holds no deploy key yet.
 	noKey bool
 
@@ -75,11 +71,10 @@ type settingsState struct {
 	notifyRead []control.NotifyChannelInfo
 }
 
-// settingsLoadMsg carries the answer of a read of one page; dir is the stack folder a key page read for.
+// settingsLoadMsg carries the answer of a read of one page.
 type settingsLoadMsg struct {
 	gen  int
 	page settingsPage
-	dir  string
 	res  any
 	err  error
 }
@@ -146,9 +141,6 @@ func newSettings(keys *kittui.Keymap, text kittui.Translator) (*settingsState, e
 		return nil, err
 	}
 	s.notifyList.SetFocused(true)
-	if s.folderList, err = newFolderList(keys, text); err != nil {
-		return nil, err
-	}
 	return s, nil
 }
 
@@ -161,8 +153,6 @@ func (s *settingsState) activeList() *kittui.List {
 		return s.credList
 	case pageNotify:
 		return s.notifyList
-	case pageFolders:
-		return s.folderList
 	}
 	return nil
 }
@@ -176,11 +166,6 @@ func (m *Model) openPage(p settingsPage) tea.Cmd {
 	switch p {
 	case pageGeneral:
 		return m.openForm(m.generalForm())
-	case pageFolders:
-		m.fillFolders()
-		return m.reloadNow()
-	case pageKey:
-		s.keyFor, s.key, s.noKey = "", part{}, false
 	}
 	return m.loadPage(true)
 }
@@ -188,7 +173,7 @@ func (m *Model) openPage(p settingsPage) tea.Cmd {
 // loadPage reads what the page shows. The folder page shows the status the refresh reads.
 func (m *Model) loadPage(force bool) tea.Cmd {
 	s := m.set
-	ctx, b, page, dir := m.ctx, m.backend, s.page, s.keyFor
+	ctx, b, page := m.ctx, m.backend, s.page
 	read := func(p *part, fn func() (any, error)) tea.Cmd {
 		if p.loading || p.loaded && !force {
 			return nil
@@ -198,12 +183,10 @@ func (m *Model) loadPage(force bool) tea.Cmd {
 		gen := s.gen
 		return func() tea.Msg {
 			res, err := fn()
-			return settingsLoadMsg{gen: gen, page: page, dir: dir, res: res, err: err}
+			return settingsLoadMsg{gen: gen, page: page, res: res, err: err}
 		}
 	}
 	switch page {
-	case pageKey:
-		return read(&s.key, func() (any, error) { return b.KeyShow(ctx, dir) })
 	case pageCreds:
 		return read(&s.creds, func() (any, error) { return b.Credentials(ctx) })
 	case pageWindow:
@@ -217,8 +200,6 @@ func (m *Model) loadPage(force bool) tea.Cmd {
 // pagePart is the read state of a page, nil for a page that reads nothing of its own.
 func (s *settingsState) pagePart(p settingsPage) *part {
 	switch p {
-	case pageKey:
-		return &s.key
 	case pageCreds:
 		return &s.creds
 	case pageWindow:
@@ -232,10 +213,6 @@ func (s *settingsState) pagePart(p settingsPage) *part {
 func (m *Model) applySettingsLoad(msg settingsLoadMsg) {
 	s := m.set
 	p := s.pagePart(msg.page)
-	if msg.page == pageKey && msg.dir != s.keyFor {
-		// The key of a folder the page no longer shows; the read of the folder shown is its own.
-		return
-	}
 	if p == nil || msg.page != s.page {
 		if p != nil {
 			p.loading = false
@@ -245,16 +222,7 @@ func (m *Model) applySettingsLoad(msg settingsLoadMsg) {
 	p.loading = false
 	p.err = msg.err
 	p.loaded = msg.err == nil
-	var remote *control.Error
 	switch res := msg.res.(type) {
-	case control.KeyResult:
-		s.noKey = false
-		if errors.As(msg.err, &remote) && remote.Code == control.CodeNoSuchKey {
-			// No key yet is a state of the page, not a failure.
-			s.noKey, p.err, p.loaded, s.keyRes = true, nil, true, control.KeyResult{}
-		} else if msg.err == nil {
-			s.keyRes = res
-		}
 	case control.CredentialListResult:
 		if msg.err == nil {
 			m.setCredentials(res.Credentials)
@@ -343,11 +311,6 @@ func (m *Model) settingsAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 	s := m.set
 	switch {
 	case id == actBack:
-		if s.page == pageKey && s.keyFor != "" {
-			s.page, s.keyFor = pageFolders, ""
-			m.fillFolders()
-			return nil, true
-		}
 		if s.page != "" {
 			s.page = ""
 			return nil, true
@@ -358,16 +321,6 @@ func (m *Model) settingsAction(id kittui.ActionID) (cmd tea.Cmd, handled bool) {
 			return m.openPage(settingsPage(item)), true
 		}
 		return nil, true
-	case id == actAdd && s.page == pageFolders:
-		return m.openForm(m.folderForm()), true
-	case id == actFetch && s.page == pageFolders:
-		return m.askFolderFetch(), true
-	case id == actRemove && s.page == pageFolders:
-		return m.askFolderRemove(), true
-	case id == actEdit && s.page == pageFolders:
-		return m.openFolderKey(), true
-	case id == actEdit && s.page == pageKey:
-		return m.openKeyForm(), true
 	case id == actAdd && s.page == pageCreds:
 		return m.openForm(m.credentialForm()), true
 	case id == actRemove && s.page == pageCreds:
@@ -453,7 +406,7 @@ func (m *Model) applySetting(msg settingMsg) tea.Cmd {
 		cmds = append(cmds, m.reloadNow())
 	case control.KeyResult:
 		// The page shows the key of its folder only; the key of another stack folder is shown in the answer alone.
-		if msg.name == s.keyFor {
+		if s.keyOpen && msg.name == s.keyFor {
 			s.key.loaded, s.noKey, s.keyRes = true, false, res
 		}
 		text := textDoneKeySet
@@ -650,18 +603,6 @@ func (m *Model) settingsFooter(common, nav []kittui.Hint) []kittui.Hint {
 	switch s.page {
 	case "":
 		return append(append([]kittui.Hint{{Action: actEnter, Label: textKeyOpen}}, common...), nav...)
-	case pageFolders:
-		own = []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}}
-		// Fetch and deploy key exist only for a folder with a remote.
-		if f, ok := m.selectedFolder(); ok && f.Kind == control.SourceKindRemote {
-			own = append(own, kittui.Hint{Action: actFetch, Label: textKeyFetch, Priority: 3},
-				kittui.Hint{Action: actEdit, Label: textKeyDeployKey, Priority: 3})
-		}
-		if _, ok := m.selectedFolder(); ok {
-			own = append(own, kittui.Hint{Action: actRemove, Label: textKeyRelease, Priority: 3})
-		}
-	case pageKey:
-		own = []kittui.Hint{{Action: actEdit, Label: textKeySetKey, Priority: 3}}
 	case pageCreds:
 		own = []kittui.Hint{{Action: actAdd, Label: textKeyAdd, Priority: 3}, {Action: actRemove, Label: textKeyRemove, Priority: 3}}
 	case pageWindow:
@@ -686,9 +627,6 @@ func (m *Model) settingsView(width, height int) string {
 	}
 	if s.page == "" {
 		return m.listView(s.menu, width, height, 0)
-	}
-	if s.page == pageFolders {
-		return m.foldersView(width, height)
 	}
 	title := m.heading(pageTitle(s.page), width)
 	if list := s.activeList(); list != nil {
@@ -727,33 +665,10 @@ func (m *Model) partLines(p part, width int) []string {
 // pageLines are the lines of the pages that are text.
 func (m *Model) pageLines(width int) []string {
 	switch m.set.page {
-	case pageKey:
-		return m.keyLines(width)
 	case pageWindow:
 		return m.windowLines(width)
 	}
 	return nil
-}
-
-func (m *Model) keyLines(width int) []string {
-	s, t := m.set, m.text
-	var lines []string
-	if s.keyFor != "" {
-		lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailKeyFolder, s.keyFor), width), "")
-	}
-	if !s.key.loaded || s.key.err != nil {
-		return append(lines, m.partLines(s.key, width)...)
-	}
-	if s.noKey {
-		return append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyNone), width)...)
-	}
-	lines = append(lines, m.line(detailIndent, kittui.StyleText, t.Lookup(textDetailFingerprint, s.keyRes.Fingerprint), width), "")
-	lines = append(lines, m.wrapped(detailIndent, kittui.StyleHint, t.Lookup(textKeyCopy), width)...)
-	// The key is written out whole and broken only where the screen is too narrow, so it can be copied.
-	for _, l := range kittui.Wrap(kittui.Escape(strings.TrimSpace(s.keyRes.PublicKey)), max(width-detailIndent, 1)) {
-		lines = append(lines, strings.Repeat(" ", detailIndent)+m.styles.Render(kittui.StyleActive, l))
-	}
-	return lines
 }
 
 func (m *Model) windowLines(width int) []string {

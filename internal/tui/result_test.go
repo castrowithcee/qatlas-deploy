@@ -26,6 +26,7 @@ func TestResultWithoutDetailsIsAMessageLine(t *testing.T) {
 func TestResultWithDetailsIsACalmNotice(t *testing.T) {
 	m := newSettingsModel(t, foldersBackend())
 	send(m, toFolders...)
+	onFolder(t, m, stackDir)
 	send(m, "F", "y")
 	if m.modal == nil {
 		t.Fatal("no notice dialog")

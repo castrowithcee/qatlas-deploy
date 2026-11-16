@@ -526,10 +526,16 @@ func (f *fakeBackend) SourceRemove(_ context.Context, path string) (control.Sour
 	return control.SourceRemoveResult{ID: "demo-id", Path: path}, nil
 }
 
+// defaultKeyDir says dir names the default key: no folder, or the first bound one.
+func (f *fakeBackend) defaultKeyDir(dir string) bool {
+	src := f.status.Engine.Sources
+	return dir == "" || len(src) > 0 && dir == src[0].Path
+}
+
 // keySlot is the stored key of a stack folder: key for the default one, dirKeys for the others. The caller
 // holds f.mu.
 func (f *fakeBackend) keySlot(dir string) *control.KeyResult {
-	if dir == "" {
+	if f.defaultKeyDir(dir) {
 		return f.key
 	}
 	if k, ok := f.dirKeys[dir]; ok {
@@ -539,7 +545,7 @@ func (f *fakeBackend) keySlot(dir string) *control.KeyResult {
 }
 
 func (f *fakeBackend) putKey(dir string, k control.KeyResult) {
-	if dir == "" {
+	if f.defaultKeyDir(dir) {
 		f.key = &k
 		return
 	}

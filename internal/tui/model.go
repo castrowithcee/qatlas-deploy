@@ -32,8 +32,8 @@ const (
 	areaStacks kittui.AreaID = "stacks"
 	areaDetail kittui.AreaID = "detail"
 	areaRuns   kittui.AreaID = "runs"
-	// areaSettings holds what a host needs to operate: the repository, the deploy key, credentials, the
-	// maintenance window and the notifications.
+	// areaSettings holds the preferences of the device, the credentials, the maintenance window and the
+	// notifications.
 	areaSettings kittui.AreaID = "settings"
 	// areaContainers lists every container of the host; it is the last area so the keys of the others stay.
 	areaContainers kittui.AreaID = "containers"
@@ -317,6 +317,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applySecrets(msg)
 	case settingsLoadMsg:
 		m.applySettingsLoad(msg)
+	case keyLoadMsg:
+		m.applyKeyLoad(msg)
 	case settingMsg:
 		return m, m.applySetting(msg)
 	case tea.PasteMsg:
@@ -364,14 +366,13 @@ func (m *Model) apply(msg refreshMsg) {
 		m.failure = m.errorText(msg.problem)
 	}
 	m.fillStacks()
-	m.fillFolders()
 }
 
 // fillStacks sets the rows of the stacks list and of the runs list from the snapshot read last.
 func (m *Model) fillStacks() {
 	rows := buildRows(m.snap)
-	// The rows go under their stack folder once there is more than one; a single folder keeps the flat list.
-	grouped := len(m.snap.status.Engine.Sources) > 1
+	// The rows go under their stack folder, and a folder has its row even without a stack.
+	grouped := len(m.snap.status.Engine.Sources) > 0
 	m.list.SetGrouped(grouped)
 	ids := itemIDs(rows)
 	clear(m.tones)
@@ -387,6 +388,8 @@ func (m *Model) fillStacks() {
 	if err := m.list.SetItems(items); err != nil {
 		m.failure = m.text.Lookup(kittui.TextError, m.text.Lookup(textErrUnshownStacks, err.Error()))
 	}
+	// The groups come after the rows, so a first reading marks the first stack, as a flat list does.
+	m.folderGroups()
 	m.rebuildRuns()
 }
 
@@ -432,6 +435,12 @@ func (m *Model) input() kittui.InputFocus {
 	case areaSettings:
 		return m.settingsInput()
 	case areaStacks:
+		switch {
+		case m.set.form != nil:
+			return m.set.form.form.Input()
+		case m.set.keyOpen:
+			return kittui.InputNavigation
+		}
 		return m.list.Input()
 	case areaContainers:
 		if m.ctv.open {
@@ -450,6 +459,8 @@ func (m *Model) input() kittui.InputFocus {
 // typed gives a key to the part that has the text focus; handled is false when it let the key pass.
 func (m *Model) typed(msg tea.KeyPressMsg) (cmd tea.Cmd, handled bool) {
 	switch {
+	case m.area == areaStacks && m.set.keyOpen:
+		return nil, false
 	case m.area == areaStacks:
 		open, handled := m.list.Update(msg)
 		return m.open(open), handled
@@ -475,7 +486,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.modal != nil {
 		return m.modalKey(msg)
 	}
-	if (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil {
+	if m.formShown() {
 		if m.formBlocked() {
 			if id, ok := m.keys.Match(msg, kittui.InputNavigation); ok && id == actForceQuit {
 				return tea.Quit
@@ -550,6 +561,10 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 						return cmd
 					}
 				}
+			case areaStacks:
+				if cmd, handled := m.folderAction(id); handled {
+					return cmd
+				}
 			}
 		case actUpdate, actDeploy, actPause, actUnpause, actPin, actUnpin, actResume, actCheck,
 			actStackStart, actStackStop, actStackRestart:
@@ -569,6 +584,10 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 				cmd, _ := m.settingsAction(actBack)
 				return cmd
 			case areaStacks:
+				if m.set.keyOpen {
+					m.closeKeyView()
+					return nil
+				}
 				m.back(m.list, msg)
 				return nil
 			case areaDetail:
@@ -616,6 +635,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	}
 	switch {
+	case m.area == areaStacks && m.set.keyOpen:
+		m.topEdge(false, msg)
 	case m.area == areaStacks:
 		open, handled := m.list.Update(msg)
 		m.topEdge(handled, msg)
@@ -667,6 +688,8 @@ func (m *Model) reloadAll() tea.Cmd {
 		cmds = append(cmds, m.loadDetail(true), m.readContainers())
 	case m.area == areaContainers:
 		cmds = append(cmds, m.readContainers(), m.readContainer())
+	case m.area == areaStacks && m.set.keyOpen:
+		cmds = append(cmds, m.loadKey())
 	case m.area == areaSettings:
 		cmds = append(cmds, m.loadPage(true))
 	case m.area == areaRuns && m.log.open && !m.log.busy:
@@ -686,6 +709,7 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 		m.pick = nil
 	}
 	m.area = area
+	m.set.keyOpen, m.set.keyFor = false, ""
 	switch area {
 	case areaDetail:
 		return tea.Batch(m.loadDetail(false), m.readContainers())
@@ -702,10 +726,11 @@ func (m *Model) enter(area kittui.AreaID) tea.Cmd {
 // zones are the focus zones of the screen in their fixed order: the tab line and the content.
 func (m *Model) zones() []kittui.FocusZone {
 	switch {
-	case (m.area == areaSettings || m.area == areaDetail) && m.set.form != nil:
+	case m.formShown():
 		return []kittui.FocusZone{kittui.ZoneForm}
 	case m.clogShown():
 	case m.area == areaDetail && m.pick == nil,
+		m.area == areaStacks && m.set.keyOpen,
 		m.area == areaContainers && m.ctv.open,
 		m.area == areaSettings && m.set.activeList() == nil && m.set.page != "":
 		return []kittui.FocusZone{kittui.ZoneTabs, kittui.ZoneDetail}
@@ -727,7 +752,7 @@ func (m *Model) setZone(z kittui.FocusZone) {
 	m.zone = z
 	lists := []*kittui.List{m.list, m.runsList, m.ctList}
 	if m.set != nil {
-		lists = append(lists, m.set.menu, m.set.credList, m.set.notifyList, m.set.folderList)
+		lists = append(lists, m.set.menu, m.set.credList, m.set.notifyList)
 	}
 	if m.pick != nil {
 		lists = append(lists, m.pick.list)
@@ -824,8 +849,11 @@ func (m *Model) footer() []kittui.Hint {
 		return append(m.clog.view.Hints(), common...)
 	case m.area == areaSettings:
 		return m.settingsFooter(common, nav)
-	case m.area == areaDetail && m.set.form != nil:
+	case (m.area == areaDetail || m.area == areaStacks) && m.set.form != nil:
 		return append(m.set.form.form.Hints(), kittui.Hint{Action: actBack, Label: textKeyCancelForm})
+	case m.area == areaStacks && m.set.keyOpen:
+		return append([]kittui.Hint{{Action: actEdit, Label: textKeySetKey, Priority: 3},
+			{Action: actBack, Label: kittui.TextKeyBack, Priority: 1}}, common...)
 	case m.area == areaDetail && m.pick != nil:
 		return append(append([]kittui.Hint{{Action: actEnter, Label: textKeyPick}, {Action: actBack, Label: kittui.TextKeyBack, Priority: 1}},
 			common...), nav...)
@@ -852,10 +880,7 @@ func (m *Model) footer() []kittui.Hint {
 		return m.listFooter(m.runsList, len(m.runByID), textKeyLog, append(
 			[]kittui.Hint{m.stackOnlyHint()}, common...), nav)
 	case m.area == areaStacks:
-		if len(m.rows) > 0 {
-			common = append(m.actionHints(), common...)
-		}
-		return m.listFooter(m.list, len(m.rows), textKeyDetails, common, nav)
+		return m.stacksFooter(common, nav)
 	}
 	return common
 }
@@ -966,6 +991,8 @@ func (m *Model) frameSpec() kittui.FrameSpec {
 	}
 	switch {
 	case m.clogShown():
+		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
+	case m.area == areaStacks && (m.set.keyOpen || m.set.form != nil):
 		spec.Back = &kittui.Hint{Action: actBack, Label: kittui.TextKeyBack}
 	case m.area == areaStacks:
 		spec.Position = m.list.Position()
@@ -1115,7 +1142,7 @@ func (m *Model) workspace(width, height int) string {
 	if m.area == areaSettings {
 		return m.settingsView(width, height)
 	}
-	if m.area == areaDetail && m.set.form != nil {
+	if m.formShown() && m.area != areaSettings {
 		return m.formView(width, height)
 	}
 	if m.area == areaContainers {
@@ -1137,19 +1164,66 @@ func (m *Model) workspace(width, height int) string {
 	return m.stacksView(width, height)
 }
 
-// stacksView draws the Stacks area: a line for every stack folder whose last poll failed, then the list.
+// stacksView draws the Stacks area: the list with a row for every stack folder and, below it, the detail of
+// the marked folder. Without a folder it points to adding one.
 func (m *Model) stacksView(width, height int) string {
-	var lines []string
-	for _, f := range m.snap.status.Engine.Sources {
-		if f.PollError != "" {
-			lines = append(lines, m.line(2, kittui.StyleFail, m.text.Lookup(textStacksFolderFailed, f.Path, f.PollError), width))
+	if m.set.keyOpen {
+		return m.keyView(width, height)
+	}
+	if len(m.snap.status.Engine.Sources) == 0 && len(m.rows) == 0 {
+		return m.stacksEmpty(width, height)
+	}
+	var detail []string
+	if f, ok := m.selectedFolder(); ok {
+		detail = append([]string{""}, m.folderDetail(f, width)...)
+		// The list keeps at least its header, the marked row and a few more.
+		detail = detail[:min(len(detail), max(height-minListRows, 0))]
+	}
+	view := m.listView(m.list, width, height-len(detail), 0)
+	return strings.Join(append([]string{view}, detail...), "\n")
+}
+
+// minListRows is what the list keeps of the workspace when the detail of a folder is long.
+const minListRows = 5
+
+// stacksEmpty says that there is no stack folder and how to add one; a click on it is the key.
+func (m *Model) stacksEmpty(width, height int) string {
+	lines := kittui.Wrap(kittui.Escape(m.text.Lookup(textStacksEmpty)), max(width-2, 1))
+	lines = lines[:min(len(lines), max(height, 1))]
+	for i, l := range lines {
+		lines[i] = "  " + m.styles.Render(kittui.StyleHint, l)
+	}
+	m.parts = append(m.parts, mousePart{rect: kittui.Rect{Width: width, Height: len(lines)},
+		targets: []kittui.Target{{Rect: kittui.Rect{Width: width, Height: len(lines)}, Zone: kittui.ZoneRows, Action: actAdd}}})
+	return strings.Join(lines, "\n")
+}
+
+// keyView draws the deploy key of the folder the key view was opened for.
+func (m *Model) keyView(width, height int) string {
+	lines := append([]string{m.heading(textTitleKey, width), ""}, m.keyLines(width)...)
+	return strings.Join(lines[:min(len(lines), height)], "\n")
+}
+
+// stacksFooter is the key line of the Stacks area: the keys of the marked row, and adding a folder in every case.
+func (m *Model) stacksFooter(common, nav []kittui.Hint) []kittui.Hint {
+	add := kittui.Hint{Action: actAdd, Label: textKeyAdd, Priority: 3}
+	f, onFolder := m.selectedFolder()
+	switch {
+	case onFolder:
+		var own []kittui.Hint
+		// Fetch and the deploy key exist only for a folder with a remote.
+		if f.Kind == control.SourceKindRemote {
+			own = append(own, kittui.Hint{Action: actFetch, Label: textKeyFetch, Priority: 3},
+				kittui.Hint{Action: actEdit, Label: textKeyDeployKey, Priority: 3})
 		}
+		own = append(own, kittui.Hint{Action: actRemove, Label: textKeyRelease, Priority: 3}, add)
+		common = append(own, common...)
+	case len(m.rows) > 0:
+		common = append(append(m.actionHints(), add), common...)
+	default:
+		common = append([]kittui.Hint{add}, common...)
 	}
-	if len(lines) == 0 || height <= len(lines) {
-		return m.listView(m.list, width, height, 0)
-	}
-	view := m.listView(m.list, width, height-len(lines), len(lines))
-	return strings.Join(lines, "\n") + "\n" + view
+	return m.listFooter(m.list, len(m.rows)+len(m.set.folderData), textKeyDetails, common, nav)
 }
 
 // note is a dimmed sentence wrapped into width cells and indented like the rows of a list.
