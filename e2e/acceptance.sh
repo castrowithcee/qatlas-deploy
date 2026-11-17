@@ -329,7 +329,7 @@ VALUES_END
 
 	step 'Stack detail: the data directory of n8n is created through the interface with the proposed owner'
 	tui_send 1
-	tui_wait 'needs data dirs' 30
+	tui_wait 'no dirs' 30
 	acc_cursor_to n8n
 	prev=$(newest_run n8n)
 	tui_send Enter
